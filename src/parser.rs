@@ -71,5 +71,8 @@ mod tests {
         assert_eq!(
             rule("word haha 123\n"),
             Ok(("", Rule { opcode: "word", word: "haha", dots: "123" })));
+        assert_eq!(
+            rule("foo haha 123\n"),
+            Err(Err::Error(Error{input: "foo haha 123\n", code: ErrorKind::Tag})));
     }
 }
