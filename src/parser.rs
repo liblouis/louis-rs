@@ -7,6 +7,7 @@ use nom::character::complete::space0;
 use nom::character::complete::space1;
 use nom::sequence::tuple;
 use nom::IResult;
+use nom_unicode::complete::alpha1 as unicode_alpha1;
 
 #[derive(PartialEq, Debug)]
 pub struct Rule<'a> {
@@ -15,7 +16,11 @@ pub struct Rule<'a> {
     dots: &'a str,
 }
 
-pub fn characters(input: &str) -> IResult<&str, &str> {
+pub fn unicode_characters(input: &str) -> IResult<&str, &str> {
+    unicode_alpha1(input)
+}
+
+pub fn ascii_characters(input: &str) -> IResult<&str, &str> {
     alpha1(input)
 }
 
@@ -31,7 +36,20 @@ pub fn rule(i: &str) -> IResult<&str, Rule> {
     let (input, (opcode, _, word, _, dots, _, _)) = tuple((
         opcode,
         space1,
-        characters,
+        ascii_characters,
+        space1,
+        dots,
+        space0,
+        newline,
+    ))(i)?;
+    Ok((input, Rule { opcode, word, dots }))
+}
+
+pub fn largesign(i: &str)  -> IResult<&str, Rule> {
+    let (input, (opcode, _, word, _, dots, _, _)) = tuple((
+        tag("largesign"),
+        space1,
+        unicode_characters,
         space1,
         dots,
         space0,
@@ -49,8 +67,8 @@ mod tests {
 
     #[test]
     fn character_test() {
-        assert_eq!(characters("hallo"), Ok(("", "hallo")));
-        assert_eq!(characters("haLlo"), Ok(("", "haLlo")));
+        assert_eq!(ascii_characters("hallo"), Ok(("", "hallo")));
+        assert_eq!(ascii_characters("haLlo"), Ok(("", "haLlo")));
     }
 
     #[test]
@@ -74,5 +92,15 @@ mod tests {
         assert_eq!(
             rule("foo haha 123\n"),
             Err(Err::Error(Error{input: "foo haha 123\n", code: ErrorKind::Tag})));
+    }
+
+    #[test]
+    fn largesign_test() {
+        assert_eq!(
+            largesign("largesign überall 123\n"),
+            Ok(("", Rule { opcode: "largesign", word: "überall", dots: "123" })));
+        assert_eq!(
+            largesign("largesign அஇ 123\n"),
+            Ok(("", Rule { opcode: "largesign", word: "அஇ", dots: "123" })));
     }
 }
