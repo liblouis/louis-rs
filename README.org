@@ -1,0 +1,54 @@
+#+title: Experimental liblouis table parser
+
+An experiment at writing a liblouis table parser based on the [[https://github.com/Geal/nom][nom
+parser combinator]] and Rust
+
+* Usage
+
+#+BEGIN_SRC shell
+$ cargo test
+#+END_SRC
+
+* Rationale
+Many if not most of the CVEs of liblouis are rooted in the hand
+crafted parsing functions of liblouis.
+
+Moving to Rust for solid memory management and to a parser combinator
+like nom would be of tremendeous help to avoid the buffer overflow
+problems.
+
+* Status
+At the moment this is nothing but an experiment, basically an extended
+afternoon hack.
+
+Support for meatier bits of the liblouis syntax such as the test and
+action expressions in the multipart opcodes is missing.
+
+At the same time it is IMHO amazing how far you can get with very
+little code...
+
+* Prerequisites
+
+- You need the [[https://www.rust-lang.org/][Rust tool chain]].
+
+* contributing
+If you have any improvements or comments please feel free to file a
+pull request or an issue.
+
+* License
+
+Copyright (C) 2021 Swiss Library for the Blind, Visually Impaired and Print Disabled
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see
+<https://www.gnu.org/licenses/>.
