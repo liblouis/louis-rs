@@ -1,3 +1,4 @@
+use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::alpha1;
 use nom::character::complete::hex_digit1;
@@ -21,10 +22,14 @@ pub fn characters(input: &str) -> IResult<&str, &str> {
 pub fn dots(input: &str) -> IResult<&str, &str> {
     hex_digit1(input)
 }
+pub fn opcode(input: &str) -> IResult<&str, &str> {
+    alt((tag("always"),
+	 tag("word")))(input)
+}
 
-pub fn always(i: &str) -> IResult<&str, Rule> {
+pub fn rule(i: &str) -> IResult<&str, Rule> {
     let (input, (opcode, _, word, _, dots, _, _)) = tuple((
-        tag("always"),
+        opcode,
         space1,
         characters,
         space1,
@@ -59,11 +64,12 @@ mod tests {
     }
 
     #[test]
-    fn always_test() {
+    fn rule_test() {
         assert_eq!(
-            always("always haha 123\n"),
-            Ok(("", Rule { opcode: "always",
-			   word: "haha",
-			   dots: "123" })));
+            rule("always haha 123\n"),
+            Ok(("", Rule { opcode: "always", word: "haha", dots: "123" })));
+        assert_eq!(
+            rule("word haha 123\n"),
+            Ok(("", Rule { opcode: "word", word: "haha", dots: "123" })));
     }
 }
