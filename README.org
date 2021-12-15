@@ -31,9 +31,16 @@ little code...
 
 - You need the [[https://www.rust-lang.org/][Rust tool chain]].
 
-* contributing
+* Contributing
 If you have any improvements or comments please feel free to file a
 pull request or an issue.
+
+* Acknowledgements
+
+The parser is built from the grammar used in [[https://github.com/liblouis/tree-sitter-liblouis][tree-sitter-liblouis]],
+which is a port of the [[https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form][EBNF grammar]] in [[https://github.com/liblouis/rewrite-louis][rewrite-louis]], which in turn is
+a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][Parsing expression grammar]] from [[https://github.com/liblouis/louis-parser][louis-parser]].
+
 
 * License
 
