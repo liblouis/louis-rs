@@ -10,52 +10,50 @@ use nom::IResult;
 use nom_unicode::complete::alpha1 as unicode_alpha1;
 
 #[derive(PartialEq, Debug)]
-pub struct Rule<'a> {
-    opcode: &'a str,
-    word: &'a str,
-    dots: &'a str,
+pub enum Rule<'a> {
+    Largesign { word: &'a str, dots: &'a str },
+    Syllable { word: &'a str, dots: &'a str },
+    Joinword { word: &'a str, dots: &'a str},
 }
 
-pub fn unicode_characters(input: &str) -> IResult<&str, &str> {
+pub fn chars(input: &str) -> IResult<&str, &str> {
     unicode_alpha1(input)
 }
 
-pub fn ascii_characters(input: &str) -> IResult<&str, &str> {
+pub fn ascii_chars(input: &str) -> IResult<&str, &str> {
     alpha1(input)
 }
 
 pub fn dots(input: &str) -> IResult<&str, &str> {
     hex_digit1(input)
 }
-pub fn opcode(input: &str) -> IResult<&str, &str> {
-    alt((tag("always"),
-	 tag("word")))(input)
+
+pub fn largesign(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, word, _, dots)) = tuple((
+        tag("largesign"), space1, chars, space1, dots,
+    ))(i)?;
+    Ok((input, Rule::Largesign { word: word, dots: dots }))
 }
 
-pub fn rule(i: &str) -> IResult<&str, Rule> {
-    let (input, (opcode, _, word, _, dots, _, _)) = tuple((
-        opcode,
-        space1,
-        ascii_characters,
-        space1,
-        dots,
-        space0,
-        newline,
+pub fn syllable(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, word, _, dots)) = tuple((
+        tag("syllable"), space1, chars, space1, dots,
     ))(i)?;
-    Ok((input, Rule { opcode, word, dots }))
+    Ok((input, Rule::Syllable { word: word, dots: dots }))
 }
 
-pub fn largesign(i: &str)  -> IResult<&str, Rule> {
-    let (input, (opcode, _, word, _, dots, _, _)) = tuple((
-        tag("largesign"),
-        space1,
-        unicode_characters,
-        space1,
-        dots,
-        space0,
-        newline,
+pub fn joinword(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, word, _, dots)) = tuple((
+        tag("joinword"), space1, chars, space1, dots,
     ))(i)?;
-    Ok((input, Rule { opcode, word, dots }))
+    Ok((input, Rule::Joinword { word: word, dots: dots }))
+}
+
+pub fn line(i: &str) -> IResult<&str, Rule> {
+    let (input, (rule, _, _)) = tuple((
+        alt((largesign, joinword, syllable)), space0, newline,
+    ))(i)?;
+    Ok((input, rule))
 }
 
 #[cfg(test)]
@@ -67,8 +65,8 @@ mod tests {
 
     #[test]
     fn character_test() {
-        assert_eq!(ascii_characters("hallo"), Ok(("", "hallo")));
-        assert_eq!(ascii_characters("haLlo"), Ok(("", "haLlo")));
+        assert_eq!(ascii_chars("hallo"), Ok(("", "hallo")));
+        assert_eq!(ascii_chars("haLlo"), Ok(("", "haLlo")));
     }
 
     #[test]
@@ -82,25 +80,35 @@ mod tests {
     }
 
     #[test]
-    fn rule_test() {
+    fn largesign_test() {
         assert_eq!(
-            rule("always haha 123\n"),
-            Ok(("", Rule { opcode: "always", word: "haha", dots: "123" })));
+            largesign("largesign überall 123"),
+            Ok(("", Rule::Largesign { word: "überall", dots: "123" })));
         assert_eq!(
-            rule("word haha 123\n"),
-            Ok(("", Rule { opcode: "word", word: "haha", dots: "123" })));
-        assert_eq!(
-            rule("foo haha 123\n"),
-            Err(Err::Error(Error{input: "foo haha 123\n", code: ErrorKind::Tag})));
+            largesign("largesign அஇ 123"),
+            Ok(("", Rule::Largesign { word: "அஇ", dots: "123" })));
     }
 
     #[test]
-    fn largesign_test() {
+    fn joinword_test() {
         assert_eq!(
-            largesign("largesign überall 123\n"),
-            Ok(("", Rule { opcode: "largesign", word: "überall", dots: "123" })));
+            joinword("joinword haha 123"),
+            Ok(("", Rule::Joinword { word: "haha", dots: "123" })));
         assert_eq!(
-            largesign("largesign அஇ 123\n"),
-            Ok(("", Rule { opcode: "largesign", word: "அஇ", dots: "123" })));
+            joinword("joinword அஇ 123"),
+            Ok(("", Rule::Joinword { word: "அஇ", dots: "123" })));
+    }
+
+    #[test]
+    fn line_test() {
+        assert_eq!(
+            line("joinword haha 123\n"),
+            Ok(("", Rule::Joinword { word: "haha", dots: "123" })));
+        assert_eq!(
+            line("largesign அஇ 123\n"),
+            Ok(("", Rule::Largesign { word: "அஇ", dots: "123" })));
+        assert_eq!(
+            line("syllable haha 123\n"),
+            Ok(("", Rule::Syllable { word: "haha", dots: "123" })));
     }
 }
