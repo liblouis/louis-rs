@@ -18,7 +18,7 @@ pub enum Rule<'a> {
     Comment { comment: &'a str },
     Largesign { word: &'a str, dots: &'a str },
     Syllable { word: &'a str, dots: &'a str },
-    Joinword { word: &'a str, dots: &'a str},
+    Joinword { word: &'a str, dots: &'a str },
 }
 
 pub fn chars(input: &str) -> IResult<&str, &str> {
@@ -54,16 +54,25 @@ pub fn joinword(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Joinword { word: word, dots: dots }))
 }
 
+pub fn end_comment(i: &str) -> IResult<&str, &str> {
+    let (input, (_, comment)) = tuple((
+        space1, not_line_ending,
+    ))(i)?;
+    Ok((input, comment))
+}
+
 pub fn rule_line(i: &str) -> IResult<&str, Rule> {
     let (input, (rule, _, _)) = tuple((
-        alt((largesign, joinword, syllable)), space0, line_ending,
+        alt((largesign, joinword, syllable)),
+	alt((end_comment, space0)),
+	line_ending,
     ))(i)?;
     Ok((input, rule))
 }
 
 pub fn comment_line(i: &str) -> IResult<&str, Rule> {
     let (input, (_, comment, _)) = tuple((tag("#"), not_line_ending, line_ending,))(i)?;
-    Ok((input, Rule::Comment {comment: comment}))
+    Ok((input, Rule::Comment { comment: comment }))
 }
 
 pub fn empty_line(i: &str) -> IResult<&str, Rule> {
@@ -158,6 +167,17 @@ mod tests {
         assert_eq!(
             comment_line("# haha 1234    "),
             Err(Err::Error(Error::new("", ErrorKind::CrLf))));
+    }
+
+    #[test]
+    fn end_comment_test() {
+	assert_eq!(
+	    end_comment("an end comment\n"),
+	    Err(Err::Error(Error::new("an end comment\n", ErrorKind::Space))));
+	assert_eq!(end_comment(" an end comment\n"), Ok(("\n", "an end comment")));
+        assert_eq!(
+            rule_line("joinword haha 123 comment \n"),
+            Ok(("", Rule::Joinword { word: "haha", dots: "123" })));
     }
 
     #[test]
