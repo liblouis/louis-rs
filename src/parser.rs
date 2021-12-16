@@ -16,6 +16,9 @@ use nom_unicode::complete::alpha1 as unicode_alpha1;
 pub enum Rule<'a> {
     Empty,
     Comment { comment: &'a str },
+    Include { filename: &'a str },
+    Undefined { dots: &'a str },
+    Display { chars: &'a str, dots: &'a str },
     Largesign { word: &'a str, dots: &'a str },
     Syllable { word: &'a str, dots: &'a str },
     Joinword { word: &'a str, dots: &'a str },
@@ -31,6 +34,21 @@ pub fn ascii_chars(input: &str) -> IResult<&str, &str> {
 
 pub fn dots(input: &str) -> IResult<&str, &str> {
     hex_digit1(input)
+}
+
+pub fn include(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, filename)) = tuple((tag("include"), space1, chars))(i)?;
+    Ok((input, Rule::Include { filename: filename }))
+}
+
+pub fn undefined(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, dots)) = tuple((tag("undefined"), space1, dots))(i)?;
+    Ok((input, Rule::Undefined { dots: dots }))
+}
+
+pub fn display(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("display"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Display { chars: chars, dots: dots }))
 }
 
 pub fn largesign(i: &str) -> IResult<&str, Rule> {
@@ -114,6 +132,21 @@ mod tests {
             dots("not valid"),
             Err(Err::Error(Error::new("not valid", ErrorKind::HexDigit)))
         );
+    }
+
+    #[test]
+    fn include_test() {
+        assert_eq!(include("include filename"), Ok(("", Rule::Include { filename: "filename" })));
+    }
+
+    #[test]
+    fn undefined_test() {
+        assert_eq!(undefined("undefined 122"), Ok(("", Rule::Undefined { dots: "122" })));
+    }
+
+    #[test]
+    fn display_test() {
+        assert_eq!(display("display haha 122"), Ok(("", Rule::Display { chars: "haha", dots: "122" })));
     }
 
     #[test]
