@@ -6,6 +6,8 @@ use nom::character::complete::line_ending;
 use nom::character::complete::not_line_ending;
 use nom::character::complete::space0;
 use nom::character::complete::space1;
+use nom::combinator::map;
+use nom::combinator::opt;
 use nom::multi::many0;
 use nom::multi::separated_list1;
 use nom::sequence::tuple;
@@ -27,11 +29,21 @@ pub enum Line<'a> {
 pub enum Rule<'a> {
     Include { filename: &'a str },
     Undefined { dots: BrailleChars },
-    Display { chars: &'a str, dots: BrailleChars },
-    Multind { chars: &'a str, dots: BrailleChars },
+    Display { chars: &'a str, dots: BrailleChars, prefix: Prefix },
+    Multind { chars: &'a str, dots: BrailleChars, prefix: Prefix },
     Largesign { word: &'a str, dots: BrailleChars },
     Syllable { word: &'a str, dots: BrailleChars },
     Joinword { word: &'a str, dots: BrailleChars },
+}
+
+#[derive(PartialEq, Debug)]
+pub enum Prefix {
+    None,
+    Noback,
+    Nofor,
+    Nocross,
+    NobackNocross,
+    NoforNocross,
 }
 
 #[derive(EnumSetType, Debug)]
@@ -100,6 +112,15 @@ pub fn dots(i: &str) -> IResult<&str, BrailleChars> {
     Ok((input, braille_chars))
 }
 
+fn prefix(i: &str) -> IResult<&str, Prefix> {
+    alt((
+	map(tuple((tag("noback"), space1, tag("nocross"), space1)), |_| Prefix::NobackNocross),
+	map(tuple((tag("nofor"), space1, tag("nocross"), space1)), |_| Prefix::NoforNocross),
+	map(tuple((tag("nofor"), space1)), |_| Prefix::Nofor),
+	map(tuple((tag("noback"), space1)), |_| Prefix::Noback),
+	map(tuple((tag("nocross"), space1)), |_| Prefix::Nocross)))(i)
+}
+
 pub fn include(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, filename)) = tuple((tag("include"), space1, chars))(i)?;
     Ok((input, Rule::Include { filename: filename }))
@@ -111,13 +132,13 @@ pub fn undefined(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn display(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("display"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Display { chars: chars, dots: dots }))
+    let (input, (prefix, _, _, chars, _, dots)) = tuple((opt(prefix), tag("display"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Display { chars: chars, dots: dots, prefix: prefix.unwrap_or(Prefix::None) }))
 }
 
 pub fn multind(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("multind"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Multind { chars: chars, dots: dots }))
+    let (input, (prefix, _, _, chars, _, dots)) = tuple((opt(prefix), tag("multind"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Multind { chars: chars, dots: dots, prefix: prefix.unwrap_or(Prefix::None) }))
 }
 
 pub fn largesign(i: &str) -> IResult<&str, Rule> {
@@ -234,7 +255,20 @@ mod tests {
     #[test]
     fn display_test() {
         assert_eq!(display("display haha 122"), Ok(("", Rule::Display { chars: "haha",
-									dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2] })));
+									dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
+									prefix: Prefix::None })));
+    }
+
+    #[test]
+    fn prefix_test() {
+        assert_eq!(display("nocross display haha 122"),
+		   Ok(("", Rule::Display { chars: "haha",
+					   dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
+					   prefix: Prefix::Nocross })));
+        assert_eq!(display("noback nocross display haha 122"),
+		   Ok(("", Rule::Display { chars: "haha",
+					   dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
+					   prefix: Prefix::NobackNocross })));
     }
 
     #[test]
@@ -326,13 +360,14 @@ mod tests {
         assert_eq!(
             table(concat!("       \n",
 			  "# just testing\n",
-			  "multind hehe 123\n",
+			  "nocross multind hehe 123\n",
 			  "joinword haha 123\n",
 			  "syllable haha 123\n")),
             Ok(("", vec![Line::Empty,
 			 Line::Comment { comment: " just testing" },
 			 Line::Rule { rule: Rule::Multind { chars: "hehe",
-							    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
+							    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
+							    prefix: Prefix::Nocross },
 				      comment: "" },
 			 Line::Rule { rule: Rule::Joinword { word: "haha",
 							     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
