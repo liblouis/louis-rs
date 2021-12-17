@@ -3,15 +3,15 @@ use nom::bytes::complete::tag;
 use nom::character::complete::alpha1;
 use nom::character::complete::hex_digit1;
 use nom::character::complete::line_ending;
+use nom::character::complete::not_line_ending;
 use nom::character::complete::space0;
 use nom::character::complete::space1;
-use nom::sequence::tuple;
 use nom::multi::many0;
 use nom::multi::separated_list1;
-use nom::character::complete::not_line_ending;
+use nom::sequence::tuple;
 
-use enumset::EnumSetType;
 use enumset::EnumSet;
+use enumset::EnumSetType;
 
 use nom::IResult;
 use nom_unicode::complete::alpha1 as unicode_alpha1;
@@ -20,7 +20,7 @@ use nom_unicode::complete::alpha1 as unicode_alpha1;
 pub enum Line<'a> {
     Empty,
     Comment { comment: &'a str },
-    Rule { rule: Rule<'a>, comment: &'a str }
+    Rule { rule: Rule<'a>, comment: &'a str },
 }
 
 #[derive(PartialEq, Debug)]
@@ -36,9 +36,22 @@ pub enum Rule<'a> {
 
 #[derive(EnumSetType, Debug)]
 pub enum BrailleDot {
-    DOT0, DOT1, DOT2, DOT3, DOT4, DOT5, DOT6,
-    DOT7, DOT8, DOT9, DOTA, DOTB, DOTC, DOTD,
-    DOTE, DOTF,
+    DOT0,
+    DOT1,
+    DOT2,
+    DOT3,
+    DOT4,
+    DOT5,
+    DOT6,
+    DOT7,
+    DOT8,
+    DOT9,
+    DOTA,
+    DOTB,
+    DOTC,
+    DOTD,
+    DOTE,
+    DOTF,
 }
 
 type BrailleChar = EnumSet<BrailleDot>;
@@ -46,31 +59,28 @@ type BrailleChars = Vec<BrailleChar>;
 
 fn char_to_dot(char: char) -> Option<BrailleDot> {
     match char {
-	'0' => Some(BrailleDot::DOT0),
-	'1' => Some(BrailleDot::DOT1),
-	'2' => Some(BrailleDot::DOT2),
-	'3' => Some(BrailleDot::DOT3),
-	'4' => Some(BrailleDot::DOT4),
-	'5' => Some(BrailleDot::DOT5),
-	'6' => Some(BrailleDot::DOT6),
-	'7' => Some(BrailleDot::DOT7),
-	'8' => Some(BrailleDot::DOT8),
-	'9' => Some(BrailleDot::DOT9),
-	'a' => Some(BrailleDot::DOTA),
-	'b' => Some(BrailleDot::DOTB),
-	'c' => Some(BrailleDot::DOTC),
-	'd' => Some(BrailleDot::DOTD),
-	'e' => Some(BrailleDot::DOTE),
-	'f' => Some(BrailleDot::DOTF),
-	 _  => None,
+        '0' => Some(BrailleDot::DOT0),
+        '1' => Some(BrailleDot::DOT1),
+        '2' => Some(BrailleDot::DOT2),
+        '3' => Some(BrailleDot::DOT3),
+        '4' => Some(BrailleDot::DOT4),
+        '5' => Some(BrailleDot::DOT5),
+        '6' => Some(BrailleDot::DOT6),
+        '7' => Some(BrailleDot::DOT7),
+        '8' => Some(BrailleDot::DOT8),
+        '9' => Some(BrailleDot::DOT9),
+        'a' => Some(BrailleDot::DOTA),
+        'b' => Some(BrailleDot::DOTB),
+        'c' => Some(BrailleDot::DOTC),
+        'd' => Some(BrailleDot::DOTD),
+        'e' => Some(BrailleDot::DOTE),
+        'f' => Some(BrailleDot::DOTF),
+        _ => None,
     }
 }
 
 fn chars_to_dots(chars: &str) -> BrailleChar {
-    chars
-	.chars()
-	.map(|c| char_to_dot(c).unwrap())
-	.collect()
+    chars.chars().map(|c| char_to_dot(c).unwrap()).collect()
 }
 
 pub fn chars(input: &str) -> IResult<&str, &str> {
@@ -132,9 +142,7 @@ pub fn joinword(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn end_comment(i: &str) -> IResult<&str, &str> {
-    let (input, (_, comment)) = tuple((
-        space1, not_line_ending,
-    ))(i)?;
+    let (input, (_, comment)) = tuple((space1, not_line_ending))(i)?;
     Ok((input, comment))
 }
 
@@ -155,7 +163,7 @@ pub fn rule_line(i: &str) -> IResult<&str, Line> {
 }
 
 pub fn comment_line(i: &str) -> IResult<&str, Line> {
-    let (input, (_, comment, _)) = tuple((tag("#"), not_line_ending, line_ending,))(i)?;
+    let (input, (_, comment, _)) = tuple((tag("#"), not_line_ending, line_ending))(i)?;
     Ok((input, Line::Comment { comment: comment }))
 }
 
@@ -225,7 +233,8 @@ mod tests {
 
     #[test]
     fn display_test() {
-        assert_eq!(display("display haha 122"), Ok(("", Rule::Display { chars: "haha", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2] })));
+        assert_eq!(display("display haha 122"), Ok(("", Rule::Display { chars: "haha",
+									dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2] })));
     }
 
     #[test]
@@ -252,13 +261,19 @@ mod tests {
     fn rule_line_test() {
         assert_eq!(
             rule_line("joinword haha 123\n"),
-            Ok(("", Line::Rule { rule: Rule::Joinword { word: "haha", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] }, comment: "" })));
+            Ok(("", Line::Rule { rule: Rule::Joinword { word: "haha",
+							dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
+				 comment: "" })));
         assert_eq!(
             rule_line("largesign அஇ 123\n"),
-            Ok(("", Line::Rule { rule: Rule::Largesign { word: "அஇ", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] }, comment: "" })));
+            Ok(("", Line::Rule { rule: Rule::Largesign { word: "அஇ",
+							 dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
+				 comment: "" })));
         assert_eq!(
             rule_line("syllable haha 123\n"),
-            Ok(("", Line::Rule { rule: Rule::Syllable { word: "haha", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] }, comment: "" })));
+            Ok(("", Line::Rule { rule: Rule::Syllable { word: "haha",
+							dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
+				 comment: "" })));
     }
 
     #[test]
@@ -289,7 +304,9 @@ mod tests {
 	assert_eq!(end_comment(" an end comment\n"), Ok(("\n", "an end comment")));
         assert_eq!(
             rule_line("joinword haha 123 comment \n"),
-            Ok(("", Line::Rule { rule: Rule::Joinword { word: "haha", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] }, comment: "comment " })));
+            Ok(("", Line::Rule { rule: Rule::Joinword { word: "haha",
+							dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
+				 comment: "comment " })));
     }
 
     #[test]
@@ -299,8 +316,13 @@ mod tests {
 			  "joinword haha 123\n",
 			  "syllable haha 123-1f\n")),
             Ok(("", vec![Line::Empty,
-			 Line::Rule { rule: Rule::Joinword { word: "haha", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] }, comment: "" },
-			 Line::Rule { rule: Rule::Syllable { word: "haha", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3, BrailleDot::DOT1 | BrailleDot::DOTF] }, comment: "" }])));
+			 Line::Rule { rule: Rule::Joinword { word: "haha",
+							     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
+				      comment: "" },
+			 Line::Rule { rule: Rule::Syllable { word: "haha",
+							     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3,
+									BrailleDot::DOT1 | BrailleDot::DOTF] },
+				      comment: "" }])));
         assert_eq!(
             table(concat!("       \n",
 			  "# just testing\n",
@@ -309,8 +331,14 @@ mod tests {
 			  "syllable haha 123\n")),
             Ok(("", vec![Line::Empty,
 			 Line::Comment { comment: " just testing" },
-			 Line::Rule { rule: Rule::Multind { chars: "hehe", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] }, comment: "" },
-			 Line::Rule { rule: Rule::Joinword { word: "haha", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] }, comment: "" },
-			 Line::Rule { rule: Rule::Syllable { word: "haha", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] }, comment: "" }])));
+			 Line::Rule { rule: Rule::Multind { chars: "hehe",
+							    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
+				      comment: "" },
+			 Line::Rule { rule: Rule::Joinword { word: "haha",
+							     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
+				      comment: "" },
+			 Line::Rule { rule: Rule::Syllable { word: "haha",
+							     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
+				      comment: "" }])));
     }
 }
