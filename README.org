@@ -41,6 +41,9 @@ The parser is built from the grammar used in [[https://github.com/liblouis/tree-
 which is a port of the [[https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form][EBNF grammar]] in [[https://github.com/liblouis/rewrite-louis][rewrite-louis]], which in turn is
 a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][Parsing expression grammar]] from [[https://github.com/liblouis/louis-parser][louis-parser]].
 
+* Todo
+- [ ] List the line number of an error, see
+  https://iximiuz.com/en/posts/rust-writing-parsers-with-nom/
 
 * License
 
