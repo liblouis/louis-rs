@@ -43,32 +43,32 @@ pub enum BrailleDot {
 type BrailleChar = EnumSet<BrailleDot>;
 type BrailleChars = Vec<BrailleChar>;
 
-fn char_to_dot(char: char) -> BrailleDot {
+fn char_to_dot(char: char) -> Option<BrailleDot> {
     match char {
-	'0' => BrailleDot::DOT0,
-	'1' => BrailleDot::DOT1,
-	'2' => BrailleDot::DOT2,
-	'3' => BrailleDot::DOT3,
-	'4' => BrailleDot::DOT4,
-	'5' => BrailleDot::DOT5,
-	'6' => BrailleDot::DOT6,
-	'7' => BrailleDot::DOT7,
-	'8' => BrailleDot::DOT8,
-	'9' => BrailleDot::DOT9,
-	'a' => BrailleDot::DOTA,
-	'b' => BrailleDot::DOTB,
-	'c' => BrailleDot::DOTC,
-	'd' => BrailleDot::DOTD,
-	'e' => BrailleDot::DOTE,
-	'f' => BrailleDot::DOTF,
-	 _  => BrailleDot::DOT0, // FIXME: might be better to return an opt
+	'0' => Some(BrailleDot::DOT0),
+	'1' => Some(BrailleDot::DOT1),
+	'2' => Some(BrailleDot::DOT2),
+	'3' => Some(BrailleDot::DOT3),
+	'4' => Some(BrailleDot::DOT4),
+	'5' => Some(BrailleDot::DOT5),
+	'6' => Some(BrailleDot::DOT6),
+	'7' => Some(BrailleDot::DOT7),
+	'8' => Some(BrailleDot::DOT8),
+	'9' => Some(BrailleDot::DOT9),
+	'a' => Some(BrailleDot::DOTA),
+	'b' => Some(BrailleDot::DOTB),
+	'c' => Some(BrailleDot::DOTC),
+	'd' => Some(BrailleDot::DOTD),
+	'e' => Some(BrailleDot::DOTE),
+	'f' => Some(BrailleDot::DOTF),
+	 _  => None,
     }
 }
 
 fn chars_to_dots(chars: &str) -> BrailleChar {
     chars
 	.chars()
-	.map(|c| char_to_dot(c))
+	.map(|c| char_to_dot(c).unwrap())
 	.collect()
 }
 
@@ -170,6 +170,13 @@ mod tests {
     use nom::error::Error;
     use nom::error::ErrorKind;
     use nom::Err;
+
+    #[test]
+    fn char_to_dot_test() {
+        assert_eq!(char_to_dot('8'), Some(BrailleDot::DOT8));
+        assert_eq!(char_to_dot('F'), None);
+        assert_eq!(char_to_dot('z'), None);
+    }
 
     #[test]
     fn character_test() {
@@ -277,10 +284,10 @@ mod tests {
         assert_eq!(
             table(concat!("       \n",
 			  "joinword haha 123\n",
-			  "syllable haha 123\n")),
+			  "syllable haha 123-1f\n")),
             Ok(("", vec![Line::Empty,
 			 Line::Rule { rule: Rule::Joinword { word: "haha", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] }, comment: "" },
-			 Line::Rule { rule: Rule::Syllable { word: "haha", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] }, comment: "" }])));
+			 Line::Rule { rule: Rule::Syllable { word: "haha", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3, BrailleDot::DOT1 | BrailleDot::DOTF] }, comment: "" }])));
         assert_eq!(
             table(concat!("       \n",
 			  "# just testing\n",
