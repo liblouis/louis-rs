@@ -13,9 +13,14 @@ use nom::IResult;
 use nom_unicode::complete::alpha1 as unicode_alpha1;
 
 #[derive(PartialEq, Debug)]
-pub enum Rule<'a> {
+pub enum Line<'a> {
     Empty,
     Comment { comment: &'a str },
+    Rule { rule: Rule<'a>, comment: &'a str }
+}
+
+#[derive(PartialEq, Debug)]
+pub enum Rule<'a> {
     Include { filename: &'a str },
     Undefined { dots: &'a str },
     Display { chars: &'a str, dots: &'a str },
@@ -79,26 +84,26 @@ pub fn end_comment(i: &str) -> IResult<&str, &str> {
     Ok((input, comment))
 }
 
-pub fn rule_line(i: &str) -> IResult<&str, Rule> {
-    let (input, (rule, _, _)) = tuple((
+pub fn rule_line(i: &str) -> IResult<&str, Line> {
+    let (input, (rule, comment, _)) = tuple((
         alt((largesign, joinword, syllable)),
 	alt((end_comment, space0)),
 	line_ending,
     ))(i)?;
-    Ok((input, rule))
+    Ok((input, Line::Rule { rule: rule, comment: comment}))
 }
 
-pub fn comment_line(i: &str) -> IResult<&str, Rule> {
+pub fn comment_line(i: &str) -> IResult<&str, Line> {
     let (input, (_, comment, _)) = tuple((tag("#"), not_line_ending, line_ending,))(i)?;
-    Ok((input, Rule::Comment { comment: comment }))
+    Ok((input, Line::Comment { comment: comment }))
 }
 
-pub fn empty_line(i: &str) -> IResult<&str, Rule> {
+pub fn empty_line(i: &str) -> IResult<&str, Line> {
     let (input, (_, _)) = tuple((space0, line_ending))(i)?;
-    Ok((input, Rule::Empty))
+    Ok((input, Line::Empty))
 }
 
-pub fn line(i: &str) -> IResult<&str, Rule> {
+pub fn line(i: &str) -> IResult<&str, Line> {
     let (input, rule) = alt((
 	rule_line,
 	comment_line,
@@ -107,7 +112,7 @@ pub fn line(i: &str) -> IResult<&str, Rule> {
     Ok((input, rule))
 }
 
-pub fn table(i: &str) -> IResult<&str, Vec<Rule>> {
+pub fn table(i: &str) -> IResult<&str, Vec<Line>> {
     many0(line)(i)
 }
 
@@ -173,30 +178,30 @@ mod tests {
     fn rule_line_test() {
         assert_eq!(
             rule_line("joinword haha 123\n"),
-            Ok(("", Rule::Joinword { word: "haha", dots: "123" })));
+            Ok(("", Line::Rule { rule: Rule::Joinword { word: "haha", dots: "123" }, comment: "" })));
         assert_eq!(
             rule_line("largesign அஇ 123\n"),
-            Ok(("", Rule::Largesign { word: "அஇ", dots: "123" })));
+            Ok(("", Line::Rule { rule: Rule::Largesign { word: "அஇ", dots: "123" }, comment: "" })));
         assert_eq!(
             rule_line("syllable haha 123\n"),
-            Ok(("", Rule::Syllable { word: "haha", dots: "123" })));
+            Ok(("", Line::Rule { rule: Rule::Syllable { word: "haha", dots: "123" }, comment: "" })));
     }
 
     #[test]
     fn empty_line_test() {
         assert_eq!(
             empty_line("       \n"),
-            Ok(("", Rule::Empty)));
+            Ok(("", Line::Empty)));
         assert_eq!(
             empty_line("\n"),
-            Ok(("", Rule::Empty)));
+            Ok(("", Line::Empty)));
     }
 
     #[test]
     fn comment_line_test() {
         assert_eq!(
             comment_line("# haha 1234    \n"),
-            Ok(("", Rule::Comment { comment: " haha 1234    "})));
+            Ok(("", Line::Comment { comment: " haha 1234    "})));
         assert_eq!(
             comment_line("# haha 1234    "),
             Err(Err::Error(Error::new("", ErrorKind::CrLf))));
@@ -210,7 +215,7 @@ mod tests {
 	assert_eq!(end_comment(" an end comment\n"), Ok(("\n", "an end comment")));
         assert_eq!(
             rule_line("joinword haha 123 comment \n"),
-            Ok(("", Rule::Joinword { word: "haha", dots: "123" })));
+            Ok(("", Line::Rule { rule: Rule::Joinword { word: "haha", dots: "123" }, comment: "comment " })));
     }
 
     #[test]
@@ -219,17 +224,17 @@ mod tests {
             table(concat!("       \n",
 			  "joinword haha 123\n",
 			  "syllable haha 123\n")),
-            Ok(("", vec![Rule::Empty,
-			 Rule::Joinword { word: "haha", dots: "123" },
-			 Rule::Syllable { word: "haha", dots: "123" }])));
+            Ok(("", vec![Line::Empty,
+			 Line::Rule { rule: Rule::Joinword { word: "haha", dots: "123" }, comment: "" },
+			 Line::Rule { rule: Rule::Syllable { word: "haha", dots: "123" }, comment: "" }])));
         assert_eq!(
             table(concat!("       \n",
 			  "# just testing\n",
 			  "joinword haha 123\n",
 			  "syllable haha 123\n")),
-            Ok(("", vec![Rule::Empty,
-			 Rule::Comment { comment: " just testing" },
-			 Rule::Joinword { word: "haha", dots: "123" },
-			 Rule::Syllable { word: "haha", dots: "123" }])));
+            Ok(("", vec![Line::Empty,
+			 Line::Comment { comment: " just testing" },
+			 Line::Rule { rule: Rule::Joinword { word: "haha", dots: "123" }, comment: "" },
+			 Line::Rule { rule: Rule::Syllable { word: "haha", dots: "123" }, comment: "" }])));
     }
 }
