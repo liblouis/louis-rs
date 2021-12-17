@@ -28,6 +28,7 @@ pub enum Rule<'a> {
     Include { filename: &'a str },
     Undefined { dots: BrailleChars },
     Display { chars: &'a str, dots: BrailleChars },
+    Multind { chars: &'a str, dots: BrailleChars },
     Largesign { word: &'a str, dots: BrailleChars },
     Syllable { word: &'a str, dots: BrailleChars },
     Joinword { word: &'a str, dots: BrailleChars },
@@ -104,6 +105,11 @@ pub fn display(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Display { chars: chars, dots: dots }))
 }
 
+pub fn multind(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("multind"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Multind { chars: chars, dots: dots }))
+}
+
 pub fn largesign(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, word, _, dots)) = tuple((
         tag("largesign"), space1, chars, space1, dots,
@@ -134,7 +140,14 @@ pub fn end_comment(i: &str) -> IResult<&str, &str> {
 
 pub fn rule_line(i: &str) -> IResult<&str, Line> {
     let (input, (rule, comment, _)) = tuple((
-        alt((largesign, joinword, syllable)),
+        alt((
+	    include,
+	    undefined,
+	    display,
+	    multind,
+	    largesign,
+	    joinword,
+	    syllable)),
 	alt((end_comment, space0)),
 	line_ending,
     ))(i)?;
@@ -291,10 +304,12 @@ mod tests {
         assert_eq!(
             table(concat!("       \n",
 			  "# just testing\n",
+			  "multind hehe 123\n",
 			  "joinword haha 123\n",
 			  "syllable haha 123\n")),
             Ok(("", vec![Line::Empty,
 			 Line::Comment { comment: " just testing" },
+			 Line::Rule { rule: Rule::Multind { chars: "hehe", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] }, comment: "" },
 			 Line::Rule { rule: Rule::Joinword { word: "haha", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] }, comment: "" },
 			 Line::Rule { rule: Rule::Syllable { word: "haha", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] }, comment: "" }])));
     }
