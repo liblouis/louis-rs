@@ -20,6 +20,7 @@ use enumset::enum_set;
 
 use nom::IResult;
 use nom_unicode::complete::alpha1 as unicode_alpha1;
+use nom_unicode::complete::digit1 as unicode_digit1;
 
 #[derive(PartialEq, Debug)]
 pub enum Line<'a> {
@@ -34,6 +35,12 @@ pub enum Rule<'a> {
     Undefined { dots: BrailleChars },
     Display { chars: &'a str, dots: BrailleChars, prefixes: Prefixes },
     Multind { chars: &'a str, dots: BrailleChars, prefixes: Prefixes },
+    Litdigit { chars: &'a str, dots: BrailleChars },
+    Modeletter { chars: &'a str, dots: BrailleChars, prefixes: Prefixes},
+    Capsletter { dots: BrailleChars, prefixes: Prefixes},
+    Begmodeword { chars: &'a str, dots: BrailleChars, prefixes: Prefixes},
+    Begcapsword { dots: BrailleChars, prefixes: Prefixes},
+    Endcapsword { dots: BrailleChars, prefixes: Prefixes},
     Largesign { word: &'a str, dots: BrailleChars },
     Syllable { word: &'a str, dots: BrailleChars },
     Joinword { word: &'a str, dots: BrailleChars },
@@ -143,6 +150,36 @@ pub fn display(i: &str) -> IResult<&str, Rule> {
 pub fn multind(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("multind"), space1, chars, space1, dots))(i)?;
     Ok((input, Rule::Multind { chars: chars, dots: dots, prefixes: prefixes.unwrap() }))
+}
+
+pub fn litdigit(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("litdigit"), space1, unicode_digit1, space1, dots))(i)?;
+    Ok((input, Rule::Litdigit { chars: chars, dots: dots }))
+}
+
+pub fn modeletter(i: &str) -> IResult<&str, Rule> {
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("modeletter"), space1, ascii_chars, space1, dots))(i)?;
+    Ok((input, Rule::Modeletter { chars: chars, dots: dots, prefixes: prefixes.unwrap() }))
+}
+
+pub fn capsletter(i: &str) -> IResult<&str, Rule> {
+    let (input, (prefixes, _, _, dots)) = tuple((opt(prefixes), tag("capsletter"), space1, dots))(i)?;
+    Ok((input, Rule::Capsletter { dots: dots, prefixes: prefixes.unwrap() }))
+}
+
+pub fn begmodeword(i: &str) -> IResult<&str, Rule> {
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("begmodeword"), space1, ascii_chars, space1, dots))(i)?;
+    Ok((input, Rule::Begmodeword { chars: chars, dots: dots, prefixes: prefixes.unwrap() }))
+}
+
+pub fn begcapsword(i: &str) -> IResult<&str, Rule> {
+    let (input, (prefixes, _, _, dots)) = tuple((opt(prefixes), tag("begcapsword"), space1, dots))(i)?;
+    Ok((input, Rule::Begcapsword { dots: dots, prefixes: prefixes.unwrap() }))
+}
+
+pub fn endcapsword(i: &str) -> IResult<&str, Rule> {
+    let (input, (prefixes, _, _, dots)) = tuple((opt(prefixes), tag("endcapsword"), space1, dots))(i)?;
+    Ok((input, Rule::Endcapsword { dots: dots, prefixes: prefixes.unwrap() }))
 }
 
 pub fn largesign(i: &str) -> IResult<&str, Rule> {
@@ -261,6 +298,51 @@ mod tests {
         assert_eq!(display("display haha 122"), Ok(("", Rule::Display { chars: "haha",
 									dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
 									prefixes: Prefixes::empty() })));
+    }
+
+    #[test]
+    fn litdigit_test() {
+        assert_eq!(litdigit("litdigit 0 245"),
+		   Ok(("", Rule::Litdigit { chars: "0", dots: vec![BrailleDot::DOT2 | BrailleDot::DOT4 | BrailleDot::DOT5] })));
+    }
+
+    #[test]
+    fn modeletter_test() {
+        assert_eq!(modeletter("modeletter uppercase 6"),
+		   Ok(("", Rule::Modeletter { chars: "uppercase",
+					      dots: vec![enum_set!(BrailleDot::DOT6)],
+					      prefixes: Prefixes::empty()})));
+    }
+
+    #[test]
+    fn capsletter_test() {
+        assert_eq!(capsletter("capsletter 6"),
+		   Ok(("", Rule::Capsletter { dots: vec![enum_set!(BrailleDot::DOT6)],
+					      prefixes: Prefixes::empty()})));
+    }
+
+    #[test]
+    fn begmodeword_test() {
+        assert_eq!(begmodeword("begmodeword uppercase 6"),
+		   Ok(("", Rule::Begmodeword { chars: "uppercase",
+					       dots: vec![enum_set!(BrailleDot::DOT6)],
+					       prefixes: Prefixes::empty()})));
+    }
+
+    #[test]
+    fn begcapsword_test() {
+        assert_eq!(begcapsword("begcapsword 6-6"),
+		   Ok(("", Rule::Begcapsword { dots: vec![enum_set!(BrailleDot::DOT6),
+							  enum_set!(BrailleDot::DOT6)],
+					       prefixes: Prefixes::empty()})));
+    }
+
+    #[test]
+    fn endcapsword_test() {
+        assert_eq!(endcapsword("endcapsword 6-3"),
+		   Ok(("", Rule::Endcapsword { dots: vec![enum_set!(BrailleDot::DOT6),
+							  enum_set!(BrailleDot::DOT3)],
+					       prefixes: Prefixes::empty()})));
     }
 
     #[test]
