@@ -9,6 +9,7 @@ use nom::character::complete::not_line_ending;
 use nom::character::complete::space0;
 use nom::character::complete::space1;
 use nom::character::complete::digit1;
+use nom::character::complete::none_of;
 use nom::combinator::map;
 use nom::combinator::map_res;
 use nom::combinator::opt;
@@ -39,6 +40,7 @@ pub enum Rule<'a> {
     Undefined { dots: BrailleChars },
     Display { chars: &'a str, dots: BrailleChars, prefixes: Prefixes },
     Multind { chars: &'a str, dots: BrailleChars, prefixes: Prefixes },
+    Punctuation { c: char, dots: BrailleChars, prefixes: Prefixes},
     Litdigit { chars: &'a str, dots: BrailleChars },
     Modeletter { chars: &'a str, dots: BrailleChars, prefixes: Prefixes},
     Capsletter { dots: BrailleChars, prefixes: Prefixes},
@@ -125,6 +127,10 @@ pub fn chars(input: &str) -> IResult<&str, &str> {
     //unicode_alpha1(input)
 }
 
+pub fn single_char(input: &str) -> IResult<&str, char> {
+    none_of(" \t\r\n")(input)
+}
+
 pub fn ascii_chars(input: &str) -> IResult<&str, &str> {
     alpha1(input)
 }
@@ -181,6 +187,11 @@ pub fn display(i: &str) -> IResult<&str, Rule> {
 pub fn multind(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("multind"), space1, chars, space1, dots))(i)?;
     Ok((input, Rule::Multind { chars: chars, dots: dots, prefixes: prefixes.unwrap() }))
+}
+
+pub fn punctuation(i: &str) -> IResult<&str, Rule> {
+    let (input, (prefixes, _, _, c, _, dots)) = tuple((opt(prefixes), tag("punctuation"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Punctuation { c: c, dots: dots, prefixes: prefixes.unwrap() }))
 }
 
 pub fn litdigit(i: &str) -> IResult<&str, Rule> {
@@ -359,6 +370,14 @@ mod tests {
         assert_eq!(display("display haha 122"), Ok(("", Rule::Display { chars: "haha",
 									dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
 									prefixes: Prefixes::empty() })));
+    }
+
+    #[test]
+    fn punctuation_test() {
+        assert_eq!(punctuation("punctuation . 46"),
+		   Ok(("", Rule::Punctuation { c: '.',
+					       dots: vec![BrailleDot::DOT4 | BrailleDot::DOT6],
+					       prefixes: Prefixes::empty() })));
     }
 
     #[test]
