@@ -1,5 +1,6 @@
 use nom::branch::alt;
 use nom::bytes::complete::tag;
+use nom::bytes::complete::is_a;
 use nom::bytes::complete::is_not;
 use nom::character::complete::alpha1;
 use nom::character::complete::hex_digit1;
@@ -7,7 +8,9 @@ use nom::character::complete::line_ending;
 use nom::character::complete::not_line_ending;
 use nom::character::complete::space0;
 use nom::character::complete::space1;
+use nom::character::complete::digit1;
 use nom::combinator::map;
+use nom::combinator::map_res;
 use nom::combinator::opt;
 use nom::combinator::success;
 use nom::multi::many0;
@@ -20,7 +23,7 @@ use enumset::EnumSetType;
 use enumset::enum_set;
 
 use nom::IResult;
-use nom_unicode::complete::alpha1 as unicode_alpha1;
+//use nom_unicode::complete::alpha1 as unicode_alpha1;
 use nom_unicode::complete::digit1 as unicode_digit1;
 
 #[derive(PartialEq, Debug)]
@@ -42,6 +45,12 @@ pub enum Rule<'a> {
     Begmodeword { chars: &'a str, dots: BrailleChars, prefixes: Prefixes},
     Begcapsword { dots: BrailleChars, prefixes: Prefixes},
     Endcapsword { dots: BrailleChars, prefixes: Prefixes},
+    Capsmodechars { chars: &'a str},
+    Begcaps { dots: BrailleChars},
+    Endcaps { dots: BrailleChars},
+    Begcapsphrase { dots: BrailleChars},
+    Endcapsphrase { dots: BrailleChars, position: Position},
+    Lencapsphrase { length: u8},
     Largesign { word: &'a str, dots: BrailleChars },
     Syllable { word: &'a str, dots: BrailleChars },
     Joinword { word: &'a str, dots: BrailleChars },
@@ -52,6 +61,12 @@ pub enum Prefix {
     Noback,
     Nofor,
     Nocross,
+}
+
+#[derive(PartialEq, Debug)]
+pub enum Position {
+    Before,
+    After,
 }
 
 type Prefixes = EnumSet<Prefix>;
@@ -106,7 +121,8 @@ fn chars_to_dots(chars: &str) -> BrailleChar {
 }
 
 pub fn chars(input: &str) -> IResult<&str, &str> {
-    unicode_alpha1(input)
+    is_not(" \t\r\n")(input)
+    //unicode_alpha1(input)
 }
 
 pub fn ascii_chars(input: &str) -> IResult<&str, &str> {
@@ -124,6 +140,16 @@ pub fn dots(i: &str) -> IResult<&str, BrailleChars> {
 	.map(|chars| chars_to_dots(chars))
 	.collect();
     Ok((input, braille_chars))
+}
+
+pub fn number(input: &str) -> IResult<&str, u8> {
+    map_res(digit1, |s: &str| s.parse::<u8>())(input)
+}
+
+pub fn before_or_after(input: &str) -> IResult<&str, Position> {
+    alt((
+	map(tag("before"), |_| Position::Before),
+	map(tag("after"), |_| Position::After)))(input)
 }
 
 fn prefixes(i: &str) -> IResult<&str, Prefixes> {
@@ -185,6 +211,36 @@ pub fn begcapsword(i: &str) -> IResult<&str, Rule> {
 pub fn endcapsword(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, dots)) = tuple((opt(prefixes), tag("endcapsword"), space1, dots))(i)?;
     Ok((input, Rule::Endcapsword { dots: dots, prefixes: prefixes.unwrap() }))
+}
+
+pub fn capsmodechars(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars)) = tuple((tag("capsmodechars"), space1, chars))(i)?;
+    Ok((input, Rule::Capsmodechars { chars: chars }))
+}
+
+pub fn begcaps(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, dots)) = tuple((tag("begcaps"), space1, dots))(i)?;
+    Ok((input, Rule::Begcaps { dots: dots }))
+}
+
+pub fn endcaps(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, dots)) = tuple((tag("endcaps"), space1, dots))(i)?;
+    Ok((input, Rule::Endcaps { dots: dots }))
+}
+
+pub fn begcapsphrase(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, dots)) = tuple((tag("begcapsphrase"), space1, dots))(i)?;
+    Ok((input, Rule::Begcapsphrase { dots: dots }))
+}
+
+pub fn endcapsphrase(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, position, _, dots)) = tuple((tag("endcapsphrase"), space1, before_or_after, space1, dots))(i)?;
+    Ok((input, Rule::Endcapsphrase { dots: dots, position: position }))
+}
+
+pub fn lencapsphrase(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, length)) = tuple((tag("lencapsphrase"), space1, number))(i)?;
+    Ok((input, Rule::Lencapsphrase { length: length }))
 }
 
 pub fn largesign(i: &str) -> IResult<&str, Rule> {
@@ -348,6 +404,52 @@ mod tests {
 		   Ok(("", Rule::Endcapsword { dots: vec![enum_set!(BrailleDot::DOT6),
 							  enum_set!(BrailleDot::DOT3)],
 					       prefixes: Prefixes::empty()})));
+    }
+
+    #[test]
+    fn capsmodechars_test() {
+        assert_eq!(capsmodechars("capsmodechars -/"),
+		   Ok(("", Rule::Capsmodechars { chars: "-/"})));
+    }
+
+    #[test]
+    fn begcaps_test() {
+        assert_eq!(begcaps("begcaps 6-6-6"),
+		   Ok(("", Rule::Begcaps { dots: vec![enum_set!(BrailleDot::DOT6),
+						      enum_set!(BrailleDot::DOT6),
+						      enum_set!(BrailleDot::DOT6)]})));
+    }
+
+    #[test]
+    fn endcaps_test() {
+        assert_eq!(endcaps("endcaps 6-3"),
+		   Ok(("", Rule::Endcaps { dots: vec![enum_set!(BrailleDot::DOT6),
+							  enum_set!(BrailleDot::DOT3)]})));
+    }
+
+    #[test]
+    fn begcapsphrase_test() {
+        assert_eq!(begcapsphrase("begcapsphrase 45-45"),
+		   Ok(("", Rule::Begcapsphrase { dots: vec![enum_set!(BrailleDot::DOT4 | BrailleDot::DOT5),
+							    enum_set!(BrailleDot::DOT4 | BrailleDot::DOT5)]})));
+    }
+
+    #[test]
+    fn endcapsphrase_test() {
+        assert_eq!(endcapsphrase("endcapsphrase before 45"),
+		   Ok(("", Rule::Endcapsphrase { dots: vec![BrailleDot::DOT4 | BrailleDot::DOT5],
+						 position: Position::Before})));
+        assert_eq!(endcapsphrase("endcapsphrase after 45"),
+		   Ok(("", Rule::Endcapsphrase { dots: vec![BrailleDot::DOT4 | BrailleDot::DOT5],
+						 position: Position::After})));
+        assert_eq!(endcapsphrase("endcapsphrase foo 45"),
+		   Err(Err::Error(Error::new("foo 45", ErrorKind::Tag))));
+    }
+
+    #[test]
+    fn _test() {
+        assert_eq!(lencapsphrase("lencapsphrase 4"),
+		   Ok(("", Rule::Lencapsphrase { length: 4 })));
     }
 
     #[test]
