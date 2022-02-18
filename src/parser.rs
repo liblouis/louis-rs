@@ -1,5 +1,6 @@
 use nom::branch::alt;
 use nom::bytes::complete::tag;
+use nom::bytes::complete::is_not;
 use nom::character::complete::alpha1;
 use nom::character::complete::hex_digit1;
 use nom::character::complete::line_ending;
@@ -112,6 +113,10 @@ pub fn ascii_chars(input: &str) -> IResult<&str, &str> {
     alpha1(input)
 }
 
+pub fn filename(input: &str) -> IResult<&str, &str> {
+    is_a("abcdefghijklmnopqrstuvwxyz0123456789_-.")(input)
+}
+
 pub fn dots(i: &str) -> IResult<&str, BrailleChars> {
     let (input, dots) = separated_list1(tag("-"), hex_digit1)(i)?;
     let braille_chars: Vec<BrailleChar> = dots
@@ -133,7 +138,7 @@ fn prefixes(i: &str) -> IResult<&str, Prefixes> {
 }
 
 pub fn include(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, filename)) = tuple((tag("include"), space1, chars))(i)?;
+    let (input, (_, _, filename)) = tuple((tag("include"), space1, filename))(i)?;
     Ok((input, Rule::Include { filename: filename }))
 }
 
@@ -285,7 +290,7 @@ mod tests {
 
     #[test]
     fn include_test() {
-        assert_eq!(include("include filename"), Ok(("", Rule::Include { filename: "filename" })));
+        assert_eq!(include("include filename.tbl"), Ok(("", Rule::Include { filename: "filename.tbl" })));
     }
 
     #[test]
