@@ -41,7 +41,8 @@ pub enum Rule<'a> {
     Display { chars: &'a str, dots: BrailleChars, prefixes: Prefixes },
     Space { ch: char, dots: BrailleChars, prefixes: Prefixes},
     Multind { chars: &'a str, dots: BrailleChars, prefixes: Prefixes },
-    Punctuation { c: char, dots: BrailleChars, prefixes: Prefixes},
+    Punctuation { ch: char, dots: BrailleChars, prefixes: Prefixes},
+    Digit { ch: char, dots: BrailleChars },
     Litdigit { chars: &'a str, dots: BrailleChars },
     Modeletter { chars: &'a str, dots: BrailleChars, prefixes: Prefixes},
     Capsletter { dots: BrailleChars, prefixes: Prefixes},
@@ -197,7 +198,12 @@ pub fn multind(i: &str) -> IResult<&str, Rule> {
 
 pub fn punctuation(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, c, _, dots)) = tuple((opt(prefixes), tag("punctuation"), space1, single_char, space1, dots))(i)?;
-    Ok((input, Rule::Punctuation { c: c, dots: dots, prefixes: prefixes.unwrap() }))
+    Ok((input, Rule::Punctuation { ch: c, dots: dots, prefixes: prefixes.unwrap() }))
+}
+
+pub fn digit(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, digit, _, dots)) = tuple((tag("digit"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Digit { ch: digit, dots: dots }))
 }
 
 pub fn litdigit(i: &str) -> IResult<&str, Rule> {
@@ -387,9 +393,19 @@ mod tests {
     #[test]
     fn punctuation_test() {
         assert_eq!(punctuation("punctuation . 46"),
-		   Ok(("", Rule::Punctuation { c: '.',
+		   Ok(("", Rule::Punctuation { ch: '.',
 					       dots: vec![BrailleDot::DOT4 | BrailleDot::DOT6],
 					       prefixes: Prefixes::empty() })));
+    }
+
+    #[test]
+    fn digit_test() {
+        assert_eq!(digit("digit 1 278"),
+		   Ok(("", Rule::Digit { ch: '1',
+					 dots: vec![BrailleDot::DOT2 | BrailleDot::DOT7 | BrailleDot::DOT8] })));
+        assert_eq!(digit("digit ۲ 1278"),
+		   Ok(("", Rule::Digit { ch: '۲',
+					 dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT7 | BrailleDot::DOT8] })));
     }
 
     #[test]
