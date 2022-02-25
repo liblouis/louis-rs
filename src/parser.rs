@@ -39,6 +39,7 @@ pub enum Rule<'a> {
     Include { filename: &'a str },
     Undefined { dots: BrailleChars },
     Display { chars: &'a str, dots: BrailleChars, prefixes: Prefixes },
+    Space { ch: char, dots: BrailleChars, prefixes: Prefixes},
     Multind { chars: &'a str, dots: BrailleChars, prefixes: Prefixes },
     Punctuation { c: char, dots: BrailleChars, prefixes: Prefixes},
     Litdigit { chars: &'a str, dots: BrailleChars },
@@ -182,6 +183,11 @@ pub fn undefined(i: &str) -> IResult<&str, Rule> {
 pub fn display(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("display"), space1, chars, space1, dots))(i)?;
     Ok((input, Rule::Display { chars: chars, dots: dots, prefixes: prefixes.unwrap() }))
+}
+
+pub fn space(i: &str) -> IResult<&str, Rule> {
+    let (input, (prefixes, _, _, c, _, dots)) = tuple((opt(prefixes), tag("space"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Space { ch: c, dots: dots, prefixes: prefixes.unwrap() }))
 }
 
 pub fn multind(i: &str) -> IResult<&str, Rule> {
@@ -370,6 +376,12 @@ mod tests {
         assert_eq!(display("display haha 122"), Ok(("", Rule::Display { chars: "haha",
 									dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
 									prefixes: Prefixes::empty() })));
+    }
+
+    #[test]
+    fn space_test() {
+        assert_eq!(space("space . 0"),
+		   Ok(("", Rule::Space { ch: '.', dots: vec![enum_set!(BrailleDot::DOT0)], prefixes: Prefixes::empty() })));
     }
 
     #[test]
