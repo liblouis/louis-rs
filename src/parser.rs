@@ -28,36 +28,36 @@ use nom::IResult;
 use nom_unicode::complete::digit1 as unicode_digit1;
 
 #[derive(PartialEq, Debug)]
-pub enum Line<'a> {
+pub enum Line {
     Empty,
-    Comment { comment: &'a str },
-    Rule { rule: Rule<'a>, comment: &'a str },
+    Comment { comment: String },
+    Rule { rule: Rule, comment: String },
 }
 
 #[derive(PartialEq, Debug)]
-pub enum Rule<'a> {
-    Include { filename: &'a str },
+pub enum Rule {
+    Include { filename: String },
     Undefined { dots: BrailleChars },
-    Display { chars: &'a str, dots: BrailleChars, prefixes: Prefixes },
+    Display { chars: String, dots: BrailleChars, prefixes: Prefixes },
     Space { ch: char, dots: BrailleChars, prefixes: Prefixes},
-    Multind { chars: &'a str, dots: BrailleChars, prefixes: Prefixes },
+    Multind { chars: String, dots: BrailleChars, prefixes: Prefixes },
     Punctuation { ch: char, dots: BrailleChars, prefixes: Prefixes},
     Digit { ch: char, dots: BrailleChars },
-    Litdigit { chars: &'a str, dots: BrailleChars },
-    Modeletter { chars: &'a str, dots: BrailleChars, prefixes: Prefixes},
+    Litdigit { chars: String, dots: BrailleChars },
+    Modeletter { chars: String, dots: BrailleChars, prefixes: Prefixes},
     Capsletter { dots: BrailleChars, prefixes: Prefixes},
-    Begmodeword { chars: &'a str, dots: BrailleChars, prefixes: Prefixes},
+    Begmodeword { chars: String, dots: BrailleChars, prefixes: Prefixes},
     Begcapsword { dots: BrailleChars, prefixes: Prefixes},
     Endcapsword { dots: BrailleChars, prefixes: Prefixes},
-    Capsmodechars { chars: &'a str},
+    Capsmodechars { chars: String},
     Begcaps { dots: BrailleChars},
     Endcaps { dots: BrailleChars},
     Begcapsphrase { dots: BrailleChars},
     Endcapsphrase { dots: BrailleChars, position: Position},
     Lencapsphrase { length: u8},
-    Largesign { word: &'a str, dots: BrailleChars },
-    Syllable { word: &'a str, dots: BrailleChars },
-    Joinword { word: &'a str, dots: BrailleChars },
+    Largesign { word: String, dots: BrailleChars },
+    Syllable { word: String, dots: BrailleChars },
+    Joinword { word: String, dots: BrailleChars },
 }
 
 #[derive(EnumSetType, Debug)]
@@ -173,7 +173,7 @@ fn prefixes(i: &str) -> IResult<&str, Prefixes> {
 
 pub fn include(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, filename)) = tuple((tag("include"), space1, filename))(i)?;
-    Ok((input, Rule::Include { filename: filename }))
+    Ok((input, Rule::Include { filename: filename.to_string() }))
 }
 
 pub fn undefined(i: &str) -> IResult<&str, Rule> {
@@ -183,7 +183,7 @@ pub fn undefined(i: &str) -> IResult<&str, Rule> {
 
 pub fn display(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("display"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Display { chars: chars, dots: dots, prefixes: prefixes.unwrap() }))
+    Ok((input, Rule::Display { chars: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
 }
 
 pub fn space(i: &str) -> IResult<&str, Rule> {
@@ -193,7 +193,7 @@ pub fn space(i: &str) -> IResult<&str, Rule> {
 
 pub fn multind(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("multind"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Multind { chars: chars, dots: dots, prefixes: prefixes.unwrap() }))
+    Ok((input, Rule::Multind { chars: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
 }
 
 pub fn punctuation(i: &str) -> IResult<&str, Rule> {
@@ -208,12 +208,12 @@ pub fn digit(i: &str) -> IResult<&str, Rule> {
 
 pub fn litdigit(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, chars, _, dots)) = tuple((tag("litdigit"), space1, unicode_digit1, space1, dots))(i)?;
-    Ok((input, Rule::Litdigit { chars: chars, dots: dots }))
+    Ok((input, Rule::Litdigit { chars: chars.to_string(), dots }))
 }
 
 pub fn modeletter(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("modeletter"), space1, ascii_chars, space1, dots))(i)?;
-    Ok((input, Rule::Modeletter { chars: chars, dots: dots, prefixes: prefixes.unwrap() }))
+    Ok((input, Rule::Modeletter { chars: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
 }
 
 pub fn capsletter(i: &str) -> IResult<&str, Rule> {
@@ -223,7 +223,7 @@ pub fn capsletter(i: &str) -> IResult<&str, Rule> {
 
 pub fn begmodeword(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("begmodeword"), space1, ascii_chars, space1, dots))(i)?;
-    Ok((input, Rule::Begmodeword { chars: chars, dots: dots, prefixes: prefixes.unwrap() }))
+    Ok((input, Rule::Begmodeword { chars: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
 }
 
 pub fn begcapsword(i: &str) -> IResult<&str, Rule> {
@@ -238,7 +238,7 @@ pub fn endcapsword(i: &str) -> IResult<&str, Rule> {
 
 pub fn capsmodechars(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, chars)) = tuple((tag("capsmodechars"), space1, chars))(i)?;
-    Ok((input, Rule::Capsmodechars { chars: chars }))
+    Ok((input, Rule::Capsmodechars { chars: chars.to_string() }))
 }
 
 pub fn begcaps(i: &str) -> IResult<&str, Rule> {
@@ -270,21 +270,21 @@ pub fn largesign(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, word, _, dots)) = tuple((
         tag("largesign"), space1, chars, space1, dots,
     ))(i)?;
-    Ok((input, Rule::Largesign { word: word, dots: dots }))
+    Ok((input, Rule::Largesign { word: word.to_string(), dots }))
 }
 
 pub fn syllable(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, word, _, dots)) = tuple((
         tag("syllable"), space1, chars, space1, dots,
     ))(i)?;
-    Ok((input, Rule::Syllable { word: word, dots: dots }))
+    Ok((input, Rule::Syllable { word: word.to_string(), dots }))
 }
 
 pub fn joinword(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, word, _, dots)) = tuple((
         tag("joinword"), space1, chars, space1, dots,
     ))(i)?;
-    Ok((input, Rule::Joinword { word: word, dots: dots }))
+    Ok((input, Rule::Joinword { word: word.to_string(), dots }))
 }
 
 pub fn end_comment(i: &str) -> IResult<&str, &str> {
@@ -320,12 +320,12 @@ pub fn rule_line(i: &str) -> IResult<&str, Line> {
         alt((end_comment, space0)),
         line_ending,
     ))(i)?;
-    Ok((input, Line::Rule { rule: rule, comment: comment}))
+    Ok((input, Line::Rule { rule, comment: comment.to_string()}))
 }
 
 pub fn comment_line(i: &str) -> IResult<&str, Line> {
     let (input, (_, comment, _)) = tuple((tag("#"), not_line_ending, line_ending))(i)?;
-    Ok((input, Line::Comment { comment: comment }))
+    Ok((input, Line::Comment { comment: comment.to_string() }))
 }
 
 pub fn empty_line(i: &str) -> IResult<&str, Line> {
@@ -384,7 +384,7 @@ mod tests {
 
     #[test]
     fn include_test() {
-        assert_eq!(include("include filename.tbl"), Ok(("", Rule::Include { filename: "filename.tbl" })));
+        assert_eq!(include("include filename.tbl"), Ok(("", Rule::Include { filename: "filename.tbl".to_string() })));
     }
 
     #[test]
@@ -394,7 +394,7 @@ mod tests {
 
     #[test]
     fn display_test() {
-        assert_eq!(display("display haha 122"), Ok(("", Rule::Display { chars: "haha",
+        assert_eq!(display("display haha 122"), Ok(("", Rule::Display { chars: "haha".to_string(),
 									dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
 									prefixes: Prefixes::empty() })));
     }
@@ -426,13 +426,13 @@ mod tests {
     #[test]
     fn litdigit_test() {
         assert_eq!(litdigit("litdigit 0 245"),
-		   Ok(("", Rule::Litdigit { chars: "0", dots: vec![BrailleDot::DOT2 | BrailleDot::DOT4 | BrailleDot::DOT5] })));
+		   Ok(("", Rule::Litdigit { chars: "0".to_string(), dots: vec![BrailleDot::DOT2 | BrailleDot::DOT4 | BrailleDot::DOT5] })));
     }
 
     #[test]
     fn modeletter_test() {
         assert_eq!(modeletter("modeletter uppercase 6"),
-		   Ok(("", Rule::Modeletter { chars: "uppercase",
+		   Ok(("", Rule::Modeletter { chars: "uppercase".to_string(),
 					      dots: vec![enum_set!(BrailleDot::DOT6)],
 					      prefixes: Prefixes::empty()})));
     }
@@ -447,7 +447,7 @@ mod tests {
     #[test]
     fn begmodeword_test() {
         assert_eq!(begmodeword("begmodeword uppercase 6"),
-		   Ok(("", Rule::Begmodeword { chars: "uppercase",
+		   Ok(("", Rule::Begmodeword { chars: "uppercase".to_string(),
 					       dots: vec![enum_set!(BrailleDot::DOT6)],
 					       prefixes: Prefixes::empty()})));
     }
@@ -471,7 +471,7 @@ mod tests {
     #[test]
     fn capsmodechars_test() {
         assert_eq!(capsmodechars("capsmodechars -/"),
-		   Ok(("", Rule::Capsmodechars { chars: "-/"})));
+		   Ok(("", Rule::Capsmodechars { chars: "-/".to_string()})));
     }
 
     #[test]
@@ -517,11 +517,11 @@ mod tests {
     #[test]
     fn prefixes_test() {
         assert_eq!(display("nocross display haha 122"),
-		   Ok(("", Rule::Display { chars: "haha",
+		   Ok(("", Rule::Display { chars: "haha".to_string(),
 					   dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
 					   prefixes: enum_set!(Prefix::Nocross) })));
         assert_eq!(display("noback nocross display haha 122"),
-		   Ok(("", Rule::Display { chars: "haha",
+		   Ok(("", Rule::Display { chars: "haha".to_string(),
 					   dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
 					   prefixes: Prefix::Noback | Prefix::Nocross })));
     }
@@ -530,39 +530,39 @@ mod tests {
     fn largesign_test() {
         assert_eq!(
             largesign("largesign überall 123"),
-            Ok(("", Rule::Largesign { word: "überall", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
+            Ok(("", Rule::Largesign { word: "überall".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
         assert_eq!(
             largesign("largesign அஇ 123"),
-            Ok(("", Rule::Largesign { word: "அஇ", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
+            Ok(("", Rule::Largesign { word: "அஇ".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
     }
 
     #[test]
     fn joinword_test() {
         assert_eq!(
             joinword("joinword haha 123"),
-            Ok(("", Rule::Joinword { word: "haha", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
+            Ok(("", Rule::Joinword { word: "haha".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
         assert_eq!(
             joinword("joinword அஇ 123"),
-            Ok(("", Rule::Joinword { word: "அஇ", dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
+            Ok(("", Rule::Joinword { word: "அஇ".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
     }
 
     #[test]
     fn rule_line_test() {
         assert_eq!(
             rule_line("joinword haha 123\n"),
-            Ok(("", Line::Rule { rule: Rule::Joinword { word: "haha",
+            Ok(("", Line::Rule { rule: Rule::Joinword { word: "haha".to_string(),
 							dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
-				 comment: "" })));
+				 comment: "".to_string() })));
         assert_eq!(
             rule_line("largesign அஇ 123\n"),
-            Ok(("", Line::Rule { rule: Rule::Largesign { word: "அஇ",
+            Ok(("", Line::Rule { rule: Rule::Largesign { word: "அஇ".to_string(),
 							 dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
-				 comment: "" })));
+				 comment: "".to_string() })));
         assert_eq!(
             rule_line("syllable haha 123\n"),
-            Ok(("", Line::Rule { rule: Rule::Syllable { word: "haha",
+            Ok(("", Line::Rule { rule: Rule::Syllable { word: "haha".to_string(),
 							dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
-				 comment: "" })));
+				 comment: "".to_string() })));
     }
 
     #[test]
@@ -579,7 +579,7 @@ mod tests {
     fn comment_line_test() {
         assert_eq!(
             comment_line("# haha 1234    \n"),
-            Ok(("", Line::Comment { comment: " haha 1234    "})));
+            Ok(("", Line::Comment { comment: " haha 1234    ".to_string()})));
         assert_eq!(
             comment_line("# haha 1234    "),
             Err(Err::Error(Error::new("", ErrorKind::CrLf))));
@@ -593,9 +593,9 @@ mod tests {
 	assert_eq!(end_comment(" an end comment\n"), Ok(("\n", "an end comment")));
         assert_eq!(
             rule_line("joinword haha 123 comment \n"),
-            Ok(("", Line::Rule { rule: Rule::Joinword { word: "haha",
+            Ok(("", Line::Rule { rule: Rule::Joinword { word: "haha".to_string(),
 							dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
-				 comment: "comment " })));
+				 comment: "comment ".to_string() })));
     }
 
     #[test]
@@ -605,13 +605,13 @@ mod tests {
 			  "joinword haha 123\n",
 			  "syllable haha 123-1f\n")),
             Ok(("", vec![Line::Empty,
-			 Line::Rule { rule: Rule::Joinword { word: "haha",
+			 Line::Rule { rule: Rule::Joinword { word: "haha".to_string(),
 							     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
-				      comment: "" },
-			 Line::Rule { rule: Rule::Syllable { word: "haha",
+				      comment: "".to_string() },
+			 Line::Rule { rule: Rule::Syllable { word: "haha".to_string(),
 							     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3,
 									BrailleDot::DOT1 | BrailleDot::DOTF] },
-				      comment: "" }])));
+				      comment: "".to_string() }])));
         assert_eq!(
             table(concat!("       \n",
 			  "# just testing\n",
@@ -619,16 +619,16 @@ mod tests {
 			  "joinword haha 123\n",
 			  "syllable haha 123\n")),
             Ok(("", vec![Line::Empty,
-			 Line::Comment { comment: " just testing" },
-			 Line::Rule { rule: Rule::Multind { chars: "hehe",
+			 Line::Comment { comment: " just testing".to_string() },
+			 Line::Rule { rule: Rule::Multind { chars: "hehe".to_string(),
 							    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
 							    prefixes: enum_set!(Prefix::Nocross) },
-				      comment: "" },
-			 Line::Rule { rule: Rule::Joinword { word: "haha",
+				      comment: "".to_string() },
+			 Line::Rule { rule: Rule::Joinword { word: "haha".to_string(),
 							     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
-				      comment: "" },
-			 Line::Rule { rule: Rule::Syllable { word: "haha",
+				      comment: "".to_string() },
+			 Line::Rule { rule: Rule::Syllable { word: "haha".to_string(),
 							     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
-				      comment: "" }])));
+				      comment: "".to_string() }])));
     }
 }
