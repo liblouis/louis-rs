@@ -178,7 +178,7 @@ pub fn include(i: &str) -> IResult<&str, Rule> {
 
 pub fn undefined(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, dots)) = tuple((tag("undefined"), space1, dots))(i)?;
-    Ok((input, Rule::Undefined { dots: dots }))
+    Ok((input, Rule::Undefined { dots }))
 }
 
 pub fn display(i: &str) -> IResult<&str, Rule> {
@@ -187,8 +187,8 @@ pub fn display(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn space(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, c, _, dots)) = tuple((opt(prefixes), tag("space"), space1, single_char, space1, dots))(i)?;
-    Ok((input, Rule::Space { ch: c, dots: dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, ch, _, dots)) = tuple((opt(prefixes), tag("space"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Space { ch, dots, prefixes: prefixes.unwrap() }))
 }
 
 pub fn multind(i: &str) -> IResult<&str, Rule> {
@@ -197,13 +197,13 @@ pub fn multind(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn punctuation(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, c, _, dots)) = tuple((opt(prefixes), tag("punctuation"), space1, single_char, space1, dots))(i)?;
-    Ok((input, Rule::Punctuation { ch: c, dots: dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, ch, _, dots)) = tuple((opt(prefixes), tag("punctuation"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Punctuation { ch, dots, prefixes: prefixes.unwrap() }))
 }
 
 pub fn digit(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, digit, _, dots)) = tuple((tag("digit"), space1, single_char, space1, dots))(i)?;
-    Ok((input, Rule::Digit { ch: digit, dots: dots }))
+    let (input, (_, _, ch, _, dots)) = tuple((tag("digit"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Digit { ch, dots }))
 }
 
 pub fn litdigit(i: &str) -> IResult<&str, Rule> {
@@ -218,7 +218,7 @@ pub fn modeletter(i: &str) -> IResult<&str, Rule> {
 
 pub fn capsletter(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, dots)) = tuple((opt(prefixes), tag("capsletter"), space1, dots))(i)?;
-    Ok((input, Rule::Capsletter { dots: dots, prefixes: prefixes.unwrap() }))
+    Ok((input, Rule::Capsletter { dots, prefixes: prefixes.unwrap() }))
 }
 
 pub fn begmodeword(i: &str) -> IResult<&str, Rule> {
@@ -228,12 +228,12 @@ pub fn begmodeword(i: &str) -> IResult<&str, Rule> {
 
 pub fn begcapsword(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, dots)) = tuple((opt(prefixes), tag("begcapsword"), space1, dots))(i)?;
-    Ok((input, Rule::Begcapsword { dots: dots, prefixes: prefixes.unwrap() }))
+    Ok((input, Rule::Begcapsword { dots, prefixes: prefixes.unwrap() }))
 }
 
 pub fn endcapsword(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, dots)) = tuple((opt(prefixes), tag("endcapsword"), space1, dots))(i)?;
-    Ok((input, Rule::Endcapsword { dots: dots, prefixes: prefixes.unwrap() }))
+    Ok((input, Rule::Endcapsword { dots, prefixes: prefixes.unwrap() }))
 }
 
 pub fn capsmodechars(i: &str) -> IResult<&str, Rule> {
@@ -243,27 +243,27 @@ pub fn capsmodechars(i: &str) -> IResult<&str, Rule> {
 
 pub fn begcaps(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, dots)) = tuple((tag("begcaps"), space1, dots))(i)?;
-    Ok((input, Rule::Begcaps { dots: dots }))
+    Ok((input, Rule::Begcaps { dots }))
 }
 
 pub fn endcaps(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, dots)) = tuple((tag("endcaps"), space1, dots))(i)?;
-    Ok((input, Rule::Endcaps { dots: dots }))
+    Ok((input, Rule::Endcaps { dots }))
 }
 
 pub fn begcapsphrase(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, dots)) = tuple((tag("begcapsphrase"), space1, dots))(i)?;
-    Ok((input, Rule::Begcapsphrase { dots: dots }))
+    Ok((input, Rule::Begcapsphrase { dots }))
 }
 
 pub fn endcapsphrase(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, position, _, dots)) = tuple((tag("endcapsphrase"), space1, before_or_after, space1, dots))(i)?;
-    Ok((input, Rule::Endcapsphrase { dots: dots, position: position }))
+    Ok((input, Rule::Endcapsphrase { dots, position }))
 }
 
 pub fn lencapsphrase(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, length)) = tuple((tag("lencapsphrase"), space1, number))(i)?;
-    Ok((input, Rule::Lencapsphrase { length: length }))
+    Ok((input, Rule::Lencapsphrase { length }))
 }
 
 pub fn largesign(i: &str) -> IResult<&str, Rule> {
