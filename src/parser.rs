@@ -1,3 +1,6 @@
+use std::fmt;
+use std::error;
+
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::is_a;
@@ -98,25 +101,38 @@ pub enum BrailleDot {
 type BrailleChar = EnumSet<BrailleDot>;
 type BrailleChars = Vec<BrailleChar>;
 
-fn char_to_dot(char: char) -> Option<BrailleDot> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseBrailleError;
+
+impl fmt::Display for ParseBrailleError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        "provided string was not `true` or `false`".fmt(f)
+    }
+}
+impl error::Error for ParseBrailleError {
+    fn description(&self) -> &str {
+        "failed to parse Braille dot"
+    }
+}
+fn char_to_dot(char: char) -> Result<BrailleDot, ParseBrailleError> {
     match char {
-        '0' => Some(BrailleDot::DOT0),
-        '1' => Some(BrailleDot::DOT1),
-        '2' => Some(BrailleDot::DOT2),
-        '3' => Some(BrailleDot::DOT3),
-        '4' => Some(BrailleDot::DOT4),
-        '5' => Some(BrailleDot::DOT5),
-        '6' => Some(BrailleDot::DOT6),
-        '7' => Some(BrailleDot::DOT7),
-        '8' => Some(BrailleDot::DOT8),
-        '9' => Some(BrailleDot::DOT9),
-        'a' => Some(BrailleDot::DOTA),
-        'b' => Some(BrailleDot::DOTB),
-        'c' => Some(BrailleDot::DOTC),
-        'd' => Some(BrailleDot::DOTD),
-        'e' => Some(BrailleDot::DOTE),
-        'f' => Some(BrailleDot::DOTF),
-        _ => None,
+        '0' => Ok(BrailleDot::DOT0),
+        '1' => Ok(BrailleDot::DOT1),
+        '2' => Ok(BrailleDot::DOT2),
+        '3' => Ok(BrailleDot::DOT3),
+        '4' => Ok(BrailleDot::DOT4),
+        '5' => Ok(BrailleDot::DOT5),
+        '6' => Ok(BrailleDot::DOT6),
+        '7' => Ok(BrailleDot::DOT7),
+        '8' => Ok(BrailleDot::DOT8),
+        '9' => Ok(BrailleDot::DOT9),
+        'a' => Ok(BrailleDot::DOTA),
+        'b' => Ok(BrailleDot::DOTB),
+        'c' => Ok(BrailleDot::DOTC),
+        'd' => Ok(BrailleDot::DOTD),
+        'e' => Ok(BrailleDot::DOTE),
+        'f' => Ok(BrailleDot::DOTF),
+        _ => Err(ParseBrailleError{}),
     }
 }
 
@@ -355,9 +371,9 @@ mod tests {
 
     #[test]
     fn char_to_dot_test() {
-        assert_eq!(char_to_dot('8'), Some(BrailleDot::DOT8));
-        assert_eq!(char_to_dot('F'), None);
-        assert_eq!(char_to_dot('z'), None);
+        assert_eq!(char_to_dot('8'), Ok(BrailleDot::DOT8));
+        assert_eq!(char_to_dot('F'), Err(ParseBrailleError{}));
+        assert_eq!(char_to_dot('z'), Err(ParseBrailleError{}));
     }
 
     #[test]
