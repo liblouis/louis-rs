@@ -13,6 +13,7 @@ use nom::character::complete::space0;
 use nom::character::complete::space1;
 use nom::character::complete::digit1;
 use nom::character::complete::none_of;
+use nom::combinator::all_consuming;
 use nom::combinator::map;
 use nom::combinator::map_res;
 use nom::combinator::opt;
@@ -435,7 +436,7 @@ pub fn line(i: &str) -> IResult<&str, Line> {
 }
 
 pub fn table(i: &str) -> IResult<&str, Vec<Line>> {
-    many0(line)(i)
+    all_consuming(many0(line))(i)
 }
 
 #[cfg(test)]

@@ -30,7 +30,7 @@ pub fn debug(table: PathBuf) -> Result<Vec<Line>, TranslationError> {
 	Ok(rules) => rules,
 	Err(_) => return Err(TranslationError{}),
     };
-    let (_, all_rules) = parser::table(&rules).unwrap();
+    let (_, all_rules) = parser::table(&rules).expect("Cannot parse table");
     Ok(all_rules)
 }
 
