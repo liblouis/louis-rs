@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use liblouis_nom::translate;
+use liblouis_nom::{translate, debug, parser::Line};
 use std::path::PathBuf;
 
 #[derive(Debug, Subcommand)]
@@ -11,6 +11,11 @@ enum Commands {
 	table: PathBuf,
 	/// String to translate
 	input: String,
+    },
+    /// print debug information about the given table <TABLE>
+    Debug {
+	/// Braille table to debug
+	table: PathBuf,
     }
 }
 
@@ -31,5 +36,16 @@ fn main() {
             println!("translating {} using table {:?}", input, table);
 	    println!("Braille: {}", translate(table, &input).expect("Translation failed"));
         }
+	Commands::Debug { table } => {
+	    println!("debugging table {:?}", table);
+	    let lines = debug(table).unwrap();
+	    for line in lines {
+		match line {
+		    Line::Empty => (),
+		    Line::Comment { comment: _ } => (),
+		    _ => println!("{:?}", line)
+		}
+	    }
+	}
     }
 }

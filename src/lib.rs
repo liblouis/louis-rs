@@ -25,6 +25,15 @@ pub fn translate(table: PathBuf, input: &str) -> Result<String, TranslationError
     Ok(input.to_string())
 }
 
+pub fn debug(table: PathBuf) -> Result<Vec<Line>, TranslationError> {
+    let rules = match fs::read_to_string(table) {
+	Ok(rules) => rules,
+	Err(_) => return Err(TranslationError{}),
+    };
+    let (_, all_rules) = parser::table(&rules).unwrap();
+    Ok(all_rules)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::translate;
