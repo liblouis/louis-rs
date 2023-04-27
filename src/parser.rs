@@ -42,19 +42,41 @@ pub enum Rule {
     Include { filename: String },
     Undefined { dots: BrailleChars },
     Display { chars: String, dots: BrailleChars, prefixes: Prefixes },
+    // Character-Definition Opcodes
     Space { ch: char, dots: BrailleChars, prefixes: Prefixes},
     Multind { chars: String, dots: BrailleChars, prefixes: Prefixes },
     Punctuation { ch: char, dots: BrailleChars, prefixes: Prefixes},
     Digit { ch: char, dots: BrailleChars },
+    Letter { ch: char, dots: BrailleChars },
+    Lowercase { word: String, dots: BrailleChars },
+    Uppercase { word: String, dots: BrailleChars },
     Litdigit { chars: String, dots: BrailleChars },
-    Modeletter { chars: String, dots: BrailleChars, prefixes: Prefixes},
+    Sign { ch: char, dots: BrailleChars },
+    Math { ch: char, dots: BrailleChars },
+    Grouping { name: String, chars: String, dots: Vec<BrailleChars> },
+    Base { attribute: String, derived: char, base: char },
+    // Braille Indicator Opcodes
+    Modeletter { attribute: String, dots: BrailleChars, prefixes: Prefixes},
     Capsletter { dots: BrailleChars, prefixes: Prefixes},
-    Begmodeword { chars: String, dots: BrailleChars, prefixes: Prefixes},
+    Begmodeword { attribute: String, dots: BrailleChars, prefixes: Prefixes},
     Begcapsword { dots: BrailleChars, prefixes: Prefixes},
+    Endmodeword { attribute: BrailleChars, prefixes: Prefixes},
     Endcapsword { dots: BrailleChars, prefixes: Prefixes},
     Capsmodechars { chars: String},
+    Begmode { attribute: String, dots: BrailleChars},
     Begcaps { dots: BrailleChars},
-    Endcaps { dots: BrailleChars},
+    Endmode { attribute: String, dots: BrailleChars},
+    Endcaps { dots: BrailleChars },
+    Letsign { dots: BrailleChars },
+    Noletsign { letters: String },
+    Noletsignbefore { characters: String },
+    Noletsignafter { characters: String },
+    Nocontractsign { dots: BrailleChars },
+    Numsign { dots: BrailleChars },
+    Numericnocontchars { characters: String },
+    Numericmodechars { characters: String },
+    Midendnumericmodechars { characters: String },
+    // Standing Alone Sequences
     Begcapsphrase { dots: BrailleChars},
     Endcapsphrase { dots: BrailleChars, position: Position},
     Lencapsphrase { length: u8},
@@ -222,14 +244,54 @@ pub fn digit(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Digit { ch, dots }))
 }
 
+pub fn letter(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, ch, _, dots)) = tuple((tag("letter"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Letter { ch, dots }))
+}
+
+pub fn lowercase(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, word, _, dots)) = tuple((
+        tag("lowercase"), space1, chars, space1, dots,
+    ))(i)?;
+    Ok((input, Rule::Lowercase { word: word.to_string(), dots }))
+}
+
+pub fn uppercase(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, word, _, dots)) = tuple((
+        tag("uppercase"), space1, chars, space1, dots,
+    ))(i)?;
+    Ok((input, Rule::Uppercase { word: word.to_string(), dots }))
+}
+
 pub fn litdigit(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, chars, _, dots)) = tuple((tag("litdigit"), space1, unicode_digit1, space1, dots))(i)?;
     Ok((input, Rule::Litdigit { chars: chars.to_string(), dots }))
 }
 
+pub fn sign(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, ch, _, dots)) = tuple((tag("sign"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Sign { ch, dots }))
+}
+
+pub fn math(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, ch, _, dots)) = tuple((tag("math"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Math { ch, dots }))
+}
+
+pub fn grouping(i: &str) -> IResult<&str, Rule> {
+    // FIXME: handle n dots
+    let (input, (_, _, name, _, characters, _, dots)) = tuple((tag("grouping"), space1, ascii_chars, space1, ascii_chars, space1, dots))(i)?;
+    Ok((input, Rule::Grouping { name: name.to_string(), chars: characters.to_string(), dots: vec![dots]}))
+}
+
+pub fn base(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, attribute, _, derived, _, base)) = tuple((tag("base"), space1, ascii_chars, space1, single_char, space1, single_char))(i)?;
+    Ok((input, Rule::Base { attribute: attribute.to_string(), derived, base }))
+}
+
 pub fn modeletter(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("modeletter"), space1, ascii_chars, space1, dots))(i)?;
-    Ok((input, Rule::Modeletter { chars: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
+    Ok((input, Rule::Modeletter { attribute: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
 }
 
 pub fn capsletter(i: &str) -> IResult<&str, Rule> {
@@ -239,7 +301,7 @@ pub fn capsletter(i: &str) -> IResult<&str, Rule> {
 
 pub fn begmodeword(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("begmodeword"), space1, ascii_chars, space1, dots))(i)?;
-    Ok((input, Rule::Begmodeword { chars: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
+    Ok((input, Rule::Begmodeword { attribute: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
 }
 
 pub fn begcapsword(i: &str) -> IResult<&str, Rule> {
@@ -303,36 +365,50 @@ pub fn joinword(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Joinword { word: word.to_string(), dots }))
 }
 
-pub fn end_comment(i: &str) -> IResult<&str, &str> {
+fn end_comment(i: &str) -> IResult<&str, &str> {
     let (input, (_, _, comment)) = tuple((space1, tag("#"), not_line_ending))(i)?;
     Ok((input, comment))
 }
 
 pub fn rule_line(i: &str) -> IResult<&str, Line> {
     let (input, (rule, comment, _)) = tuple((
+	// for some reason alt only allows for 21 choices. As a
+	// workaround we need to nest the alt calls, see
+	// https://github.com/rust-bakery/nom/issues/1144#issuecomment-629774957
         alt((
-            include,
-            undefined,
-            display,
-            space,
-            multind,
-            punctuation,
-            digit,
-            litdigit,
-            modeletter,
-            capsletter,
-            begmodeword,
-            begcapsword,
-            endcapsword,
-            capsmodechars,
-            begcaps,
-            endcaps,
-            begcapsphrase,
-            endcapsphrase,
-            largesign,
-            syllable,
-            joinword,
-        )),
+	    alt((
+		include,
+		undefined,
+		display,
+		space,
+		multind,
+		punctuation,
+		digit,
+		letter,
+		lowercase,
+		uppercase,
+		litdigit,
+		sign,
+		math,
+		grouping,
+		base,
+            )),
+	    alt((
+		modeletter,
+		capsletter,
+		begmodeword,
+		begcapsword,
+		endcapsword,
+		capsmodechars,
+		begcaps,
+		endcaps,
+		begcapsphrase,
+		endcapsphrase,
+		largesign,
+		syllable,
+		joinword,
+	    )),
+	)),
         alt((end_comment, space0)),
         line_ending,
     ))(i)?;
@@ -448,7 +524,7 @@ mod tests {
     #[test]
     fn modeletter_test() {
         assert_eq!(modeletter("modeletter uppercase 6"),
-		   Ok(("", Rule::Modeletter { chars: "uppercase".to_string(),
+		   Ok(("", Rule::Modeletter { attribute: "uppercase".to_string(),
 					      dots: vec![enum_set!(BrailleDot::DOT6)],
 					      prefixes: Prefixes::empty()})));
     }
@@ -463,7 +539,7 @@ mod tests {
     #[test]
     fn begmodeword_test() {
         assert_eq!(begmodeword("begmodeword uppercase 6"),
-		   Ok(("", Rule::Begmodeword { chars: "uppercase".to_string(),
+		   Ok(("", Rule::Begmodeword { attribute: "uppercase".to_string(),
 					       dots: vec![enum_set!(BrailleDot::DOT6)],
 					       prefixes: Prefixes::empty()})));
     }
@@ -563,6 +639,26 @@ mod tests {
     }
 
     #[test]
+    fn uppercase_test() {
+        assert_eq!(
+            uppercase("uppercase foo 123"),
+            Ok(("", Rule::Uppercase { word: "foo".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
+        assert_eq!(
+            uppercase("uppercase அஇ 123"),
+            Ok(("", Rule::Uppercase { word: "அஇ".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
+    }
+
+    #[test]
+    fn lowercase_test() {
+        assert_eq!(
+            lowercase("lowercase foo 123"),
+            Ok(("", Rule::Lowercase { word: "foo".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
+        assert_eq!(
+            lowercase("lowercase அஇ 123"),
+            Ok(("", Rule::Lowercase { word: "அஇ".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
+    }
+
+    #[test]
     fn rule_line_test() {
         assert_eq!(
             rule_line("joinword haha 123\n"),
@@ -579,6 +675,9 @@ mod tests {
             Ok(("", Line::Rule { rule: Rule::Syllable { word: "haha".to_string(),
 							dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
 				 comment: "".to_string() })));
+        assert_eq!(
+            rule_line("base uppercase A a\n"),
+            Ok(("", Line::Rule { rule: Rule::Base { attribute: "uppercase".to_string(), derived: 'A', base: 'a' }, comment: "".to_string() })));
     }
 
     #[test]
