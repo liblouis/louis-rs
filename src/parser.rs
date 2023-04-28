@@ -460,6 +460,14 @@ mod tests {
     }
 
     #[test]
+    fn characters_test() {
+        assert_eq!(chars("foo"), Ok(("", "foo")));
+        assert_eq!(chars("foo bar"), Ok((" bar", "foo")));
+	// FIXME: I guess that should parse as a single unicode char
+        assert_eq!(chars(r"\x04D8"), Ok(("", r"\x04D8")));
+    }
+
+    #[test]
     fn dots_test() {
         assert_eq!(dots("123"), Ok(("",  vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] )));
         assert_eq!(dots("1f"), Ok(("", vec![BrailleDot::DOT1 | BrailleDot::DOTF])));
