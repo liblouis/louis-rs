@@ -252,14 +252,14 @@ pub fn letter(i: &str) -> IResult<&str, Rule> {
 
 pub fn lowercase(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, word, _, dots)) = tuple((
-        tag("lowercase"), space1, chars, space1, dots,
+        tag("lowercase"), space1, single_char, space1, dots,
     ))(i)?;
     Ok((input, Rule::Lowercase { word: word.to_string(), dots }))
 }
 
 pub fn uppercase(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, word, _, dots)) = tuple((
-        tag("uppercase"), space1, chars, space1, dots,
+        tag("uppercase"), space1, single_char, space1, dots,
     ))(i)?;
     Ok((input, Rule::Uppercase { word: word.to_string(), dots }))
 }
@@ -642,21 +642,24 @@ mod tests {
     #[test]
     fn uppercase_test() {
         assert_eq!(
-            uppercase("uppercase foo 123"),
-            Ok(("", Rule::Uppercase { word: "foo".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
+            uppercase("uppercase f 123"),
+            Ok(("", Rule::Uppercase { word: "f".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
         assert_eq!(
-            uppercase("uppercase அஇ 123"),
-            Ok(("", Rule::Uppercase { word: "அஇ".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
+            uppercase("uppercase அ 123"),
+            Ok(("", Rule::Uppercase { word: "அ".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
+        assert_eq!(
+            uppercase(r"uppercase \x04D8 34579"),
+            Ok(("", Rule::Uppercase { word: "Ә".to_string(), dots: vec![BrailleDot::DOT3 | BrailleDot::DOT4 | BrailleDot::DOT5 | BrailleDot::DOT7 | BrailleDot::DOT9] })));
     }
 
     #[test]
     fn lowercase_test() {
         assert_eq!(
-            lowercase("lowercase foo 123"),
-            Ok(("", Rule::Lowercase { word: "foo".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
+            lowercase("lowercase f 123"),
+            Ok(("", Rule::Lowercase { word: "f".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
         assert_eq!(
-            lowercase("lowercase அஇ 123"),
-            Ok(("", Rule::Lowercase { word: "அஇ".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
+            lowercase("lowercase அ 123"),
+            Ok(("", Rule::Lowercase { word: "அ".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
     }
 
     #[test]
