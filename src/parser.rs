@@ -168,6 +168,18 @@ pub fn chars(input: &str) -> IResult<&str, &str> {
     //unicode_alpha1(input)
 }
 
+pub fn unicode_literal(input: &str) -> IResult<&str, char> {
+    let (i, digits) = hex_digit1(input)?;
+    let num = digits.parse::<u32>().unwrap();
+    let c = char::from_u32(num).unwrap();
+    Ok((i, c))
+}
+
+pub fn escaped_char(i: &str) -> IResult<&str, char> {
+    let (input, (_, c)) = tuple((tag("\\x"), unicode_literal))(i)?;
+    Ok((input, c))
+}
+
 pub fn single_char(input: &str) -> IResult<&str, char> {
     none_of(" \t\r\n")(input)
 }
@@ -457,6 +469,11 @@ mod tests {
     fn character_test() {
         assert_eq!(ascii_chars("hallo"), Ok(("", "hallo")));
         assert_eq!(ascii_chars("haLlo"), Ok(("", "haLlo")));
+    }
+
+    #[test]
+    fn unicode_literal_test() {
+        assert_eq!(unicode_literal("00AD"), Ok(("", '­')));
     }
 
     #[test]
