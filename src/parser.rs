@@ -82,6 +82,9 @@ pub enum Rule {
     Begcapsphrase { dots: BrailleChars},
     Endcapsphrase { dots: BrailleChars, position: Position},
     Lencapsphrase { length: u8},
+    // Special Opcodes
+    Decpoint { characters: String, dots: BrailleChars},
+    Hyphen { characters: String, dots: BrailleChars},
     // Translation Opcodes
     Compbrl { characters: String},
     Comp6 { characters: String, dots: BrailleChars},
@@ -111,6 +114,17 @@ pub enum Rule {
     Midnum {characters: String, dots: BrailleChars},
     Endnum {characters: String, dots: BrailleChars},
     Joinnum {characters: String, dots: BrailleChars},
+    // Swap Opcodes
+    Swapcd {name: String, characters: String, dots: Vec<BrailleChars> },
+    Swapdd {name: String, dots: Vec<BrailleChars>, dotpattern: Vec<BrailleChars>},
+    Swapcc {name: String, chars: String, replacement: String},
+    // Context Opcodes
+    Context {test: String, action: String, prefix: Prefixes},
+    Pass2 {test: String, action: String, prefix: Prefixes},
+    Pass3 {test: String, action: String, prefix: Prefixes},
+    Pass4 {test: String, action: String, prefix: Prefixes},
+    // Correct Opcode
+    Correct {test: String, action: String, prefix: Prefixes},
 }
 
 #[derive(EnumSetType, Debug)]
@@ -436,6 +450,16 @@ pub fn lencapsphrase(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Lencapsphrase { length }))
 }
 
+pub fn decpoint(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("decpoint"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Decpoint { characters: chars.to_string(), dots }))
+}
+
+pub fn hyphen(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("hyphen"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Hyphen { characters: chars.to_string(), dots }))
+}
+
 pub fn compbrl(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, chars)) = tuple((tag("compbrl"), space1, chars))(i)?;
     Ok((input, Rule::Compbrl { characters: chars.to_string() }))
@@ -580,6 +604,46 @@ pub fn joinnum(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Joinnum { characters: chars.to_string(), dots }))
 }
 
+pub fn swapcd(i: &str) -> IResult<&str, Rule> {
+    let (input, ( _, _, name, _, characters, _, dots)) = tuple((tag("swapcd"), space1, ascii_chars, space1, chars, space1, separated_list1(tag(","), dots)))(i)?;
+    Ok((input, Rule::Swapcd { name: name.to_string(), characters: characters.to_string(), dots }))
+}
+
+pub fn swapdd(i: &str) -> IResult<&str, Rule> {
+    let (input, ( _, _, name, _, dots, _, dotpattern)) = tuple((tag("swapdd"), space1, ascii_chars, space1, separated_list1(tag(","), dots), space1, separated_list1(tag(","), dots)))(i)?;
+    Ok((input, Rule::Swapdd { name: name.to_string(), dots, dotpattern }))
+}
+
+pub fn swapcc(i: &str) -> IResult<&str, Rule> {
+    let (input, ( _, _, name, _, characters, _, replacement)) = tuple((tag("swapcc"), space1, ascii_chars, space1, chars, space1, chars))(i)?;
+    Ok((input, Rule::Swapcc { name: name.to_string(), chars: characters.to_string(), replacement: replacement.to_string() }))
+}
+
+pub fn context(i: &str) -> IResult<&str, Rule> {
+    let (input, (prefixes, _, _, test, _, action)) = tuple((opt(prefixes), tag("context"), space1, chars, space1, chars))(i)?;
+    Ok((input, Rule::Context { test: test.to_string(), action: action.to_string(), prefix: prefixes.unwrap() }))
+}
+
+pub fn pass2(i: &str) -> IResult<&str, Rule> {
+    let (input, (prefixes, _, _, test, _, action)) = tuple((opt(prefixes), tag("pass2"), space1, chars, space1, chars))(i)?;
+    Ok((input, Rule::Pass2 { test: test.to_string(), action: action.to_string(), prefix: prefixes.unwrap() }))
+}
+
+pub fn pass3(i: &str) -> IResult<&str, Rule> {
+    let (input, (prefixes, _, _, test, _, action)) = tuple((opt(prefixes), tag("pass3"), space1, chars, space1, chars))(i)?;
+    Ok((input, Rule::Pass3 { test: test.to_string(), action: action.to_string(), prefix: prefixes.unwrap() }))
+}
+
+pub fn pass4(i: &str) -> IResult<&str, Rule> {
+    let (input, (prefixes, _, _, test, _, action)) = tuple((opt(prefixes), tag("pass4"), space1, chars, space1, chars))(i)?;
+    Ok((input, Rule::Pass4 { test: test.to_string(), action: action.to_string(), prefix: prefixes.unwrap() }))
+}
+
+pub fn correct(i: &str) -> IResult<&str, Rule> {
+    let (input, (prefixes, _, _, test, _, action)) = tuple((opt(prefixes), tag("correct"), space1, chars, space1, chars))(i)?;
+    Ok((input, Rule::Correct { test: test.to_string(), action: action.to_string(), prefix: prefixes.unwrap() }))
+}
+
 fn end_comment(i: &str) -> IResult<&str, &str> {
     let (input, (_, _, comment)) = tuple((space1, opt(tag("#")), not_line_ending))(i)?;
     Ok((input, comment))
@@ -629,6 +693,10 @@ pub fn rule_line(i: &str) -> IResult<&str, Line> {
 		midendnumericmodechars,
 		begcapsphrase,
 		endcapsphrase,
+	    )),
+	    alt((
+		decpoint,
+		hyphen,
 		compbrl,
 		comp6,
 		nocont,
@@ -637,8 +705,6 @@ pub fn rule_line(i: &str) -> IResult<&str, Line> {
 		repeated,
 		repword,
 		rependword,
-	    )),
-	    alt((
 		largesign,
 		word,
 		syllable,
@@ -647,6 +713,8 @@ pub fn rule_line(i: &str) -> IResult<&str, Line> {
 		contraction,
 		sufword,
 		prfword,
+	    )),
+	    alt((
 		begword,
 		begmidword,
 		midword,
@@ -658,7 +726,15 @@ pub fn rule_line(i: &str) -> IResult<&str, Line> {
 		begnum,
 		midnum,
 		endnum,
-		joinnum
+		joinnum,
+		swapcd,
+		swapdd,
+		swapcc,
+		context,
+		pass2,
+		pass3,
+		pass4,
+		correct,
 	    ))
 	)),
         alt((end_comment, space0)),
