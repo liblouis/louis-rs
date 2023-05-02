@@ -52,7 +52,7 @@ pub enum Rule {
     Lowercase { word: String, dots: BrailleChars },
     Uppercase { word: String, dots: BrailleChars },
     Litdigit { chars: String, dots: BrailleChars },
-    Sign { ch: char, dots: BrailleChars },
+    Sign { ch: char, dots: BrailleChars, prefixes: Prefixes },
     Math { ch: char, dots: BrailleChars },
     Grouping { name: String, chars: String, dots: Vec<BrailleChars> },
     Base { attribute: String, derived: char, base: char },
@@ -312,8 +312,8 @@ pub fn litdigit(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn sign(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, ch, _, dots)) = tuple((tag("sign"), space1, single_char, space1, dots))(i)?;
-    Ok((input, Rule::Sign { ch, dots }))
+    let (input, (prefixes, _, _, ch, _, dots)) = tuple((opt(prefixes), tag("sign"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Sign { ch, dots, prefixes: prefixes.unwrap() }))
 }
 
 pub fn math(i: &str) -> IResult<&str, Rule> {
