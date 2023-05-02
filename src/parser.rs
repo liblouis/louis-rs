@@ -537,7 +537,7 @@ pub fn joinnum(i: &str) -> IResult<&str, Rule> {
 }
 
 fn end_comment(i: &str) -> IResult<&str, &str> {
-    let (input, (_, _, comment)) = tuple((space1, tag("#"), not_line_ending))(i)?;
+    let (input, (_, _, comment)) = tuple((space1, opt(tag("#")), not_line_ending))(i)?;
     Ok((input, comment))
 }
 
