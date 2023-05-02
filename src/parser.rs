@@ -322,9 +322,8 @@ pub fn math(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn grouping(i: &str) -> IResult<&str, Rule> {
-    // FIXME: handle n dots
-    let (input, (_, _, name, _, characters, _, dots)) = tuple((tag("grouping"), space1, ascii_chars, space1, ascii_chars, space1, dots))(i)?;
-    Ok((input, Rule::Grouping { name: name.to_string(), chars: characters.to_string(), dots: vec![dots]}))
+    let (input, (_, _, name, _, characters, _, dots)) = tuple((tag("grouping"), space1, ascii_chars, space1, ascii_chars, space1, separated_list1(tag(","), dots)))(i)?;
+    Ok((input, Rule::Grouping { name: name.to_string(), chars: characters.to_string(), dots}))
 }
 
 pub fn base(i: &str) -> IResult<&str, Rule> {
@@ -798,6 +797,12 @@ mod tests {
     fn litdigit_test() {
         assert_eq!(litdigit("litdigit 0 245"),
 		   Ok(("", Rule::Litdigit { chars: "0".to_string(), dots: vec![BrailleDot::DOT2 | BrailleDot::DOT4 | BrailleDot::DOT5] })));
+    }
+
+    #[test]
+    fn grouping_test() {
+        assert_eq!(grouping("grouping mfrac ab 3e,4e"),
+		   Ok(("", Rule::Grouping { name: "mfrac".to_string(), chars: "ab".to_string(), dots: vec![vec![BrailleDot::DOT3 | BrailleDot::DOTE], vec![BrailleDot::DOT4 | BrailleDot::DOTE]] })));
     }
 
     #[test]
