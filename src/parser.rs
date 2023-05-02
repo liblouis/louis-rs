@@ -169,8 +169,8 @@ pub fn chars(input: &str) -> IResult<&str, &str> {
 }
 
 pub fn unicode_literal(input: &str) -> IResult<&str, char> {
-    let (i, digits) = hex_digit1(input)?;
-    let num = digits.parse::<u32>().unwrap();
+    let (i, num) = map_res(hex_digit1, |s| u32::from_str_radix(s, 16))(input)?;
+
     let c = char::from_u32(num).unwrap();
     Ok((i, c))
 }
@@ -474,6 +474,19 @@ mod tests {
     #[test]
     fn unicode_literal_test() {
         assert_eq!(unicode_literal("00AD"), Ok(("", '­')));
+    }
+
+    #[test]
+    fn escaped_char_test() {
+        assert_eq!(escaped_char("\\x00AD"), Ok(("", '­')));
+        assert_eq!(escaped_char("\\x04D8"), Ok(("", 'Ә')));
+    }
+
+    #[test]
+    fn single_char_test() {
+        assert_eq!(single_char("a"), Ok(("", 'a')));
+        assert_eq!(single_char("b"), Ok(("", 'b')));
+        assert_eq!(single_char("\\x00AD"), Ok(("", '­')));
     }
 
     #[test]
