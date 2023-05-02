@@ -87,7 +87,7 @@ pub enum Rule {
     Comp6 { characters: String, dots: BrailleChars},
     Nocont {characters: String},
     Replace {characters: String, replacement: String},
-    Always {characters: String, dots: BrailleChars},
+    Always {characters: String, dots: BrailleChars, prefixes: Prefixes},
     Repeated {characters: String, dots: BrailleChars},
     Repword  {characters: String, dots: BrailleChars},
     Rependword  {characters: String, dots: BrailleChars, other: BrailleChars},
@@ -413,8 +413,8 @@ pub fn replace(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn always(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("always"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Always { characters: chars.to_string(), dots }))
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("always"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Always { characters: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
 }
 
 pub fn repeated(i: &str) -> IResult<&str, Rule> {
