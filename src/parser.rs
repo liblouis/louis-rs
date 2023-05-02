@@ -70,7 +70,7 @@ pub enum Rule {
     Endmode { attribute: String, dots: BrailleChars},
     Endcaps { dots: BrailleChars },
     Letsign { dots: BrailleChars },
-    Noletsign { letters: String },
+    Noletsign { characters: String },
     Noletsignbefore { characters: String },
     Noletsignafter { characters: String },
     Nocontractsign { dots: BrailleChars },
@@ -377,6 +377,51 @@ pub fn endcaps(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Endcaps { dots }))
 }
 
+pub fn letsign(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, dots)) = tuple((tag("letsign"), space1, dots))(i)?;
+    Ok((input, Rule::Letsign { dots }))
+}
+
+pub fn noletsign(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, characters)) = tuple((tag("noletsign"), space1, chars))(i)?;
+    Ok((input, Rule::Noletsign { characters: characters.to_string() }))
+}
+
+pub fn noletsignbefore(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, characters)) = tuple((tag("noletsignbefore"), space1, chars))(i)?;
+    Ok((input, Rule::Noletsignbefore { characters: characters.to_string() }))
+}
+
+pub fn noletsignafter(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, characters)) = tuple((tag("noletsignafter"), space1, chars))(i)?;
+    Ok((input, Rule::Noletsignafter { characters: characters.to_string() }))
+}
+
+pub fn nocontractsign(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, dots)) = tuple((tag("nocontractsign"), space1, dots))(i)?;
+    Ok((input, Rule::Nocontractsign { dots }))
+}
+
+pub fn numsign(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, dots)) = tuple((tag("numsign"), space1, dots))(i)?;
+    Ok((input, Rule::Numsign { dots }))
+}
+
+pub fn numericnocontchars(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, characters)) = tuple((tag("numericnocontchars"), space1, chars))(i)?;
+    Ok((input, Rule::Numericnocontchars { characters: characters.to_string() }))
+}
+
+pub fn numericmodechars(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, characters)) = tuple((tag("numericmodechars"), space1, chars))(i)?;
+    Ok((input, Rule::Numericmodechars { characters: characters.to_string() }))
+}
+
+pub fn midendnumericmodechars(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, characters)) = tuple((tag("midendnumericmodechars"), space1, chars))(i)?;
+    Ok((input, Rule::Midendnumericmodechars { characters: characters.to_string() }))
+}
+
 pub fn begcapsphrase(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, dots)) = tuple((tag("begcapsphrase"), space1, dots))(i)?;
     Ok((input, Rule::Begcapsphrase { dots }))
@@ -574,6 +619,15 @@ pub fn rule_line(i: &str) -> IResult<&str, Line> {
 		capsmodechars,
 		begcaps,
 		endcaps,
+		letsign,
+		noletsign,
+		noletsignbefore,
+		noletsignafter,
+		nocontractsign,
+		numsign,
+		numericnocontchars,
+		numericmodechars,
+		midendnumericmodechars,
 		begcapsphrase,
 		endcapsphrase,
 		compbrl,
