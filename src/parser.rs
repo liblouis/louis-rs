@@ -219,7 +219,7 @@ pub fn ascii_chars(input: &str) -> IResult<&str, &str> {
 }
 
 pub fn filename(input: &str) -> IResult<&str, &str> {
-    is_a("abcdefghijklmnopqrstuvwxyz0123456789_-.")(input)
+    is_a("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.")(input)
 }
 
 pub fn dots(i: &str) -> IResult<&str, BrailleChars> {
