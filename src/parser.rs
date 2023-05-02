@@ -181,7 +181,10 @@ pub fn escaped_char(i: &str) -> IResult<&str, char> {
 }
 
 pub fn single_char(input: &str) -> IResult<&str, char> {
-    none_of(" \t\r\n")(input)
+    alt((
+	escaped_char,
+	none_of(" \t\r\n"),
+    ))(input)
 }
 
 pub fn ascii_chars(input: &str) -> IResult<&str, &str> {
@@ -686,7 +689,7 @@ mod tests {
             uppercase("uppercase அ 123"),
             Ok(("", Rule::Uppercase { word: "அ".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
         assert_eq!(
-            uppercase(r"uppercase \x04D8 34579"),
+            uppercase("uppercase \\x04D8 34579"),
             Ok(("", Rule::Uppercase { word: "Ә".to_string(), dots: vec![BrailleDot::DOT3 | BrailleDot::DOT4 | BrailleDot::DOT5 | BrailleDot::DOT7 | BrailleDot::DOT9] })));
     }
 
