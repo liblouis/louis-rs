@@ -82,9 +82,35 @@ pub enum Rule {
     Begcapsphrase { dots: BrailleChars},
     Endcapsphrase { dots: BrailleChars, position: Position},
     Lencapsphrase { length: u8},
-    Largesign { word: String, dots: BrailleChars },
+    // Translation Opcodes
+    Compbrl { characters: String},
+    Comp6 { characters: String, dots: BrailleChars},
+    Nocont {characters: String},
+    Replace {characters: String, replacement: String},
+    Always {characters: String, dots: BrailleChars},
+    Repeated {characters: String, dots: BrailleChars},
+    Repword  {characters: String, dots: BrailleChars},
+    Rependword  {characters: String, dots: BrailleChars, other: BrailleChars},
+    Largesign  {characters: String, dots: BrailleChars},
+    Word  {characters: String, dots: BrailleChars},
     Syllable { word: String, dots: BrailleChars },
     Joinword { word: String, dots: BrailleChars },
+    Lowword  {characters: String, dots: BrailleChars},
+    Contraction  {characters: String},
+    Sufword  {characters: String, dots: BrailleChars},
+    Prfword  {characters: String, dots: BrailleChars},
+    Begword  {characters: String, dots: BrailleChars},
+    Begmidword  {characters: String, dots: BrailleChars},
+    Midword  {characters: String, dots: BrailleChars},
+    Midendword  {characters: String, dots: BrailleChars},
+    Endword  {characters: String, dots: BrailleChars},
+    Partword {characters: String, dots: BrailleChars},
+    Prepunc {characters: String, dots: BrailleChars},
+    Postpunc {characters: String, dots: BrailleChars},
+    Begnum {characters: String, dots: BrailleChars},
+    Midnum {characters: String, dots: BrailleChars},
+    Endnum {characters: String, dots: BrailleChars},
+    Joinnum {characters: String, dots: BrailleChars},
 }
 
 #[derive(EnumSetType, Debug)]
@@ -366,11 +392,54 @@ pub fn lencapsphrase(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Lencapsphrase { length }))
 }
 
+pub fn compbrl(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars)) = tuple((tag("compbrl"), space1, chars))(i)?;
+    Ok((input, Rule::Compbrl { characters: chars.to_string() }))
+}
+
+pub fn comp6(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("comp6"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Comp6 { characters: chars.to_string(), dots }))
+}
+
+pub fn nocont(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars)) = tuple((tag("nocont"), space1, chars))(i)?;
+    Ok((input, Rule::Compbrl { characters: chars.to_string() }))
+}
+
+pub fn replace(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, replacement)) = tuple((tag("replace"), space1, chars, space1, chars))(i)?;
+    Ok((input, Rule::Replace { characters: chars.to_string(), replacement: replacement.to_string() }))
+}
+
+pub fn always(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("always"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Always { characters: chars.to_string(), dots }))
+}
+
+pub fn repeated(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("repeated"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Repeated { characters: chars.to_string(), dots }))
+}
+
+pub fn repword(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("repword"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Repword { characters: chars.to_string(), dots }))
+}
+
+pub fn rependword(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots, _, other)) = tuple((tag("repword"), space1, chars, space1, dots, space1, dots))(i)?;
+    Ok((input, Rule::Rependword { characters: chars.to_string(), dots, other }))
+}
+
 pub fn largesign(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, word, _, dots)) = tuple((
-        tag("largesign"), space1, chars, space1, dots,
-    ))(i)?;
-    Ok((input, Rule::Largesign { word: word.to_string(), dots }))
+    let (input, (_, _, chars, _, dots)) = tuple((tag("largesign"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Largesign { characters: chars.to_string(), dots }))
+}
+
+pub fn word(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("word"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Word { characters: chars.to_string(), dots }))
 }
 
 pub fn syllable(i: &str) -> IResult<&str, Rule> {
@@ -385,6 +454,86 @@ pub fn joinword(i: &str) -> IResult<&str, Rule> {
         tag("joinword"), space1, chars, space1, dots,
     ))(i)?;
     Ok((input, Rule::Joinword { word: word.to_string(), dots }))
+}
+
+pub fn lowword(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("lowword"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Lowword { characters: chars.to_string(), dots }))
+}
+
+pub fn contraction(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars)) = tuple((tag("contraction"), space1, chars))(i)?;
+    Ok((input, Rule::Contraction { characters: chars.to_string() }))
+}
+
+pub fn sufword(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("sufword"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Sufword { characters: chars.to_string(), dots }))
+}
+
+pub fn prfword(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("prfword"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Prfword { characters: chars.to_string(), dots }))
+}
+
+pub fn begword(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("begword"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Begword { characters: chars.to_string(), dots }))
+}
+
+pub fn begmidword(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("begmidword"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Begmidword { characters: chars.to_string(), dots }))
+}
+
+pub fn midword(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("midword"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Midword { characters: chars.to_string(), dots }))
+}
+
+pub fn midendword(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("midendword"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Midendword { characters: chars.to_string(), dots }))
+}
+
+pub fn endword(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("endword"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Endword { characters: chars.to_string(), dots }))
+}
+
+pub fn partword(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("partword"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Partword { characters: chars.to_string(), dots }))
+}
+
+pub fn prepunc(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("prepunc"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Prepunc { characters: chars.to_string(), dots }))
+}
+
+pub fn postpunc(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("postpunc"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Postpunc { characters: chars.to_string(), dots }))
+}
+
+pub fn begnum(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("begnum"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Begnum { characters: chars.to_string(), dots }))
+}
+
+pub fn midnum(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("midnum"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Midnum { characters: chars.to_string(), dots }))
+}
+
+pub fn endnum(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("endnum"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Endnum { characters: chars.to_string(), dots }))
+}
+
+pub fn joinnum(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, chars, _, dots)) = tuple((tag("joinnum"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Joinnum { characters: chars.to_string(), dots }))
 }
 
 fn end_comment(i: &str) -> IResult<&str, &str> {
@@ -427,10 +576,37 @@ pub fn rule_line(i: &str) -> IResult<&str, Line> {
 		endcaps,
 		begcapsphrase,
 		endcapsphrase,
+		compbrl,
+		comp6,
+		nocont,
+		replace,
+		always,
+		repeated,
+		repword,
+		rependword,
+	    )),
+	    alt((
 		largesign,
+		word,
 		syllable,
 		joinword,
-	    )),
+		lowword,
+		contraction,
+		sufword,
+		prfword,
+		begword,
+		begmidword,
+		midword,
+		midendword,
+		endword,
+		partword,
+		prepunc,
+		postpunc,
+		begnum,
+		midnum,
+		endnum,
+		joinnum
+	    ))
 	)),
         alt((end_comment, space0)),
         line_ending,
@@ -671,10 +847,10 @@ mod tests {
     fn largesign_test() {
         assert_eq!(
             largesign("largesign überall 123"),
-            Ok(("", Rule::Largesign { word: "überall".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
+            Ok(("", Rule::Largesign { characters: "überall".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
         assert_eq!(
             largesign("largesign அஇ 123"),
-            Ok(("", Rule::Largesign { word: "அஇ".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
+            Ok(("", Rule::Largesign { characters: "அஇ".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] })));
     }
 
     #[test]
@@ -719,7 +895,7 @@ mod tests {
 				 comment: "".to_string() })));
         assert_eq!(
             rule_line("largesign அஇ 123\n"),
-            Ok(("", Line::Rule { rule: Rule::Largesign { word: "அஇ".to_string(),
+            Ok(("", Line::Rule { rule: Rule::Largesign { characters: "அஇ".to_string(),
 							 dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
 				 comment: "".to_string() })));
         assert_eq!(
