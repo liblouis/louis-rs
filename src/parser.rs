@@ -56,6 +56,7 @@ pub enum Rule {
     Math { ch: char, dots: BrailleChars },
     Grouping { name: String, chars: String, dots: Vec<BrailleChars> },
     Base { attribute: String, derived: char, base: char },
+    Attribute { name: String, chars: String },
     // Braille Indicator Opcodes
     Modeletter { attribute: String, dots: BrailleChars, prefixes: Prefixes},
     Capsletter { dots: BrailleChars, prefixes: Prefixes},
@@ -305,6 +306,11 @@ pub fn base(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Base { attribute: attribute.to_string(), derived, base }))
 }
 
+pub fn attribute(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, name, _, chars)) = tuple((tag("attribute"), space1, ascii_chars, space1, chars))(i)?;
+    Ok((input, Rule::Attribute { name: name.to_string(), chars: chars.to_string() }))
+}
+
 pub fn modeletter(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("modeletter"), space1, ascii_chars, space1, dots))(i)?;
     Ok((input, Rule::Modeletter { attribute: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
@@ -408,6 +414,7 @@ pub fn rule_line(i: &str) -> IResult<&str, Line> {
 		math,
 		grouping,
 		base,
+		attribute,
             )),
 	    alt((
 		modeletter,
