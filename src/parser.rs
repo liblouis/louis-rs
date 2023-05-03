@@ -114,7 +114,7 @@ pub enum Rule {
     Begword  {characters: String, dots: BrailleChars},
     Begmidword  {characters: String, dots: BrailleChars},
     Midword  {characters: String, dots: BrailleChars},
-    Midendword  {characters: String, dots: BrailleChars},
+    Midendword  {characters: String, dots: BrailleChars, prefixes: Prefixes},
     Endword  {characters: String, dots: BrailleChars},
     Partword {characters: String, dots: BrailleChars},
     Prepunc {characters: String, dots: BrailleChars},
@@ -592,8 +592,8 @@ pub fn midword(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn midendword(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("midendword"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Midendword { characters: chars.to_string(), dots }))
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("midendword"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Midendword { characters: chars.to_string(), dots , prefixes: prefixes.unwrap()}))
 }
 
 pub fn endword(i: &str) -> IResult<&str, Rule> {
