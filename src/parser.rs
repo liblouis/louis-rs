@@ -125,6 +125,9 @@ pub enum Rule {
     Pass4 {test: String, action: String, prefix: Prefixes},
     // Correct Opcode
     Correct {test: String, action: String, prefix: Prefixes},
+
+    // Match Opcode
+    Match { pre: String, characters: String, post: String, dots: BrailleChars, prefixes: Prefixes},
 }
 
 #[derive(EnumSetType, Debug)]
@@ -641,6 +644,11 @@ pub fn correct(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Correct { test: test.to_string(), action: action.to_string(), prefix: prefixes.unwrap() }))
 }
 
+pub fn match_opcode(i: &str) -> IResult<&str, Rule> {
+    let (input, (prefixes, _, _, pre, _, chars, _, post, _, dots)) = tuple((opt(prefixes), tag("match"), space1, chars, space1, chars, space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Match { pre: pre.to_string(), characters: chars.to_string(), post: post.to_string(), dots, prefixes: prefixes.unwrap() }))
+}
+
 fn end_comment(i: &str) -> IResult<&str, &str> {
     let (input, (_, _, comment)) = tuple((space1, opt(tag("#")), not_line_ending))(i)?;
     Ok((input, comment))
@@ -732,6 +740,7 @@ pub fn rule_line(i: &str) -> IResult<&str, Line> {
 		pass3,
 		pass4,
 		correct,
+		match_opcode,
 	    ))
 	)),
         alt((end_comment, space0)),
@@ -1027,6 +1036,17 @@ mod tests {
 				    prefixes: Prefixes::empty() })));
 	// FIXME: test multind with an end comment
 	// FIXME: test multind with invalid opcodes
+    }
+
+    #[test]
+    fn match_test() {
+        assert_eq!(
+            match_opcode("match ab xyz cd 1346-13456"),
+            Ok(("", Rule::Match {pre: "ab".to_string(),
+				 characters: "xyz".to_string(),
+				 post: "cd".to_string(),
+				 dots: vec![BrailleDot::DOT1 | BrailleDot::DOT3 | BrailleDot::DOT4 | BrailleDot::DOT6, BrailleDot::DOT1 | BrailleDot::DOT3 | BrailleDot::DOT4 | BrailleDot::DOT5 | BrailleDot::DOT6],
+				 prefixes: Prefixes::empty() })));
     }
 
     #[test]
