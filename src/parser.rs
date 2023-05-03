@@ -130,13 +130,13 @@ pub enum Rule {
     Swapcc {name: String, chars: String, replacement: String},
 
     // Context Opcodes
-    Context {test: String, action: String, prefix: Prefixes},
-    Pass2 {test: String, action: String, prefix: Prefixes},
-    Pass3 {test: String, action: String, prefix: Prefixes},
-    Pass4 {test: String, action: String, prefix: Prefixes},
+    Context {test: String, action: String, prefixes: Prefixes},
+    Pass2 {test: String, action: String, prefixes: Prefixes},
+    Pass3 {test: String, action: String, prefixes: Prefixes},
+    Pass4 {test: String, action: String, prefixes: Prefixes},
 
     // Correct Opcode
-    Correct {test: String, action: String, prefix: Prefixes},
+    Correct {test: String, action: String, prefixes: Prefixes},
 
     // Match Opcode
     Match { pre: String, characters: String, post: String, dots: BrailleChars, prefixes: Prefixes},
@@ -653,27 +653,27 @@ pub fn swapcc(i: &str) -> IResult<&str, Rule> {
 
 pub fn context(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, test, _, action)) = tuple((opt(prefixes), tag("context"), space1, chars, space1, chars))(i)?;
-    Ok((input, Rule::Context { test: test.to_string(), action: action.to_string(), prefix: prefixes.unwrap() }))
+    Ok((input, Rule::Context { test: test.to_string(), action: action.to_string(), prefixes: prefixes.unwrap() }))
 }
 
 pub fn pass2(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, test, _, action)) = tuple((opt(prefixes), tag("pass2"), space1, chars, space1, chars))(i)?;
-    Ok((input, Rule::Pass2 { test: test.to_string(), action: action.to_string(), prefix: prefixes.unwrap() }))
+    Ok((input, Rule::Pass2 { test: test.to_string(), action: action.to_string(), prefixes: prefixes.unwrap() }))
 }
 
 pub fn pass3(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, test, _, action)) = tuple((opt(prefixes), tag("pass3"), space1, chars, space1, chars))(i)?;
-    Ok((input, Rule::Pass3 { test: test.to_string(), action: action.to_string(), prefix: prefixes.unwrap() }))
+    Ok((input, Rule::Pass3 { test: test.to_string(), action: action.to_string(), prefixes: prefixes.unwrap() }))
 }
 
 pub fn pass4(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, test, _, action)) = tuple((opt(prefixes), tag("pass4"), space1, chars, space1, chars))(i)?;
-    Ok((input, Rule::Pass4 { test: test.to_string(), action: action.to_string(), prefix: prefixes.unwrap() }))
+    Ok((input, Rule::Pass4 { test: test.to_string(), action: action.to_string(), prefixes: prefixes.unwrap() }))
 }
 
 pub fn correct(i: &str) -> IResult<&str, Rule> {
     let (input, (prefixes, _, _, test, _, action)) = tuple((opt(prefixes), tag("correct"), space1, chars, space1, chars))(i)?;
-    Ok((input, Rule::Correct { test: test.to_string(), action: action.to_string(), prefix: prefixes.unwrap() }))
+    Ok((input, Rule::Correct { test: test.to_string(), action: action.to_string(), prefixes: prefixes.unwrap() }))
 }
 
 pub fn match_opcode(i: &str) -> IResult<&str, Rule> {
