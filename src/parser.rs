@@ -45,7 +45,7 @@ pub enum Rule {
     Display { chars: String, dots: BrailleChars, prefixes: Prefixes },
     // Character-Definition Opcodes
     Space { ch: char, dots: BrailleChars, prefixes: Prefixes},
-    Multind { chars: String, dots: BrailleChars, prefixes: Prefixes },
+    Multind { dots: BrailleChars, opcodes: Vec<String>, prefixes: Prefixes },
     Punctuation { ch: char, dots: BrailleChars, prefixes: Prefixes},
     Digit { ch: char, dots: BrailleChars },
     Letter { ch: char, dots: BrailleChars },
@@ -287,8 +287,9 @@ pub fn space(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn multind(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("multind"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Multind { chars: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, dots, _, opcodes)) = tuple((opt(prefixes), tag("multind"), space1, dots, space1, separated_list1(space1, chars)))(i)?;
+    // FIXME: Make sure the opcodes are valid
+    Ok((input, Rule::Multind { dots, opcodes: opcodes.iter().map(|s| s.to_string()).collect(), prefixes: prefixes.unwrap() }))
 }
 
 pub fn punctuation(i: &str) -> IResult<&str, Rule> {
@@ -1018,6 +1019,17 @@ mod tests {
     }
 
     #[test]
+    fn multind_test() {
+        assert_eq!(
+            multind("multind 123 lowercase uppercase"),
+            Ok(("", Rule::Multind { dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
+				    opcodes: vec!["lowercase".to_string(), "uppercase".to_string()],
+				    prefixes: Prefixes::empty() })));
+	// FIXME: test multind with an end comment
+	// FIXME: test multind with invalid opcodes
+    }
+
+    #[test]
     fn rule_line_test() {
         assert_eq!(
             rule_line("joinword haha 123\n"),
@@ -1089,12 +1101,12 @@ mod tests {
         assert_eq!(
             table(concat!("       \n",
 			  "# just testing\n",
-			  "nocross multind hehe 123\n",
+			  "nocross multind 123 always syllable\n",
 			  "joinword haha 123\n",
 			  "syllable haha 123\n")),
             Ok(("", vec![Line::Empty,
 			 Line::Comment { comment: " just testing".to_string() },
-			 Line::Rule { rule: Rule::Multind { chars: "hehe".to_string(),
+			 Line::Rule { rule: Rule::Multind { opcodes: vec!["always".to_string(), "syllable".to_string()],
 							    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
 							    prefixes: enum_set!(Prefix::Nocross) },
 				      comment: "".to_string() },
