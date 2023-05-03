@@ -43,6 +43,7 @@ pub enum Rule {
     Include { filename: String },
     Undefined { dots: BrailleChars },
     Display { chars: String, dots: BrailleChars, prefixes: Prefixes },
+
     // Character-Definition Opcodes
     Space { ch: char, dots: BrailleChars, prefixes: Prefixes},
     Multind { dots: BrailleChars, opcodes: Vec<String>, prefixes: Prefixes },
@@ -57,6 +58,7 @@ pub enum Rule {
     Grouping { name: String, chars: String, dots: Vec<BrailleChars> },
     Base { attribute: String, derived: char, base: char },
     Attribute { name: String, chars: String },
+
     // Braille Indicator Opcodes
     Modeletter { attribute: String, dots: BrailleChars, prefixes: Prefixes},
     Capsletter { dots: BrailleChars, prefixes: Prefixes},
@@ -91,6 +93,7 @@ pub enum Rule {
     // Special Opcodes
     Decpoint { characters: String, dots: BrailleChars},
     Hyphen { characters: String, dots: BrailleChars},
+
     // Translation Opcodes
     Compbrl { characters: String},
     Comp6 { characters: String, dots: BrailleChars},
@@ -120,15 +123,18 @@ pub enum Rule {
     Midnum {characters: String, dots: BrailleChars},
     Endnum {characters: String, dots: BrailleChars},
     Joinnum {characters: String, dots: BrailleChars},
+
     // Swap Opcodes
     Swapcd {name: String, characters: String, dots: Vec<BrailleChars> },
     Swapdd {name: String, dots: Vec<BrailleChars>, dotpattern: Vec<BrailleChars>},
     Swapcc {name: String, chars: String, replacement: String},
+
     // Context Opcodes
     Context {test: String, action: String, prefix: Prefixes},
     Pass2 {test: String, action: String, prefix: Prefixes},
     Pass3 {test: String, action: String, prefix: Prefixes},
     Pass4 {test: String, action: String, prefix: Prefixes},
+
     // Correct Opcode
     Correct {test: String, action: String, prefix: Prefixes},
 
