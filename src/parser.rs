@@ -78,10 +78,16 @@ pub enum Rule {
     Numericnocontchars { characters: String },
     Numericmodechars { characters: String },
     Midendnumericmodechars { characters: String },
-    // Standing Alone Sequences
     Begcapsphrase { dots: BrailleChars},
     Endcapsphrase { dots: BrailleChars, position: Position},
     Lencapsphrase { length: u8},
+
+    // Standing Alone Sequences
+    Seqdelimiter { characters: String },
+    Seqbeforechars { characters: String },
+    Seqafterchars { characters: String },
+    Seqafterpattern { pattern: String },
+
     // Special Opcodes
     Decpoint { characters: String, dots: BrailleChars},
     Hyphen { characters: String, dots: BrailleChars},
@@ -450,6 +456,26 @@ pub fn lencapsphrase(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Lencapsphrase { length }))
 }
 
+pub fn seqdelimiter(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, characters)) = tuple((tag("seqdelimiter"), space1, chars))(i)?;
+    Ok((input, Rule::Seqdelimiter { characters: characters.to_string() }))
+}
+
+pub fn seqbeforechars(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, characters)) = tuple((tag("seqbeforechars"), space1, chars))(i)?;
+    Ok((input, Rule::Seqbeforechars { characters: characters.to_string() }))
+}
+
+pub fn seqafterchars(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, characters)) = tuple((tag("seqafterchars"), space1, chars))(i)?;
+    Ok((input, Rule::Seqafterchars { characters: characters.to_string() }))
+}
+
+pub fn seqafterpattern(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, characters)) = tuple((tag("seqafterpattern"), space1, chars))(i)?;
+    Ok((input, Rule::Seqafterpattern { pattern: characters.to_string() }))
+}
+
 pub fn decpoint(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, chars, _, dots)) = tuple((tag("decpoint"), space1, chars, space1, dots))(i)?;
     Ok((input, Rule::Decpoint { characters: chars.to_string(), dots }))
@@ -698,6 +724,13 @@ pub fn rule_line(i: &str) -> IResult<&str, Line> {
 		midendnumericmodechars,
 		begcapsphrase,
 		endcapsphrase,
+		lencapsphrase,
+	    )),
+	    alt((
+		seqdelimiter,
+		seqbeforechars,
+		seqafterchars,
+		seqafterpattern,
 	    )),
 	    alt((
 		decpoint,
@@ -967,7 +1000,7 @@ mod tests {
     }
 
     #[test]
-    fn _test() {
+    fn lencapsphrase_test() {
         assert_eq!(lencapsphrase("lencapsphrase 4"),
 		   Ok(("", Rule::Lencapsphrase { length: 4 })));
     }
