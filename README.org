@@ -47,7 +47,7 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
 - [-] Complete the parser
   - [X] handle the '=' braille pattern
   - [ ] handle escaped unicode digit in ~litdigit~
-  - [ ] handle escaped space ('\s')
+  - [X] handle escaped space ('\s')
 
 * License
 

@@ -259,6 +259,19 @@ pub fn unicode_literal(input: &str) -> IResult<&str, char> {
     Ok((i, c))
 }
 
+fn escape_sequence(input: &str) -> IResult<&str, char> {
+    alt((
+	map(tag(r"\\"), |_| '\\'),
+	map(tag(r"\f"), |_| '\x0C'),
+	map(tag(r"\n"), |_| '\n'),
+	map(tag(r"\r"), |_| '\r'),
+	map(tag(r"\s"), |_| ' '),
+	map(tag(r"\t"), |_| '\t'),
+	map(tag(r"\v"), |_| '\x0B'),
+	map(tag(r"\e"), |_| '\x1B'),
+    ))(input)
+}
+
 pub fn escaped_char(i: &str) -> IResult<&str, char> {
     let (input, (_, c)) = tuple((tag("\\x"), unicode_literal))(i)?;
     Ok((input, c))
@@ -266,6 +279,7 @@ pub fn escaped_char(i: &str) -> IResult<&str, char> {
 
 pub fn single_char(input: &str) -> IResult<&str, char> {
     alt((
+	escape_sequence,
 	escaped_char,
 	none_of(" \t\r\n"),
     ))(input)
