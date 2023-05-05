@@ -49,7 +49,7 @@ pub enum Rule {
     Multind { dots: BrailleChars, opcodes: Vec<String>, prefixes: Prefixes },
     Punctuation { ch: char, dots: BrailleChars, prefixes: Prefixes},
     Digit { ch: char, dots: BrailleChars },
-    Letter { ch: char, dots: BrailleChars },
+    Letter { ch: char, dots: BrailleCharsOrImplicit },
     Lowercase { word: String, dots: BrailleChars, prefixes: Prefixes },
     Uppercase { word: String, dots: BrailleChars, prefixes: Prefixes },
     Litdigit { chars: String, dots: BrailleChars },
@@ -96,32 +96,32 @@ pub enum Rule {
 
     // Translation Opcodes
     Compbrl { characters: String},
-    Comp6 { characters: String, dots: BrailleChars},
+    Comp6 { characters: String, dots: BrailleCharsOrImplicit},
     Nocont {characters: String},
     Replace {characters: String, replacement: String},
-    Always {characters: String, dots: BrailleChars, prefixes: Prefixes},
+    Always {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
     Repeated {characters: String, dots: BrailleChars},
     Repword  {characters: String, dots: BrailleChars},
     Rependword  {characters: String, dots: BrailleChars, other: BrailleChars},
     Largesign  {characters: String, dots: BrailleChars},
-    Word  {characters: String, dots: BrailleChars},
-    Syllable { word: String, dots: BrailleChars },
+    Word  {characters: String, dots: BrailleCharsOrImplicit},
+    Syllable { word: String, dots: BrailleCharsOrImplicit },
     Joinword { word: String, dots: BrailleChars },
     Lowword  {characters: String, dots: BrailleChars},
     Contraction  {characters: String},
-    Sufword  {characters: String, dots: BrailleChars},
-    Prfword  {characters: String, dots: BrailleChars},
-    Begword  {characters: String, dots: BrailleChars},
-    Begmidword  {characters: String, dots: BrailleChars},
-    Midword  {characters: String, dots: BrailleChars},
-    Midendword  {characters: String, dots: BrailleChars, prefixes: Prefixes},
-    Endword  {characters: String, dots: BrailleChars},
-    Partword {characters: String, dots: BrailleChars},
+    Sufword  {characters: String, dots: BrailleCharsOrImplicit},
+    Prfword  {characters: String, dots: BrailleCharsOrImplicit},
+    Begword  {characters: String, dots: BrailleCharsOrImplicit},
+    Begmidword  {characters: String, dots: BrailleCharsOrImplicit},
+    Midword  {characters: String, dots: BrailleCharsOrImplicit},
+    Midendword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
+    Endword  {characters: String, dots: BrailleCharsOrImplicit},
+    Partword {characters: String, dots: BrailleCharsOrImplicit},
     Prepunc {characters: String, dots: BrailleChars},
     Postpunc {characters: String, dots: BrailleChars},
     Begnum {characters: String, dots: BrailleChars},
     Midnum {characters: String, dots: BrailleChars},
-    Endnum {characters: String, dots: BrailleChars},
+    Endnum {characters: String, dots: BrailleCharsOrImplicit},
     Joinnum {characters: String, dots: BrailleChars},
 
     // Swap Opcodes
@@ -139,7 +139,7 @@ pub enum Rule {
     Correct {test: String, action: String, prefixes: Prefixes},
 
     // Match Opcode
-    Match { pre: String, characters: String, post: String, dots: BrailleChars, prefixes: Prefixes},
+    Match { pre: String, characters: String, post: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
 }
 
 #[derive(EnumSetType, Debug)]
@@ -179,6 +179,12 @@ pub enum BrailleDot {
 
 type BrailleChar = EnumSet<BrailleDot>;
 type BrailleChars = Vec<BrailleChar>;
+
+#[derive(PartialEq, Debug)]
+pub enum BrailleCharsOrImplicit {
+    Implicit,
+    Explicit(BrailleChars),
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseBrailleError;
@@ -251,6 +257,13 @@ pub fn filename(input: &str) -> IResult<&str, &str> {
     is_a("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.")(input)
 }
 
+pub fn braillechars_or_implicit(input: &str) -> IResult<&str, BrailleCharsOrImplicit> {
+    alt((
+	map(tag("="), |_| BrailleCharsOrImplicit::Implicit),
+	map(dots, |dots| BrailleCharsOrImplicit::Explicit(dots))
+    ))(input)
+}
+
 pub fn dots(i: &str) -> IResult<&str, BrailleChars> {
     let (input, dots) = separated_list1(tag("-"), hex_digit1)(i)?;
     let braille_chars: Vec<BrailleChar> = dots
@@ -318,7 +331,7 @@ pub fn digit(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn letter(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, ch, _, dots)) = tuple((tag("letter"), space1, single_char, space1, dots))(i)?;
+    let (input, (_, _, ch, _, dots)) = tuple((tag("letter"), space1, single_char, space1, braillechars_or_implicit))(i)?;
     Ok((input, Rule::Letter { ch, dots }))
 }
 
@@ -498,7 +511,7 @@ pub fn compbrl(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn comp6(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("comp6"), space1, chars, space1, dots))(i)?;
+    let (input, (_, _, chars, _, dots)) = tuple((tag("comp6"), space1, chars, space1, braillechars_or_implicit))(i)?;
     Ok((input, Rule::Comp6 { characters: chars.to_string(), dots }))
 }
 
@@ -513,7 +526,7 @@ pub fn replace(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn always(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("always"), space1, chars, space1, dots))(i)?;
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("always"), space1, chars, space1, braillechars_or_implicit))(i)?;
     Ok((input, Rule::Always { characters: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
 }
 
@@ -538,14 +551,12 @@ pub fn largesign(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn word(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("word"), space1, chars, space1, dots))(i)?;
+    let (input, (_, _, chars, _, dots)) = tuple((tag("word"), space1, chars, space1, braillechars_or_implicit))(i)?;
     Ok((input, Rule::Word { characters: chars.to_string(), dots }))
 }
 
 pub fn syllable(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, word, _, dots)) = tuple((
-        tag("syllable"), space1, chars, space1, dots,
-    ))(i)?;
+    let (input, (_, _, word, _, dots)) = tuple((tag("syllable"), space1, chars, space1, braillechars_or_implicit))(i)?;
     Ok((input, Rule::Syllable { word: word.to_string(), dots }))
 }
 
@@ -567,42 +578,42 @@ pub fn contraction(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn sufword(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("sufword"), space1, chars, space1, dots))(i)?;
+    let (input, (_, _, chars, _, dots)) = tuple((tag("sufword"), space1, chars, space1, braillechars_or_implicit))(i)?;
     Ok((input, Rule::Sufword { characters: chars.to_string(), dots }))
 }
 
 pub fn prfword(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("prfword"), space1, chars, space1, dots))(i)?;
+    let (input, (_, _, chars, _, dots)) = tuple((tag("prfword"), space1, chars, space1, braillechars_or_implicit))(i)?;
     Ok((input, Rule::Prfword { characters: chars.to_string(), dots }))
 }
 
 pub fn begword(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("begword"), space1, chars, space1, dots))(i)?;
+    let (input, (_, _, chars, _, dots)) = tuple((tag("begword"), space1, chars, space1, braillechars_or_implicit))(i)?;
     Ok((input, Rule::Begword { characters: chars.to_string(), dots }))
 }
 
 pub fn begmidword(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("begmidword"), space1, chars, space1, dots))(i)?;
+    let (input, (_, _, chars, _, dots)) = tuple((tag("begmidword"), space1, chars, space1, braillechars_or_implicit))(i)?;
     Ok((input, Rule::Begmidword { characters: chars.to_string(), dots }))
 }
 
 pub fn midword(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("midword"), space1, chars, space1, dots))(i)?;
+    let (input, (_, _, chars, _, dots)) = tuple((tag("midword"), space1, chars, space1, braillechars_or_implicit))(i)?;
     Ok((input, Rule::Midword { characters: chars.to_string(), dots }))
 }
 
 pub fn midendword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("midendword"), space1, chars, space1, dots))(i)?;
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("midendword"), space1, chars, space1, braillechars_or_implicit))(i)?;
     Ok((input, Rule::Midendword { characters: chars.to_string(), dots , prefixes: prefixes.unwrap()}))
 }
 
 pub fn endword(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("endword"), space1, chars, space1, dots))(i)?;
+    let (input, (_, _, chars, _, dots)) = tuple((tag("endword"), space1, chars, space1, braillechars_or_implicit))(i)?;
     Ok((input, Rule::Endword { characters: chars.to_string(), dots }))
 }
 
 pub fn partword(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("partword"), space1, chars, space1, dots))(i)?;
+    let (input, (_, _, chars, _, dots)) = tuple((tag("partword"), space1, chars, space1, braillechars_or_implicit))(i)?;
     Ok((input, Rule::Partword { characters: chars.to_string(), dots }))
 }
 
@@ -627,7 +638,7 @@ pub fn midnum(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn endnum(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("endnum"), space1, chars, space1, dots))(i)?;
+    let (input, (_, _, chars, _, dots)) = tuple((tag("endnum"), space1, chars, space1, braillechars_or_implicit))(i)?;
     Ok((input, Rule::Endnum { characters: chars.to_string(), dots }))
 }
 
@@ -677,7 +688,7 @@ pub fn correct(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn match_opcode(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, pre, _, chars, _, post, _, dots)) = tuple((opt(prefixes), tag("match"), space1, chars, space1, chars, space1, chars, space1, dots))(i)?;
+    let (input, (prefixes, _, _, pre, _, chars, _, post, _, dots)) = tuple((opt(prefixes), tag("match"), space1, chars, space1, chars, space1, chars, space1, braillechars_or_implicit))(i)?;
     Ok((input, Rule::Match { pre: pre.to_string(), characters: chars.to_string(), post: post.to_string(), dots, prefixes: prefixes.unwrap() }))
 }
 
@@ -868,9 +879,15 @@ mod tests {
 				BrailleDot::DOT1 | BrailleDot::DOTF,
 				BrailleDot::DOT7 | BrailleDot::DOT8,
 		   ])));
-        assert_eq!(dots("huhu"),
-		   Err(Err::Error(Error::new("huhu", ErrorKind::HexDigit)))
+        assert_eq!(dots("huhu"), Err(Err::Error(Error {input: "huhu", code: ErrorKind::HexDigit}))
         );
+    }
+
+    #[test]
+    fn braillechars_or_implicit_test() {
+        assert_eq!(braillechars_or_implicit("123"), Ok(("", BrailleCharsOrImplicit::Explicit(vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]))));
+        assert_eq!(braillechars_or_implicit("="), Ok(("", BrailleCharsOrImplicit::Implicit)));
+        assert_eq!(dots("m"), Err(Err::Error(Error { input: "m", code: ErrorKind::HexDigit })));
     }
 
     #[test]
@@ -1084,7 +1101,7 @@ mod tests {
             Ok(("", Rule::Match {pre: "ab".to_string(),
 				 characters: "xyz".to_string(),
 				 post: "cd".to_string(),
-				 dots: vec![BrailleDot::DOT1 | BrailleDot::DOT3 | BrailleDot::DOT4 | BrailleDot::DOT6, BrailleDot::DOT1 | BrailleDot::DOT3 | BrailleDot::DOT4 | BrailleDot::DOT5 | BrailleDot::DOT6],
+				 dots: BrailleCharsOrImplicit::Explicit(vec![BrailleDot::DOT1 | BrailleDot::DOT3 | BrailleDot::DOT4 | BrailleDot::DOT6, BrailleDot::DOT1 | BrailleDot::DOT3 | BrailleDot::DOT4 | BrailleDot::DOT5 | BrailleDot::DOT6]),
 				 prefixes: Prefixes::empty() })));
     }
 
@@ -1103,7 +1120,7 @@ mod tests {
         assert_eq!(
             rule_line("syllable haha 123\n"),
             Ok(("", Line::Rule { rule: Rule::Syllable { word: "haha".to_string(),
-							dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
+							dots: BrailleCharsOrImplicit::Explicit(vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]) },
 				 comment: "".to_string() })));
         assert_eq!(
             rule_line("base uppercase A a\n"),
@@ -1154,15 +1171,14 @@ mod tests {
 							     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
 				      comment: "".to_string() },
 			 Line::Rule { rule: Rule::Syllable { word: "haha".to_string(),
-							     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3,
-									BrailleDot::DOT1 | BrailleDot::DOTF] },
+							     dots: BrailleCharsOrImplicit::Explicit(vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3, BrailleDot::DOT1 | BrailleDot::DOTF]) },
 				      comment: "".to_string() }])));
         assert_eq!(
             table(concat!("       \n",
 			  "# just testing\n",
 			  "nocross multind 123 always syllable\n",
 			  "joinword haha 123\n",
-			  "syllable haha 123\n")),
+			  "syllable haha =\n")),
             Ok(("", vec![Line::Empty,
 			 Line::Comment { comment: " just testing".to_string() },
 			 Line::Rule { rule: Rule::Multind { opcodes: vec!["always".to_string(), "syllable".to_string()],
@@ -1173,7 +1189,7 @@ mod tests {
 							     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
 				      comment: "".to_string() },
 			 Line::Rule { rule: Rule::Syllable { word: "haha".to_string(),
-							     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3] },
+							     dots: BrailleCharsOrImplicit::Implicit },
 				      comment: "".to_string() }])));
     }
 }
