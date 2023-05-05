@@ -44,9 +44,9 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
 * Todo
 - [ ] List the line number of an error, see
   https://iximiuz.com/en/posts/rust-writing-parsers-with-nom/
-- [-] Complete the parser
+- [X] Complete the parser
   - [X] handle the '=' braille pattern
-  - [ ] handle escaped unicode digit in ~litdigit~
+  - [X] handle escaped unicode digit in ~litdigit~
   - [X] handle escaped space ('\s')
 
 * License

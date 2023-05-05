@@ -52,7 +52,7 @@ pub enum Rule {
     Letter { ch: char, dots: BrailleCharsOrImplicit },
     Lowercase { word: String, dots: BrailleChars, prefixes: Prefixes },
     Uppercase { word: String, dots: BrailleChars, prefixes: Prefixes },
-    Litdigit { chars: String, dots: BrailleChars },
+    Litdigit { ch: char, dots: BrailleChars },
     Sign { ch: char, dots: BrailleChars, prefixes: Prefixes },
     Math { ch: char, dots: BrailleChars },
     Grouping { name: String, chars: String, dots: Vec<BrailleChars> },
@@ -309,6 +309,13 @@ pub fn dots(i: &str) -> IResult<&str, BrailleChars> {
     Ok((input, braille_chars))
 }
 
+fn unicode_digit(input: &str) -> IResult<&str, char> {
+    alt((
+	escaped_char,
+	map(unicode_digit1, |s: &str| s.chars().next().unwrap()), // smelly, we really just want to parse one digit
+    ))(input)
+}
+
 pub fn number(input: &str) -> IResult<&str, u8> {
     map_res(digit1, |s: &str| s.parse::<u8>())(input)
 }
@@ -382,8 +389,8 @@ pub fn uppercase(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn litdigit(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("litdigit"), space1, unicode_digit1, space1, dots))(i)?;
-    Ok((input, Rule::Litdigit { chars: chars.to_string(), dots }))
+    let (input, (_, _, ch, _, dots)) = tuple((tag("litdigit"), space1, unicode_digit, space1, dots))(i)?;
+    Ok((input, Rule::Litdigit { ch, dots }))
 }
 
 pub fn sign(i: &str) -> IResult<&str, Rule> {
@@ -1067,7 +1074,7 @@ mod tests {
     #[test]
     fn litdigit_test() {
         assert_eq!(litdigit("litdigit 0 245"),
-		   Ok(("", Rule::Litdigit { chars: "0".to_string(), dots: vec![BrailleDot::DOT2 | BrailleDot::DOT4 | BrailleDot::DOT5] })));
+		   Ok(("", Rule::Litdigit { ch: '0', dots: vec![BrailleDot::DOT2 | BrailleDot::DOT4 | BrailleDot::DOT5] })));
     }
 
     #[test]
