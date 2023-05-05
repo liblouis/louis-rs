@@ -89,10 +89,32 @@ pub enum Rule {
     Seqbeforechars { characters: String },
     Seqafterchars { characters: String },
     Seqafterpattern { pattern: String },
+    Seqafterexpression { expression: String },
 
-    // Special Opcodes
+    // Emphasis Opcodes
+    Class { name: String, chars: String },
+    Emphclass { name: String },
+    Begemph { name: String, dots: BrailleChars, prefixes: Prefixes },
+    Endemph { name: String, dots: BrailleChars, prefixes: Prefixes },
+    Noemphchars { name: String, chars: String},
+    Emphletter { name: String, dots: BrailleChars },
+    Begemphword { name: String,  dots: BrailleChars },
+    Endemphword { name: String, dots: BrailleChars },
+    Emphmodechars { name: String, chars: String },
+    Begemphphrase { name: String, dots: BrailleChars },
+    Endemphphrase { name: String, dots: BrailleChars, position: Position },
+    Lenemphphrase { name: String, length: u8 },
+
+    // Computer braille
+    Begcomp { dots: BrailleChars, prefixes: Prefixes},
+    Endcomp { dots: BrailleChars, prefixes: Prefixes},
+
+    // Special Symbol Opcodes
     Decpoint { characters: String, dots: BrailleChars},
-    Hyphen { characters: String, dots: BrailleChars},
+    Hyphen { characters: String, dots: BrailleChars, prefixes: Prefixes},
+
+    // Special Processing Opcodes
+    Capsnocont,
 
     // Translation Opcodes
     Compbrl { characters: String},
@@ -495,14 +517,94 @@ pub fn seqafterpattern(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Seqafterpattern { pattern: characters.to_string() }))
 }
 
+pub fn seqafterexpression(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, expression)) = tuple((tag("seqafterexpression"), space1, chars))(i)?;
+    Ok((input, Rule::Seqafterexpression { expression: expression.to_string() }))
+}
+
+pub fn class(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, name, _, chars)) = tuple((tag("class"), space1, chars, space1, chars))(i)?;
+    Ok((input, Rule::Class { name: name.to_string(), chars: chars.to_string() }))
+}
+
+pub fn emphclass(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, name)) = tuple((tag("emphclass"), space1, chars))(i)?;
+    Ok((input, Rule::Emphclass { name: name.to_string() }))
+}
+
+pub fn begemph(i: &str) -> IResult<&str, Rule> {
+    let (input, (prefixes, _, _, name, _, dots)) = tuple((opt(prefixes), tag("begemph"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Begemph { name: name.to_string(), dots, prefixes: prefixes.unwrap() }))
+}
+
+pub fn endemph(i: &str) -> IResult<&str, Rule> {
+    let (input, (prefixes, _, _, name, _, dots)) = tuple((opt(prefixes), tag("endemph"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Endemph { name: name.to_string(), dots, prefixes: prefixes.unwrap() }))
+}
+
+pub fn noemphchars(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, name, _, chars)) = tuple((tag("noemphchars"), space1, chars, space1, chars))(i)?;
+    Ok((input, Rule::Noemphchars { name: name.to_string(), chars: chars.to_string() }))
+}
+
+pub fn emphletter(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, name, _, dots)) = tuple((tag("emphletter"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Emphletter { name: name.to_string(), dots }))
+}
+
+pub fn begemphword(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, name, _, dots)) = tuple((tag("begemphword"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Begemphword { name: name.to_string(), dots }))
+}
+
+pub fn endemphword(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, name, _, dots)) = tuple((tag("endemphword"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Endemphword { name: name.to_string(), dots }))
+}
+
+pub fn emphmodechars(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, name, _, chars)) = tuple((tag("emphmodechars"), space1, chars, space1, chars))(i)?;
+    Ok((input, Rule::Emphmodechars { name: name.to_string(), chars: chars.to_string() }))
+}
+
+pub fn begemphphrase(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, name, _, dots)) = tuple((tag("begemphphrase"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Begemphphrase { name: name.to_string(), dots }))
+}
+
+pub fn endemphphrase(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, name, _, position, _, dots)) = tuple((tag("endemphphrase"), space1, chars, space1, before_or_after, space1, dots))(i)?;
+    Ok((input, Rule::Endemphphrase { name: name.to_string(), dots, position }))
+}
+
+pub fn lenemphphrase(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, name, _, length)) = tuple((tag("lenemphphrase"), space1, chars, space1, number))(i)?;
+    Ok((input, Rule::Lenemphphrase { name: name.to_string(), length }))
+}
+
+pub fn begcomp(i: &str) -> IResult<&str, Rule> {
+    let (input, (prefixes, _, _, dots)) = tuple((opt(prefixes), tag("begcomp"), space1, dots))(i)?;
+    Ok((input, Rule::Begcomp { dots, prefixes: prefixes.unwrap() }))
+}
+
+pub fn endcomp(i: &str) -> IResult<&str, Rule> {
+    let (input, (prefixes, _, _, dots)) = tuple((opt(prefixes), tag("endcomp"), space1, dots))(i)?;
+    Ok((input, Rule::Endcomp { dots, prefixes: prefixes.unwrap() }))
+}
+
 pub fn decpoint(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, chars, _, dots)) = tuple((tag("decpoint"), space1, chars, space1, dots))(i)?;
     Ok((input, Rule::Decpoint { characters: chars.to_string(), dots }))
 }
 
 pub fn hyphen(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("hyphen"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Hyphen { characters: chars.to_string(), dots }))
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("hyphen"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Hyphen { characters: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
+}
+
+pub fn capsnocont(i: &str) -> IResult<&str, Rule> {
+    let (input, _) = tag("capsnocont")(i)?;
+    Ok((input, Rule::Capsnocont))
 }
 
 pub fn compbrl(i: &str) -> IResult<&str, Rule> {
@@ -748,6 +850,23 @@ pub fn rule_line(i: &str) -> IResult<&str, Line> {
 		seqbeforechars,
 		seqafterchars,
 		seqafterpattern,
+		seqafterexpression,
+	    )),
+	    alt((
+		class,
+		emphclass,
+		begemph,
+		endemph,
+		noemphchars,
+		emphletter,
+		begemphword,
+		endemphword,
+		emphmodechars,
+		begemphphrase,
+		endemphphrase,
+		lenemphphrase,
+		begcomp,
+		endcomp,
 	    )),
 	    alt((
 		decpoint,
