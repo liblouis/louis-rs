@@ -920,6 +920,7 @@ pub fn rule_line(i: &str) -> IResult<&str, Line> {
 	    alt((
 		decpoint,
 		hyphen,
+		capsnocont,
 		compbrl,
 		comp6,
 		nocont,
