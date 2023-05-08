@@ -121,7 +121,7 @@ pub enum Rule {
     Capsnocont,
 
     // Translation Opcodes
-    Compbrl { characters: String},
+    Compbrl { characters: String, prefixes: Prefixes},
     Comp6 { characters: String, dots: BrailleCharsOrImplicit},
     Nocont {characters: String},
     Replace {characters: String, replacement: Option<String> },
@@ -663,8 +663,8 @@ pub fn capsnocont(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn compbrl(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars)) = tuple((tag("compbrl"), space1, chars))(i)?;
-    Ok((input, Rule::Compbrl { characters: chars.to_string() }))
+    let (input, (prefixes, _, _, chars)) = tuple((opt(prefixes), tag("compbrl"), space1, chars))(i)?;
+    Ok((input, Rule::Compbrl { characters: chars.to_string(),  prefixes: prefixes.unwrap()}))
 }
 
 pub fn comp6(i: &str) -> IResult<&str, Rule> {
