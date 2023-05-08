@@ -125,24 +125,24 @@ pub enum Rule {
     Comp6 { characters: String, dots: BrailleCharsOrImplicit},
     Nocont {characters: String},
     Replace {characters: String, replacement: Option<String> },
-    Always {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
+    Always {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
     Repeated {characters: String, dots: BrailleChars, prefixes: Prefixes},
     Repword  {characters: String, dots: BrailleChars},
     Rependword  {characters: String, dots: BrailleChars, other: BrailleChars},
     Largesign  {characters: String, dots: BrailleChars},
-    Word  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
+    Word  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
     Syllable { word: String, dots: BrailleCharsOrImplicit },
     Joinword { word: String, dots: BrailleChars },
     Lowword  {characters: String, dots: BrailleChars, prefixes: Prefixes},
     Contraction  {characters: String},
-    Sufword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
-    Prfword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
-    Begword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
-    Begmidword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
-    Midword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
-    Midendword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
-    Endword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
-    Partword {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
+    Sufword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
+    Prfword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
+    Begword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
+    Begmidword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
+    Midword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
+    Midendword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
+    Endword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
+    Partword {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
     Prepunc {characters: String, dots: BrailleChars, prefixes: Prefixes},
     Postpunc {characters: String, dots: BrailleChars, prefixes: Prefixes},
     Begnum {characters: String, dots: BrailleChars, prefixes: Prefixes},
@@ -177,6 +177,14 @@ pub enum Prefix {
     Nofor,
     Nocross,
 }
+
+#[derive(PartialEq, Debug)]
+pub enum WithClass {
+    Before{class: String},
+    After{class: String},
+}
+
+type WithClasses = Vec<WithClass>;
 
 #[derive(PartialEq, Debug)]
 pub enum Position {
@@ -679,8 +687,8 @@ pub fn replace(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn always(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("always"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Always { characters: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
+    let (input, (classes, prefixes, _, _, chars, _, dots)) = tuple((with_classes, opt(prefixes), tag("always"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Always { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
 }
 
 pub fn repeated(i: &str) -> IResult<&str, Rule> {
@@ -704,8 +712,8 @@ pub fn largesign(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn word(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("word"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Word { characters: chars.to_string(), dots , prefixes: prefixes.unwrap() }))
+    let (input, (classes, prefixes, _, _, chars, _, dots)) = tuple((with_classes, opt(prefixes), tag("word"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Word { characters: chars.to_string(), dots , prefixes: prefixes.unwrap(), classes }))
 }
 
 pub fn syllable(i: &str) -> IResult<&str, Rule> {
@@ -731,43 +739,43 @@ pub fn contraction(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn sufword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("sufword"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Sufword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
+    let (input, (classes, prefixes, _, _, chars, _, dots)) = tuple((with_classes, opt(prefixes), tag("sufword"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Sufword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
 }
 
 pub fn prfword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("prfword"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Prfword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap()  }))
+    let (input, (classes, prefixes, _, _, chars, _, dots)) = tuple((with_classes, opt(prefixes), tag("prfword"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Prfword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
 }
 
 pub fn begword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("begword"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Begword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap()  }))
+    let (input, (classes, prefixes, _, _, chars, _, dots)) = tuple((with_classes, opt(prefixes), tag("begword"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Begword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
 }
 
 pub fn begmidword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("begmidword"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Begmidword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap()  }))
+    let (input, (classes, prefixes, _, _, chars, _, dots)) = tuple((with_classes, opt(prefixes), tag("begmidword"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Begmidword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
 }
 
 pub fn midword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("midword"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Midword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap()  }))
+    let (input, (classes, prefixes, _, _, chars, _, dots)) = tuple((with_classes, opt(prefixes), tag("midword"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Midword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
 }
 
 pub fn midendword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("midendword"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Midendword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap()}))
+    let (input, (classes, prefixes, _, _, chars, _, dots)) = tuple((with_classes, opt(prefixes), tag("midendword"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Midendword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
 }
 
 pub fn endword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("endword"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Endword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap()  }))
+    let (input, (classes, prefixes, _, _, chars, _, dots)) = tuple((with_classes, opt(prefixes), tag("endword"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Endword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
 }
 
 pub fn partword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("partword"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Partword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap()  }))
+    let (input, (classes, prefixes, _, _, chars, _, dots)) = tuple((with_classes, opt(prefixes), tag("partword"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Partword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
 }
 
 pub fn prepunc(i: &str) -> IResult<&str, Rule> {
@@ -848,6 +856,20 @@ pub fn match_opcode(i: &str) -> IResult<&str, Rule> {
 fn literal(input: &str) -> IResult<&str, Rule> {
     let (input, ( _, _, characters)) = tuple((tag("literal"), space1, chars))(input)?;
     Ok((input, Rule::Literal { characters: characters.to_string() }))
+}
+
+fn with_class_before(input: &str) -> IResult<&str, WithClass> {
+    let (input, (_, _, class, _)) = tuple((tag("before"), space1, alpha1, space1))(input)?;
+    Ok((input, WithClass::Before{class: class.to_string()}))
+}
+
+fn with_class_after(input: &str) -> IResult<&str, WithClass> {
+    let (input, (_, _, class, _)) = tuple((tag("after"), space1, alpha1, space1))(input)?;
+    Ok((input, WithClass::After{class: class.to_string()}))
+}
+
+fn with_classes(input: &str) -> IResult<&str, Vec<WithClass>> {
+    many0(alt((with_class_before, with_class_after)))(input)
 }
 
 fn end_comment(i: &str) -> IResult<&str, &str> {
@@ -1075,6 +1097,14 @@ mod tests {
     }
 
     #[test]
+    fn with_classes_test() {
+        assert_eq!(with_classes("before italics "), Ok(("", vec![WithClass::Before{class: "italics".to_string()}])));
+        assert_eq!(with_classes("before italics after foo "), Ok(("", vec![WithClass::Before{class: "italics".to_string()},
+									  WithClass::After{class: "foo".to_string()}])));
+        assert_eq!(with_classes(""), Ok(("", vec![])));
+    }
+
+    #[test]
     fn include_test() {
         assert_eq!(include("include filename.tbl"), Ok(("", Rule::Include { filename: "filename.tbl".to_string() })));
     }
@@ -1276,6 +1306,22 @@ mod tests {
 				    prefixes: Prefixes::empty() })));
 	// FIXME: test multind with an end comment
 	// FIXME: test multind with invalid opcodes
+    }
+
+    #[test]
+    fn always_test() {
+        assert_eq!(
+            always("always world 123"),
+            Ok(("", Rule::Always { characters: "world".to_string(),
+				   dots: BrailleCharsOrImplicit::Explicit(vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]),
+				   prefixes: Prefixes::empty(),
+				   classes: vec![]})));
+        assert_eq!(
+            always("before number always world 123"),
+            Ok(("", Rule::Always { characters: "world".to_string(),
+				   dots: BrailleCharsOrImplicit::Explicit(vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]),
+				   prefixes: Prefixes::empty(),
+				   classes: vec![WithClass::Before{class: "number".to_string()}]})));
     }
 
     #[test]
