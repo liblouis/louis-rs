@@ -165,6 +165,9 @@ pub enum Rule {
 
     // Match Opcode
     Match { pre: String, characters: String, post: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
+
+    // undocumented opcodes
+    Literal {characters: String, }
 }
 
 #[derive(EnumSetType, Debug)]
@@ -834,6 +837,11 @@ pub fn match_opcode(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Match { pre: pre.to_string(), characters: chars.to_string(), post: post.to_string(), dots, prefixes: prefixes.unwrap() }))
 }
 
+fn literal(input: &str) -> IResult<&str, Rule> {
+    let (input, ( _, _, characters)) = tuple((tag("literal"), space1, chars))(input)?;
+    Ok((input, Rule::Literal { characters: characters.to_string() }))
+}
+
 fn end_comment(i: &str) -> IResult<&str, &str> {
     let (input, (_, _, comment)) = tuple((space1, opt(tag("#")), not_line_ending))(i)?;
     Ok((input, comment))
@@ -951,6 +959,9 @@ pub fn rule_line(i: &str) -> IResult<&str, Line> {
 		pass4,
 		correct,
 		match_opcode,
+	    )),
+	    alt((
+		literal,
 	    ))
 	)),
         alt((end_comment, space0)),
