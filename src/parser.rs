@@ -291,10 +291,6 @@ pub fn single_char(input: &str) -> IResult<&str, char> {
     ))(input)
 }
 
-pub fn ascii_chars(input: &str) -> IResult<&str, &str> {
-    alpha1(input)
-}
-
 pub fn filename(input: &str) -> IResult<&str, &str> {
     is_a("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.")(input)
 }
@@ -421,22 +417,22 @@ pub fn math(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn grouping(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, name, _, characters, _, dots)) = tuple((tag("grouping"), space1, ascii_chars, space1, ascii_chars, space1, separated_list1(tag(","), dots)))(i)?;
+    let (input, (_, _, name, _, characters, _, dots)) = tuple((tag("grouping"), space1, alpha1, space1, alpha1, space1, separated_list1(tag(","), dots)))(i)?;
     Ok((input, Rule::Grouping { name: name.to_string(), chars: characters.to_string(), dots}))
 }
 
 pub fn base(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, attribute, _, derived, _, base)) = tuple((tag("base"), space1, ascii_chars, space1, single_char, space1, single_char))(i)?;
+    let (input, (_, _, attribute, _, derived, _, base)) = tuple((tag("base"), space1, alpha1, space1, single_char, space1, single_char))(i)?;
     Ok((input, Rule::Base { attribute: attribute.to_string(), derived, base }))
 }
 
 pub fn attribute(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, name, _, chars)) = tuple((tag("attribute"), space1, ascii_chars, space1, chars))(i)?;
+    let (input, (_, _, name, _, chars)) = tuple((tag("attribute"), space1, alpha1, space1, chars))(i)?;
     Ok((input, Rule::Attribute { name: name.to_string(), chars: chars.to_string() }))
 }
 
 pub fn modeletter(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("modeletter"), space1, ascii_chars, space1, dots))(i)?;
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("modeletter"), space1, alpha1, space1, dots))(i)?;
     Ok((input, Rule::Modeletter { attribute: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
 }
 
@@ -446,7 +442,7 @@ pub fn capsletter(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn begmodeword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("begmodeword"), space1, ascii_chars, space1, dots))(i)?;
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("begmodeword"), space1, alpha1, space1, dots))(i)?;
     Ok((input, Rule::Begmodeword { attribute: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
 }
 
@@ -797,17 +793,17 @@ pub fn joinnum(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn swapcd(i: &str) -> IResult<&str, Rule> {
-    let (input, ( _, _, name, _, characters, _, dots)) = tuple((tag("swapcd"), space1, ascii_chars, space1, chars, space1, separated_list1(tag(","), dots)))(i)?;
+    let (input, ( _, _, name, _, characters, _, dots)) = tuple((tag("swapcd"), space1, alpha1, space1, chars, space1, separated_list1(tag(","), dots)))(i)?;
     Ok((input, Rule::Swapcd { name: name.to_string(), characters: characters.to_string(), dots }))
 }
 
 pub fn swapdd(i: &str) -> IResult<&str, Rule> {
-    let (input, ( _, _, name, _, dots, _, dotpattern)) = tuple((tag("swapdd"), space1, ascii_chars, space1, separated_list1(tag(","), dots), space1, separated_list1(tag(","), dots)))(i)?;
+    let (input, ( _, _, name, _, dots, _, dotpattern)) = tuple((tag("swapdd"), space1, alpha1, space1, separated_list1(tag(","), dots), space1, separated_list1(tag(","), dots)))(i)?;
     Ok((input, Rule::Swapdd { name: name.to_string(), dots, dotpattern }))
 }
 
 pub fn swapcc(i: &str) -> IResult<&str, Rule> {
-    let (input, ( _, _, name, _, characters, _, replacement)) = tuple((tag("swapcc"), space1, ascii_chars, space1, chars, space1, chars))(i)?;
+    let (input, ( _, _, name, _, characters, _, replacement)) = tuple((tag("swapcc"), space1, alpha1, space1, chars, space1, chars))(i)?;
     Ok((input, Rule::Swapcc { name: name.to_string(), chars: characters.to_string(), replacement: replacement.to_string() }))
 }
 
@@ -1010,12 +1006,6 @@ mod tests {
         assert_eq!(char_to_dot('8'), Ok(BrailleDot::DOT8));
         assert_eq!(char_to_dot('F'), Err(ParseBrailleError{}));
         assert_eq!(char_to_dot('z'), Err(ParseBrailleError{}));
-    }
-
-    #[test]
-    fn character_test() {
-        assert_eq!(ascii_chars("hallo"), Ok(("", "hallo")));
-        assert_eq!(ascii_chars("haLlo"), Ok(("", "haLlo")));
     }
 
     #[test]
