@@ -18,6 +18,8 @@ use nom::combinator::map;
 use nom::combinator::map_res;
 use nom::combinator::opt;
 use nom::combinator::success;
+use nom::combinator::verify;
+use nom::error::ParseError;
 use nom::multi::many0;
 use nom::multi::separated_list1;
 use nom::sequence::tuple;
@@ -309,11 +311,22 @@ pub fn dots(i: &str) -> IResult<&str, BrailleChars> {
     Ok((input, braille_chars))
 }
 
-fn unicode_digit(input: &str) -> IResult<&str, char> {
+fn single_unicode_digit(input: &str) -> IResult<&str, char> {
     alt((
 	escaped_char,
-	map(unicode_digit1, |s: &str| s.chars().next().unwrap()), // smelly, we really just want to parse one digit
+	one_unicode_digit,
     ))(input)
+}
+
+fn one_unicode_digit(input: &str) -> IResult<&str, char> {
+    let (input, digit) = verify(unicode_digit1, |s: &str| s.chars().count() == 1)(input)?;
+    match digit.char_indices().next() {
+	Some((i, c)) => match input.get(i..) {
+	    Some(s) => Ok((s, c)),
+	    _ => Err(nom::Err::Error(ParseError::from_error_kind(input, nom::error::ErrorKind::Digit))),
+	}
+	_ => Err(nom::Err::Error(ParseError::from_error_kind(input, nom::error::ErrorKind::Digit))),
+    }
 }
 
 pub fn number(input: &str) -> IResult<&str, u8> {
@@ -389,7 +402,7 @@ pub fn uppercase(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn litdigit(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, ch, _, dots)) = tuple((tag("litdigit"), space1, unicode_digit, space1, dots))(i)?;
+    let (input, (_, _, ch, _, dots)) = tuple((tag("litdigit"), space1, single_unicode_digit, space1, dots))(i)?;
     Ok((input, Rule::Litdigit { ch, dots }))
 }
 
@@ -991,6 +1004,16 @@ mod tests {
     fn escaped_char_test() {
         assert_eq!(escaped_char("\\x00AD"), Ok(("", '­')));
         assert_eq!(escaped_char("\\x04D8"), Ok(("", 'Ә')));
+    }
+
+    #[test]
+    fn one_unicode_digit_test() {
+        assert_eq!(one_unicode_digit("1"), Ok(("", '1')));
+        assert_eq!(one_unicode_digit("12"), Err(Err::Error(Error { input: "12", code: ErrorKind::Verify })));
+        assert_eq!(one_unicode_digit("b"), Err(Err::Error(Error { input: "b", code: ErrorKind::Digit })));
+        assert_eq!(one_unicode_digit("1b"), Ok(("b", '1')));
+        assert_eq!(one_unicode_digit(""), Err(Err::Error(Error { input: "", code: ErrorKind::Digit })));
+        assert_eq!(one_unicode_digit("໑"), Ok(("", '໑')));
     }
 
     #[test]
