@@ -79,6 +79,7 @@ pub enum Rule {
     Noletsignafter { characters: String },
     Nocontractsign { dots: BrailleChars },
     Numsign { dots: BrailleChars },
+    Nonumsign { dots: BrailleChars },
     Numericnocontchars { characters: String },
     Numericmodechars { characters: String },
     Midendnumericmodechars { characters: String },
@@ -501,6 +502,11 @@ pub fn numsign(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Numsign { dots }))
 }
 
+fn nonumsign(i: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, dots)) = tuple((tag("nonumsign"), space1, dots))(i)?;
+    Ok((input, Rule::Nonumsign { dots }))
+}
+
 pub fn numericnocontchars(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, characters)) = tuple((tag("numericnocontchars"), space1, chars))(i)?;
     Ok((input, Rule::Numericnocontchars { characters: characters.to_string() }))
@@ -872,6 +878,7 @@ pub fn rule_line(i: &str) -> IResult<&str, Line> {
 		noletsignafter,
 		nocontractsign,
 		numsign,
+		nonumsign,
 		numericnocontchars,
 		numericmodechars,
 		midendnumericmodechars,
