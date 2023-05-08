@@ -9,6 +9,7 @@ use nom::character::complete::alpha1;
 use nom::character::complete::hex_digit1;
 use nom::character::complete::line_ending;
 use nom::character::complete::not_line_ending;
+use nom::character::complete::one_of;
 use nom::character::complete::space0;
 use nom::character::complete::space1;
 use nom::character::complete::digit1;
@@ -426,9 +427,16 @@ pub fn base(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Base { attribute: attribute.to_string(), derived, base }))
 }
 
+fn attribute_name(input: &str) -> IResult<&str, String> {
+    alt((
+	map(one_of("01234567"), |c| c.to_string()),
+	map(alpha1, |s: &str| s.to_string()),
+    ))(input)
+}
+
 pub fn attribute(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, name, _, chars)) = tuple((tag("attribute"), space1, alpha1, space1, chars))(i)?;
-    Ok((input, Rule::Attribute { name: name.to_string(), chars: chars.to_string() }))
+    let (input, (_, _, name, _, chars)) = tuple((tag("attribute"), space1, attribute_name, space1, chars))(i)?;
+    Ok((input, Rule::Attribute { name, chars: chars.to_string() }))
 }
 
 pub fn modeletter(i: &str) -> IResult<&str, Rule> {
