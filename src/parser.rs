@@ -123,7 +123,7 @@ pub enum Rule {
     Compbrl { characters: String},
     Comp6 { characters: String, dots: BrailleCharsOrImplicit},
     Nocont {characters: String},
-    Replace {characters: String, replacement: String},
+    Replace {characters: String, replacement: Option<String> },
     Always {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
     Repeated {characters: String, dots: BrailleChars},
     Repword  {characters: String, dots: BrailleChars},
@@ -666,8 +666,12 @@ pub fn nocont(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn replace(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, replacement)) = tuple((tag("replace"), space1, chars, space1, chars))(i)?;
-    Ok((input, Rule::Replace { characters: chars.to_string(), replacement: replacement.to_string() }))
+    let (input, (_, _, chars, replacement)) = tuple((tag("replace"), space1, chars, opt(tuple((space1, chars)))))(i)?;
+    let replacement = match replacement {
+	Some((_, replacement)) => Some(replacement.to_string()),
+	None => None,
+    };
+    Ok((input, Rule::Replace { characters: chars.to_string(), replacement }))
 }
 
 pub fn always(i: &str) -> IResult<&str, Rule> {
