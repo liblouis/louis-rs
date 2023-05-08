@@ -674,7 +674,7 @@ pub fn comp6(i: &str) -> IResult<&str, Rule> {
 
 pub fn nocont(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, chars)) = tuple((tag("nocont"), space1, chars))(i)?;
-    Ok((input, Rule::Compbrl { characters: chars.to_string() }))
+    Ok((input, Rule::Nocont { characters: chars.to_string() }))
 }
 
 pub fn replace(i: &str) -> IResult<&str, Rule> {
