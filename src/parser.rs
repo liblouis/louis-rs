@@ -686,7 +686,7 @@ pub fn repword(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn rependword(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, chars, _, dots, _, other)) = tuple((tag("repword"), space1, chars, space1, dots, space1, dots))(i)?;
+    let (input, (_, _, chars, _, dots, _, other)) = tuple((tag("rependword"), space1, chars, space1, dots, tag(","), dots))(i)?;
     Ok((input, Rule::Rependword { characters: chars.to_string(), dots, other }))
 }
 
