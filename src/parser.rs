@@ -378,24 +378,24 @@ pub fn undefined(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn display(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("display"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Display { chars: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((prefixes, tag("display"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Display { chars: chars.to_string(), dots, prefixes }))
 }
 
 pub fn space(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, ch, _, dots)) = tuple((opt(prefixes), tag("space"), space1, single_char, space1, dots))(i)?;
-    Ok((input, Rule::Space { ch, dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, ch, _, dots)) = tuple((prefixes, tag("space"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Space { ch, dots, prefixes }))
 }
 
 pub fn multind(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, dots, _, opcodes)) = tuple((opt(prefixes), tag("multind"), space1, dots, space1, separated_list1(space1, chars)))(i)?;
+    let (input, (prefixes, _, _, dots, _, opcodes)) = tuple((prefixes, tag("multind"), space1, dots, space1, separated_list1(space1, chars)))(i)?;
     // FIXME: Make sure the opcodes are valid
-    Ok((input, Rule::Multind { dots, opcodes: opcodes.iter().map(|s| s.to_string()).collect(), prefixes: prefixes.unwrap() }))
+    Ok((input, Rule::Multind { dots, opcodes: opcodes.iter().map(|s| s.to_string()).collect(), prefixes }))
 }
 
 pub fn punctuation(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, ch, _, dots)) = tuple((opt(prefixes), tag("punctuation"), space1, single_char, space1, dots))(i)?;
-    Ok((input, Rule::Punctuation { ch, dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, ch, _, dots)) = tuple((prefixes, tag("punctuation"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Punctuation { ch, dots, prefixes }))
 }
 
 pub fn digit(i: &str) -> IResult<&str, Rule> {
@@ -404,18 +404,18 @@ pub fn digit(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn letter(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, ch, _, dots)) = tuple((opt(prefixes), tag("letter"), space1, single_char, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Letter { ch, dots , prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, ch, _, dots)) = tuple((prefixes, tag("letter"), space1, single_char, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Letter { ch, dots , prefixes }))
 }
 
 pub fn lowercase(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, word, _, dots)) = tuple((opt(prefixes), tag("lowercase"), space1, single_char, space1, dots))(i)?;
-    Ok((input, Rule::Lowercase { word: word.to_string(), dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, word, _, dots)) = tuple((prefixes, tag("lowercase"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Lowercase { word: word.to_string(), dots, prefixes }))
 }
 
 pub fn uppercase(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, word, _, dots)) = tuple((opt(prefixes), tag("uppercase"), space1, single_char, space1, dots))(i)?;
-    Ok((input, Rule::Uppercase { word: word.to_string(), dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, word, _, dots)) = tuple((prefixes, tag("uppercase"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Uppercase { word: word.to_string(), dots, prefixes }))
 }
 
 pub fn litdigit(i: &str) -> IResult<&str, Rule> {
@@ -424,13 +424,13 @@ pub fn litdigit(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn sign(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, ch, _, dots)) = tuple((opt(prefixes), tag("sign"), space1, single_char, space1, dots))(i)?;
-    Ok((input, Rule::Sign { ch, dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, ch, _, dots)) = tuple((prefixes, tag("sign"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Sign { ch, dots, prefixes }))
 }
 
 pub fn math(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, ch, _, dots)) = tuple((opt(prefixes), tag("math"), space1, single_char, space1, dots))(i)?;
-    Ok((input, Rule::Math { ch, dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, ch, _, dots)) = tuple((prefixes, tag("math"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Math { ch, dots, prefixes }))
 }
 
 pub fn grouping(i: &str) -> IResult<&str, Rule> {
@@ -456,28 +456,28 @@ pub fn attribute(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn modeletter(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("modeletter"), space1, alpha1, space1, dots))(i)?;
-    Ok((input, Rule::Modeletter { attribute: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((prefixes, tag("modeletter"), space1, alpha1, space1, dots))(i)?;
+    Ok((input, Rule::Modeletter { attribute: chars.to_string(), dots, prefixes }))
 }
 
 pub fn capsletter(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, dots)) = tuple((opt(prefixes), tag("capsletter"), space1, dots))(i)?;
-    Ok((input, Rule::Capsletter { dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, dots)) = tuple((prefixes, tag("capsletter"), space1, dots))(i)?;
+    Ok((input, Rule::Capsletter { dots, prefixes }))
 }
 
 pub fn begmodeword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("begmodeword"), space1, alpha1, space1, dots))(i)?;
-    Ok((input, Rule::Begmodeword { attribute: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((prefixes, tag("begmodeword"), space1, alpha1, space1, dots))(i)?;
+    Ok((input, Rule::Begmodeword { attribute: chars.to_string(), dots, prefixes }))
 }
 
 pub fn begcapsword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, dots)) = tuple((opt(prefixes), tag("begcapsword"), space1, dots))(i)?;
-    Ok((input, Rule::Begcapsword { dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, dots)) = tuple((prefixes, tag("begcapsword"), space1, dots))(i)?;
+    Ok((input, Rule::Begcapsword { dots, prefixes }))
 }
 
 pub fn endcapsword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, dots)) = tuple((opt(prefixes), tag("endcapsword"), space1, dots))(i)?;
-    Ok((input, Rule::Endcapsword { dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, dots)) = tuple((prefixes, tag("endcapsword"), space1, dots))(i)?;
+    Ok((input, Rule::Endcapsword { dots, prefixes }))
 }
 
 pub fn capsmodechars(i: &str) -> IResult<&str, Rule> {
@@ -596,13 +596,13 @@ pub fn emphclass(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn begemph(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, name, _, dots)) = tuple((opt(prefixes), tag("begemph"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Begemph { name: name.to_string(), dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, name, _, dots)) = tuple((prefixes, tag("begemph"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Begemph { name: name.to_string(), dots, prefixes }))
 }
 
 pub fn endemph(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, name, _, dots)) = tuple((opt(prefixes), tag("endemph"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Endemph { name: name.to_string(), dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, name, _, dots)) = tuple((prefixes, tag("endemph"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Endemph { name: name.to_string(), dots, prefixes }))
 }
 
 pub fn noemphchars(i: &str) -> IResult<&str, Rule> {
@@ -646,13 +646,13 @@ pub fn lenemphphrase(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn begcomp(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, dots)) = tuple((opt(prefixes), tag("begcomp"), space1, dots))(i)?;
-    Ok((input, Rule::Begcomp { dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, dots)) = tuple((prefixes, tag("begcomp"), space1, dots))(i)?;
+    Ok((input, Rule::Begcomp { dots, prefixes }))
 }
 
 pub fn endcomp(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, dots)) = tuple((opt(prefixes), tag("endcomp"), space1, dots))(i)?;
-    Ok((input, Rule::Endcomp { dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, dots)) = tuple((prefixes, tag("endcomp"), space1, dots))(i)?;
+    Ok((input, Rule::Endcomp { dots, prefixes }))
 }
 
 pub fn decpoint(i: &str) -> IResult<&str, Rule> {
@@ -661,8 +661,8 @@ pub fn decpoint(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn hyphen(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("hyphen"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Hyphen { characters: chars.to_string(), dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((prefixes, tag("hyphen"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Hyphen { characters: chars.to_string(), dots, prefixes }))
 }
 
 pub fn capsnocont(i: &str) -> IResult<&str, Rule> {
@@ -671,8 +671,8 @@ pub fn capsnocont(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn compbrl(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars)) = tuple((opt(prefixes), tag("compbrl"), space1, chars))(i)?;
-    Ok((input, Rule::Compbrl { characters: chars.to_string(),  prefixes: prefixes.unwrap()}))
+    let (input, (prefixes, _, _, chars)) = tuple((prefixes, tag("compbrl"), space1, chars))(i)?;
+    Ok((input, Rule::Compbrl { characters: chars.to_string(),  prefixes}))
 }
 
 pub fn comp6(i: &str) -> IResult<&str, Rule> {
@@ -695,13 +695,13 @@ pub fn replace(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn always(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((opt(prefixes), with_classes, tag("always"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Always { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
+    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((prefixes, with_classes, tag("always"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Always { characters: chars.to_string(), dots, prefixes, classes }))
 }
 
 pub fn repeated(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("repeated"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Repeated { characters: chars.to_string(), dots , prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((prefixes, tag("repeated"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Repeated { characters: chars.to_string(), dots , prefixes }))
 }
 
 pub fn repword(i: &str) -> IResult<&str, Rule> {
@@ -720,8 +720,8 @@ pub fn largesign(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn word(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((opt(prefixes), with_classes, tag("word"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Word { characters: chars.to_string(), dots , prefixes: prefixes.unwrap(), classes }))
+    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((prefixes, with_classes, tag("word"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Word { characters: chars.to_string(), dots , prefixes, classes }))
 }
 
 pub fn syllable(i: &str) -> IResult<&str, Rule> {
@@ -737,8 +737,8 @@ pub fn joinword(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn lowword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("lowword"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Lowword { characters: chars.to_string(), dots , prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((prefixes, tag("lowword"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Lowword { characters: chars.to_string(), dots , prefixes }))
 }
 
 pub fn contraction(i: &str) -> IResult<&str, Rule> {
@@ -747,73 +747,73 @@ pub fn contraction(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn sufword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((opt(prefixes), with_classes, tag("sufword"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Sufword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
+    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((prefixes, with_classes, tag("sufword"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Sufword { characters: chars.to_string(), dots, prefixes, classes }))
 }
 
 pub fn prfword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((opt(prefixes), with_classes, tag("prfword"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Prfword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
+    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((prefixes, with_classes, tag("prfword"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Prfword { characters: chars.to_string(), dots, prefixes, classes }))
 }
 
 pub fn begword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((opt(prefixes), with_classes, tag("begword"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Begword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
+    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((prefixes, with_classes, tag("begword"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Begword { characters: chars.to_string(), dots, prefixes, classes }))
 }
 
 pub fn begmidword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((opt(prefixes), with_classes, tag("begmidword"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Begmidword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
+    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((prefixes, with_classes, tag("begmidword"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Begmidword { characters: chars.to_string(), dots, prefixes, classes }))
 }
 
 pub fn midword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((opt(prefixes), with_classes, tag("midword"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Midword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
+    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((prefixes, with_classes, tag("midword"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Midword { characters: chars.to_string(), dots, prefixes, classes }))
 }
 
 pub fn midendword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((opt(prefixes), with_classes, tag("midendword"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Midendword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
+    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((prefixes, with_classes, tag("midendword"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Midendword { characters: chars.to_string(), dots, prefixes, classes }))
 }
 
 pub fn endword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((opt(prefixes), with_classes, tag("endword"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Endword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
+    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((prefixes, with_classes, tag("endword"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Endword { characters: chars.to_string(), dots, prefixes, classes }))
 }
 
 pub fn partword(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((opt(prefixes), with_classes, tag("partword"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Partword { characters: chars.to_string(), dots, prefixes: prefixes.unwrap(), classes }))
+    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((prefixes, with_classes, tag("partword"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Partword { characters: chars.to_string(), dots, prefixes, classes }))
 }
 
 pub fn prepunc(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("prepunc"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Prepunc { characters: chars.to_string(), dots, prefixes: prefixes.unwrap()  }))
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((prefixes, tag("prepunc"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Prepunc { characters: chars.to_string(), dots, prefixes  }))
 }
 
 pub fn postpunc(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("postpunc"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Postpunc { characters: chars.to_string(), dots, prefixes: prefixes.unwrap()  }))
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((prefixes, tag("postpunc"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Postpunc { characters: chars.to_string(), dots, prefixes  }))
 }
 
 pub fn begnum(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("begnum"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Begnum { characters: chars.to_string(), dots, prefixes: prefixes.unwrap()  }))
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((prefixes, tag("begnum"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Begnum { characters: chars.to_string(), dots, prefixes  }))
 }
 
 pub fn midnum(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("midnum"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Midnum { characters: chars.to_string(), dots, prefixes: prefixes.unwrap()  }))
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((prefixes, tag("midnum"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Midnum { characters: chars.to_string(), dots, prefixes  }))
 }
 
 pub fn endnum(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("endnum"), space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Endnum { characters: chars.to_string(), dots, prefixes: prefixes.unwrap()  }))
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((prefixes, tag("endnum"), space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Endnum { characters: chars.to_string(), dots, prefixes  }))
 }
 
 pub fn joinnum(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((opt(prefixes), tag("joinnum"), space1, chars, space1, dots))(i)?;
-    Ok((input, Rule::Joinnum { characters: chars.to_string(), dots, prefixes: prefixes.unwrap()  }))
+    let (input, (prefixes, _, _, chars, _, dots)) = tuple((prefixes, tag("joinnum"), space1, chars, space1, dots))(i)?;
+    Ok((input, Rule::Joinnum { characters: chars.to_string(), dots, prefixes  }))
 }
 
 pub fn swapcd(i: &str) -> IResult<&str, Rule> {
@@ -832,33 +832,33 @@ pub fn swapcc(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn context(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, test, _, action)) = tuple((opt(prefixes), tag("context"), space1, chars, space1, chars))(i)?;
-    Ok((input, Rule::Context { test: test.to_string(), action: action.to_string(), prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, test, _, action)) = tuple((prefixes, tag("context"), space1, chars, space1, chars))(i)?;
+    Ok((input, Rule::Context { test: test.to_string(), action: action.to_string(), prefixes }))
 }
 
 pub fn pass2(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, test, _, action)) = tuple((opt(prefixes), tag("pass2"), space1, chars, space1, chars))(i)?;
-    Ok((input, Rule::Pass2 { test: test.to_string(), action: action.to_string(), prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, test, _, action)) = tuple((prefixes, tag("pass2"), space1, chars, space1, chars))(i)?;
+    Ok((input, Rule::Pass2 { test: test.to_string(), action: action.to_string(), prefixes }))
 }
 
 pub fn pass3(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, test, _, action)) = tuple((opt(prefixes), tag("pass3"), space1, chars, space1, chars))(i)?;
-    Ok((input, Rule::Pass3 { test: test.to_string(), action: action.to_string(), prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, test, _, action)) = tuple((prefixes, tag("pass3"), space1, chars, space1, chars))(i)?;
+    Ok((input, Rule::Pass3 { test: test.to_string(), action: action.to_string(), prefixes }))
 }
 
 pub fn pass4(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, test, _, action)) = tuple((opt(prefixes), tag("pass4"), space1, chars, space1, chars))(i)?;
-    Ok((input, Rule::Pass4 { test: test.to_string(), action: action.to_string(), prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, test, _, action)) = tuple((prefixes, tag("pass4"), space1, chars, space1, chars))(i)?;
+    Ok((input, Rule::Pass4 { test: test.to_string(), action: action.to_string(), prefixes }))
 }
 
 pub fn correct(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, test, _, action)) = tuple((opt(prefixes), tag("correct"), space1, chars, space1, chars))(i)?;
-    Ok((input, Rule::Correct { test: test.to_string(), action: action.to_string(), prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, _, _, test, _, action)) = tuple((prefixes, tag("correct"), space1, chars, space1, chars))(i)?;
+    Ok((input, Rule::Correct { test: test.to_string(), action: action.to_string(), prefixes }))
 }
 
 pub fn match_opcode(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, positions, _, _, pre, _, chars, _, post, _, dots)) = tuple((opt(prefixes), with_matches, tag("match"), space1, chars, space1, chars, space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Match { pre: pre.to_string(), characters: chars.to_string(), post: post.to_string(), dots, positions, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, positions, _, _, pre, _, chars, _, post, _, dots)) = tuple((prefixes, with_matches, tag("match"), space1, chars, space1, chars, space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Match { pre: pre.to_string(), characters: chars.to_string(), post: post.to_string(), dots, positions, prefixes }))
 }
 
 fn literal(input: &str) -> IResult<&str, Rule> {
