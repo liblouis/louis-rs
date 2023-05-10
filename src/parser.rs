@@ -178,6 +178,8 @@ pub enum Prefix {
     Nocross,
 }
 
+type Prefixes = EnumSet<Prefix>;
+
 #[derive(PartialEq, Debug)]
 pub enum WithClass {
     Before{class: String},
@@ -199,8 +201,6 @@ pub enum Position {
     Before,
     After,
 }
-
-type Prefixes = EnumSet<Prefix>;
 
 #[derive(EnumSetType, Debug)]
 pub enum BrailleDot {
