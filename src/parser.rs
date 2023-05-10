@@ -87,6 +87,9 @@ pub enum Rule {
     Begcapsphrase { dots: BrailleChars},
     Endcapsphrase { dots: BrailleChars, position: Position},
     Lencapsphrase { length: u8},
+    Begmodephrase { name: String, dots: BrailleChars},
+    Endmodephrase { name: String, dots: BrailleChars, position: Position},
+    Lenmodephrase { name: String, length: u8},
 
     // Standing Alone Sequences
     Seqdelimiter { characters: String },
@@ -560,6 +563,21 @@ pub fn lencapsphrase(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Lencapsphrase { length }))
 }
 
+pub fn begmodephrase(input: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, name, _, dots)) = tuple((tag("begmodephrase"), space1, alpha1, space1, dots))(input)?;
+    Ok((input, Rule::Begmodephrase { name: name.to_string(), dots }))
+}
+
+pub fn endmodephrase(input: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, name, _, position, _, dots)) = tuple((tag("endmodephrase"), space1, alpha1, space1, before_or_after, space1, dots))(input)?;
+    Ok((input, Rule::Endmodephrase { name: name.to_string(), position, dots }))
+}
+
+pub fn lenmodephrase(input: &str) -> IResult<&str, Rule> {
+    let (input, (_, _, name, _, length)) = tuple((tag("lenmodephrase"), space1, alpha1, space1, number))(input)?;
+    Ok((input, Rule::Lenmodephrase { name: name.to_string(), length }))
+}
+
 pub fn seqdelimiter(i: &str) -> IResult<&str, Rule> {
     let (input, (_, _, characters)) = tuple((tag("seqdelimiter"), space1, chars))(i)?;
     Ok((input, Rule::Seqdelimiter { characters: characters.to_string() }))
@@ -944,6 +962,9 @@ pub fn rule_line(i: &str) -> IResult<&str, Line> {
 		lencapsphrase,
 	    )),
 	    alt((
+		begmodephrase,
+		endmodephrase,
+		lenmodephrase,
 		seqdelimiter,
 		seqbeforechars,
 		seqafterchars,
