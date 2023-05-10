@@ -165,7 +165,7 @@ pub enum Rule {
     Correct {test: String, action: String, prefixes: Prefixes},
 
     // Match Opcode
-    Match { pre: String, characters: String, post: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
+    Match { pre: String, characters: String, post: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, positions: WithMatches},
 
     // undocumented opcodes
     Literal {characters: String, }
@@ -185,6 +185,14 @@ pub enum WithClass {
 }
 
 type WithClasses = Vec<WithClass>;
+
+#[derive(EnumSetType, Debug)]
+pub enum WithMatch {
+    Before,
+    After,
+}
+
+type WithMatches = EnumSet<WithMatch>;
 
 #[derive(PartialEq, Debug)]
 pub enum Position {
@@ -849,8 +857,8 @@ pub fn correct(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn match_opcode(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, pre, _, chars, _, post, _, dots)) = tuple((opt(prefixes), tag("match"), space1, chars, space1, chars, space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Match { pre: pre.to_string(), characters: chars.to_string(), post: post.to_string(), dots, prefixes: prefixes.unwrap() }))
+    let (input, (prefixes, positions, _, _, pre, _, chars, _, post, _, dots)) = tuple((opt(prefixes), with_matches, tag("match"), space1, chars, space1, chars, space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Match { pre: pre.to_string(), characters: chars.to_string(), post: post.to_string(), dots, positions, prefixes: prefixes.unwrap() }))
 }
 
 fn literal(input: &str) -> IResult<&str, Rule> {
@@ -871,6 +879,17 @@ fn with_class_after(input: &str) -> IResult<&str, WithClass> {
 fn with_classes(input: &str) -> IResult<&str, Vec<WithClass>> {
     many0(alt((with_class_before, with_class_after)))(input)
 }
+
+fn with_matches(input: &str) -> IResult<&str, WithMatches> {
+    alt((
+	map(tuple((tag("empmatchbefore"), space1, tag("empmatchafter"), space1)), |_| WithMatch::Before | WithMatch::After),
+	map(tuple((tag("empmatchafter"), space1, tag("empmatchbefore"), space1)), |_| WithMatch::After | WithMatch::Before),
+	map(tuple((tag("empmatchbefore"), space1)), |_| enum_set!(WithMatch::Before)),
+	map(tuple((tag("empmatchafter"), space1)), |_| enum_set!(WithMatch::After)),
+	success::<_,_,Error<_>>(WithMatches::empty()),
+    ))(input)
+}
+
 
 fn end_comment(i: &str) -> IResult<&str, &str> {
     let (input, (_, _, comment)) = tuple((space1, opt(tag("#")), not_line_ending))(i)?;
@@ -1105,6 +1124,15 @@ mod tests {
     }
 
     #[test]
+    fn with_matches_test() {
+        assert_eq!(with_matches("empmatchbefore empmatchafter "), Ok(("", enum_set![WithMatch::Before | WithMatch::After])));
+        assert_eq!(with_matches("empmatchafter empmatchbefore "), Ok(("", enum_set![WithMatch::Before | WithMatch::After])));
+        assert_eq!(with_matches("empmatchbefore "), Ok(("", enum_set![WithMatch::Before])));
+        assert_eq!(with_matches("empmatchafter "), Ok(("", enum_set![WithMatch::After])));
+        assert_eq!(with_matches(""), Ok(("", enum_set![])));
+    }
+
+    #[test]
     fn include_test() {
         assert_eq!(include("include filename.tbl"), Ok(("", Rule::Include { filename: "filename.tbl".to_string() })));
     }
@@ -1331,6 +1359,7 @@ mod tests {
             Ok(("", Rule::Match {pre: "ab".to_string(),
 				 characters: "xyz".to_string(),
 				 post: "cd".to_string(),
+				 positions: WithMatches::empty(),
 				 dots: BrailleCharsOrImplicit::Explicit(vec![BrailleDot::DOT1 | BrailleDot::DOT3 | BrailleDot::DOT4 | BrailleDot::DOT6, BrailleDot::DOT1 | BrailleDot::DOT3 | BrailleDot::DOT4 | BrailleDot::DOT5 | BrailleDot::DOT6]),
 				 prefixes: Prefixes::empty() })));
     }
