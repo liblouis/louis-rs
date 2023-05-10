@@ -165,7 +165,7 @@ pub enum Rule {
     Correct {test: String, action: String, prefixes: Prefixes},
 
     // Match Opcode
-    Match { pre: String, characters: String, post: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, positions: WithMatches},
+    Match { pre: String, characters: String, post: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses, positions: WithMatches},
 
     // undocumented opcodes
     Literal {characters: String, }
@@ -857,8 +857,8 @@ pub fn correct(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn match_opcode(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, positions, _, _, pre, _, chars, _, post, _, dots)) = tuple((prefixes, with_matches, tag("match"), space1, chars, space1, chars, space1, chars, space1, braillechars_or_implicit))(i)?;
-    Ok((input, Rule::Match { pre: pre.to_string(), characters: chars.to_string(), post: post.to_string(), dots, positions, prefixes }))
+    let (input, (prefixes, classes, positions, _, _, pre, _, chars, _, post, _, dots)) = tuple((prefixes, with_classes, with_matches, tag("match"), space1, chars, space1, chars, space1, chars, space1, braillechars_or_implicit))(i)?;
+    Ok((input, Rule::Match { pre: pre.to_string(), characters: chars.to_string(), post: post.to_string(), dots, classes, positions, prefixes }))
 }
 
 fn literal(input: &str) -> IResult<&str, Rule> {
@@ -1360,6 +1360,7 @@ mod tests {
 				 characters: "xyz".to_string(),
 				 post: "cd".to_string(),
 				 positions: WithMatches::empty(),
+				 classes: vec![],
 				 dots: BrailleCharsOrImplicit::Explicit(vec![BrailleDot::DOT1 | BrailleDot::DOT3 | BrailleDot::DOT4 | BrailleDot::DOT6, BrailleDot::DOT1 | BrailleDot::DOT3 | BrailleDot::DOT4 | BrailleDot::DOT5 | BrailleDot::DOT6]),
 				 prefixes: Prefixes::empty() })));
     }
