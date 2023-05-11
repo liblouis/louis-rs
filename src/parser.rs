@@ -53,8 +53,8 @@ pub enum Rule {
     Punctuation { ch: char, dots: BrailleChars, prefixes: Prefixes},
     Digit { ch: char, dots: BrailleChars },
     Letter { ch: char, dots: BrailleCharsOrImplicit, prefixes: Prefixes },
-    Lowercase { word: String, dots: BrailleChars, prefixes: Prefixes },
-    Uppercase { word: String, dots: BrailleChars, prefixes: Prefixes },
+    Lowercase { ch: char, dots: BrailleChars, prefixes: Prefixes },
+    Uppercase { ch: char, dots: BrailleChars, prefixes: Prefixes },
     Litdigit { ch: char, dots: BrailleChars },
     Sign { ch: char, dots: BrailleChars, prefixes: Prefixes },
     Math { ch: char, dots: BrailleChars, prefixes: Prefixes },
@@ -412,13 +412,13 @@ pub fn letter(i: &str) -> IResult<&str, Rule> {
 }
 
 pub fn lowercase(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, word, _, dots)) = tuple((prefixes, tag("lowercase"), space1, single_char, space1, dots))(i)?;
-    Ok((input, Rule::Lowercase { word: word.to_string(), dots, prefixes }))
+    let (input, (prefixes, _, _, ch, _, dots)) = tuple((prefixes, tag("lowercase"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Lowercase { ch, dots, prefixes }))
 }
 
 pub fn uppercase(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, word, _, dots)) = tuple((prefixes, tag("uppercase"), space1, single_char, space1, dots))(i)?;
-    Ok((input, Rule::Uppercase { word: word.to_string(), dots, prefixes }))
+    let (input, (prefixes, _, _, ch, _, dots)) = tuple((prefixes, tag("uppercase"), space1, single_char, space1, dots))(i)?;
+    Ok((input, Rule::Uppercase { ch, dots, prefixes }))
 }
 
 pub fn litdigit(i: &str) -> IResult<&str, Rule> {
@@ -1327,23 +1327,23 @@ mod tests {
     fn uppercase_test() {
         assert_eq!(
             uppercase("uppercase f 123"),
-            Ok(("", Rule::Uppercase { word: "f".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3], prefixes: Prefixes::empty()  })));
+            Ok(("", Rule::Uppercase { ch: 'f', dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3], prefixes: Prefixes::empty()  })));
         assert_eq!(
             uppercase("uppercase அ 123"),
-            Ok(("", Rule::Uppercase { word: "அ".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3], prefixes: Prefixes::empty()  })));
+            Ok(("", Rule::Uppercase { ch: 'அ', dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3], prefixes: Prefixes::empty()  })));
         assert_eq!(
             uppercase("uppercase \\x04D8 34579"),
-            Ok(("", Rule::Uppercase { word: "Ә".to_string(), dots: vec![BrailleDot::DOT3 | BrailleDot::DOT4 | BrailleDot::DOT5 | BrailleDot::DOT7 | BrailleDot::DOT9], prefixes: Prefixes::empty() })));
+            Ok(("", Rule::Uppercase { ch: 'Ә', dots: vec![BrailleDot::DOT3 | BrailleDot::DOT4 | BrailleDot::DOT5 | BrailleDot::DOT7 | BrailleDot::DOT9], prefixes: Prefixes::empty() })));
     }
 
     #[test]
     fn lowercase_test() {
         assert_eq!(
             lowercase("lowercase f 123"),
-            Ok(("", Rule::Lowercase { word: "f".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3], prefixes: Prefixes::empty() })));
+            Ok(("", Rule::Lowercase { ch: 'f', dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3], prefixes: Prefixes::empty() })));
         assert_eq!(
             lowercase("lowercase அ 123"),
-            Ok(("", Rule::Lowercase { word: "அ".to_string(), dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3], prefixes: Prefixes::empty() })));
+            Ok(("", Rule::Lowercase { ch: 'அ', dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3], prefixes: Prefixes::empty() })));
     }
 
     #[test]
