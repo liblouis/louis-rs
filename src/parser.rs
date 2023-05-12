@@ -41,6 +41,15 @@ pub enum Line {
     Rule { rule: Rule, comment: String },
 }
 
+impl Line {
+    pub fn as_rule(self) -> Option<Rule> {
+	match self {
+	    Line::Rule { rule, .. } => Some(rule),
+	    _ => None,
+	}
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub enum Rule {
     Include { filename: String },
