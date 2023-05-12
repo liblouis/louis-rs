@@ -34,6 +34,6 @@ mod tests {
     #[test]
     fn it_works() {
 	let input = "testing123".to_string();
-        assert_eq!(translate(PathBuf::from("tests/test_table.txt"), &input), Ok(input));
+        assert_eq!(translate(PathBuf::from("tests/test_table.txt"), &input).unwrap(), input);
     }
 }
