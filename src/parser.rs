@@ -179,7 +179,7 @@ pub enum Rule {
     // Match Opcode
     Match { pre: String, characters: String, post: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses, positions: WithMatches},
 
-    // undocumented opcodes
+    // deprecated opcodes
     Literal {characters: String, }
 }
 
