@@ -880,6 +880,7 @@ fn pass4(i: &str) -> IResult<&str, Rule> {
 }
 
 fn correct(i: &str) -> IResult<&str, Rule> {
+    // FIXME: make sure the prefixes are mandatory here
     let (input, (prefixes, _, _, test, _, action)) = tuple((prefixes, tag("correct"), space1, chars, space1, chars))(i)?;
     Ok((input, Rule::Correct { test: test.to_string(), action: action.to_string(), prefixes }))
 }
