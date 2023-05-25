@@ -16,6 +16,9 @@ pub struct TranslationTable {
 
 impl TranslationTable {
     fn translate(&self, input: &str) -> String {
+	// apply the corrections
+	// apply the translations
+	// finally use the character definitions for the remaining text
 	input.chars().map(|c| self.char_to_braille(c)).collect()
     }
 
