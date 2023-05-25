@@ -2,11 +2,16 @@ use std::collections::HashMap;
 
 const UNDEFINED: &str = "⣿";
 
+type Corrections = HashMap<String, String>;
+type CharacterDefinitions = HashMap<char, String>;
+type Translations = HashMap<String, String>;
+
 #[derive(Debug)]
 pub struct TranslationTable {
     undefined: String,
-    corrections: HashMap<String, String>,
-    character_definitions: HashMap<char, String>,
+    corrections: Corrections,
+    character_definitions: CharacterDefinitions,
+    translations: Translations,
 }
 
 impl TranslationTable {
