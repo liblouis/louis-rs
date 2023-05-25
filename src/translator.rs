@@ -10,21 +10,6 @@ pub struct TranslationTable {
 }
 
 impl TranslationTable {
-    fn new() -> Self {
-	Self { undefined: UNDEFINED.to_string(),
-	       corrections: HashMap::new(),
-	       character_definitions: HashMap::new()}
-    }
-
-    // implementing the builder pattern, see https://doc.rust-lang.org/1.0.0/style/ownership/builders.html
-    fn character_definitions(self, defs: HashMap<char, String>) -> TranslationTable {
-	Self {character_definitions: defs, ..self}
-    }
-   
-    fn corrections(self, corrections: HashMap<String, String>) -> TranslationTable {
-	Self {corrections, ..self}
-    }
-   
     fn translate(&self, input: &str) -> String {
 	input.chars().map(|c| self.char_to_braille(c)).collect()
     }
@@ -34,6 +19,25 @@ impl TranslationTable {
 	    Some(replacement) => replacement.to_string(),
 	    None => self.undefined.to_string(),
 	}
+    }
+}
+
+// implementing the builder pattern, see https://doc.rust-lang.org/1.0.0/style/ownership/builders.html
+impl TranslationTable {
+    fn new() -> Self {
+        Self { undefined: UNDEFINED.to_string(),
+               corrections: HashMap::new(),
+               character_definitions: HashMap::new(),
+	       translations: HashMap::new(),
+	}
+    }
+
+    fn character_definitions(self, defs: CharacterDefinitions) -> TranslationTable {
+        Self {character_definitions: defs, ..self}
+    }
+
+    fn corrections(self, corrections: Corrections) -> TranslationTable {
+        Self {corrections, ..self}
     }
 }
 
