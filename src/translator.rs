@@ -154,6 +154,15 @@ mod tests {
         assert_eq!(table.translate("ab"), "⠁⠂");
     }
 
+    #[ignore]
+    #[test]
+    fn find_translation_test() {
+	let translations = HashMap::from([("gegen".to_string(), "⠛".to_string()),
+					  ("immer".to_string(), "⠭".to_string())]);
+	let table = TranslationTable::new().translations(translations);
+        assert_eq!(table.translate("gegen"), "⠛");
+    }
+
     #[test]
     fn undefined_test() {
 	let table = TranslationTable::new();
