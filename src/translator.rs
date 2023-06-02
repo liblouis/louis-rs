@@ -28,6 +28,20 @@ impl TranslationTable {
 	    None => self.undefined.to_string(),
 	}
     }
+
+    fn apply_character_definition<'a>(&self, input: &'a str) -> (&'a str, String) {
+	let c = match input.chars().nth(0) {
+	    Some(c) => c,
+	    None => return (input, "".to_string())
+	};
+	let braille = self.char_to_braille(c);
+	// the c.to_string().len() is fishy, but I need to know the
+	// byte length of the char so I can split the slice at the
+	// right point
+	let (_, rest) = input.split_at(c.to_string().len());
+	(rest, braille)
+    }
+
     fn apply_translations<'a>(&self, input: &'a str) -> (&'a str, String) {
 	match self.longest_matching_translation(input) {
 	    Some((k,v)) => (input.split_at(k.len()).1, v.to_string()),
@@ -76,6 +90,20 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
+
+    #[test]
+    fn apply_character_definition_test() {
+	let char_defs = HashMap::from([('a', "A".to_string()),
+				       ('b', "B".to_string())]);
+	let table = TranslationTable::new().character_definitions(char_defs);
+        assert_eq!(table.apply_character_definition("a"), (&""[..], "A".to_string()));
+        assert_eq!(table.apply_character_definition("b"), (&""[..], "B".to_string()));
+        assert_eq!(table.apply_character_definition("x"), (&""[..], "⣿".to_string()));
+	// only consume one char
+        assert_eq!(table.apply_character_definition("aa"), (&"a"[..], "A".to_string()));
+	// handle weird unicode correctly
+        assert_eq!(table.apply_character_definition("🛖a"), (&"a"[..], "⣿".to_string()));
+    }
 
     #[test]
     fn longest_matching_translation_test() {
