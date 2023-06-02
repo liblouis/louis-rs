@@ -40,12 +40,15 @@ impl TranslationTable {
 	}
     }
 
+    fn corrections(self, corrections: Corrections) -> TranslationTable {
+        Self {corrections, ..self}
+    }
     fn character_definitions(self, defs: CharacterDefinitions) -> TranslationTable {
         Self {character_definitions: defs, ..self}
     }
 
-    fn corrections(self, corrections: Corrections) -> TranslationTable {
-        Self {corrections, ..self}
+    fn translations(self, trans: Translations) -> TranslationTable {
+        Self {translations: trans, ..self}
     }
 }
 
