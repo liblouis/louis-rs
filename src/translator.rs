@@ -15,11 +15,21 @@ pub struct TranslationTable {
 }
 
 impl TranslationTable {
+
     fn translate(&self, input: &str) -> String {
 	// apply the corrections
 	// apply the translations
 	// finally use the character definitions for the remaining text
 	input.chars().map(|c| self.char_to_braille(c)).collect()
+    }
+
+    fn translate3(&self, input: &str) -> String {
+	let mut out = String::new();
+	loop {
+	    let (input, braille) = self.apply_character_definition(input);
+	    out.push_str(&braille);
+	    if input.is_empty() {return out}
+	}
     }
 
     // experimental!
