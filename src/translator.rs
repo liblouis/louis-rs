@@ -22,6 +22,16 @@ impl TranslationTable {
 	input.chars().map(|c| self.char_to_braille(c)).collect()
     }
 
+    // experimental!
+    fn translate2(&self, input: &str) -> String {
+	if input.is_empty() {
+	    return String::new()
+	} else {
+	    let (rest, braille) = self.apply_character_definition(input);
+	    return [braille, self.translate2(rest)].concat();
+	}
+    }
+
     fn char_to_braille(&self, c: char) -> String {
 	match self.character_definitions.get(&c) {
 	    Some(replacement) => replacement.to_string(),
@@ -130,6 +140,12 @@ mod tests {
         assert_eq!(table.apply_translations("hahaho"), (&"ho"[..], "HA".to_string()));
     }
 
+    #[test]
+    fn translate2_test() {
+	let char_defs = HashMap::from([('a', "A".to_string()), ('b', "B".to_string())]);
+	let table = TranslationTable::new().character_definitions(char_defs);
+        assert_eq!(table.translate2("ab"), "AB");
+    }
 
     #[test]
     fn translate_test() {
