@@ -42,30 +42,33 @@ impl TranslationTable {
 	}
     }
 
-    fn char_to_braille(&self, c: char) -> String {
+    fn char_to_braille(&self, c: char) -> Option<String> {
 	match self.character_definitions.get(&c) {
-	    Some(replacement) => replacement.to_string(),
-	    None => self.undefined.to_string(),
+	    Some(replacement) => Some(replacement.to_string()),
+	    None => None,
 	}
     }
 
-    fn apply_character_definition<'a>(&self, input: &'a str) -> (&'a str, String) {
-	let c = match input.chars().nth(0) {
-	    Some(c) => c,
-	    None => return (input, "".to_string())
-	};
-	let braille = self.char_to_braille(c);
+    fn apply_undefined<'a>(&self, input: &'a str) -> Option<(&'a str, String)> {
+	let c = input.chars().nth(0)?;
+	let (_, rest) = input.split_at(c.to_string().len());
+	Some((rest, self.undefined.to_string()))
+    }
+
+    fn apply_character_definition<'a>(&self, input: &'a str) -> Option<(&'a str, String)> {
+	let c = input.chars().nth(0)?;
+	let braille = self.char_to_braille(c)?;
 	// the c.to_string().len() is fishy, but I need to know the
 	// byte length of the char so I can split the slice at the
 	// right point
 	let (_, rest) = input.split_at(c.to_string().len());
-	(rest, braille)
+	Some((rest, braille))
     }
 
-    fn apply_translations<'a>(&self, input: &'a str) -> (&'a str, String) {
+    fn apply_translations<'a>(&self, input: &'a str) -> Option<(&'a str, String)> {
 	match self.longest_matching_translation(input) {
-	    Some((k,v)) => (input.split_at(k.len()).1, v.to_string()),
-	    None => (input, "".to_string())
+	    Some((k,v)) => Some((input.split_at(k.len()).1, v.to_string())),
+	    None => None,
 	}
     }
 
@@ -116,13 +119,13 @@ mod tests {
 	let char_defs = HashMap::from([('a', "A".to_string()),
 				       ('b', "B".to_string())]);
 	let table = TranslationTable::new().character_definitions(char_defs);
-        assert_eq!(table.apply_character_definition("a"), (&""[..], "A".to_string()));
-        assert_eq!(table.apply_character_definition("b"), (&""[..], "B".to_string()));
-        assert_eq!(table.apply_character_definition("x"), (&""[..], "⣿".to_string()));
+        assert_eq!(table.apply_character_definition("a"), Some((&""[..], "A".to_string())));
+        assert_eq!(table.apply_character_definition("b"), Some((&""[..], "B".to_string())));
+        assert_eq!(table.apply_character_definition("x"), None);
 	// only consume one char
-        assert_eq!(table.apply_character_definition("aa"), (&"a"[..], "A".to_string()));
+        assert_eq!(table.apply_character_definition("aa"), Some((&"a"[..], "A".to_string())));
 	// handle weird unicode correctly
-        assert_eq!(table.apply_character_definition("🛖a"), (&"a"[..], "⣿".to_string()));
+        assert_eq!(table.apply_character_definition("🛖a"), None);
     }
 
     #[test]
@@ -145,9 +148,9 @@ mod tests {
 					  ("hahaha".to_string(), "HAA".to_string()),
 					  ("hahahi".to_string(), "HAI".to_string())]);
 	let table = TranslationTable::new().translations(translations);
-        assert_eq!(table.apply_translations("haha"), (&""[..], "HA".to_string()));
-        assert_eq!(table.apply_translations("hahaha"), (&""[..], "HAA".to_string()));
-        assert_eq!(table.apply_translations("hahaho"), (&"ho"[..], "HA".to_string()));
+        assert_eq!(table.apply_translations("haha"), Some((&""[..], "HA".to_string())));
+        assert_eq!(table.apply_translations("hahaha"), Some((&""[..], "HAA".to_string())));
+        assert_eq!(table.apply_translations("hahaho"), Some((&"ho"[..], "HA".to_string())));
     }
 
     #[test]
