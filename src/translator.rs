@@ -19,26 +19,26 @@ impl TranslationTable {
     fn translate(&self, input: &str) -> String {
 	// apply the corrections
 	// apply the translations
-	// finally use the character definitions for the remaining text
-	input.chars().map(|c| self.char_to_braille(c)).collect()
+	self.pass1(input)
     }
 
-    fn translate3(&self, input: &str) -> String {
-	let mut out = String::new();
-	loop {
-	    let (input, braille) = self.apply_character_definition(input);
-	    out.push_str(&braille);
-	    if input.is_empty() {return out}
-	}
-    }
-
-    // experimental!
-    fn translate2(&self, input: &str) -> String {
+    fn pass1(&self, input: &str) -> String {
 	if input.is_empty() {
 	    return String::new()
 	} else {
-	    let (rest, braille) = self.apply_character_definition(input);
-	    return [braille, self.translate2(rest)].concat();
+	    // check if any translations apply
+	    if let Some((rest, braille)) = self.apply_translations(input) {
+		return [braille, self.pass1(rest)].concat()
+		// check if any character definitions apply
+	    } else if let Some((rest, braille)) = self.apply_character_definition(input) {
+		return [braille, self.pass1(rest)].concat()
+		// otherwise just use the undefined definition
+	    } else if let Some((rest, braille)) = self.apply_undefined(input) {
+		return [braille, self.pass1(rest)].concat()
+	    } else {
+		// FIXME: what should pass1 do if it can't even do the undef rule?
+		return "".to_string()
+	    }
 	}
     }
 
@@ -106,6 +106,10 @@ impl TranslationTable {
     fn translations(self, trans: Translations) -> TranslationTable {
         Self {translations: trans, ..self}
     }
+
+    fn undefined(self, undef: String) -> TranslationTable {
+        Self {undefined: undef, ..self}
+    }
 }
 
 #[cfg(test)]
@@ -154,10 +158,10 @@ mod tests {
     }
 
     #[test]
-    fn translate2_test() {
+    fn pass1_test() {
 	let char_defs = HashMap::from([('a', "A".to_string()), ('b', "B".to_string())]);
 	let table = TranslationTable::new().character_definitions(char_defs);
-        assert_eq!(table.translate2("ab"), "AB");
+        assert_eq!(table.pass1("ab"), "AB");
     }
 
     #[test]
@@ -167,18 +171,20 @@ mod tests {
         assert_eq!(table.translate("ab"), "⠁⠂");
     }
 
-    #[ignore]
     #[test]
     fn find_translation_test() {
-	let translations = HashMap::from([("gegen".to_string(), "⠛".to_string()),
-					  ("immer".to_string(), "⠭".to_string())]);
-	let table = TranslationTable::new().translations(translations);
-        assert_eq!(table.translate("gegen"), "⠛");
+	let translations = HashMap::from([("gegen".to_string(), "G".to_string()),
+					  ("immer".to_string(), "I".to_string())]);
+	let table = TranslationTable::new().translations(translations).undefined("X".to_string());
+        assert_eq!(table.translate("gegen"), "G");
+        assert_eq!(table.translate("gegenw"), "GX");
+        assert_eq!(table.translate("🛖gegen"), "XG");
     }
 
     #[test]
     fn undefined_test() {
-	let table = TranslationTable::new();
-        assert_eq!(table.translate("x"), UNDEFINED);
+	let table = TranslationTable::new().undefined("X".to_string());
+        assert_eq!(table.translate("x"), "X");
+        assert_eq!(table.translate("🛖h"), "XX");
     }
 }
