@@ -1,10 +1,22 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 const UNDEFINED: &str = "⣿";
 
 type Corrections = HashMap<String, String>;
 type CharacterDefinitions = HashMap<char, String>;
 type Translations = HashMap<String, String>;
+
+#[derive(Debug, PartialEq)]
+pub struct TranslationMapping<'a> {
+    input: &'a str,
+    output: String,
+}
+
+impl<'a> TranslationMapping<'a> {
+    fn new(input: &'a str, output: String) -> TranslationMapping<'a> {
+ 	TranslationMapping {input, output}
+    }
+}
 
 #[derive(Debug)]
 pub struct TranslationTable {
@@ -19,25 +31,32 @@ impl TranslationTable {
     fn translate(&self, input: &str) -> String {
 	// apply the corrections
 	// apply the translations
-	self.pass1(input)
+	self.pass1(input).into_iter().map(|m| m.output).collect::<Vec<String>>().concat()
     }
 
-    fn pass1(&self, input: &str) -> String {
+    // a VecDeque allows for efficient insertion at the beginning of a sequence
+    fn pass1<'a>(&'a self, input: &'a str) -> VecDeque<TranslationMapping<'a>> {
 	if input.is_empty() {
-	    return String::new()
+	    return VecDeque::new()
 	} else {
 	    // check if any translations apply
-	    if let Some((rest, braille)) = self.apply_translations(input) {
-		return [braille, self.pass1(rest)].concat()
+	    if let Some((rest, mapping)) = self.apply_translations(input) {
+		let mut r = self.pass1(rest);
+		r.push_front(mapping);
+		return r
 		// check if any character definitions apply
-	    } else if let Some((rest, braille)) = self.apply_character_definition(input) {
-		return [braille, self.pass1(rest)].concat()
+	    } else if let Some((rest, mapping)) = self.apply_character_definition(input) {
+		let mut r = self.pass1(rest);
+		r.push_front(mapping);
+		return r
 		// otherwise just use the undefined definition
-	    } else if let Some((rest, braille)) = self.apply_undefined(input) {
-		return [braille, self.pass1(rest)].concat()
+	    } else if let Some((rest, mapping)) = self.apply_undefined(input) {
+		let mut r = self.pass1(rest);
+		r.push_front(mapping);
+		return r
 	    } else {
 		// FIXME: what should pass1 do if it can't even do the undef rule?
-		return "".to_string()
+		return VecDeque::new()
 	    }
 	}
     }
@@ -49,25 +68,25 @@ impl TranslationTable {
 	}
     }
 
-    fn apply_undefined<'a>(&self, input: &'a str) -> Option<(&'a str, String)> {
+    fn apply_undefined<'a>(&self, input: &'a str) -> Option<(&'a str, TranslationMapping<'a>)> {
 	let c = input.chars().nth(0)?;
-	let (_, rest) = input.split_at(c.to_string().len());
-	Some((rest, self.undefined.to_string()))
+	let (first, rest) = input.split_at(c.to_string().len());
+	Some((rest, TranslationMapping::new(first, self.undefined.to_string())))
     }
 
-    fn apply_character_definition<'a>(&self, input: &'a str) -> Option<(&'a str, String)> {
+    fn apply_character_definition<'a>(&self, input: &'a str) -> Option<(&'a str, TranslationMapping<'a>)> {
 	let c = input.chars().nth(0)?;
 	let braille = self.char_to_braille(c)?;
 	// the c.to_string().len() is fishy, but I need to know the
 	// byte length of the char so I can split the slice at the
 	// right point
-	let (_, rest) = input.split_at(c.to_string().len());
-	Some((rest, braille))
+	let (first, rest) = input.split_at(c.to_string().len());
+	Some((rest, TranslationMapping::new(first, braille)))
     }
 
-    fn apply_translations<'a>(&self, input: &'a str) -> Option<(&'a str, String)> {
+    fn apply_translations<'a>(&self, input: &'a str) -> Option<(&'a str, TranslationMapping)> {
 	match self.longest_matching_translation(input) {
-	    Some((k,v)) => Some((input.split_at(k.len()).1, v.to_string())),
+	    Some((k,v)) => Some((input.split_at(k.len()).1, TranslationMapping::new(k, v.to_string()))),
 	    None => None,
 	}
     }
@@ -123,11 +142,11 @@ mod tests {
 	let char_defs = HashMap::from([('a', "A".to_string()),
 				       ('b', "B".to_string())]);
 	let table = TranslationTable::new().character_definitions(char_defs);
-        assert_eq!(table.apply_character_definition("a"), Some((&""[..], "A".to_string())));
-        assert_eq!(table.apply_character_definition("b"), Some((&""[..], "B".to_string())));
+        assert_eq!(table.apply_character_definition("a"), Some((&""[..], TranslationMapping::new("a", "A".to_string()))));
+        assert_eq!(table.apply_character_definition("b"), Some((&""[..], TranslationMapping::new("b", "B".to_string()))));
         assert_eq!(table.apply_character_definition("x"), None);
 	// only consume one char
-        assert_eq!(table.apply_character_definition("aa"), Some((&"a"[..], "A".to_string())));
+        assert_eq!(table.apply_character_definition("aa"), Some((&"a"[..], TranslationMapping::new("a", "A".to_string()))));
 	// handle weird unicode correctly
         assert_eq!(table.apply_character_definition("🛖a"), None);
     }
@@ -152,16 +171,17 @@ mod tests {
 					  ("hahaha".to_string(), "HAA".to_string()),
 					  ("hahahi".to_string(), "HAI".to_string())]);
 	let table = TranslationTable::new().translations(translations);
-        assert_eq!(table.apply_translations("haha"), Some((&""[..], "HA".to_string())));
-        assert_eq!(table.apply_translations("hahaha"), Some((&""[..], "HAA".to_string())));
-        assert_eq!(table.apply_translations("hahaho"), Some((&"ho"[..], "HA".to_string())));
+        assert_eq!(table.apply_translations("haha"), Some((&""[..], TranslationMapping::new("haha", "HA".to_string()))));
+        assert_eq!(table.apply_translations("hahaha"), Some((&""[..], TranslationMapping::new("hahaha", "HAA".to_string()))));
+        assert_eq!(table.apply_translations("hahaho"), Some((&"ho"[..], TranslationMapping::new("haha", "HA".to_string()))));
     }
 
     #[test]
     fn pass1_test() {
 	let char_defs = HashMap::from([('a', "A".to_string()), ('b', "B".to_string())]);
 	let table = TranslationTable::new().character_definitions(char_defs);
-        assert_eq!(table.pass1("ab"), "AB");
+        assert_eq!(table.pass1("ab"), vec![TranslationMapping::new("a", "A".to_string()),
+					   TranslationMapping::new("b", "B".to_string())]);
     }
 
     #[test]
