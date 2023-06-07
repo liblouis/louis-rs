@@ -1,4 +1,4 @@
-use std::{path::PathBuf, fs, io};
+use std::{fs, io, path::PathBuf};
 use thiserror::Error;
 
 use parser::{Line, Rule};
@@ -17,7 +17,10 @@ pub fn translate(table: PathBuf, input: &str) -> Result<String, TranslationError
     let rules = fs::read_to_string(table)?;
 
     let (_, lines) = parser::table(&rules).unwrap();
-    let _rules : Vec<Rule> = lines.into_iter().filter_map(|line| line.as_rule()).collect();
+    let _rules: Vec<Rule> = lines
+        .into_iter()
+        .filter_map(|line| line.as_rule())
+        .collect();
     Ok(input.to_string())
 }
 
@@ -34,7 +37,10 @@ mod tests {
 
     #[test]
     fn it_works() {
-	let input = "testing123".to_string();
-        assert_eq!(translate(PathBuf::from("tests/test_table.txt"), &input).unwrap(), input);
+        let input = "testing123".to_string();
+        assert_eq!(
+            translate(PathBuf::from("tests/test_table.txt"), &input).unwrap(),
+            input
+        );
     }
 }

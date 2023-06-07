@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use liblouis_nom::{translate, debug, parser::Line};
+use liblouis_nom::{debug, parser::Line, translate};
 use std::path::PathBuf;
 
 #[derive(Debug, Subcommand)]
@@ -7,16 +7,16 @@ enum Commands {
     /// translate <INPUT> to or from braille using <TABLE>
     #[command(arg_required_else_help = true)]
     Translate {
-	/// Braille table to use for the translation
-	table: PathBuf,
-	/// String to translate
-	input: String,
+        /// Braille table to use for the translation
+        table: PathBuf,
+        /// String to translate
+        input: String,
     },
     /// print debug information about the given table <TABLE>
     Debug {
-	/// Braille table to debug
-	table: PathBuf,
-    }
+        /// Braille table to debug
+        table: PathBuf,
+    },
 }
 
 #[derive(Debug, Parser)] // requires `derive` feature
@@ -34,18 +34,21 @@ fn main() {
     match args.command {
         Commands::Translate { table, input } => {
             println!("translating {} using table {:?}", input, table);
-	    println!("Braille: {}", translate(table, &input).expect("Translation failed"));
+            println!(
+                "Braille: {}",
+                translate(table, &input).expect("Translation failed")
+            );
         }
-	Commands::Debug { table } => {
-	    println!("debugging table {:?}", table);
-	    let lines = debug(table).unwrap();
-	    for line in lines {
-		match line {
-		    Line::Empty => (),
-		    Line::Comment { comment: _ } => (),
-		    _ => println!("{:?}", line)
-		}
-	    }
-	}
+        Commands::Debug { table } => {
+            println!("debugging table {:?}", table);
+            let lines = debug(table).unwrap();
+            for line in lines {
+                match line {
+                    Line::Empty => (),
+                    Line::Comment { comment: _ } => (),
+                    _ => println!("{:?}", line),
+                }
+            }
+        }
     }
 }
