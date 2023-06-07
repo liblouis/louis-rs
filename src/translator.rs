@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap};
 
 const UNDEFINED: &str = "⣿";
 
@@ -34,31 +34,30 @@ impl TranslationTable {
 	self.pass1(input).into_iter().map(|m| m.output).collect::<Vec<String>>().concat()
     }
 
-    // a VecDeque allows for efficient insertion at the beginning of a sequence
-    fn pass1<'a>(&'a self, input: &'a str) -> VecDeque<TranslationMapping<'a>> {
-	if input.is_empty() {
-	    return VecDeque::new()
-	} else {
+    fn pass1<'a>(&'a self, input: &'a str) -> Vec<TranslationMapping<'a>> {
+	let mut current_input = input;
+	let mut mappings = Vec::new();
+	while !current_input.is_empty() {
 	    // check if any translations apply
-	    if let Some((rest, mapping)) = self.apply_translations(input) {
-		let mut r = self.pass1(rest);
-		r.push_front(mapping);
-		return r
+	    if let Some((rest, mapping)) = self.apply_translations(current_input) {
+		current_input = rest;
+		mappings.push(mapping);
 		// check if any character definitions apply
-	    } else if let Some((rest, mapping)) = self.apply_character_definition(input) {
-		let mut r = self.pass1(rest);
-		r.push_front(mapping);
-		return r
+	    } else if let Some((rest, mapping)) = self.apply_character_definition(current_input) {
+		current_input = rest;
+		mappings.push(mapping);
 		// otherwise just use the undefined definition
-	    } else if let Some((rest, mapping)) = self.apply_undefined(input) {
-		let mut r = self.pass1(rest);
-		r.push_front(mapping);
-		return r
+	    } else if let Some((rest, mapping)) = self.apply_undefined(current_input) {
+		current_input = rest;
+		mappings.push(mapping);
 	    } else {
-		// FIXME: what should pass1 do if it can't even do the undef rule?
-		return VecDeque::new()
+		// FIXME: what should pass1 do if it can't even apply
+		// the undefined definition? Just skip that byte I guess.
+		let (_, rest) = current_input.split_at(1);
+		current_input = rest;
 	    }
 	}
+	mappings
     }
 
     fn char_to_braille(&self, c: char) -> Option<String> {
