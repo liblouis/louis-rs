@@ -55,9 +55,8 @@ impl TranslationTable {
                 mappings.push(mapping);
             } else {
                 // FIXME: what should pass1 do if it can't even apply
-                // the undefined definition? Just skip that byte I guess.
-                let (_, rest) = current_input.split_at(1);
-                current_input = rest;
+                // the undefined definition?
+                panic!("Looks like the input is not valid UTF-8")
             }
         }
         mappings
