@@ -4,7 +4,7 @@ use thiserror::Error;
 use parser::{Line, Rule};
 
 pub mod parser;
-mod translator;
+pub mod translator;
 
 #[derive(Error, Debug)]
 pub enum TranslationError {
