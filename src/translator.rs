@@ -10,6 +10,7 @@ type Corrections = HashMap<String, String>;
 type CharacterDefinitions = HashMap<char, String>;
 type Translations = HashMap<String, String>;
 
+/// Mapping of an input char to the translated output
 #[derive(Debug, PartialEq)]
 pub struct TranslationMapping<'a> {
     input: &'a str,
@@ -22,6 +23,18 @@ impl<'a> TranslationMapping<'a> {
     }
 }
 
+/// Context of a translation
+///
+/// Contains information that is needed to do the translation, such as
+/// whether the previous character is a number, etc
+struct TranslationContext {
+    look_back: char,
+}
+
+/// A Translation table holds all the rules needed to do a braille translation
+///
+/// Contains static information that is needed to do the translation,
+/// such as character definitions, translation rules, etc
 #[derive(Debug, Default)]
 pub struct TranslationTable {
     undefined: String,
@@ -105,6 +118,8 @@ impl TranslationTable {
             None => None,
         }
     }
+
+    /// Find the longest matching translation for given input
 
     // This is a very naive implementation. It basically goes through
     // all translation opcodes and checks if the match the given
