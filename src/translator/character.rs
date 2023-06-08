@@ -2,15 +2,15 @@ use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub enum CharacterAttribute {
-    SPACE,
-    DIGIT,
-    LETTER,
-    LOWERCASE,
-    UPPERCASE,
-    PUNCTUATION,
-    SIGN,
-    MATH,
-    LITDIGIT,
+    Space,
+    Digit,
+    Letter,
+    Lowercase,
+    Uppercase,
+    Punctuation,
+    Sign,
+    Math,
+    Litdigit,
 }
 
 #[derive(Debug, Default)]
@@ -34,25 +34,25 @@ mod tests {
     #[test]
     fn has_attribute_test() {
         let char_attr = CharacterAttributes(HashMap::from([
-            (CharacterAttribute::LETTER, HashSet::from(['a', 'b'])),
-            (CharacterAttribute::MATH, HashSet::from(['∑', '𝛑'])),
+            (CharacterAttribute::Letter, HashSet::from(['a', 'b'])),
+            (CharacterAttribute::Math, HashSet::from(['∑', '𝛑'])),
         ]));
         assert_eq!(
-            char_attr.has_attribute(CharacterAttribute::LETTER, 'a'),
+            char_attr.has_attribute(CharacterAttribute::Letter, 'a'),
             true
         );
         assert_eq!(
-            char_attr.has_attribute(CharacterAttribute::SIGN, 'a'),
+            char_attr.has_attribute(CharacterAttribute::Sign, 'a'),
             false
         );
         assert_eq!(
-            char_attr.has_attribute(CharacterAttribute::LETTER, 'c'),
+            char_attr.has_attribute(CharacterAttribute::Letter, 'c'),
             false
         );
         assert_eq!(
-            char_attr.has_attribute(CharacterAttribute::MATH, 'c'),
+            char_attr.has_attribute(CharacterAttribute::Math, 'c'),
             false
         );
-        assert_eq!(char_attr.has_attribute(CharacterAttribute::MATH, '𝛑'), true);
+        assert_eq!(char_attr.has_attribute(CharacterAttribute::Math, '𝛑'), true);
     }
 }
