@@ -1,5 +1,9 @@
 use std::collections::HashMap;
 
+use crate::translator::character::CharacterAttributes;
+
+mod character;
+
 const UNDEFINED: &str = "⣿";
 
 type Corrections = HashMap<String, String>;
@@ -23,6 +27,7 @@ pub struct TranslationTable {
     undefined: String,
     corrections: Corrections,
     character_definitions: CharacterDefinitions,
+    character_attributes: CharacterAttributes,
     translations: Translations,
 }
 
@@ -122,6 +127,7 @@ impl TranslationTable {
             undefined: UNDEFINED.to_string(),
             corrections: HashMap::new(),
             character_definitions: HashMap::new(),
+            character_attributes: CharacterAttributes::default(),
             translations: HashMap::new(),
         }
     }
