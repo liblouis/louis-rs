@@ -135,9 +135,6 @@ impl TranslationTable {
     }
 }
 
-impl TranslationTable {
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
