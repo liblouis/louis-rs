@@ -23,12 +23,20 @@ impl<'a> TranslationMapping<'a> {
     }
 }
 
+/// Mode of a translation
+enum TranslationMode {
+    Numeric,
+    AllCaps,
+    Caps,
+}
+
 /// Context of a translation
 ///
 /// Contains information that is needed to do the translation, such as
 /// whether the previous character is a number, etc
 struct TranslationContext {
-    look_back: char,
+    prev_char: char,
+    mode: TranslationMode,
 }
 
 /// A Translation table holds all the rules needed to do a braille translation
