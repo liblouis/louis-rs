@@ -22,7 +22,7 @@ impl<'a> TranslationMapping<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct TranslationTable {
     undefined: String,
     corrections: Corrections,
@@ -120,44 +120,7 @@ impl TranslationTable {
     }
 }
 
-// implementing the builder pattern, see https://doc.rust-lang.org/1.0.0/style/ownership/builders.html
 impl TranslationTable {
-    fn new() -> Self {
-        Self {
-            undefined: UNDEFINED.to_string(),
-            corrections: HashMap::new(),
-            character_definitions: HashMap::new(),
-            character_attributes: CharacterAttributes::default(),
-            translations: HashMap::new(),
-        }
-    }
-
-    fn corrections(self, corrections: Corrections) -> TranslationTable {
-        Self {
-            corrections,
-            ..self
-        }
-    }
-    fn character_definitions(self, defs: CharacterDefinitions) -> TranslationTable {
-        Self {
-            character_definitions: defs,
-            ..self
-        }
-    }
-
-    fn translations(self, trans: Translations) -> TranslationTable {
-        Self {
-            translations: trans,
-            ..self
-        }
-    }
-
-    fn undefined(self, undef: String) -> TranslationTable {
-        Self {
-            undefined: undef,
-            ..self
-        }
-    }
 }
 
 #[cfg(test)]
@@ -169,7 +132,7 @@ mod tests {
     #[test]
     fn apply_character_definition_test() {
         let char_defs = HashMap::from([('a', "A".to_string()), ('b', "B".to_string())]);
-        let table = TranslationTable::new().character_definitions(char_defs);
+        let table = TranslationTable{character_definitions: char_defs, ..Default::default()};
         assert_eq!(
             table.apply_character_definition("a"),
             Some((&""[..], TranslationMapping::new("a", "A".to_string())))
@@ -196,7 +159,7 @@ mod tests {
             ("hahaha".to_string(), "".to_string()),
             ("hahahi".to_string(), "".to_string()),
         ]);
-        let table = TranslationTable::new().translations(translations);
+        let table = TranslationTable{translations: translations, ..Default::default()};
         let ignore = String::new();
         assert_eq!(
             table.longest_matching_translation("haha"),
@@ -220,7 +183,7 @@ mod tests {
             ("hahaha".to_string(), "HAA".to_string()),
             ("hahahi".to_string(), "HAI".to_string()),
         ]);
-        let table = TranslationTable::new().translations(translations);
+        let table = TranslationTable{translations: translations, ..Default::default()};
         assert_eq!(
             table.apply_translations("haha"),
             Some((&""[..], TranslationMapping::new("haha", "HA".to_string())))
@@ -241,7 +204,7 @@ mod tests {
     #[test]
     fn pass1_test() {
         let char_defs = HashMap::from([('a', "A".to_string()), ('b', "B".to_string())]);
-        let table = TranslationTable::new().character_definitions(char_defs);
+        let table = TranslationTable{character_definitions: char_defs, ..Default::default()};
         assert_eq!(
             table.pass1("ab"),
             vec![
@@ -254,7 +217,7 @@ mod tests {
     #[test]
     fn translate_test() {
         let char_defs = HashMap::from([('a', "⠁".to_string()), ('b', "⠂".to_string())]);
-        let table = TranslationTable::new().character_definitions(char_defs);
+        let table = TranslationTable{character_definitions: char_defs, ..Default::default()};
         assert_eq!(table.translate("ab"), "⠁⠂");
     }
 
@@ -264,9 +227,7 @@ mod tests {
             ("gegen".to_string(), "G".to_string()),
             ("immer".to_string(), "I".to_string()),
         ]);
-        let table = TranslationTable::new()
-            .translations(translations)
-            .undefined("X".to_string());
+        let table = TranslationTable{translations: translations, undefined: "X".to_string(), ..Default::default()};
         assert_eq!(table.translate("gegen"), "G");
         assert_eq!(table.translate("gegenw"), "GX");
         assert_eq!(table.translate("🛖gegen"), "XG");
@@ -274,7 +235,7 @@ mod tests {
 
     #[test]
     fn undefined_test() {
-        let table = TranslationTable::new().undefined("X".to_string());
+        let table = TranslationTable{undefined: "X".to_string(), ..Default::default()};
         assert_eq!(table.translate("x"), "X");
         assert_eq!(table.translate("🛖h"), "XX");
     }
