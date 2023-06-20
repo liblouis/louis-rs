@@ -1,7 +1,7 @@
-#+title: Experimental liblouis table parser
+#+title: Experimental liblouis re-implementation in Rust
 
-An experiment at writing a liblouis table parser based on the [[https://github.com/Geal/nom][nom
-parser combinator]] and Rust
+An experiment at re-writing liblouis in Rust using the [[https://github.com/Geal/nom][nom parser
+combinator]].
 
 * Usage
 
@@ -49,9 +49,16 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
   - [X] handle escaped unicode digit in ~litdigit~
   - [X] handle escaped space ('\s')
 
+* Open Questions
+- Should the translation API be against ~&str~ or ~&[char]~
+- use a trie, e.g. the fst crate
+- how to handle emphasis?
+- if the translation API is against ~&str~, how are we going to do the
+  typeform information?
+
 * License
 
-Copyright (C) 2021 Swiss Library for the Blind, Visually Impaired and Print Disabled
+Copyright (C) 2021-2023 Swiss Library for the Blind, Visually Impaired and Print Disabled
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
