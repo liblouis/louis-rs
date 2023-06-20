@@ -1,5 +1,6 @@
 use std::error;
 use std::fmt;
+use std::fs;
 
 use nom::branch::alt;
 use nom::bytes::complete::is_a;
@@ -1828,6 +1829,27 @@ fn line(i: &str) -> IResult<&str, Line> {
 
 pub fn table(i: &str) -> IResult<&str, Vec<Line>> {
     all_consuming(many0(line))(i)
+}
+
+fn expand_include(line: Line) -> Vec<Line> {
+    if let Line::Rule {
+        rule: Rule::Include { filename },
+        ..
+    } = line
+    {
+        // FIXME: how do we upstream io and parsing errors?
+        let included = fs::read_to_string(filename).unwrap();
+        let (_, lines) = table(&included).unwrap();
+        return lines;
+    }
+    vec![line]
+}
+
+pub fn expand_includes(lines: Vec<Line>) -> Vec<Line> {
+    lines
+        .into_iter()
+        .flat_map(|line| expand_include(line))
+        .collect()
 }
 
 #[cfg(test)]
