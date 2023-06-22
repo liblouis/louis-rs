@@ -192,7 +192,7 @@ pub enum Prefix {
     Nocross,
 }
 
-type Prefixes = EnumSet<Prefix>;
+pub type Prefixes = EnumSet<Prefix>;
 
 #[derive(PartialEq, Debug)]
 pub enum WithClass {
@@ -236,8 +236,8 @@ pub enum BrailleDot {
     DOTF,
 }
 
-type BrailleChar = EnumSet<BrailleDot>;
-type BrailleChars = Vec<BrailleChar>;
+pub type BrailleChar = EnumSet<BrailleDot>;
+pub type BrailleChars = Vec<BrailleChar>;
 
 #[derive(PartialEq, Debug)]
 pub enum BrailleCharsOrImplicit {

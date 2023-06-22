@@ -13,7 +13,7 @@ pub enum CharacterAttribute {
     Litdigit,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct CharacterAttributes(HashMap<CharacterAttribute, HashSet<char>>);
 
 impl CharacterAttributes {

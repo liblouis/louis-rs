@@ -1,6 +1,15 @@
 use std::collections::HashMap;
 
 use crate::translator::character::CharacterAttributes;
+use crate::parser::Line;
+use crate::parser::Rule;
+use crate::parser::BrailleChar;
+use crate::parser::BrailleChars;
+use crate::parser::BrailleCharsOrImplicit;
+use crate::parser::BrailleDot;
+use crate::parser::Prefixes;
+
+use enumset::enum_set;
 
 mod character;
 
@@ -43,7 +52,7 @@ struct TranslationContext {
 ///
 /// Contains static information that is needed to do the translation,
 /// such as character definitions, translation rules, etc
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct TranslationTable {
     undefined: String,
     corrections: Corrections,
@@ -52,7 +61,58 @@ pub struct TranslationTable {
     translations: Translations,
 }
 
+fn dot_to_unicode(dot: BrailleChar) -> char {
+    let mut unicode = 0x2800;
+    for d in dot {
+        match d {
+            BrailleDot::DOT1 => unicode |= 0x0001,
+            BrailleDot::DOT2 => unicode |= 0x0002,
+            BrailleDot::DOT3 => unicode |= 0x0004,
+            BrailleDot::DOT4 => unicode |= 0x0008,
+            BrailleDot::DOT5 => unicode |= 0x0010,
+            BrailleDot::DOT6 => unicode |= 0x0020,
+            BrailleDot::DOT7 => unicode |= 0x0040,
+            BrailleDot::DOT8 => unicode |= 0x0080,
+            _ => {},
+        }
+    }
+    char::from_u32(unicode).unwrap()
+}
+
+fn dots_to_unicode(dots: BrailleChars) -> String {
+    dots.into_iter()
+        .map(|d| dot_to_unicode(d))
+        .collect()
+}
+
 impl TranslationTable {
+
+    fn from(lines: Vec<Line>) -> TranslationTable {
+        let mut char_defs = HashMap::new();
+        for line in lines {
+            match line {
+                Line::Rule { rule, .. } => {
+                    match rule {
+                        Rule::Letter { ch, dots, .. } => {
+                            match dots {
+                                BrailleCharsOrImplicit::Explicit (dots2) => {
+                                    char_defs.insert(ch, dots_to_unicode(dots2));
+                                },
+                                _ => {}
+                            }
+                        },
+                        _ => {}
+                    }
+                },
+                _ => {}
+            }
+        }
+        TranslationTable {
+            character_definitions: char_defs,
+            ..Default::default()
+        }
+    }
+
     fn translate(&self, input: &str) -> String {
         // apply the corrections
         // apply the translations
@@ -139,6 +199,41 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
+
+    #[test]
+    fn dot_to_unicode_test() {
+        assert_eq!(dot_to_unicode(enum_set!(BrailleDot::DOT1 | BrailleDot::DOT8)), '⢁');
+    }
+
+    #[test]
+    fn dots_to_unicode_test() {
+        assert_eq!(dots_to_unicode(vec![enum_set!(BrailleDot::DOT1), enum_set!(BrailleDot::DOT8)]), "⠁⢀".to_string());
+    }
+
+    #[test]
+    fn compile_translation_table_test() {
+        let table = TranslationTable::from(
+            vec![
+                Line::Rule {
+                    rule: Rule::Letter {
+                        ch: 'a',
+                        dots: BrailleCharsOrImplicit::Explicit(
+                            vec![enum_set!(BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3)]),
+                        prefixes: Prefixes::empty()
+                    },
+                    comment: "".to_string()
+                }
+            ]
+        );
+        let table2 = TranslationTable {
+            character_definitions: HashMap::from([('a', "⠇".to_string())]),
+            ..Default::default()
+        };
+        assert_eq!(table, table2);
+    }
+
+
+
 
     #[test]
     fn apply_character_definition_test() {
