@@ -59,23 +59,18 @@ pub struct TranslationTable {
 }
 
 impl TranslationTable {
-
     fn from(lines: Vec<Line>) -> TranslationTable {
         let mut char_defs = HashMap::new();
         for line in lines {
             match line {
-                Line::Rule { rule, .. } => {
-                    match rule {
-                        Rule::Letter { ch, dots, .. } => {
-                            match dots {
-                                BrailleCharsOrImplicit::Explicit (dots2) => {
-                                    char_defs.insert(ch, dots_to_unicode(dots2));
-                                },
-                                _ => {}
-                            }
-                        },
+                Line::Rule { rule, .. } => match rule {
+                    Rule::Letter { ch, dots, .. } => match dots {
+                        BrailleCharsOrImplicit::Explicit(dots2) => {
+                            char_defs.insert(ch, dots_to_unicode(dots2));
+                        }
                         _ => {}
-                    }
+                    },
+                    _ => {}
                 },
                 _ => {}
             }
@@ -178,28 +173,22 @@ mod tests {
 
     #[test]
     fn compile_translation_table_test() {
-        let table = TranslationTable::from(
-            vec![
-                Line::Rule {
-                    rule: Rule::Letter {
-                        ch: 'a',
-                        dots: BrailleCharsOrImplicit::Explicit(
-                            vec![enum_set!(BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3)]),
-                        prefixes: Prefixes::empty()
-                    },
-                    comment: "".to_string()
-                }
-            ]
-        );
+        let table = TranslationTable::from(vec![Line::Rule {
+            rule: Rule::Letter {
+                ch: 'a',
+                dots: BrailleCharsOrImplicit::Explicit(vec![enum_set!(
+                    BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3
+                )]),
+                prefixes: Prefixes::empty(),
+            },
+            comment: "".to_string(),
+        }]);
         let table2 = TranslationTable {
             character_definitions: HashMap::from([('a', "⠇".to_string())]),
             ..Default::default()
         };
         assert_eq!(table, table2);
     }
-
-
-
 
     #[test]
     fn apply_character_definition_test() {
