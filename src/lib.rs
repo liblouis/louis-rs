@@ -2,6 +2,7 @@ use std::{fs, io, path::PathBuf};
 use thiserror::Error;
 
 use parser::{Line, Rule};
+use translator::TranslationTable;
 
 pub mod parser;
 pub mod translator;
@@ -20,11 +21,8 @@ pub fn translate(table: PathBuf, input: &str) -> Result<String, TranslationError
     let rules = fs::read_to_string(table)?;
 
     let (_, lines) = parser::table(&rules).unwrap();
-    let _rules: Vec<Rule> = lines
-        .into_iter()
-        .filter_map(|line| line.as_rule())
-        .collect();
-    Ok(input.to_string())
+    let table = TranslationTable::compile(lines);
+    Ok(table.translate(input))
 }
 
 pub fn debug(table: PathBuf) -> Result<Vec<Line>, TranslationError> {
@@ -41,9 +39,10 @@ mod tests {
     #[test]
     fn it_works() {
         let input = "testing123".to_string();
+	let output = "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀".to_string();
         assert_eq!(
             translate(PathBuf::from("tests/test_table.txt"), &input).unwrap(),
-            input
+            output
         );
     }
 }

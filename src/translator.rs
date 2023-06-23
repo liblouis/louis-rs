@@ -109,7 +109,7 @@ impl TranslationTable {
         }
     }
 
-    fn translate(&self, input: &str) -> String {
+    pub fn translate(&self, input: &str) -> String {
         // apply the corrections
         // apply the translations
         self.pass1(input)
