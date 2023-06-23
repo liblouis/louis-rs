@@ -62,17 +62,22 @@ impl TranslationTable {
     fn from(lines: Vec<Line>) -> TranslationTable {
         let mut char_defs = HashMap::new();
         for line in lines {
-            match line {
-                Line::Rule { rule, .. } => match rule {
-                    Rule::Letter { ch, dots, .. } => match dots {
-                        BrailleCharsOrImplicit::Explicit(dots2) => {
-                            char_defs.insert(ch, dots_to_unicode(dots2));
+            if let Line::Rule { rule, .. } = line {
+                match rule {
+                    Rule::Space { ch, dots, .. }
+                    | Rule::Punctuation { ch, dots, .. }
+                    | Rule::Digit { ch, dots }
+                    | Rule::Lowercase { ch, dots, .. }
+                    | Rule::Uppercase { ch, dots, .. }
+                    | Rule::Litdigit { ch, dots }
+                    | Rule::Sign { ch, dots, .. }
+                    | Rule::Math { ch, dots, .. } => {
+                        char_defs.insert(ch, dots_to_unicode(dots));
+                    }
+                    Rule::Letter { ch, dots, .. } => {
+                        if let BrailleCharsOrImplicit::Explicit(explicit_dots) = dots {
+                            char_defs.insert(ch, dots_to_unicode(explicit_dots));
                         }
-                        _ => {}
-                    },
-                    _ => {}
-                },
-                _ => {}
             }
         }
         TranslationTable {
