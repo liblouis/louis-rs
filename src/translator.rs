@@ -57,7 +57,7 @@ pub struct TranslationTable {
 }
 
 impl TranslationTable {
-    fn from(lines: Vec<Line>) -> TranslationTable {
+    pub fn compile(lines: Vec<Line>) -> Self {
         let mut char_defs = HashMap::new();
         let mut translations = HashMap::new();
         let mut undefined: Option<String> = None;
@@ -201,7 +201,7 @@ mod tests {
 
     #[test]
     fn compile_translation_table_test() {
-        let table = TranslationTable::from(vec![Line::Rule {
+        let table = TranslationTable::compile(vec![Line::Rule {
             rule: Rule::Letter {
                 ch: 'a',
                 dots: BrailleCharsOrImplicit::Explicit(vec![enum_set!(
