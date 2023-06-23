@@ -61,6 +61,7 @@ pub struct TranslationTable {
 impl TranslationTable {
     fn from(lines: Vec<Line>) -> TranslationTable {
         let mut char_defs = HashMap::new();
+        let mut translations = HashMap::new();
         for line in lines {
             if let Line::Rule { rule, .. } = line {
                 match rule {
@@ -78,10 +79,27 @@ impl TranslationTable {
                         if let BrailleCharsOrImplicit::Explicit(explicit_dots) = dots {
                             char_defs.insert(ch, dots_to_unicode(explicit_dots));
                         }
+                    }
+                    Rule::Always {
+                        characters, dots, ..
+                    }
+                    | Rule::Word {
+                        characters, dots, ..
+                    }
+                    | Rule::Partword {
+                        characters, dots, ..
+                    } => {
+                        if let BrailleCharsOrImplicit::Explicit(explicit_dots) = dots {
+                            translations.insert(characters, dots_to_unicode(explicit_dots));
+                        }
+                    }
+                    _ => (), // ignore all other rules for now
+                }
             }
         }
         TranslationTable {
             character_definitions: char_defs,
+            translations: translations,
             ..Default::default()
         }
     }
