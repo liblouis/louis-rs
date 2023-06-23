@@ -245,6 +245,39 @@ pub enum BrailleCharsOrImplicit {
     Explicit(BrailleChars),
 }
 
+fn dot_to_hex(dot: BrailleDot) -> u32 {
+    match dot {
+        BrailleDot::DOT1 => 0x0001,
+        BrailleDot::DOT2 => 0x0002,
+        BrailleDot::DOT3 => 0x0004,
+        BrailleDot::DOT4 => 0x0008,
+        BrailleDot::DOT5 => 0x0010,
+        BrailleDot::DOT6 => 0x0020,
+        BrailleDot::DOT7 => 0x0040,
+        BrailleDot::DOT8 => 0x0080,
+        // all other braille dots cannot be mapped to unicode, so they
+        // return the identity bit pattern
+        _ => 0x0000,
+    }
+}
+
+// FIXME: the following two functions should be defined as associated
+// functions, i.e. inside an impl block for BrailleChar or as an
+// implementation of the From trait. Both solutions would probably
+// require the newtype pattern as we do not own these types, see
+// https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#using-the-newtype-pattern-to-implement-external-traits-on-external-types
+fn dot_to_unicode(dot: BrailleChar) -> char {
+    let unicode = dot
+        .iter()
+        .map(|d| dot_to_hex(d))
+        .fold(0x2800, |acc, x| acc | x);
+    char::from_u32(unicode).unwrap()
+}
+
+pub fn dots_to_unicode(dots: BrailleChars) -> String {
+    dots.into_iter().map(|d| dot_to_unicode(d)).collect()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseBrailleError;
 
@@ -1858,6 +1891,25 @@ mod tests {
     use nom::error::Error;
     use nom::error::ErrorKind;
     use nom::Err;
+
+    #[test]
+    fn dot_to_unicode_test() {
+        assert_eq!(
+            dot_to_unicode(enum_set!(BrailleDot::DOT1 | BrailleDot::DOT8)),
+            '⢁'
+        );
+    }
+
+    #[test]
+    fn dots_to_unicode_test() {
+        assert_eq!(
+            dots_to_unicode(vec![
+                enum_set!(BrailleDot::DOT1),
+                enum_set!(BrailleDot::DOT8)
+            ]),
+            "⠁⢀".to_string()
+        );
+    }
 
     #[test]
     fn char_to_dot_test() {
