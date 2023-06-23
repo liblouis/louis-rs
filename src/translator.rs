@@ -80,17 +80,11 @@ impl TranslationTable {
                             char_defs.insert(ch, dots_to_unicode(explicit_dots));
                         }
                     }
-                    Rule::Always {
-                        characters, dots, ..
-                    }
-                    | Rule::Word {
-                        characters, dots, ..
-                    }
-                    | Rule::Partword {
-                        characters, dots, ..
-                    } => {
+                    Rule::Always { chars, dots, .. }
+                    | Rule::Word { chars, dots, .. }
+                    | Rule::Partword { chars, dots, .. } => {
                         if let BrailleCharsOrImplicit::Explicit(explicit_dots) = dots {
-                            translations.insert(characters, dots_to_unicode(explicit_dots));
+                            translations.insert(chars, dots_to_unicode(explicit_dots));
                         }
                     }
                     _ => (), // ignore all other rules for now

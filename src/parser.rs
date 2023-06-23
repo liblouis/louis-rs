@@ -86,15 +86,15 @@ pub enum Rule {
     Endmode { attribute: String, dots: BrailleChars},
     Endcaps { dots: BrailleChars },
     Letsign { dots: BrailleChars },
-    Noletsign { characters: String },
-    Noletsignbefore { characters: String },
-    Noletsignafter { characters: String },
+    Noletsign { chars: String },
+    Noletsignbefore { chars: String },
+    Noletsignafter { chars: String },
     Nocontractsign { dots: BrailleChars },
     Numsign { dots: BrailleChars },
     Nonumsign { dots: BrailleChars },
-    Numericnocontchars { characters: String },
-    Numericmodechars { characters: String },
-    Midendnumericmodechars { characters: String },
+    Numericnocontchars { chars: String },
+    Numericmodechars { chars: String },
+    Midendnumericmodechars { chars: String },
     Begcapsphrase { dots: BrailleChars},
     Endcapsphrase { dots: BrailleChars, position: Position},
     Lencapsphrase { length: u8},
@@ -103,9 +103,9 @@ pub enum Rule {
     Lenmodephrase { name: String, length: u8},
 
     // Standing Alone Sequences
-    Seqdelimiter { characters: String },
-    Seqbeforechars { characters: String },
-    Seqafterchars { characters: String },
+    Seqdelimiter { chars: String },
+    Seqbeforechars { chars: String },
+    Seqafterchars { chars: String },
     Seqafterpattern { pattern: String },
     Seqafterexpression { expression: String },
 
@@ -128,44 +128,44 @@ pub enum Rule {
     Endcomp { dots: BrailleChars, prefixes: Prefixes},
 
     // Special Symbol Opcodes
-    Decpoint { characters: String, dots: BrailleChars},
-    Hyphen { characters: String, dots: BrailleChars, prefixes: Prefixes},
+    Decpoint { chars: String, dots: BrailleChars},
+    Hyphen { chars: String, dots: BrailleChars, prefixes: Prefixes},
 
     // Special Processing Opcodes
     Capsnocont,
 
     // Translation Opcodes
-    Compbrl { characters: String, prefixes: Prefixes},
-    Comp6 { characters: String, dots: BrailleCharsOrImplicit},
-    Nocont {characters: String},
-    Replace {characters: String, replacement: Option<String> },
-    Always {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Repeated {characters: String, dots: BrailleChars, prefixes: Prefixes},
-    Repword  {characters: String, dots: BrailleChars},
-    Rependword  {characters: String, dots: BrailleChars, other: BrailleChars},
-    Largesign  {characters: String, dots: BrailleChars},
-    Word  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
+    Compbrl { chars: String, prefixes: Prefixes},
+    Comp6 { chars: String, dots: BrailleCharsOrImplicit},
+    Nocont {chars: String},
+    Replace {chars: String, replacement: Option<String> },
+    Always {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
+    Repeated {chars: String, dots: BrailleChars, prefixes: Prefixes},
+    Repword  {chars: String, dots: BrailleChars},
+    Rependword  {chars: String, dots: BrailleChars, other: BrailleChars},
+    Largesign  {chars: String, dots: BrailleChars},
+    Word  {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
     Syllable { word: String, dots: BrailleCharsOrImplicit },
     Joinword { word: String, dots: BrailleChars },
-    Lowword  {characters: String, dots: BrailleChars, prefixes: Prefixes},
-    Contraction  {characters: String},
-    Sufword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Prfword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Begword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Begmidword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Midword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Midendword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Endword  {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Partword {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Prepunc {characters: String, dots: BrailleChars, prefixes: Prefixes},
-    Postpunc {characters: String, dots: BrailleChars, prefixes: Prefixes},
-    Begnum {characters: String, dots: BrailleChars, prefixes: Prefixes},
-    Midnum {characters: String, dots: BrailleChars, prefixes: Prefixes},
-    Endnum {characters: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
-    Joinnum {characters: String, dots: BrailleChars, prefixes: Prefixes},
+    Lowword  {chars: String, dots: BrailleChars, prefixes: Prefixes},
+    Contraction  {chars: String},
+    Sufword  {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
+    Prfword  {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
+    Begword  {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
+    Begmidword  {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
+    Midword  {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
+    Midendword  {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
+    Endword  {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
+    Partword {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
+    Prepunc {chars: String, dots: BrailleChars, prefixes: Prefixes},
+    Postpunc {chars: String, dots: BrailleChars, prefixes: Prefixes},
+    Begnum {chars: String, dots: BrailleChars, prefixes: Prefixes},
+    Midnum {chars: String, dots: BrailleChars, prefixes: Prefixes},
+    Endnum {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
+    Joinnum {chars: String, dots: BrailleChars, prefixes: Prefixes},
 
     // Swap Opcodes
-    Swapcd {name: String, characters: String, dots: Vec<BrailleChars> },
+    Swapcd {name: String, chars: String, dots: Vec<BrailleChars> },
     Swapdd {name: String, dots: Vec<BrailleChars>, dotpattern: Vec<BrailleChars>},
     Swapcc {name: String, chars: String, replacement: String},
 
@@ -179,10 +179,10 @@ pub enum Rule {
     Correct {test: String, action: String, prefixes: Prefixes},
 
     // Match Opcode
-    Match { pre: String, characters: String, post: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses, positions: WithMatches},
+    Match { pre: String, chars: String, post: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses, positions: WithMatches},
 
     // deprecated opcodes
-    Literal {characters: String, }
+    Literal {chars: String, }
 }
 
 #[derive(EnumSetType, Debug)]
@@ -548,7 +548,7 @@ fn math(i: &str) -> IResult<&str, Rule> {
 }
 
 fn grouping(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, name, _, characters, _, dots)) = tuple((
+    let (input, (_, _, name, _, chars, _, dots)) = tuple((
         tag("grouping"),
         space1,
         alpha1,
@@ -561,7 +561,7 @@ fn grouping(i: &str) -> IResult<&str, Rule> {
         input,
         Rule::Grouping {
             name: name.to_string(),
-            chars: characters.to_string(),
+            chars: chars.to_string(),
             dots,
         },
     ))
@@ -673,31 +673,31 @@ fn letsign(i: &str) -> IResult<&str, Rule> {
 }
 
 fn noletsign(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, characters)) = tuple((tag("noletsign"), space1, chars))(i)?;
+    let (input, (_, _, chars)) = tuple((tag("noletsign"), space1, chars))(i)?;
     Ok((
         input,
         Rule::Noletsign {
-            characters: characters.to_string(),
+            chars: chars.to_string(),
         },
     ))
 }
 
 fn noletsignbefore(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, characters)) = tuple((tag("noletsignbefore"), space1, chars))(i)?;
+    let (input, (_, _, chars)) = tuple((tag("noletsignbefore"), space1, chars))(i)?;
     Ok((
         input,
         Rule::Noletsignbefore {
-            characters: characters.to_string(),
+            chars: chars.to_string(),
         },
     ))
 }
 
 fn noletsignafter(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, characters)) = tuple((tag("noletsignafter"), space1, chars))(i)?;
+    let (input, (_, _, chars)) = tuple((tag("noletsignafter"), space1, chars))(i)?;
     Ok((
         input,
         Rule::Noletsignafter {
-            characters: characters.to_string(),
+            chars: chars.to_string(),
         },
     ))
 }
@@ -718,31 +718,31 @@ fn nonumsign(i: &str) -> IResult<&str, Rule> {
 }
 
 fn numericnocontchars(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, characters)) = tuple((tag("numericnocontchars"), space1, chars))(i)?;
+    let (input, (_, _, chars)) = tuple((tag("numericnocontchars"), space1, chars))(i)?;
     Ok((
         input,
         Rule::Numericnocontchars {
-            characters: characters.to_string(),
+            chars: chars.to_string(),
         },
     ))
 }
 
 fn numericmodechars(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, characters)) = tuple((tag("numericmodechars"), space1, chars))(i)?;
+    let (input, (_, _, chars)) = tuple((tag("numericmodechars"), space1, chars))(i)?;
     Ok((
         input,
         Rule::Numericmodechars {
-            characters: characters.to_string(),
+            chars: chars.to_string(),
         },
     ))
 }
 
 fn midendnumericmodechars(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, characters)) = tuple((tag("midendnumericmodechars"), space1, chars))(i)?;
+    let (input, (_, _, chars)) = tuple((tag("midendnumericmodechars"), space1, chars))(i)?;
     Ok((
         input,
         Rule::Midendnumericmodechars {
-            characters: characters.to_string(),
+            chars: chars.to_string(),
         },
     ))
 }
@@ -808,41 +808,41 @@ fn lenmodephrase(input: &str) -> IResult<&str, Rule> {
 }
 
 fn seqdelimiter(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, characters)) = tuple((tag("seqdelimiter"), space1, chars))(i)?;
+    let (input, (_, _, chars)) = tuple((tag("seqdelimiter"), space1, chars))(i)?;
     Ok((
         input,
         Rule::Seqdelimiter {
-            characters: characters.to_string(),
+            chars: chars.to_string(),
         },
     ))
 }
 
 fn seqbeforechars(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, characters)) = tuple((tag("seqbeforechars"), space1, chars))(i)?;
+    let (input, (_, _, chars)) = tuple((tag("seqbeforechars"), space1, chars))(i)?;
     Ok((
         input,
         Rule::Seqbeforechars {
-            characters: characters.to_string(),
+            chars: chars.to_string(),
         },
     ))
 }
 
 fn seqafterchars(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, characters)) = tuple((tag("seqafterchars"), space1, chars))(i)?;
+    let (input, (_, _, chars)) = tuple((tag("seqafterchars"), space1, chars))(i)?;
     Ok((
         input,
         Rule::Seqafterchars {
-            characters: characters.to_string(),
+            chars: chars.to_string(),
         },
     ))
 }
 
 fn seqafterpattern(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, characters)) = tuple((tag("seqafterpattern"), space1, chars))(i)?;
+    let (input, (_, _, chars)) = tuple((tag("seqafterpattern"), space1, chars))(i)?;
     Ok((
         input,
         Rule::Seqafterpattern {
-            pattern: characters.to_string(),
+            pattern: chars.to_string(),
         },
     ))
 }
@@ -1023,7 +1023,7 @@ fn decpoint(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Decpoint {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
         },
     ))
@@ -1035,7 +1035,7 @@ fn hyphen(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Hyphen {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
         },
@@ -1052,7 +1052,7 @@ fn compbrl(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Compbrl {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             prefixes,
         },
     ))
@@ -1069,7 +1069,7 @@ fn comp6(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Comp6 {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
         },
     ))
@@ -1080,7 +1080,7 @@ fn nocont(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Nocont {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
         },
     ))
 }
@@ -1095,7 +1095,7 @@ fn replace(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Replace {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             replacement,
         },
     ))
@@ -1114,7 +1114,7 @@ fn always(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Always {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
             classes,
@@ -1128,7 +1128,7 @@ fn repeated(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Repeated {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
         },
@@ -1140,7 +1140,7 @@ fn repword(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Repword {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
         },
     ))
@@ -1159,7 +1159,7 @@ fn rependword(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Rependword {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             other,
         },
@@ -1172,7 +1172,7 @@ fn largesign(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Largesign {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
         },
     ))
@@ -1191,7 +1191,7 @@ fn word(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Word {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
             classes,
@@ -1233,7 +1233,7 @@ fn lowword(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Lowword {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
         },
@@ -1245,7 +1245,7 @@ fn contraction(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Contraction {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
         },
     ))
 }
@@ -1263,7 +1263,7 @@ fn sufword(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Sufword {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
             classes,
@@ -1284,7 +1284,7 @@ fn prfword(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Prfword {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
             classes,
@@ -1305,7 +1305,7 @@ fn begword(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Begword {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
             classes,
@@ -1326,7 +1326,7 @@ fn begmidword(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Begmidword {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
             classes,
@@ -1347,7 +1347,7 @@ fn midword(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Midword {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
             classes,
@@ -1368,7 +1368,7 @@ fn midendword(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Midendword {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
             classes,
@@ -1389,7 +1389,7 @@ fn endword(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Endword {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
             classes,
@@ -1410,7 +1410,7 @@ fn partword(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Partword {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
             classes,
@@ -1424,7 +1424,7 @@ fn prepunc(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Prepunc {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
         },
@@ -1437,7 +1437,7 @@ fn postpunc(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Postpunc {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
         },
@@ -1450,7 +1450,7 @@ fn begnum(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Begnum {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
         },
@@ -1463,7 +1463,7 @@ fn midnum(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Midnum {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
         },
@@ -1482,7 +1482,7 @@ fn endnum(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Endnum {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
         },
@@ -1495,7 +1495,7 @@ fn joinnum(i: &str) -> IResult<&str, Rule> {
     Ok((
         input,
         Rule::Joinnum {
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             dots,
             prefixes,
         },
@@ -1503,7 +1503,7 @@ fn joinnum(i: &str) -> IResult<&str, Rule> {
 }
 
 fn swapcd(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, name, _, characters, _, dots)) = tuple((
+    let (input, (_, _, name, _, chars, _, dots)) = tuple((
         tag("swapcd"),
         space1,
         alpha1,
@@ -1516,7 +1516,7 @@ fn swapcd(i: &str) -> IResult<&str, Rule> {
         input,
         Rule::Swapcd {
             name: name.to_string(),
-            characters: characters.to_string(),
+            chars: chars.to_string(),
             dots,
         },
     ))
@@ -1543,13 +1543,13 @@ fn swapdd(i: &str) -> IResult<&str, Rule> {
 }
 
 fn swapcc(i: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, name, _, characters, _, replacement)) =
+    let (input, (_, _, name, _, chars, _, replacement)) =
         tuple((tag("swapcc"), space1, alpha1, space1, chars, space1, chars))(i)?;
     Ok((
         input,
         Rule::Swapcc {
             name: name.to_string(),
-            chars: characters.to_string(),
+            chars: chars.to_string(),
             replacement: replacement.to_string(),
         },
     ))
@@ -1640,7 +1640,7 @@ fn match_opcode(i: &str) -> IResult<&str, Rule> {
         input,
         Rule::Match {
             pre: pre.to_string(),
-            characters: chars.to_string(),
+            chars: chars.to_string(),
             post: post.to_string(),
             dots,
             classes,
@@ -1651,11 +1651,11 @@ fn match_opcode(i: &str) -> IResult<&str, Rule> {
 }
 
 fn literal(input: &str) -> IResult<&str, Rule> {
-    let (input, (_, _, characters)) = tuple((tag("literal"), space1, chars))(input)?;
+    let (input, (_, _, chars)) = tuple((tag("literal"), space1, chars))(input)?;
     Ok((
         input,
         Rule::Literal {
-            characters: characters.to_string(),
+            chars: chars.to_string(),
         },
     ))
 }
@@ -1965,7 +1965,7 @@ mod tests {
     }
 
     #[test]
-    fn characters_test() {
+    fn chars_test() {
         assert_eq!(chars("foo"), Ok(("", "foo")));
         assert_eq!(chars("foo bar"), Ok((" bar", "foo")));
         // FIXME: I guess that should parse as a single unicode char
@@ -2417,7 +2417,7 @@ mod tests {
             Ok((
                 "",
                 Rule::Largesign {
-                    characters: "überall".to_string(),
+                    chars: "überall".to_string(),
                     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
                 }
             ))
@@ -2427,7 +2427,7 @@ mod tests {
             Ok((
                 "",
                 Rule::Largesign {
-                    characters: "அஇ".to_string(),
+                    chars: "அஇ".to_string(),
                     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
                 }
             ))
@@ -2551,7 +2551,7 @@ mod tests {
             Ok((
                 "",
                 Rule::Always {
-                    characters: "world".to_string(),
+                    chars: "world".to_string(),
                     dots: BrailleCharsOrImplicit::Explicit(vec![
                         BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3
                     ]),
@@ -2565,7 +2565,7 @@ mod tests {
             Ok((
                 "",
                 Rule::Always {
-                    characters: "world".to_string(),
+                    chars: "world".to_string(),
                     dots: BrailleCharsOrImplicit::Explicit(vec![
                         BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3
                     ]),
@@ -2586,7 +2586,7 @@ mod tests {
                 "",
                 Rule::Match {
                     pre: "ab".to_string(),
-                    characters: "xyz".to_string(),
+                    chars: "xyz".to_string(),
                     post: "cd".to_string(),
                     positions: WithMatches::empty(),
                     classes: vec![],
@@ -2625,7 +2625,7 @@ mod tests {
                 "",
                 Line::Rule {
                     rule: Rule::Largesign {
-                        characters: "அஇ".to_string(),
+                        chars: "அஇ".to_string(),
                         dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
                     },
                     comment: "".to_string()
