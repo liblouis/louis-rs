@@ -10,8 +10,6 @@ use enumset::enum_set;
 
 mod character;
 
-const UNDEFINED: &str = "⣿";
-
 type Corrections = HashMap<String, String>;
 type CharacterDefinitions = HashMap<char, String>;
 type Translations = HashMap<String, String>;
@@ -62,9 +60,13 @@ impl TranslationTable {
     fn from(lines: Vec<Line>) -> TranslationTable {
         let mut char_defs = HashMap::new();
         let mut translations = HashMap::new();
+        let mut undefined: Option<String> = None;
         for line in lines {
             if let Line::Rule { rule, .. } = line {
                 match rule {
+                    Rule::Undefined { dots } => {
+                        undefined = Some(dots_to_unicode(dots));
+                    }
                     Rule::Space { ch, dots, .. }
                     | Rule::Punctuation { ch, dots, .. }
                     | Rule::Digit { ch, dots }
@@ -91,10 +93,19 @@ impl TranslationTable {
                 }
             }
         }
-        TranslationTable {
-            character_definitions: char_defs,
-            translations: translations,
-            ..Default::default()
+        if let Some(undefined) = undefined {
+            TranslationTable {
+                undefined: undefined,
+                character_definitions: char_defs,
+                translations: translations,
+                ..Default::default()
+            }
+        } else {
+            TranslationTable {
+                character_definitions: char_defs,
+                translations: translations,
+                ..Default::default()
+            }
         }
     }
 
