@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use liblouis_nom::{debug, parser::Line, translate};
+use liblouis::{debug, parser::Line, translate};
 use std::path::PathBuf;
 
 #[derive(Debug, Subcommand)]
