@@ -2,11 +2,8 @@ use std::collections::HashMap;
 
 use crate::parser::dots_to_unicode;
 use crate::parser::BrailleCharsOrImplicit;
-use crate::parser::Line;
 use crate::parser::Rule;
 use crate::translator::character::CharacterAttributes;
-
-use enumset::enum_set;
 
 mod character;
 
@@ -57,40 +54,38 @@ pub struct TranslationTable {
 }
 
 impl TranslationTable {
-    pub fn compile(lines: Vec<Line>) -> Self {
+    pub fn compile(rules: Vec<Rule>) -> Self {
         let mut char_defs = HashMap::new();
         let mut translations = HashMap::new();
         let mut undefined: Option<String> = None;
-        for line in lines {
-            if let Line::Rule { rule, .. } = line {
-                match rule {
-                    Rule::Undefined { dots } => {
-                        undefined = Some(dots_to_unicode(dots));
-                    }
-                    Rule::Space { ch, dots, .. }
-                    | Rule::Punctuation { ch, dots, .. }
-                    | Rule::Digit { ch, dots }
-                    | Rule::Lowercase { ch, dots, .. }
-                    | Rule::Uppercase { ch, dots, .. }
-                    | Rule::Litdigit { ch, dots }
-                    | Rule::Sign { ch, dots, .. }
-                    | Rule::Math { ch, dots, .. } => {
-                        char_defs.insert(ch, dots_to_unicode(dots));
-                    }
-                    Rule::Letter { ch, dots, .. } => {
-                        if let BrailleCharsOrImplicit::Explicit(explicit_dots) = dots {
-                            char_defs.insert(ch, dots_to_unicode(explicit_dots));
-                        }
-                    }
-                    Rule::Always { chars, dots, .. }
-                    | Rule::Word { chars, dots, .. }
-                    | Rule::Partword { chars, dots, .. } => {
-                        if let BrailleCharsOrImplicit::Explicit(explicit_dots) = dots {
-                            translations.insert(chars, dots_to_unicode(explicit_dots));
-                        }
-                    }
-                    _ => (), // ignore all other rules for now
+        for rule in rules {
+            match rule {
+                Rule::Undefined { dots } => {
+                    undefined = Some(dots_to_unicode(dots));
                 }
+                Rule::Space { ch, dots, .. }
+                | Rule::Punctuation { ch, dots, .. }
+                | Rule::Digit { ch, dots }
+                | Rule::Lowercase { ch, dots, .. }
+                | Rule::Uppercase { ch, dots, .. }
+                | Rule::Litdigit { ch, dots }
+                | Rule::Sign { ch, dots, .. }
+                | Rule::Math { ch, dots, .. } => {
+                    char_defs.insert(ch, dots_to_unicode(dots));
+                }
+                Rule::Letter { ch, dots, .. } => {
+                    if let BrailleCharsOrImplicit::Explicit(explicit_dots) = dots {
+                        char_defs.insert(ch, dots_to_unicode(explicit_dots));
+                    }
+                }
+                Rule::Always { chars, dots, .. }
+                | Rule::Word { chars, dots, .. }
+                | Rule::Partword { chars, dots, .. } => {
+                    if let BrailleCharsOrImplicit::Explicit(explicit_dots) = dots {
+                        translations.insert(chars, dots_to_unicode(explicit_dots));
+                    }
+                }
+                _ => (), // ignore all other rules for now
             }
         }
         if let Some(undefined) = undefined {
@@ -197,19 +192,18 @@ mod tests {
     use crate::parser::BrailleDot;
     use crate::parser::Prefixes;
 
+    use enumset::enum_set;
+
     use super::*;
 
     #[test]
     fn compile_translation_table_test() {
-        let table = TranslationTable::compile(vec![Line::Rule {
-            rule: Rule::Letter {
-                ch: 'a',
-                dots: BrailleCharsOrImplicit::Explicit(vec![enum_set!(
-                    BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3
-                )]),
-                prefixes: Prefixes::empty(),
-            },
-            comment: "".to_string(),
+        let table = TranslationTable::compile(vec![Rule::Letter {
+            ch: 'a',
+            dots: BrailleCharsOrImplicit::Explicit(vec![enum_set!(
+                BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3
+            )]),
+            prefixes: Prefixes::empty(),
         }]);
         let table2 = TranslationTable {
             character_definitions: HashMap::from([('a', "⠇".to_string())]),
