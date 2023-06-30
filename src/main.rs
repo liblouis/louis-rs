@@ -12,6 +12,12 @@ enum Commands {
         /// String to translate
         input: String,
     },
+    /// Run the tests defined in the <YAML_TEST_FILE>. Return 0 if all
+    /// tests pass or 1 if any of the tests fail.
+    CheckYaml {
+	/// YAML file listing all the tests
+	yaml: PathBuf
+    },
     /// print debug information about the given table <TABLE>
     Debug {
         /// Braille table to debug
@@ -39,6 +45,9 @@ fn main() {
                 translate(table, &input).expect("Translation failed")
             );
         }
+	Commands::CheckYaml { yaml } => {
+            println!("Testing with {:?}", yaml);
+	}
         Commands::Debug { table } => {
             println!("debugging table {:?}", table);
             let lines = debug(table).unwrap();
