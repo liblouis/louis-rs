@@ -4,6 +4,7 @@ use thiserror::Error;
 use parser::Line;
 use translator::TranslationTable;
 
+pub mod check_yaml;
 pub mod parser;
 pub mod translator;
 

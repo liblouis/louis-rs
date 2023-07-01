@@ -1,5 +1,10 @@
 use clap::{Parser, Subcommand};
-use liblouis::{debug, parser::Line, translate};
+use liblouis::{
+    check_yaml::{check_yaml, TestResult},
+    debug,
+    parser::Line,
+    translate,
+};
 use std::path::PathBuf;
 
 #[derive(Debug, Subcommand)]
@@ -15,8 +20,8 @@ enum Commands {
     /// Run the tests defined in the <YAML_TEST_FILE>. Return 0 if all
     /// tests pass or 1 if any of the tests fail.
     CheckYaml {
-	/// YAML file listing all the tests
-	yaml: PathBuf
+        /// YAML file listing all the tests
+        yaml: PathBuf,
     },
     /// print debug information about the given table <TABLE>
     Debug {
@@ -45,9 +50,21 @@ fn main() {
                 translate(table, &input).expect("Translation failed")
             );
         }
-	Commands::CheckYaml { yaml } => {
+        Commands::CheckYaml { yaml } => {
             println!("Testing with {:?}", yaml);
-	}
+            let results = check_yaml(yaml);
+            println!(
+                "Pass: {}",
+                results
+                    .iter()
+                    .filter(|r| **r == TestResult::Success)
+                    .count()
+            );
+            println!(
+                "Fail: {}",
+                results.iter().filter(|r| r.is_failure()).count()
+            );
+        }
         Commands::Debug { table } => {
             println!("debugging table {:?}", table);
             let lines = debug(table).unwrap();
