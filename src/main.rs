@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use liblouis::{
-    check_yaml::{TestResult, TestSuite, check},
+    check::{TestResult, TestSuite, check},
     debug,
     parser::Line,
     translate,
