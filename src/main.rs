@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use liblouis::{
-    check_yaml::{check_yaml, TestResult},
+    check_yaml::{TestResult, TestSuite, check},
     debug,
     parser::Line,
     translate,
@@ -52,7 +52,9 @@ fn main() {
         }
         Commands::CheckYaml { yaml } => {
             println!("Testing with {:?}", yaml);
-            let results = check_yaml(yaml);
+	    // TODO: open the yaml file and convert it to a TestSuite
+	    let test_suite = TestSuite::default();
+            let results = check(test_suite);
             println!(
                 "Pass: {}",
                 results
