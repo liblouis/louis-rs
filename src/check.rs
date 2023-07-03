@@ -44,6 +44,17 @@ pub struct TestSuite {
     direction: Direction,
 }
 
+impl TestSuite {
+    pub fn check(&self) -> Vec<TestResult> {
+	match self.direction {
+            Direction::Forward => {
+		return self.tests.iter().map(|t| t.check()).collect();
+            }
+            Direction::Backward => return vec![TestResult::Error],
+	}
+    }
+}
+
 pub struct Test {
     // FIXME: instead of a reference to a file a test should rather
     // contain something that can be constructed in a test such as a
@@ -86,15 +97,6 @@ impl Test {
     }
 }
 
-pub fn check(tests: TestSuite) -> Vec<TestResult> {
-    match tests.direction {
-        Direction::Forward => {
-            return tests.tests.iter().map(|t| t.check()).collect();
-        }
-        Direction::Backward => return vec![TestResult::Error],
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,6 +117,6 @@ mod tests {
 					 expected: "some braille".to_string(),
 					 actual: "⠀⠀⠀⠀⠀⠀⠀⠀⠀".to_string(),
 	};
-        assert_eq!(check(test_suite), vec![result]);
+        assert_eq!(test_suite.check(), vec![result]);
     }
 }

@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use liblouis::{
-    check::{TestResult, TestSuite, check},
+    check::{TestResult, TestSuite},
     debug,
     parser::Line,
     translate,
@@ -54,7 +54,7 @@ fn main() {
             println!("Testing with {:?}", yaml);
 	    // TODO: open the yaml file and convert it to a TestSuite
 	    let test_suite = TestSuite::default();
-            let results = check(test_suite);
+            let results = test_suite.check();
             println!(
                 "Pass: {}",
                 results
