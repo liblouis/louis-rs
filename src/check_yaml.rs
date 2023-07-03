@@ -45,6 +45,9 @@ pub struct TestSuite {
 }
 
 pub struct Test {
+    // FIXME: instead of a reference to a file a test should rather
+    // contain something that can be constructed in a test such as a
+    // TranslationTable
     table: PathBuf,
     input: String,
     expected: String,
