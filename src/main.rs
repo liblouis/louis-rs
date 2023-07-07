@@ -52,8 +52,8 @@ fn main() {
         }
         Commands::CheckYaml { yaml } => {
             println!("Testing with {:?}", yaml);
-	    // TODO: open the yaml file and convert it to a TestSuite
-	    let test_suite = TestSuite::default();
+            // TODO: open the yaml file and convert it to a TestSuite
+            let test_suite = TestSuite::default();
             let results = test_suite.check();
             println!(
                 "Pass: {}",
@@ -71,7 +71,7 @@ fn main() {
             println!("debugging table {:?}", table);
             let rules = debug(table).unwrap();
             for rule in rules {
-		println!("{:?}", rule);
+                println!("{:?}", rule);
             }
         }
     }

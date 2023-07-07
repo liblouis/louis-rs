@@ -46,12 +46,12 @@ pub struct TestSuite {
 
 impl TestSuite {
     pub fn check(&self) -> Vec<TestResult> {
-	match self.direction {
+        match self.direction {
             Direction::Forward => {
-		return self.tests.iter().map(|t| t.check()).collect();
+                return self.tests.iter().map(|t| t.check()).collect();
             }
             Direction::Backward => return vec![TestResult::Error],
-	}
+        }
     }
 }
 
@@ -113,10 +113,11 @@ mod tests {
             direction: Direction::Forward,
             tests: vec![test],
         };
-	let result = TestResult::Failure{input: "some text".to_string(),
-					 expected: "some braille".to_string(),
-					 actual: "⠀⠀⠀⠀⠀⠀⠀⠀⠀".to_string(),
-	};
+        let result = TestResult::Failure {
+            input: "some text".to_string(),
+            expected: "some braille".to_string(),
+            actual: "⠀⠀⠀⠀⠀⠀⠀⠀⠀".to_string(),
+        };
         assert_eq!(test_suite.check(), vec![result]);
     }
 }
