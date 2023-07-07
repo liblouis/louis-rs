@@ -1,3 +1,4 @@
+use search_path::SearchPath;
 use std::{fs, io, path::PathBuf};
 use thiserror::Error;
 
@@ -19,25 +20,27 @@ pub enum TranslationError {
 }
 
 pub fn translate(table: PathBuf, input: &str) -> Result<String, TranslationError> {
+    let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
     let table = fs::read_to_string(table)?;
     let (_, lines) = parser::table(&table).unwrap();
     let rules = lines
         .into_iter()
         .filter_map(|line| line.as_rule())
         .collect();
-    let rules = expand_includes(rules);
+    let rules = expand_includes(&search_path, rules);
     let table = TranslationTable::compile(rules);
     Ok(table.translate(input))
 }
 
 pub fn debug(table: PathBuf) -> Result<Vec<Rule>, TranslationError> {
+    let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
     let table = fs::read_to_string(table)?;
     let (_, lines) = parser::table(&table).expect("Cannot parse table");
     let rules = lines
         .into_iter()
         .filter_map(|line| line.as_rule())
         .collect();
-    let rules = expand_includes(rules);
+    let rules = expand_includes(&search_path, rules);
     Ok(rules)
 }
 

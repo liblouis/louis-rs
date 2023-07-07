@@ -1,9 +1,7 @@
 use clap::{Parser, Subcommand};
 use liblouis::{
     check::{TestResult, TestSuite},
-    debug,
-    parser::Line,
-    translate,
+    debug, translate,
 };
 use std::path::PathBuf;
 

@@ -1,6 +1,7 @@
 use std::error;
 use std::fmt;
 use std::fs;
+use std::path::PathBuf;
 
 use nom::branch::alt;
 use nom::bytes::complete::is_a;
@@ -34,6 +35,7 @@ use enumset::EnumSetType;
 use nom::IResult;
 //use nom_unicode::complete::alpha1 as unicode_alpha1;
 use nom_unicode::complete::digit1 as unicode_digit1;
+use search_path::SearchPath;
 
 #[derive(PartialEq, Debug)]
 pub enum Line {
@@ -1864,25 +1866,26 @@ pub fn table(i: &str) -> IResult<&str, Vec<Line>> {
     all_consuming(many0(line))(i)
 }
 
-fn expand_include(rule: Rule) -> Vec<Rule> {
+fn expand_include(search_path: &SearchPath, rule: Rule) -> Vec<Rule> {
     if let Rule::Include { filename } = rule {
         // FIXME: how do we upstream io and parsing errors?
-        let included = fs::read_to_string(filename).unwrap();
+        let path = search_path.find_file(&PathBuf::from(filename)).unwrap();
+        let included = fs::read_to_string(path).unwrap();
         let (_, lines) = table(&included).unwrap();
         let rules = lines
             .into_iter()
             .filter_map(|line| line.as_rule())
             .collect();
-        expand_includes(rules)
+        expand_includes(search_path, rules)
     } else {
         vec![rule]
     }
 }
 
-pub fn expand_includes(rules: Vec<Rule>) -> Vec<Rule> {
+pub fn expand_includes(search_path: &SearchPath, rules: Vec<Rule>) -> Vec<Rule> {
     rules
         .into_iter()
-        .flat_map(|rule| expand_include(rule))
+        .flat_map(|rule| expand_include(search_path, rule))
         .collect()
 }
 
