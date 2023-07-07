@@ -1864,24 +1864,25 @@ pub fn table(i: &str) -> IResult<&str, Vec<Line>> {
     all_consuming(many0(line))(i)
 }
 
-fn expand_include(line: Line) -> Vec<Line> {
-    if let Line::Rule {
-        rule: Rule::Include { filename },
-        ..
-    } = line
-    {
+fn expand_include(rule: Rule) -> Vec<Rule> {
+    if let Rule::Include { filename } = rule {
         // FIXME: how do we upstream io and parsing errors?
         let included = fs::read_to_string(filename).unwrap();
         let (_, lines) = table(&included).unwrap();
-        return lines;
+        let rules = lines
+            .into_iter()
+            .filter_map(|line| line.as_rule())
+            .collect();
+        expand_includes(rules)
+    } else {
+        vec![rule]
     }
-    vec![line]
 }
 
-pub fn expand_includes(lines: Vec<Line>) -> Vec<Line> {
-    lines
+pub fn expand_includes(rules: Vec<Rule>) -> Vec<Rule> {
+    rules
         .into_iter()
-        .flat_map(|line| expand_include(line))
+        .flat_map(|rule| expand_include(rule))
         .collect()
 }
 

@@ -69,13 +69,9 @@ fn main() {
         }
         Commands::Debug { table } => {
             println!("debugging table {:?}", table);
-            let lines = debug(table).unwrap();
-            for line in lines {
-                match line {
-                    Line::Empty => (),
-                    Line::Comment { comment: _ } => (),
-                    _ => println!("{:?}", line),
-                }
+            let rules = debug(table).unwrap();
+            for rule in rules {
+		println!("{:?}", rule);
             }
         }
     }
