@@ -58,6 +58,9 @@ impl TranslationTable {
         let mut char_defs = HashMap::new();
         let mut translations = HashMap::new();
         let mut undefined: Option<String> = None;
+	// FIXME: use backward rules for back translation, i.e.
+	// somehow pass the information which direction we want
+	let rules = rules.into_iter().filter(|r| r.is_forward());
         for rule in rules {
             match rule {
                 Rule::Undefined { dots } => {
