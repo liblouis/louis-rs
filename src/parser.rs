@@ -187,6 +187,73 @@ pub enum Rule {
     Literal {chars: String, }
 }
 
+impl Rule {
+    fn prefixes(&self) -> Option<Prefixes> {
+        match self {
+            Rule::Display { prefixes, .. }
+            | Rule::Space { prefixes, .. }
+            | Rule::Multind { prefixes, .. }
+            | Rule::Punctuation { prefixes, .. }
+            | Rule::Letter { prefixes, .. }
+            | Rule::Lowercase { prefixes, .. }
+            | Rule::Uppercase { prefixes, .. }
+            | Rule::Sign { prefixes, .. }
+            | Rule::Math { prefixes, .. }
+            | Rule::Modeletter { prefixes, .. }
+            | Rule::Capsletter { prefixes, .. }
+            | Rule::Begmodeword { prefixes, .. }
+            | Rule::Begcapsword { prefixes, .. }
+            | Rule::Endmodeword { prefixes, .. }
+            | Rule::Endcapsword { prefixes, .. }
+            | Rule::Begemph { prefixes, .. }
+            | Rule::Endemph { prefixes, .. }
+            | Rule::Begcomp { prefixes, .. }
+            | Rule::Endcomp { prefixes, .. }
+            | Rule::Hyphen { prefixes, .. }
+            | Rule::Compbrl { prefixes, .. }
+            | Rule::Always { prefixes, .. }
+            | Rule::Repeated { prefixes, .. }
+            | Rule::Word { prefixes, .. }
+            | Rule::Lowword { prefixes, .. }
+            | Rule::Sufword { prefixes, .. }
+            | Rule::Prfword { prefixes, .. }
+            | Rule::Begword { prefixes, .. }
+            | Rule::Begmidword { prefixes, .. }
+            | Rule::Midword { prefixes, .. }
+            | Rule::Midendword { prefixes, .. }
+            | Rule::Endword { prefixes, .. }
+            | Rule::Partword { prefixes, .. }
+            | Rule::Prepunc { prefixes, .. }
+            | Rule::Postpunc { prefixes, .. }
+            | Rule::Begnum { prefixes, .. }
+            | Rule::Midnum { prefixes, .. }
+            | Rule::Endnum { prefixes, .. }
+            | Rule::Joinnum { prefixes, .. }
+            | Rule::Context { prefixes, .. }
+            | Rule::Pass2 { prefixes, .. }
+            | Rule::Pass3 { prefixes, .. }
+            | Rule::Pass4 { prefixes, .. }
+            | Rule::Correct { prefixes, .. }
+            | Rule::Match { prefixes, .. } => Some(*prefixes),
+            _ => None,
+        }
+    }
+
+    pub fn is_forward(&self) -> bool {
+        match self.prefixes() {
+            Some(prefixes) => !prefixes.contains(Prefix::Nofor),
+            None => true,
+        }
+    }
+
+    pub fn is_backward(&self) -> bool {
+        match self.prefixes() {
+            Some(prefixes) => !prefixes.contains(Prefix::Noback),
+            None => true,
+        }
+    }
+}
+
 #[derive(EnumSetType, Debug)]
 pub enum Prefix {
     Noback,
@@ -1974,6 +2041,64 @@ mod tests {
         assert_eq!(chars("foo bar"), Ok((" bar", "foo")));
         // FIXME: I guess that should parse as a single unicode char
         assert_eq!(chars(r"\x04D8"), Ok(("", r"\x04D8")));
+    }
+
+    #[test]
+    fn foward_test() {
+        assert_eq!(Rule::Capsnocont {}.is_forward(), true);
+        assert_eq!(
+            Rule::Compbrl {
+                chars: "foo".to_string(),
+                prefixes: Prefixes::empty()
+            }
+            .is_forward(),
+            true
+        );
+        assert_eq!(
+            Rule::Compbrl {
+                chars: "foo".to_string(),
+                prefixes: enum_set!(Prefix::Nofor)
+            }
+            .is_forward(),
+            false
+        );
+        assert_eq!(
+            Rule::Compbrl {
+                chars: "foo".to_string(),
+                prefixes: enum_set!(Prefix::Noback)
+            }
+            .is_forward(),
+            true
+        );
+    }
+
+    #[test]
+    fn backward_test() {
+        assert_eq!(Rule::Capsnocont {}.is_backward(), true);
+        assert_eq!(
+            Rule::Compbrl {
+                chars: "foo".to_string(),
+                prefixes: Prefixes::empty()
+            }
+            .is_backward(),
+            true
+        );
+        assert_eq!(
+            Rule::Compbrl {
+                chars: "foo".to_string(),
+                prefixes: enum_set!(Prefix::Nofor)
+            }
+            .is_backward(),
+            true
+        );
+        assert_eq!(
+            Rule::Compbrl {
+                chars: "foo".to_string(),
+                prefixes: enum_set!(Prefix::Noback)
+            }
+            .is_backward(),
+            false
+        );
     }
 
     #[test]
