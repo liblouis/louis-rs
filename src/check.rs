@@ -1,4 +1,4 @@
-use crate::translate;
+use crate::{translate, translator::Direction};
 
 use std::path::PathBuf;
 
@@ -29,13 +29,6 @@ impl TestResult {
             return false;
         }
     }
-}
-
-#[derive(Default)]
-enum Direction {
-    #[default]
-    Forward,
-    Backward,
 }
 
 #[derive(Default)]

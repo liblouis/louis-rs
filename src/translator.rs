@@ -40,6 +40,13 @@ struct TranslationContext {
     mode: TranslationMode,
 }
 
+#[derive(PartialEq, Default)]
+pub enum Direction {
+    #[default]
+    Forward,
+    Backward,
+}
+
 /// A Translation table holds all the rules needed to do a braille translation
 ///
 /// Contains static information that is needed to do the translation,
@@ -54,13 +61,17 @@ pub struct TranslationTable {
 }
 
 impl TranslationTable {
-    pub fn compile(rules: Vec<Rule>) -> Self {
+    pub fn compile(rules: Vec<Rule>, direction: Direction) -> Self {
         let mut char_defs = HashMap::new();
         let mut translations = HashMap::new();
         let mut undefined: Option<String> = None;
-	// FIXME: use backward rules for back translation, i.e.
-	// somehow pass the information which direction we want
-	let rules = rules.into_iter().filter(|r| r.is_forward());
+        let rules = rules.into_iter().filter(|r| {
+            if direction == Direction::Forward {
+                r.is_forward()
+            } else {
+                r.is_backward()
+            }
+        });
         for rule in rules {
             match rule {
                 Rule::Undefined { dots } => {
@@ -201,13 +212,16 @@ mod tests {
 
     #[test]
     fn compile_translation_table_test() {
-        let table = TranslationTable::compile(vec![Rule::Letter {
-            ch: 'a',
-            dots: BrailleCharsOrImplicit::Explicit(vec![enum_set!(
-                BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3
-            )]),
-            prefixes: Prefixes::empty(),
-        }]);
+        let table = TranslationTable::compile(
+            vec![Rule::Letter {
+                ch: 'a',
+                dots: BrailleCharsOrImplicit::Explicit(vec![enum_set!(
+                    BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3
+                )]),
+                prefixes: Prefixes::empty(),
+            }],
+            Direction::Forward,
+        );
         let table2 = TranslationTable {
             character_definitions: HashMap::from([('a', "⠇".to_string())]),
             ..Default::default()

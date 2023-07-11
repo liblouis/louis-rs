@@ -3,7 +3,7 @@ use std::{fs, io, path::PathBuf};
 use thiserror::Error;
 
 use parser::{expand_includes, Rule};
-use translator::TranslationTable;
+use translator::{Direction, TranslationTable};
 
 pub mod check;
 pub mod parser;
@@ -28,7 +28,7 @@ pub fn translate(table: PathBuf, input: &str) -> Result<String, TranslationError
         .filter_map(|line| line.as_rule())
         .collect();
     let rules = expand_includes(&search_path, rules);
-    let table = TranslationTable::compile(rules);
+    let table = TranslationTable::compile(rules, Direction::Forward);
     Ok(table.translate(input))
 }
 
