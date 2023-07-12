@@ -250,6 +250,7 @@ mod tests {
         assert_eq!(display_table, display_table2);
     }
 
+    #[test]
     fn translate_display_table_test() {
         let display_table = DisplayTable::compile(
             vec![Rule::Display { ch: 'a', dots: vec![enum_set!(BrailleDot::DOT1)], prefixes: Prefixes::empty() }]
