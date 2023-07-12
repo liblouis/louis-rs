@@ -37,6 +37,7 @@ impl TestResult {
 
 #[derive(Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TestSuite {
+    table: PathBuf,
     tests: Vec<Test>,
     direction: Direction,
 }
@@ -49,15 +50,12 @@ impl TestSuite {
             }
             Direction::Backward => return vec![TestResult::Error],
         }
+        self.tests.iter().map(|t| t.check(self.table.clone())).collect()
     }
 }
 
 #[derive(Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Test {
-    // FIXME: instead of a reference to a file a test should rather
-    // contain something that can be constructed in a test such as a
-    // TranslationTable
-    table: PathBuf,
     input: String,
     expected: String,
     xfail: bool,
@@ -102,13 +100,12 @@ mod tests {
     #[test]
     fn check_test() {
         let test = Test {
-            table: PathBuf::from("tests/test_table.txt"),
             input: "some text".to_string(),
             expected: "some braille".to_string(),
             xfail: false,
         };
         let test_suite = TestSuite {
-            direction: Direction::Forward,
+            table: PathBuf::from("tests/test_table.txt"),
             tests: vec![test],
         };
         let result = TestResult::Failure {
