@@ -2,6 +2,8 @@
 
 use crate::{translate, translator::Direction};
 
+use serde::{Serialize, Deserialize};
+
 use std::path::PathBuf;
 
 #[derive(PartialEq, Debug)]
@@ -33,7 +35,7 @@ impl TestResult {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TestSuite {
     tests: Vec<Test>,
     direction: Direction,
@@ -50,6 +52,7 @@ impl TestSuite {
     }
 }
 
+#[derive(Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Test {
     // FIXME: instead of a reference to a file a test should rather
     // contain something that can be constructed in a test such as a
