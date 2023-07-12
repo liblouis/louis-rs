@@ -1,6 +1,6 @@
 //! Test braille translation using tests defined in YAML files
 
-use crate::{translate, translator::Direction};
+use crate::{translate, translator::{Direction, DisplayTable}, TranslationError, display};
 
 use serde::{Serialize, Deserialize};
 
@@ -37,20 +37,25 @@ impl TestResult {
 
 #[derive(Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TestSuite {
+    display: PathBuf,
+    // FIXME: instead of a reference to a file a test should rather
+    // contain something that can be constructed in a test such as a
+    // TranslationTable
     table: PathBuf,
     tests: Vec<Test>,
-    direction: Direction,
+//    direction: Direction,
 }
 
 impl TestSuite {
     pub fn check(&self) -> Vec<TestResult> {
-        match self.direction {
-            Direction::Forward => {
-                return self.tests.iter().map(|t| t.check()).collect();
-            }
-            Direction::Backward => return vec![TestResult::Error],
-        }
-        self.tests.iter().map(|t| t.check(self.table.clone())).collect()
+        self.tests.iter().map(|t| t.check(self.table.clone(), self.display.clone())).collect()
+//        self.tests.iter().map(|t| t.check(self.table.clone(), self.display.clone())).collect()
+//        match self.direction {
+//            Direction::Forward => {
+//                return self.tests.iter().map(|t| t.check(self.table.clone())).collect();
+//            }
+//            Direction::Backward => return vec![TestResult::Error],
+//        }
     }
 }
 
@@ -62,33 +67,45 @@ pub struct Test {
 }
 
 impl Test {
-    fn check(&self) -> TestResult {
-        if let Ok(actual) = translate(self.table.clone(), &self.input) {
-            if actual == self.expected {
-                if !self.xfail {
-                    return TestResult::Success;
-                } else {
-                    return TestResult::UnexpectedSuccess {
-                        input: self.input.to_string(),
-                    };
+    fn check(&self, table: PathBuf, display_table: PathBuf) -> TestResult {
+        match translate(table, &self.input) {
+            Ok(actual) => {
+                match display(display_table, &actual) {
+                    Ok(displayed) => {
+                        if displayed == self.expected {
+                            if !self.xfail {
+                                return TestResult::Success;
+                            } else {
+                                return TestResult::UnexpectedSuccess {
+                                    input: self.input.to_string(),
+                                };
+                            }
+                        } else {
+                            if self.xfail {
+                                return TestResult::ExpectedFailure {
+                                    input: self.input.to_string(),
+                                    expected: self.expected.to_string(),
+                                    actual: displayed,
+                                };
+                            } else {
+                                return TestResult::Failure {
+                                    input: self.input.to_string(),
+                                    expected: self.expected.to_string(),
+                                    actual: displayed,
+                                };
+                            }
+                        } 
+                    },
+                    Err(e) => {
+                        println!("{:?}", e);
+                        return TestResult::Error;
+                    }
                 }
-            } else {
-                if self.xfail {
-                    return TestResult::ExpectedFailure {
-                        input: self.input.to_string(),
-                        expected: self.expected.to_string(),
-                        actual,
-                    };
-                } else {
-                    return TestResult::Failure {
-                        input: self.input.to_string(),
-                        expected: self.expected.to_string(),
-                        actual,
-                    };
-                }
+            },
+            Err(e) => {
+                println!("{:?}", e);
+                return TestResult::Error;
             }
-        } else {
-            return TestResult::Error;
         }
     }
 }
@@ -106,12 +123,13 @@ mod tests {
         };
         let test_suite = TestSuite {
             table: PathBuf::from("tests/test_table.txt"),
+            display: PathBuf::from("tests/test_display.txt"),
             tests: vec![test],
         };
         let result = TestResult::Failure {
             input: "some text".to_string(),
             expected: "some braille".to_string(),
-            actual: "⠀⠀⠀⠀⠀⠀⠀⠀⠀".to_string(),
+            actual: "         ".to_string(),
         };
         assert_eq!(test_suite.check(), vec![result]);
     }

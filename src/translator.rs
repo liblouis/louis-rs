@@ -14,6 +14,7 @@ mod character;
 
 type Corrections = HashMap<String, String>;
 type CharacterDefinitions = HashMap<char, String>;
+type DisplayDefinitions = HashMap<char, char>;
 type Translations = HashMap<String, String>;
 
 /// Mapping of an input char to the translated output
@@ -50,6 +51,29 @@ pub enum Direction {
     #[default]
     Forward,
     Backward,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct DisplayTable {
+    dots_to_char: DisplayDefinitions,
+}
+
+impl DisplayTable {
+    pub fn compile(rules: Vec<Rule>) -> DisplayTable {
+        let mut mapping = DisplayDefinitions::new();
+        for rule in rules {
+            match rule {
+                Rule::Display { ch, dots, prefixes } => {
+                    mapping.insert(dots_to_unicode(dots).chars().nth(0).unwrap(), ch);
+                },
+                _ => (),
+            }
+        }
+        DisplayTable { dots_to_char: mapping }
+    }
+    pub fn translate(&self, input: &str) -> String {
+        input.chars().map(|c| self.dots_to_char.get(&c).unwrap()).collect()
+    }
 }
 
 /// A Translation table holds all the rules needed to do a braille translation
@@ -214,6 +238,24 @@ mod tests {
     use enumset::enum_set;
 
     use super::*;
+
+    #[test]
+    fn compile_display_table_test() {
+        let display_table = DisplayTable::compile(
+            vec![Rule::Display { ch: 'a', dots: vec![enum_set!(BrailleDot::DOT1)], prefixes: Prefixes::empty() }]
+        );
+        let display_table2 = DisplayTable {
+            dots_to_char: HashMap::from([('⠁', 'a')])
+        };
+        assert_eq!(display_table, display_table2);
+    }
+
+    fn translate_display_table_test() {
+        let display_table = DisplayTable::compile(
+            vec![Rule::Display { ch: 'a', dots: vec![enum_set!(BrailleDot::DOT1)], prefixes: Prefixes::empty() }]
+        );
+        assert_eq!(display_table.translate("⠁"), "a");
+    }
 
     #[test]
     fn compile_translation_table_test() {

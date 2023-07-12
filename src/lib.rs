@@ -6,8 +6,8 @@ use search_path::SearchPath;
 use std::{fs, io, path::PathBuf};
 use thiserror::Error;
 
-use parser::{expand_includes, Rule};
-use translator::{Direction, TranslationTable};
+use parser::{expand_includes, Rule, table};
+use translator::{Direction, TranslationTable, DisplayTable};
 
 pub mod check;
 pub mod parser;
@@ -35,6 +35,20 @@ pub fn translate(table: PathBuf, input: &str) -> Result<String, TranslationError
         .collect();
     let rules = expand_includes(&search_path, rules);
     let table = TranslationTable::compile(rules, Direction::Forward);
+    Ok(table.translate(input))
+}
+
+pub fn display(table: PathBuf, input: &str) -> Result<String, TranslationError> {
+    let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
+    let path = search_path.find_file(&PathBuf::from(table)).unwrap();
+    let table = fs::read_to_string(path).unwrap();
+    let (_, lines) = parser::table(&table).unwrap();
+    let rules = lines
+        .into_iter()
+        .filter_map(|line| line.as_rule())
+        .collect();
+    let rules = expand_includes(&search_path, rules);
+    let table = DisplayTable::compile(rules);
     Ok(table.translate(input))
 }
 
