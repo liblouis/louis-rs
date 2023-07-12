@@ -6,7 +6,7 @@ use search_path::SearchPath;
 use std::{fs, io, path::PathBuf};
 use thiserror::Error;
 
-use parser::{expand_includes, Rule, table};
+use parser::{expand_includes, Rule};
 use translator::{Direction, TranslationTable, DisplayTable};
 
 pub mod check;

@@ -1,6 +1,6 @@
 //! Test braille translation using tests defined in YAML files
 
-use crate::{translate, translator::{Direction, DisplayTable}, TranslationError, display};
+use crate::{translate, display};
 
 use serde::{Serialize, Deserialize};
 
