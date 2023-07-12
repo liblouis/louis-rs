@@ -63,7 +63,7 @@ impl DisplayTable {
         let mut mapping = DisplayDefinitions::new();
         for rule in rules {
             match rule {
-                Rule::Display { ch, dots, prefixes } => {
+                Rule::Display { ch, dots, .. } => {
                     mapping.insert(dots_to_unicode(dots).chars().nth(0).unwrap(), ch);
                 },
                 _ => (),
