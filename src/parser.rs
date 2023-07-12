@@ -60,7 +60,7 @@ impl Line {
 pub enum Rule {
     Include { filename: String },
     Undefined { dots: BrailleChars },
-    Display { chars: String, dots: BrailleChars, prefixes: Prefixes },
+    Display { ch: char, dots: BrailleChars, prefixes: Prefixes },
 
     // Character-Definition Opcodes
     Space { ch: char, dots: BrailleChars, prefixes: Prefixes},
@@ -509,12 +509,12 @@ fn undefined(i: &str) -> IResult<&str, Rule> {
 }
 
 fn display(i: &str) -> IResult<&str, Rule> {
-    let (input, (prefixes, _, _, chars, _, dots)) =
-        tuple((prefixes, tag("display"), space1, chars, space1, dots))(i)?;
+    let (input, (prefixes, _, _, char, _, dots)) =
+        tuple((prefixes, tag("display"), space1, single_char, space1, dots))(i)?;
     Ok((
         input,
         Rule::Display {
-            chars: chars.to_string(),
+            ch: char,
             dots,
             prefixes,
         },
@@ -2248,11 +2248,11 @@ mod tests {
     #[test]
     fn display_test() {
         assert_eq!(
-            display("display haha 122"),
+            display("display h 122"),
             Ok((
                 "",
                 Rule::Display {
-                    chars: "haha".to_string(),
+                    ch: 'h',
                     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
                     prefixes: Prefixes::empty()
                 }
@@ -2518,22 +2518,22 @@ mod tests {
     #[test]
     fn prefixes_test() {
         assert_eq!(
-            display("nocross display haha 122"),
+            display("nocross display h 122"),
             Ok((
                 "",
                 Rule::Display {
-                    chars: "haha".to_string(),
+                    ch: 'h',
                     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
                     prefixes: enum_set!(Prefix::Nocross)
                 }
             ))
         );
         assert_eq!(
-            display("noback nocross display haha 122"),
+            display("noback nocross display h 122"),
             Ok((
                 "",
                 Rule::Display {
-                    chars: "haha".to_string(),
+                    ch: 'h',
                     dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
                     prefixes: Prefix::Noback | Prefix::Nocross
                 }
