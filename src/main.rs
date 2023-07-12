@@ -3,7 +3,7 @@ use liblouis::{
     check::{TestResult, TestSuite},
     debug, translate,
 };
-use std::{path::PathBuf, fs::File, io::BufReader};
+use std::{fs::File, io::BufReader, path::PathBuf};
 
 #[derive(Debug, Subcommand)]
 enum Commands {
@@ -52,8 +52,9 @@ fn main() {
             println!("Testing with {:?}", yaml);
             let input = File::open(yaml).expect("could not read to file");
             let buffered = BufReader::new(input);
-            let test_suite: TestSuite = serde_yaml::from_reader(buffered).expect("Cannot parse yaml");
-        
+            let test_suite: TestSuite =
+                serde_yaml::from_reader(buffered).expect("Cannot parse yaml");
+
             let results = test_suite.check();
             println!(
                 "Pass: {}",

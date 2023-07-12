@@ -7,7 +7,7 @@ use std::{fs, io, path::PathBuf};
 use thiserror::Error;
 
 use parser::{expand_includes, Rule};
-use translator::{Direction, TranslationTable, DisplayTable};
+use translator::{Direction, DisplayTable, TranslationTable};
 
 pub mod check;
 pub mod parser;

@@ -65,14 +65,19 @@ impl DisplayTable {
             match rule {
                 Rule::Display { ch, dots, .. } => {
                     mapping.insert(dots_to_unicode(dots).chars().nth(0).unwrap(), ch);
-                },
+                }
                 _ => (),
             }
         }
-        DisplayTable { dots_to_char: mapping }
+        DisplayTable {
+            dots_to_char: mapping,
+        }
     }
     pub fn translate(&self, input: &str) -> String {
-        input.chars().map(|c| self.dots_to_char.get(&c).unwrap()).collect()
+        input
+            .chars()
+            .map(|c| self.dots_to_char.get(&c).unwrap())
+            .collect()
     }
 }
 
@@ -241,20 +246,24 @@ mod tests {
 
     #[test]
     fn compile_display_table_test() {
-        let display_table = DisplayTable::compile(
-            vec![Rule::Display { ch: 'a', dots: vec![enum_set!(BrailleDot::DOT1)], prefixes: Prefixes::empty() }]
-        );
+        let display_table = DisplayTable::compile(vec![Rule::Display {
+            ch: 'a',
+            dots: vec![enum_set!(BrailleDot::DOT1)],
+            prefixes: Prefixes::empty(),
+        }]);
         let display_table2 = DisplayTable {
-            dots_to_char: HashMap::from([('⠁', 'a')])
+            dots_to_char: HashMap::from([('⠁', 'a')]),
         };
         assert_eq!(display_table, display_table2);
     }
 
     #[test]
     fn translate_display_table_test() {
-        let display_table = DisplayTable::compile(
-            vec![Rule::Display { ch: 'a', dots: vec![enum_set!(BrailleDot::DOT1)], prefixes: Prefixes::empty() }]
-        );
+        let display_table = DisplayTable::compile(vec![Rule::Display {
+            ch: 'a',
+            dots: vec![enum_set!(BrailleDot::DOT1)],
+            prefixes: Prefixes::empty(),
+        }]);
         assert_eq!(display_table.translate("⠁"), "a");
     }
 
