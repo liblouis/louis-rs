@@ -27,7 +27,8 @@ pub enum TranslationError {
 /// a `Result` containing the translation.
 pub fn translate(table: PathBuf, input: &str) -> Result<String, TranslationError> {
     let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
-    let table = fs::read_to_string(table)?;
+    let path = search_path.find_file(&PathBuf::from(table)).unwrap();
+    let table = fs::read_to_string(path).unwrap();
     let (_, lines) = parser::table(&table).unwrap();
     let rules = lines
         .into_iter()
