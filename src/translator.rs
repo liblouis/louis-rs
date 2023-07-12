@@ -1,3 +1,5 @@
+//! Translate text to braille using liblouis translation tables.
+
 use std::collections::HashMap;
 
 use crate::parser::dots_to_unicode;

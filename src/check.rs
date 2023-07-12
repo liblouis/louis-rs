@@ -1,3 +1,5 @@
+//! Test braille translation using tests defined in YAML files
+
 use crate::{translate, translator::Direction};
 
 use std::path::PathBuf;

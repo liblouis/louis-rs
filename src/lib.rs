@@ -1,3 +1,7 @@
+//! An experimental  re-write of [liblouis] in Rust
+//!
+//! [liblouis]: http://liblouis.io
+
 use search_path::SearchPath;
 use std::{fs, io, path::PathBuf};
 use thiserror::Error;
@@ -19,6 +23,8 @@ pub enum TranslationError {
     Unknown,
 }
 
+/// Translate the `input` using the given translation `table`. Return
+/// a `Result` containing the translation.
 pub fn translate(table: PathBuf, input: &str) -> Result<String, TranslationError> {
     let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
     let table = fs::read_to_string(table)?;
@@ -32,6 +38,8 @@ pub fn translate(table: PathBuf, input: &str) -> Result<String, TranslationError
     Ok(table.translate(input))
 }
 
+/// Return a `Vec` of all rules in the given translation `table` for
+/// debugging purposes.
 pub fn debug(table: PathBuf) -> Result<Vec<Rule>, TranslationError> {
     let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
     let table = fs::read_to_string(table)?;
