@@ -45,7 +45,7 @@ struct TranslationContext {
     mode: TranslationMode,
 }
 
-#[derive(Default, Debug, PartialEq, Deserialize)]
+#[derive(Default, Debug, PartialEq, Deserialize, Clone, clap::ValueEnum)]
 pub enum Direction {
     #[default]
     Forward,
