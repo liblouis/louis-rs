@@ -17,6 +17,7 @@
 
 display: unicode-without-blank.dis
 table: nl-comp8.utb
+directions: [Forward]
 #  language: nl
 #  type: computer
 #  dots: 8

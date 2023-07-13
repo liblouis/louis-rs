@@ -2,12 +2,12 @@
 
 use crate::{
     compile, compile_display, display, translate,
-    translator::{DisplayTable, TranslationTable},
+    translator::{DisplayTable, TranslationTable, Direction},
 };
 
 use serde::Deserialize;
 
-use std::path::PathBuf;
+use std::{path::PathBuf, collections::HashSet};
 
 #[derive(PartialEq, Debug)]
 pub enum TestResult {
@@ -45,8 +45,8 @@ pub struct TestSuite {
     // contain something that can be constructed in a test such as a
     // TranslationTable
     table: PathBuf,
+    directions: HashSet<Direction>,
     tests: Vec<Test>,
-    //    direction: Direction,
 }
 
 impl TestSuite {
@@ -119,6 +119,7 @@ mod tests {
             table: PathBuf::from("tests/test_table.txt"),
             display: PathBuf::from("tests/test_display.txt"),
             tests: vec![test],
+	    directions: HashSet::from([Direction::Forward])
         };
         let result = TestResult::Failure {
             input: "some text".to_string(),

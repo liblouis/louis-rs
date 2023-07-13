@@ -1,5 +1,6 @@
 table: es-g2.ctb
 display: unicode-without-blank.dis
+directions: [Forward]
 tests:
 - {input: abeja, expected: ⠂⠑⠚⠁, xfail: false}
 - {input: nabo, expected: ⠝⠂⠕, xfail: false}
