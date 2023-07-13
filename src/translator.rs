@@ -72,10 +72,15 @@ impl DisplayTable {
             dots_to_char: mapping,
         }
     }
+    /// Map the `input` to the output using the display rules in the
+    /// `DisplayTable`.
+    ///
+    /// if the `DisplayTable` does not contain a mapping for a
+    /// specific char then the original character is returned
     pub fn translate(&self, input: &str) -> String {
         input
             .chars()
-            .map(|c| self.dots_to_char.get(&c).unwrap())
+            .map(|c| *self.dots_to_char.get(&c).unwrap_or(&c))
             .collect()
     }
 }
