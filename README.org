@@ -48,13 +48,59 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
   - [X] handle the '=' braille pattern
   - [X] handle escaped unicode digit in ~litdigit~
   - [X] handle escaped space ('\s')
+- [ ] extend the code to handle character attributes. I think quite a
+  bit is already there (data types), but the rules are ignored
+  currently.
+- [X] add support for prefix handling. Just ignore the rule when
+  constructing the translation table for forward or backward
+  translation.
+- [ ] add support for backward translation
+- [ ] add support for cursor handling
+- [ ] extend the translation functionality, e.g.
+  - [ ] add code to handle word boundaries so we could support beg- and
+    endword.
+  - [ ] add code to handle braille indication (caps, emphasis, etc)
 
 * Open Questions
 - Should the translation API be against ~&str~ or ~&[char]~
+  - most likely ~&str~, as that is the basic data type for strings
 - use a trie, e.g. the fst crate
 - how to handle emphasis?
 - if the translation API is against ~&str~, how are we going to do the
   typeform information?
+- There is basic support for checking based on YAML files. However,
+  the supported syntax is more normalized. It is not clear whether we
+  can support the existing syntax.
+- what are we going to do with hyphenation? The parser doesn't handle
+  hyphenation files currently. Should it? We could instead just use one
+  of the hyphenation crates, e.g.
+  https://docs.rs/hyphenation/latest/hyphenation/
+  - the lou_hyphenate API call: I think we should definitely drop this
+    in the Rust version.
+  - the nocross opcode: It would be great if we could reuse something,
+    although I'm not entirely sure that is possible.
+    - I think the [[https://docs.rs/hyphenation/latest/hyphenation/][hyphenation crate]] fits the bill just nicely. You
+      feed it the hyphenation tables (either the ones from the
+      liblouis distribution or the ones from libhyphen) and then you
+      just query it for hyphenation
+      #+begin_src rust
+	extern crate hyphenation;
+
+	use hyphenation::{Hyphenator, Standard, Language};
+	use hyphenation::Load;
+
+	let path_to_dict = "/path/to/english-dictionary.bincode";
+	let en_us = Standard::from_path(Language::EnglishUS, path_to_dict)?;
+
+	let hyphenated = en_us.hyphenate("anfractuous");
+
+	let breaks = &hyphenated.breaks;
+	assert_eq!(breaks, &[2, 6, 8]);
+
+	let hyphenated_segments : Vec<&str>= hyphenated.iter().collect()
+	assert_eq!(hyphenated_segments, &["an-", "frac-", "tu-", "ous"]);
+
+      #+end_src
 
 * License
 
