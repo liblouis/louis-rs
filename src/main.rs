@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use liblouis::{
     check::{TestResult, TestSuite},
-    debug, translate,
+    compile, debug, translate,
 };
 use std::{fs::File, io::BufReader, path::PathBuf};
 
@@ -43,10 +43,8 @@ fn main() {
     match args.command {
         Commands::Translate { table, input } => {
             println!("translating {} using table {:?}", input, table);
-            println!(
-                "Braille: {}",
-                translate(table, &input).expect("Translation failed")
-            );
+            let table = compile(&table).expect("Cannot compile table");
+            println!("Braille: {}", translate(&table, &input));
         }
         Commands::CheckYaml { yaml } => {
             println!("Testing with {:?}", yaml);
