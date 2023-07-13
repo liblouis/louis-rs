@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 
 use serde::Deserialize;
-use serde::Serialize;
 
 use crate::parser::dots_to_unicode;
 use crate::parser::BrailleCharsOrImplicit;
@@ -46,7 +45,7 @@ struct TranslationContext {
     mode: TranslationMode,
 }
 
-#[derive(Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, PartialEq, Deserialize)]
 pub enum Direction {
     #[default]
     Forward,

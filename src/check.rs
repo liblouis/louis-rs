@@ -5,7 +5,7 @@ use crate::{
     translator::{DisplayTable, TranslationTable},
 };
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use std::path::PathBuf;
 
@@ -38,7 +38,7 @@ impl TestResult {
     }
 }
 
-#[derive(Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, PartialEq, Deserialize)]
 pub struct TestSuite {
     display: PathBuf,
     // FIXME: instead of a reference to a file a test should rather
@@ -67,7 +67,7 @@ impl TestSuite {
     }
 }
 
-#[derive(Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, PartialEq, Deserialize)]
 pub struct Test {
     input: String,
     expected: String,
