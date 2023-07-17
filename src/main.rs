@@ -1,7 +1,8 @@
 use clap::{Parser, Subcommand};
 use liblouis::{
     check::{TestResult, TestSuite},
-    compile, debug, translate, translator::Direction,
+    compile, debug, translate,
+    translator::Direction,
 };
 use std::{fs::File, io::BufReader, path::PathBuf};
 
@@ -14,8 +15,8 @@ enum Commands {
         table: PathBuf,
         /// String to translate
         input: String,
-	#[arg(long,short,value_enum,default_value_t=Direction::Forward)]
-	direction: Direction,
+        #[arg(long,short,value_enum,default_value_t=Direction::Forward)]
+        direction: Direction,
     },
     /// Run the tests defined in the <YAML_TEST_FILE>. Return 0 if all
     /// tests pass or 1 if any of the tests fail.
@@ -43,8 +44,15 @@ fn main() {
     let args = Cli::parse();
 
     match args.command {
-        Commands::Translate { table, input, direction } => {
-            println!("{:?} translating {} using table {:?}", direction, input, table);
+        Commands::Translate {
+            table,
+            input,
+            direction,
+        } => {
+            println!(
+                "{:?} translating {} using table {:?}",
+                direction, input, table
+            );
             let table = compile(&table).expect("Cannot compile table");
             println!("Braille: {}", translate(&table, &input));
         }

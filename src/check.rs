@@ -2,12 +2,12 @@
 
 use crate::{
     compile, compile_display, display, translate,
-    translator::{DisplayTable, TranslationTable, Direction},
+    translator::{Direction, DisplayTable, TranslationTable},
 };
 
 use serde::Deserialize;
 
-use std::{path::PathBuf, collections::HashSet};
+use std::{collections::HashSet, path::PathBuf};
 
 #[derive(PartialEq, Debug)]
 pub enum TestResult {
@@ -119,7 +119,7 @@ mod tests {
             table: PathBuf::from("tests/test_table.txt"),
             display: PathBuf::from("tests/test_display.txt"),
             tests: vec![test],
-	    directions: HashSet::from([Direction::Forward])
+            directions: HashSet::from([Direction::Forward]),
         };
         let result = TestResult::Failure {
             input: "some text".to_string(),
