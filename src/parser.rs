@@ -1,5 +1,8 @@
 //! Parse liblouis translation tables
 
+// see https://codeandbitters.com/lets-build-a-parser/ for a lot of
+// inspiration
+
 use std::fs;
 use std::path::PathBuf;
 
@@ -342,6 +345,7 @@ fn dot_to_unicode(dot: BrailleChar) -> char {
     char::from_u32(unicode).unwrap()
 }
 
+/// Map `BrailleChars` to a string containing unicode braille
 pub fn dots_to_unicode(dots: BrailleChars) -> String {
     dots.into_iter().map(|d| dot_to_unicode(d)).collect()
 }
