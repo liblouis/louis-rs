@@ -23,6 +23,7 @@ use nom::combinator::map;
 use nom::combinator::map_res;
 use nom::combinator::opt;
 use nom::combinator::success;
+use nom::combinator::value;
 use nom::combinator::verify;
 use nom::error::Error;
 use nom::error::ParseError;
@@ -281,7 +282,7 @@ pub enum WithMatch {
 
 type WithMatches = EnumSet<WithMatch>;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Position {
     Before,
     After,
@@ -310,7 +311,7 @@ pub enum BrailleDot {
 pub type BrailleChar = EnumSet<BrailleDot>;
 pub type BrailleChars = Vec<BrailleChar>;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum BrailleCharsOrImplicit {
     Implicit,
     Explicit(BrailleChars),
@@ -403,14 +404,14 @@ fn unicode_literal(input: &str) -> IResult<&str, char> {
 
 fn escape_sequence(input: &str) -> IResult<&str, char> {
     alt((
-        map(tag(r"\\"), |_| '\\'),
-        map(tag(r"\f"), |_| '\x0C'),
-        map(tag(r"\n"), |_| '\n'),
-        map(tag(r"\r"), |_| '\r'),
-        map(tag(r"\s"), |_| ' '),
-        map(tag(r"\t"), |_| '\t'),
-        map(tag(r"\v"), |_| '\x0B'),
-        map(tag(r"\e"), |_| '\x1B'),
+        value('\\', tag(r"\\")),
+        value('\x0C', tag(r"\f")),
+        value('\n', tag(r"\n")),
+        value('\r', tag(r"\r")),
+        value(' ', tag(r"\s")),
+        value('\t', tag(r"\t")),
+        value('\x0B', tag(r"\v")),
+        value('\x1B', tag(r"\e")),
     ))(input)
 }
 
@@ -429,7 +430,7 @@ fn filename(input: &str) -> IResult<&str, &str> {
 
 fn braillechars_or_implicit(input: &str) -> IResult<&str, BrailleCharsOrImplicit> {
     alt((
-        map(tag("="), |_| BrailleCharsOrImplicit::Implicit),
+        value(BrailleCharsOrImplicit::Implicit, tag("=")),
         map(dots, |dots| BrailleCharsOrImplicit::Explicit(dots)),
     ))(input)
 }
@@ -467,28 +468,24 @@ fn number(input: &str) -> IResult<&str, u8> {
 
 fn before_or_after(input: &str) -> IResult<&str, Position> {
     alt((
-        map(tag("before"), |_| Position::Before),
-        map(tag("after"), |_| Position::After),
+        value(Position::Before, tag("before")),
+        value(Position::After, tag("after")),
     ))(input)
 }
 
 fn prefixes(i: &str) -> IResult<&str, Prefixes> {
     alt((
-        map(
+        value(
+            Prefix::Noback | Prefix::Nocross,
             tuple((tag("noback"), space1, tag("nocross"), space1)),
-            |_| Prefix::Noback | Prefix::Nocross,
         ),
-        map(
+        value(
+            Prefix::Nofor | Prefix::Nocross,
             tuple((tag("nofor"), space1, tag("nocross"), space1)),
-            |_| Prefix::Nofor | Prefix::Nocross,
         ),
-        map(tuple((tag("nofor"), space1)), |_| enum_set!(Prefix::Nofor)),
-        map(tuple((tag("noback"), space1)), |_| {
-            enum_set!(Prefix::Noback)
-        }),
-        map(tuple((tag("nocross"), space1)), |_| {
-            enum_set!(Prefix::Nocross)
-        }),
+        value(enum_set!(Prefix::Nofor), tuple((tag("nofor"), space1))),
+        value(enum_set!(Prefix::Noback), tuple((tag("noback"), space1))),
+        value(enum_set!(Prefix::Nocross), tuple((tag("nocross"), space1))),
         success::<_, _, Error<_>>(Prefixes::empty()),
     ))(i)
 }
@@ -1757,20 +1754,22 @@ fn with_classes(input: &str) -> IResult<&str, Vec<WithClass>> {
 
 fn with_matches(input: &str) -> IResult<&str, WithMatches> {
     alt((
-        map(
+        value(
+            WithMatch::Before | WithMatch::After,
             tuple((tag("empmatchbefore"), space1, tag("empmatchafter"), space1)),
-            |_| WithMatch::Before | WithMatch::After,
         ),
-        map(
+        value(
+            WithMatch::After | WithMatch::Before,
             tuple((tag("empmatchafter"), space1, tag("empmatchbefore"), space1)),
-            |_| WithMatch::After | WithMatch::Before,
         ),
-        map(tuple((tag("empmatchbefore"), space1)), |_| {
-            enum_set!(WithMatch::Before)
-        }),
-        map(tuple((tag("empmatchafter"), space1)), |_| {
-            enum_set!(WithMatch::After)
-        }),
+        value(
+            enum_set!(WithMatch::Before),
+            tuple((tag("empmatchbefore"), space1)),
+        ),
+        value(
+            enum_set!(WithMatch::After),
+            tuple((tag("empmatchafter"), space1)),
+        ),
         success::<_, _, Error<_>>(WithMatches::empty()),
     ))(input)
 }
