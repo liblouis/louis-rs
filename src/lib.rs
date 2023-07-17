@@ -6,7 +6,7 @@ use search_path::SearchPath;
 use std::{fs, io, path::PathBuf};
 use thiserror::Error;
 
-use parser::{expand_includes, Rule};
+use parser::{expand_includes, LouisParseError, Rule};
 use translator::{Direction, DisplayTable, TranslationTable};
 
 pub mod check;
@@ -19,6 +19,8 @@ pub enum TranslationError {
     /// The table could not be read
     #[error("Cannot open table")]
     ReadTable(#[from] io::Error),
+    #[error("Cannot parse table")]
+    ParseTable(#[from] LouisParseError),
     #[error("unknown translation error")]
     Unknown,
 }
@@ -27,7 +29,7 @@ pub fn compile(table: &PathBuf) -> Result<TranslationTable, TranslationError> {
     let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
     let path = search_path.find_file(&PathBuf::from(table)).unwrap();
     let table = fs::read_to_string(path)?;
-    let (_, lines) = parser::table(&table).unwrap();
+    let lines = parser::table(&table)?;
     let rules = lines
         .into_iter()
         .filter_map(|line| line.as_rule())
@@ -40,7 +42,7 @@ pub fn compile_display(table: &PathBuf) -> Result<DisplayTable, TranslationError
     let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
     let path = search_path.find_file(&PathBuf::from(table)).unwrap();
     let table = fs::read_to_string(path)?;
-    let (_, lines) = parser::table(&table).unwrap();
+    let lines = parser::table(&table)?;
     let rules = lines
         .into_iter()
         .filter_map(|line| line.as_rule())
@@ -64,7 +66,7 @@ pub fn display(table: &DisplayTable, input: &str) -> String {
 pub fn debug(table: PathBuf) -> Result<Vec<Rule>, TranslationError> {
     let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
     let table = fs::read_to_string(table)?;
-    let (_, lines) = parser::table(&table).expect("Cannot parse table");
+    let lines = parser::table(&table)?;
     let rules = lines
         .into_iter()
         .filter_map(|line| line.as_rule())

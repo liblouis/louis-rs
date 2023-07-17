@@ -1930,8 +1930,13 @@ fn line(i: &str) -> IResult<&str, Line> {
     Ok((input, rule))
 }
 
-pub fn table(i: &str) -> IResult<&str, Vec<Line>> {
-    all_consuming(many0(line))(i)
+pub fn table(input: &str) -> Result<Vec<Line>, LouisParseError> {
+    let (_, lines) = all_consuming(many0(line))(input).map_err(|nom_err| match nom_err {
+        nom::Err::Incomplete(_) => unreachable!(),
+        nom::Err::Error(e) => e,
+        nom::Err::Failure(e) => e,
+    })?;
+    Ok(lines)
 }
 
 fn expand_include(search_path: &SearchPath, rule: Rule) -> Vec<Rule> {
