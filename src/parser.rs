@@ -1,7 +1,5 @@
 //! Parse liblouis translation tables
 
-use std::error;
-use std::fmt;
 use std::fs;
 use std::path::PathBuf;
 
@@ -20,12 +18,10 @@ use nom::character::complete::space0;
 use nom::character::complete::space1;
 use nom::combinator::all_consuming;
 use nom::combinator::map;
-use nom::combinator::map_res;
 use nom::combinator::opt;
 use nom::combinator::success;
 use nom::combinator::value;
-use nom::combinator::verify;
-use nom::error::Error;
+use nom::error::ErrorKind;
 use nom::error::ParseError;
 use nom::multi::many0;
 use nom::multi::separated_list1;
@@ -350,21 +346,35 @@ pub fn dots_to_unicode(dots: BrailleChars) -> String {
     dots.into_iter().map(|d| dot_to_unicode(d)).collect()
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParseBrailleError;
+#[derive(thiserror::Error, Debug, PartialEq)]
+pub enum LouisParseError {
+    #[error("invalid braille")]
+    BadBraille,
+    #[error("invalid unicode literal")]
+    BadUnicodeLiteral,
+    #[error("invalid digit")]
+    BadDigit,
+    #[error("invalid prefix")]
+    BadPrefix,
+    #[error("invalid match prefix")]
+    BadMatchPrefix,
+    #[error("bad escape sequence")]
+    BadEscape,
+    #[error("unknown parser error")]
+    Unparseable,
+}
 
-impl fmt::Display for ParseBrailleError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        "provided string was not `true` or `false`".fmt(f)
+impl<I> ParseError<I> for LouisParseError {
+    fn from_error_kind(_input: I, _kind: ErrorKind) -> Self {
+        LouisParseError::Unparseable
+    }
+
+    fn append(_: I, _: ErrorKind, other: Self) -> Self {
+        other
     }
 }
-impl error::Error for ParseBrailleError {
-    fn description(&self) -> &str {
-        "failed to parse Braille dot"
-    }
-}
 
-fn char_to_dot(char: char) -> Result<BrailleDot, ParseBrailleError> {
+fn char_to_dot(char: char) -> Result<BrailleDot, LouisParseError> {
     match char {
         '0' => Ok(BrailleDot::DOT0),
         '1' => Ok(BrailleDot::DOT1),
@@ -382,27 +392,32 @@ fn char_to_dot(char: char) -> Result<BrailleDot, ParseBrailleError> {
         'd' => Ok(BrailleDot::DOTD),
         'e' => Ok(BrailleDot::DOTE),
         'f' => Ok(BrailleDot::DOTF),
-        _ => Err(ParseBrailleError {}),
+        _ => Err(LouisParseError::BadBraille {}),
     }
 }
 
-fn chars_to_dots(chars: &str) -> BrailleChar {
-    chars.chars().map(|c| char_to_dot(c).unwrap()).collect()
+fn chars_to_dots(chars: &str) -> Result<BrailleChar, LouisParseError> {
+    chars.chars().map(|c| char_to_dot(c)).collect()
 }
 
-fn chars(input: &str) -> IResult<&str, &str> {
+fn chars(input: &str) -> IResult<&str, &str, LouisParseError> {
     is_not(" \t\r\n")(input)
     //unicode_alpha1(input)
 }
 
-fn unicode_literal(input: &str) -> IResult<&str, char> {
-    let (i, num) = map_res(hex_digit1, |s| u32::from_str_radix(s, 16))(input)?;
+fn unicode_literal(input: &str) -> IResult<&str, char, LouisParseError> {
+    let (rest, raw_num) = hex_digit1(input)?;
 
-    let c = char::from_u32(num).unwrap();
-    Ok((i, c))
+    match u32::from_str_radix(raw_num, 16) {
+        Ok(num) => match char::from_u32(num) {
+            Some(c) => Ok((rest, c)),
+            None => Err(nom::Err::Failure(LouisParseError::BadUnicodeLiteral)),
+        },
+        Err(_) => Err(nom::Err::Failure(LouisParseError::BadUnicodeLiteral)),
+    }
 }
 
-fn escape_sequence(input: &str) -> IResult<&str, char> {
+fn escape_sequence(input: &str) -> IResult<&str, char, LouisParseError> {
     alt((
         value('\\', tag(r"\\")),
         value('\x0C', tag(r"\f")),
@@ -415,65 +430,72 @@ fn escape_sequence(input: &str) -> IResult<&str, char> {
     ))(input)
 }
 
-fn escaped_char(i: &str) -> IResult<&str, char> {
+fn escaped_char(i: &str) -> IResult<&str, char, LouisParseError> {
     let (input, (_, c)) = tuple((tag("\\x"), unicode_literal))(i)?;
     Ok((input, c))
 }
 
-fn single_char(input: &str) -> IResult<&str, char> {
+fn single_char(input: &str) -> IResult<&str, char, LouisParseError> {
     alt((escape_sequence, escaped_char, none_of(" \t\r\n")))(input)
 }
 
-fn filename(input: &str) -> IResult<&str, &str> {
+fn filename(input: &str) -> IResult<&str, &str, LouisParseError> {
     is_a("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.")(input)
 }
 
-fn braillechars_or_implicit(input: &str) -> IResult<&str, BrailleCharsOrImplicit> {
+fn braillechars_or_implicit(input: &str) -> IResult<&str, BrailleCharsOrImplicit, LouisParseError> {
     alt((
         value(BrailleCharsOrImplicit::Implicit, tag("=")),
         map(dots, |dots| BrailleCharsOrImplicit::Explicit(dots)),
     ))(input)
 }
 
-fn dots(i: &str) -> IResult<&str, BrailleChars> {
-    let (input, dots) = separated_list1(tag("-"), hex_digit1)(i)?;
-    let braille_chars: Vec<BrailleChar> = dots.iter().map(|chars| chars_to_dots(chars)).collect();
-    Ok((input, braille_chars))
-}
-
-fn single_unicode_digit(input: &str) -> IResult<&str, char> {
-    alt((escaped_char, one_unicode_digit))(input)
-}
-
-fn one_unicode_digit(input: &str) -> IResult<&str, char> {
-    let (input, digit) = verify(unicode_digit1, |s: &str| s.chars().count() == 1)(input)?;
-    match digit.char_indices().next() {
-        Some((i, c)) => match input.get(i..) {
-            Some(s) => Ok((s, c)),
-            _ => Err(nom::Err::Error(ParseError::from_error_kind(
-                input,
-                nom::error::ErrorKind::Digit,
-            ))),
-        },
-        _ => Err(nom::Err::Error(ParseError::from_error_kind(
-            input,
-            nom::error::ErrorKind::Digit,
-        ))),
+fn dots(i: &str) -> IResult<&str, BrailleChars, LouisParseError> {
+    let result = separated_list1(tag("-"), hex_digit1::<&str, nom::error::Error<&str>>)(i);
+    match result {
+        Ok((rest, dots)) => {
+            let braille_chars: Result<Vec<BrailleChar>, _> =
+                dots.iter().map(|chars| chars_to_dots(chars)).collect();
+            match braille_chars {
+                Ok(chars) => Ok((rest, chars)),
+                Err(_) => Err(nom::Err::Error(LouisParseError::BadBraille)),
+            }
+        }
+        Err(_) => Err(nom::Err::Error(LouisParseError::BadBraille)),
     }
 }
 
-fn number(input: &str) -> IResult<&str, u8> {
-    map_res(digit1, |s: &str| s.parse::<u8>())(input)
+fn single_unicode_digit(input: &str) -> IResult<&str, char, LouisParseError> {
+    alt((escaped_char, one_unicode_digit))(input)
 }
 
-fn before_or_after(input: &str) -> IResult<&str, Position> {
+fn one_unicode_digit(input: &str) -> IResult<&str, char, LouisParseError> {
+    let result = unicode_digit1::<&str, nom::error::Error<&str>>(input);
+    match result {
+        Ok((rest, digits)) => match digits.chars().count() {
+            1 => Ok((rest, digits.chars().nth(0).unwrap())),
+            _ => Err(nom::Err::Error(LouisParseError::BadDigit)),
+        },
+        Err(_) => Err(nom::Err::Error(LouisParseError::BadDigit)),
+    }
+}
+
+fn number(input: &str) -> IResult<&str, u8, LouisParseError> {
+    let (rest, raw_num) = digit1(input)?;
+    match raw_num.parse::<u8>() {
+        Ok(num) => Ok((rest, num)),
+        Err(_) => Err(nom::Err::Failure(LouisParseError::BadUnicodeLiteral)),
+    }
+}
+
+fn before_or_after(input: &str) -> IResult<&str, Position, LouisParseError> {
     alt((
         value(Position::Before, tag("before")),
         value(Position::After, tag("after")),
     ))(input)
 }
 
-fn prefixes(i: &str) -> IResult<&str, Prefixes> {
+fn prefixes(i: &str) -> IResult<&str, Prefixes, LouisParseError> {
     alt((
         value(
             Prefix::Noback | Prefix::Nocross,
@@ -486,11 +508,11 @@ fn prefixes(i: &str) -> IResult<&str, Prefixes> {
         value(enum_set!(Prefix::Nofor), tuple((tag("nofor"), space1))),
         value(enum_set!(Prefix::Noback), tuple((tag("noback"), space1))),
         value(enum_set!(Prefix::Nocross), tuple((tag("nocross"), space1))),
-        success::<_, _, Error<_>>(Prefixes::empty()),
+        success::<_, _, LouisParseError>(Prefixes::empty()),
     ))(i)
 }
 
-fn include(i: &str) -> IResult<&str, Rule> {
+fn include(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, filename)) = tuple((tag("include"), space1, filename))(i)?;
     Ok((
         input,
@@ -500,12 +522,12 @@ fn include(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn undefined(i: &str) -> IResult<&str, Rule> {
+fn undefined(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, dots)) = tuple((tag("undefined"), space1, dots))(i)?;
     Ok((input, Rule::Undefined { dots }))
 }
 
-fn display(i: &str) -> IResult<&str, Rule> {
+fn display(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, char, _, dots)) =
         tuple((prefixes, tag("display"), space1, single_char, space1, dots))(i)?;
     Ok((
@@ -518,13 +540,13 @@ fn display(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn space(i: &str) -> IResult<&str, Rule> {
+fn space(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, ch, _, dots)) =
         tuple((prefixes, tag("space"), space1, single_char, space1, dots))(i)?;
     Ok((input, Rule::Space { ch, dots, prefixes }))
 }
 
-fn multind(i: &str) -> IResult<&str, Rule> {
+fn multind(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, dots, _, opcodes)) = tuple((
         prefixes,
         tag("multind"),
@@ -544,7 +566,7 @@ fn multind(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn punctuation(i: &str) -> IResult<&str, Rule> {
+fn punctuation(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, ch, _, dots)) = tuple((
         prefixes,
         tag("punctuation"),
@@ -556,12 +578,12 @@ fn punctuation(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Punctuation { ch, dots, prefixes }))
 }
 
-fn digit(i: &str) -> IResult<&str, Rule> {
+fn digit(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, ch, _, dots)) = tuple((tag("digit"), space1, single_char, space1, dots))(i)?;
     Ok((input, Rule::Digit { ch, dots }))
 }
 
-fn letter(i: &str) -> IResult<&str, Rule> {
+fn letter(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, ch, _, dots)) = tuple((
         prefixes,
         tag("letter"),
@@ -573,7 +595,7 @@ fn letter(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Letter { ch, dots, prefixes }))
 }
 
-fn lowercase(i: &str) -> IResult<&str, Rule> {
+fn lowercase(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, ch, _, dots)) = tuple((
         prefixes,
         tag("lowercase"),
@@ -585,7 +607,7 @@ fn lowercase(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Lowercase { ch, dots, prefixes }))
 }
 
-fn uppercase(i: &str) -> IResult<&str, Rule> {
+fn uppercase(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, ch, _, dots)) = tuple((
         prefixes,
         tag("uppercase"),
@@ -597,25 +619,25 @@ fn uppercase(i: &str) -> IResult<&str, Rule> {
     Ok((input, Rule::Uppercase { ch, dots, prefixes }))
 }
 
-fn litdigit(i: &str) -> IResult<&str, Rule> {
+fn litdigit(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, ch, _, dots)) =
         tuple((tag("litdigit"), space1, single_unicode_digit, space1, dots))(i)?;
     Ok((input, Rule::Litdigit { ch, dots }))
 }
 
-fn sign(i: &str) -> IResult<&str, Rule> {
+fn sign(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, ch, _, dots)) =
         tuple((prefixes, tag("sign"), space1, single_char, space1, dots))(i)?;
     Ok((input, Rule::Sign { ch, dots, prefixes }))
 }
 
-fn math(i: &str) -> IResult<&str, Rule> {
+fn math(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, ch, _, dots)) =
         tuple((prefixes, tag("math"), space1, single_char, space1, dots))(i)?;
     Ok((input, Rule::Math { ch, dots, prefixes }))
 }
 
-fn grouping(i: &str) -> IResult<&str, Rule> {
+fn grouping(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name, _, chars, _, dots)) = tuple((
         tag("grouping"),
         space1,
@@ -635,7 +657,7 @@ fn grouping(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn base(i: &str) -> IResult<&str, Rule> {
+fn base(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, attribute, _, derived, _, base)) = tuple((
         tag("base"),
         space1,
@@ -655,14 +677,14 @@ fn base(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn attribute_name(input: &str) -> IResult<&str, String> {
+fn attribute_name(input: &str) -> IResult<&str, String, LouisParseError> {
     alt((
         map(one_of("01234567"), |c| c.to_string()),
         map(alpha1, |s: &str| s.to_string()),
     ))(input)
 }
 
-fn attribute(i: &str) -> IResult<&str, Rule> {
+fn attribute(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name, _, chars)) =
         tuple((tag("attribute"), space1, attribute_name, space1, chars))(i)?;
     Ok((
@@ -674,7 +696,7 @@ fn attribute(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn modeletter(i: &str) -> IResult<&str, Rule> {
+fn modeletter(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, chars, _, dots)) =
         tuple((prefixes, tag("modeletter"), space1, alpha1, space1, dots))(i)?;
     Ok((
@@ -687,12 +709,12 @@ fn modeletter(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn capsletter(i: &str) -> IResult<&str, Rule> {
+fn capsletter(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, dots)) = tuple((prefixes, tag("capsletter"), space1, dots))(i)?;
     Ok((input, Rule::Capsletter { dots, prefixes }))
 }
 
-fn begmodeword(i: &str) -> IResult<&str, Rule> {
+fn begmodeword(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, chars, _, dots)) =
         tuple((prefixes, tag("begmodeword"), space1, alpha1, space1, dots))(i)?;
     Ok((
@@ -705,17 +727,17 @@ fn begmodeword(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn begcapsword(i: &str) -> IResult<&str, Rule> {
+fn begcapsword(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, dots)) = tuple((prefixes, tag("begcapsword"), space1, dots))(i)?;
     Ok((input, Rule::Begcapsword { dots, prefixes }))
 }
 
-fn endcapsword(i: &str) -> IResult<&str, Rule> {
+fn endcapsword(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, dots)) = tuple((prefixes, tag("endcapsword"), space1, dots))(i)?;
     Ok((input, Rule::Endcapsword { dots, prefixes }))
 }
 
-fn capsmodechars(i: &str) -> IResult<&str, Rule> {
+fn capsmodechars(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars)) = tuple((tag("capsmodechars"), space1, chars))(i)?;
     Ok((
         input,
@@ -725,22 +747,22 @@ fn capsmodechars(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn begcaps(i: &str) -> IResult<&str, Rule> {
+fn begcaps(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, dots)) = tuple((tag("begcaps"), space1, dots))(i)?;
     Ok((input, Rule::Begcaps { dots }))
 }
 
-fn endcaps(i: &str) -> IResult<&str, Rule> {
+fn endcaps(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, dots)) = tuple((tag("endcaps"), space1, dots))(i)?;
     Ok((input, Rule::Endcaps { dots }))
 }
 
-fn letsign(i: &str) -> IResult<&str, Rule> {
+fn letsign(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, dots)) = tuple((tag("letsign"), space1, dots))(i)?;
     Ok((input, Rule::Letsign { dots }))
 }
 
-fn noletsign(i: &str) -> IResult<&str, Rule> {
+fn noletsign(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars)) = tuple((tag("noletsign"), space1, chars))(i)?;
     Ok((
         input,
@@ -750,7 +772,7 @@ fn noletsign(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn noletsignbefore(i: &str) -> IResult<&str, Rule> {
+fn noletsignbefore(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars)) = tuple((tag("noletsignbefore"), space1, chars))(i)?;
     Ok((
         input,
@@ -760,7 +782,7 @@ fn noletsignbefore(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn noletsignafter(i: &str) -> IResult<&str, Rule> {
+fn noletsignafter(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars)) = tuple((tag("noletsignafter"), space1, chars))(i)?;
     Ok((
         input,
@@ -770,22 +792,22 @@ fn noletsignafter(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn nocontractsign(i: &str) -> IResult<&str, Rule> {
+fn nocontractsign(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, dots)) = tuple((tag("nocontractsign"), space1, dots))(i)?;
     Ok((input, Rule::Nocontractsign { dots }))
 }
 
-fn numsign(i: &str) -> IResult<&str, Rule> {
+fn numsign(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, dots)) = tuple((tag("numsign"), space1, dots))(i)?;
     Ok((input, Rule::Numsign { dots }))
 }
 
-fn nonumsign(i: &str) -> IResult<&str, Rule> {
+fn nonumsign(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, dots)) = tuple((tag("nonumsign"), space1, dots))(i)?;
     Ok((input, Rule::Nonumsign { dots }))
 }
 
-fn numericnocontchars(i: &str) -> IResult<&str, Rule> {
+fn numericnocontchars(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars)) = tuple((tag("numericnocontchars"), space1, chars))(i)?;
     Ok((
         input,
@@ -795,7 +817,7 @@ fn numericnocontchars(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn numericmodechars(i: &str) -> IResult<&str, Rule> {
+fn numericmodechars(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars)) = tuple((tag("numericmodechars"), space1, chars))(i)?;
     Ok((
         input,
@@ -805,7 +827,7 @@ fn numericmodechars(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn midendnumericmodechars(i: &str) -> IResult<&str, Rule> {
+fn midendnumericmodechars(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars)) = tuple((tag("midendnumericmodechars"), space1, chars))(i)?;
     Ok((
         input,
@@ -815,23 +837,23 @@ fn midendnumericmodechars(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn begcapsphrase(i: &str) -> IResult<&str, Rule> {
+fn begcapsphrase(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, dots)) = tuple((tag("begcapsphrase"), space1, dots))(i)?;
     Ok((input, Rule::Begcapsphrase { dots }))
 }
 
-fn endcapsphrase(i: &str) -> IResult<&str, Rule> {
+fn endcapsphrase(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, position, _, dots)) =
         tuple((tag("endcapsphrase"), space1, before_or_after, space1, dots))(i)?;
     Ok((input, Rule::Endcapsphrase { dots, position }))
 }
 
-fn lencapsphrase(i: &str) -> IResult<&str, Rule> {
+fn lencapsphrase(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, length)) = tuple((tag("lencapsphrase"), space1, number))(i)?;
     Ok((input, Rule::Lencapsphrase { length }))
 }
 
-fn begmodephrase(input: &str) -> IResult<&str, Rule> {
+fn begmodephrase(input: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name, _, dots)) =
         tuple((tag("begmodephrase"), space1, alpha1, space1, dots))(input)?;
     Ok((
@@ -843,7 +865,7 @@ fn begmodephrase(input: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn endmodephrase(input: &str) -> IResult<&str, Rule> {
+fn endmodephrase(input: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name, _, position, _, dots)) = tuple((
         tag("endmodephrase"),
         space1,
@@ -863,7 +885,7 @@ fn endmodephrase(input: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn lenmodephrase(input: &str) -> IResult<&str, Rule> {
+fn lenmodephrase(input: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name, _, length)) =
         tuple((tag("lenmodephrase"), space1, alpha1, space1, number))(input)?;
     Ok((
@@ -875,7 +897,7 @@ fn lenmodephrase(input: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn seqdelimiter(i: &str) -> IResult<&str, Rule> {
+fn seqdelimiter(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars)) = tuple((tag("seqdelimiter"), space1, chars))(i)?;
     Ok((
         input,
@@ -885,7 +907,7 @@ fn seqdelimiter(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn seqbeforechars(i: &str) -> IResult<&str, Rule> {
+fn seqbeforechars(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars)) = tuple((tag("seqbeforechars"), space1, chars))(i)?;
     Ok((
         input,
@@ -895,7 +917,7 @@ fn seqbeforechars(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn seqafterchars(i: &str) -> IResult<&str, Rule> {
+fn seqafterchars(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars)) = tuple((tag("seqafterchars"), space1, chars))(i)?;
     Ok((
         input,
@@ -905,7 +927,7 @@ fn seqafterchars(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn seqafterpattern(i: &str) -> IResult<&str, Rule> {
+fn seqafterpattern(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars)) = tuple((tag("seqafterpattern"), space1, chars))(i)?;
     Ok((
         input,
@@ -915,7 +937,7 @@ fn seqafterpattern(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn seqafterexpression(i: &str) -> IResult<&str, Rule> {
+fn seqafterexpression(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, expression)) = tuple((tag("seqafterexpression"), space1, chars))(i)?;
     Ok((
         input,
@@ -925,7 +947,7 @@ fn seqafterexpression(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn class(i: &str) -> IResult<&str, Rule> {
+fn class(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name, _, chars)) = tuple((tag("class"), space1, chars, space1, chars))(i)?;
     Ok((
         input,
@@ -936,7 +958,7 @@ fn class(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn emphclass(i: &str) -> IResult<&str, Rule> {
+fn emphclass(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name)) = tuple((tag("emphclass"), space1, chars))(i)?;
     Ok((
         input,
@@ -946,7 +968,7 @@ fn emphclass(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn begemph(i: &str) -> IResult<&str, Rule> {
+fn begemph(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, name, _, dots)) =
         tuple((prefixes, tag("begemph"), space1, chars, space1, dots))(i)?;
     Ok((
@@ -959,7 +981,7 @@ fn begemph(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn endemph(i: &str) -> IResult<&str, Rule> {
+fn endemph(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, name, _, dots)) =
         tuple((prefixes, tag("endemph"), space1, chars, space1, dots))(i)?;
     Ok((
@@ -972,7 +994,7 @@ fn endemph(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn noemphchars(i: &str) -> IResult<&str, Rule> {
+fn noemphchars(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name, _, chars)) =
         tuple((tag("noemphchars"), space1, chars, space1, chars))(i)?;
     Ok((
@@ -984,7 +1006,7 @@ fn noemphchars(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn emphletter(i: &str) -> IResult<&str, Rule> {
+fn emphletter(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name, _, dots)) =
         tuple((tag("emphletter"), space1, chars, space1, dots))(i)?;
     Ok((
@@ -996,7 +1018,7 @@ fn emphletter(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn begemphword(i: &str) -> IResult<&str, Rule> {
+fn begemphword(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name, _, dots)) =
         tuple((tag("begemphword"), space1, chars, space1, dots))(i)?;
     Ok((
@@ -1008,7 +1030,7 @@ fn begemphword(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn endemphword(i: &str) -> IResult<&str, Rule> {
+fn endemphword(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name, _, dots)) =
         tuple((tag("endemphword"), space1, chars, space1, dots))(i)?;
     Ok((
@@ -1020,7 +1042,7 @@ fn endemphword(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn emphmodechars(i: &str) -> IResult<&str, Rule> {
+fn emphmodechars(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name, _, chars)) =
         tuple((tag("emphmodechars"), space1, chars, space1, chars))(i)?;
     Ok((
@@ -1032,7 +1054,7 @@ fn emphmodechars(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn begemphphrase(i: &str) -> IResult<&str, Rule> {
+fn begemphphrase(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name, _, dots)) =
         tuple((tag("begemphphrase"), space1, chars, space1, dots))(i)?;
     Ok((
@@ -1044,7 +1066,7 @@ fn begemphphrase(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn endemphphrase(i: &str) -> IResult<&str, Rule> {
+fn endemphphrase(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name, _, position, _, dots)) = tuple((
         tag("endemphphrase"),
         space1,
@@ -1064,7 +1086,7 @@ fn endemphphrase(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn lenemphphrase(i: &str) -> IResult<&str, Rule> {
+fn lenemphphrase(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name, _, length)) =
         tuple((tag("lenemphphrase"), space1, chars, space1, number))(i)?;
     Ok((
@@ -1076,17 +1098,17 @@ fn lenemphphrase(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn begcomp(i: &str) -> IResult<&str, Rule> {
+fn begcomp(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, dots)) = tuple((prefixes, tag("begcomp"), space1, dots))(i)?;
     Ok((input, Rule::Begcomp { dots, prefixes }))
 }
 
-fn endcomp(i: &str) -> IResult<&str, Rule> {
+fn endcomp(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, dots)) = tuple((prefixes, tag("endcomp"), space1, dots))(i)?;
     Ok((input, Rule::Endcomp { dots, prefixes }))
 }
 
-fn decpoint(i: &str) -> IResult<&str, Rule> {
+fn decpoint(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars, _, dots)) = tuple((tag("decpoint"), space1, chars, space1, dots))(i)?;
     Ok((
         input,
@@ -1097,7 +1119,7 @@ fn decpoint(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn hyphen(i: &str) -> IResult<&str, Rule> {
+fn hyphen(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, chars, _, dots)) =
         tuple((prefixes, tag("hyphen"), space1, chars, space1, dots))(i)?;
     Ok((
@@ -1110,12 +1132,12 @@ fn hyphen(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn capsnocont(i: &str) -> IResult<&str, Rule> {
+fn capsnocont(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, _) = tag("capsnocont")(i)?;
     Ok((input, Rule::Capsnocont))
 }
 
-fn compbrl(i: &str) -> IResult<&str, Rule> {
+fn compbrl(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, chars)) = tuple((prefixes, tag("compbrl"), space1, chars))(i)?;
     Ok((
         input,
@@ -1126,7 +1148,7 @@ fn compbrl(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn comp6(i: &str) -> IResult<&str, Rule> {
+fn comp6(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars, _, dots)) = tuple((
         tag("comp6"),
         space1,
@@ -1143,7 +1165,7 @@ fn comp6(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn nocont(i: &str) -> IResult<&str, Rule> {
+fn nocont(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars)) = tuple((tag("nocont"), space1, chars))(i)?;
     Ok((
         input,
@@ -1153,7 +1175,7 @@ fn nocont(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn replace(i: &str) -> IResult<&str, Rule> {
+fn replace(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars, replacement)) =
         tuple((tag("replace"), space1, chars, opt(tuple((space1, chars)))))(i)?;
     let replacement = match replacement {
@@ -1169,7 +1191,7 @@ fn replace(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn always(i: &str) -> IResult<&str, Rule> {
+fn always(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
         prefixes,
         with_classes,
@@ -1190,7 +1212,7 @@ fn always(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn repeated(i: &str) -> IResult<&str, Rule> {
+fn repeated(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, chars, _, dots)) =
         tuple((prefixes, tag("repeated"), space1, chars, space1, dots))(i)?;
     Ok((
@@ -1203,7 +1225,7 @@ fn repeated(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn repword(i: &str) -> IResult<&str, Rule> {
+fn repword(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars, _, dots)) = tuple((tag("repword"), space1, chars, space1, dots))(i)?;
     Ok((
         input,
@@ -1214,7 +1236,7 @@ fn repword(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn rependword(i: &str) -> IResult<&str, Rule> {
+fn rependword(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars, _, dots, _, other)) = tuple((
         tag("rependword"),
         space1,
@@ -1234,7 +1256,7 @@ fn rependword(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn largesign(i: &str) -> IResult<&str, Rule> {
+fn largesign(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars, _, dots)) =
         tuple((tag("largesign"), space1, chars, space1, dots))(i)?;
     Ok((
@@ -1246,7 +1268,7 @@ fn largesign(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn word(i: &str) -> IResult<&str, Rule> {
+fn word(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
         prefixes,
         with_classes,
@@ -1267,7 +1289,7 @@ fn word(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn syllable(i: &str) -> IResult<&str, Rule> {
+fn syllable(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, word, _, dots)) = tuple((
         tag("syllable"),
         space1,
@@ -1284,7 +1306,7 @@ fn syllable(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn joinword(i: &str) -> IResult<&str, Rule> {
+fn joinword(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, word, _, dots)) = tuple((tag("joinword"), space1, chars, space1, dots))(i)?;
     Ok((
         input,
@@ -1295,7 +1317,7 @@ fn joinword(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn lowword(i: &str) -> IResult<&str, Rule> {
+fn lowword(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, chars, _, dots)) =
         tuple((prefixes, tag("lowword"), space1, chars, space1, dots))(i)?;
     Ok((
@@ -1308,7 +1330,7 @@ fn lowword(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn contraction(i: &str) -> IResult<&str, Rule> {
+fn contraction(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars)) = tuple((tag("contraction"), space1, chars))(i)?;
     Ok((
         input,
@@ -1318,7 +1340,7 @@ fn contraction(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn sufword(i: &str) -> IResult<&str, Rule> {
+fn sufword(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
         prefixes,
         with_classes,
@@ -1339,7 +1361,7 @@ fn sufword(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn prfword(i: &str) -> IResult<&str, Rule> {
+fn prfword(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
         prefixes,
         with_classes,
@@ -1360,7 +1382,7 @@ fn prfword(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn begword(i: &str) -> IResult<&str, Rule> {
+fn begword(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
         prefixes,
         with_classes,
@@ -1381,7 +1403,7 @@ fn begword(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn begmidword(i: &str) -> IResult<&str, Rule> {
+fn begmidword(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
         prefixes,
         with_classes,
@@ -1402,7 +1424,7 @@ fn begmidword(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn midword(i: &str) -> IResult<&str, Rule> {
+fn midword(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
         prefixes,
         with_classes,
@@ -1423,7 +1445,7 @@ fn midword(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn midendword(i: &str) -> IResult<&str, Rule> {
+fn midendword(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
         prefixes,
         with_classes,
@@ -1444,7 +1466,7 @@ fn midendword(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn endword(i: &str) -> IResult<&str, Rule> {
+fn endword(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
         prefixes,
         with_classes,
@@ -1465,7 +1487,7 @@ fn endword(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn partword(i: &str) -> IResult<&str, Rule> {
+fn partword(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
         prefixes,
         with_classes,
@@ -1486,7 +1508,7 @@ fn partword(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn prepunc(i: &str) -> IResult<&str, Rule> {
+fn prepunc(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, chars, _, dots)) =
         tuple((prefixes, tag("prepunc"), space1, chars, space1, dots))(i)?;
     Ok((
@@ -1499,7 +1521,7 @@ fn prepunc(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn postpunc(i: &str) -> IResult<&str, Rule> {
+fn postpunc(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, chars, _, dots)) =
         tuple((prefixes, tag("postpunc"), space1, chars, space1, dots))(i)?;
     Ok((
@@ -1512,7 +1534,7 @@ fn postpunc(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn begnum(i: &str) -> IResult<&str, Rule> {
+fn begnum(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, chars, _, dots)) =
         tuple((prefixes, tag("begnum"), space1, chars, space1, dots))(i)?;
     Ok((
@@ -1525,7 +1547,7 @@ fn begnum(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn midnum(i: &str) -> IResult<&str, Rule> {
+fn midnum(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, chars, _, dots)) =
         tuple((prefixes, tag("midnum"), space1, chars, space1, dots))(i)?;
     Ok((
@@ -1538,7 +1560,7 @@ fn midnum(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn endnum(i: &str) -> IResult<&str, Rule> {
+fn endnum(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, chars, _, dots)) = tuple((
         prefixes,
         tag("endnum"),
@@ -1557,7 +1579,7 @@ fn endnum(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn joinnum(i: &str) -> IResult<&str, Rule> {
+fn joinnum(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, chars, _, dots)) =
         tuple((prefixes, tag("joinnum"), space1, chars, space1, dots))(i)?;
     Ok((
@@ -1570,7 +1592,7 @@ fn joinnum(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn swapcd(i: &str) -> IResult<&str, Rule> {
+fn swapcd(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name, _, chars, _, dots)) = tuple((
         tag("swapcd"),
         space1,
@@ -1590,7 +1612,7 @@ fn swapcd(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn swapdd(i: &str) -> IResult<&str, Rule> {
+fn swapdd(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name, _, dots, _, dotpattern)) = tuple((
         tag("swapdd"),
         space1,
@@ -1610,7 +1632,7 @@ fn swapdd(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn swapcc(i: &str) -> IResult<&str, Rule> {
+fn swapcc(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, name, _, chars, _, replacement)) =
         tuple((tag("swapcc"), space1, alpha1, space1, chars, space1, chars))(i)?;
     Ok((
@@ -1623,7 +1645,7 @@ fn swapcc(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn context(i: &str) -> IResult<&str, Rule> {
+fn context(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, test, _, action)) =
         tuple((prefixes, tag("context"), space1, chars, space1, chars))(i)?;
     Ok((
@@ -1636,7 +1658,7 @@ fn context(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn pass2(i: &str) -> IResult<&str, Rule> {
+fn pass2(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, test, _, action)) =
         tuple((prefixes, tag("pass2"), space1, chars, space1, chars))(i)?;
     Ok((
@@ -1649,7 +1671,7 @@ fn pass2(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn pass3(i: &str) -> IResult<&str, Rule> {
+fn pass3(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, test, _, action)) =
         tuple((prefixes, tag("pass3"), space1, chars, space1, chars))(i)?;
     Ok((
@@ -1662,7 +1684,7 @@ fn pass3(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn pass4(i: &str) -> IResult<&str, Rule> {
+fn pass4(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, test, _, action)) =
         tuple((prefixes, tag("pass4"), space1, chars, space1, chars))(i)?;
     Ok((
@@ -1675,7 +1697,7 @@ fn pass4(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn correct(i: &str) -> IResult<&str, Rule> {
+fn correct(i: &str) -> IResult<&str, Rule, LouisParseError> {
     // FIXME: make sure the prefixes are mandatory here
     let (input, (prefixes, _, _, test, _, action)) =
         tuple((prefixes, tag("correct"), space1, chars, space1, chars))(i)?;
@@ -1689,7 +1711,7 @@ fn correct(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn match_opcode(i: &str) -> IResult<&str, Rule> {
+fn match_opcode(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, classes, positions, _, _, pre, _, chars, _, post, _, dots)) = tuple((
         prefixes,
         with_classes,
@@ -1718,7 +1740,7 @@ fn match_opcode(i: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn literal(input: &str) -> IResult<&str, Rule> {
+fn literal(input: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars)) = tuple((tag("literal"), space1, chars))(input)?;
     Ok((
         input,
@@ -1728,7 +1750,7 @@ fn literal(input: &str) -> IResult<&str, Rule> {
     ))
 }
 
-fn with_class_before(input: &str) -> IResult<&str, WithClass> {
+fn with_class_before(input: &str) -> IResult<&str, WithClass, LouisParseError> {
     let (input, (_, _, class, _)) = tuple((tag("before"), space1, alpha1, space1))(input)?;
     Ok((
         input,
@@ -1738,7 +1760,7 @@ fn with_class_before(input: &str) -> IResult<&str, WithClass> {
     ))
 }
 
-fn with_class_after(input: &str) -> IResult<&str, WithClass> {
+fn with_class_after(input: &str) -> IResult<&str, WithClass, LouisParseError> {
     let (input, (_, _, class, _)) = tuple((tag("after"), space1, alpha1, space1))(input)?;
     Ok((
         input,
@@ -1748,11 +1770,11 @@ fn with_class_after(input: &str) -> IResult<&str, WithClass> {
     ))
 }
 
-fn with_classes(input: &str) -> IResult<&str, Vec<WithClass>> {
+fn with_classes(input: &str) -> IResult<&str, Vec<WithClass>, LouisParseError> {
     many0(alt((with_class_before, with_class_after)))(input)
 }
 
-fn with_matches(input: &str) -> IResult<&str, WithMatches> {
+fn with_matches(input: &str) -> IResult<&str, WithMatches, LouisParseError> {
     alt((
         value(
             WithMatch::Before | WithMatch::After,
@@ -1770,16 +1792,16 @@ fn with_matches(input: &str) -> IResult<&str, WithMatches> {
             enum_set!(WithMatch::After),
             tuple((tag("empmatchafter"), space1)),
         ),
-        success::<_, _, Error<_>>(WithMatches::empty()),
+        success::<_, _, LouisParseError>(WithMatches::empty()),
     ))(input)
 }
 
-fn end_comment(i: &str) -> IResult<&str, &str> {
+fn end_comment(i: &str) -> IResult<&str, &str, LouisParseError> {
     let (input, (_, _, comment)) = tuple((space1, opt(tag("#")), not_line_ending))(i)?;
     Ok((input, comment))
 }
 
-fn rule_line(i: &str) -> IResult<&str, Line> {
+fn rule_line(i: &str) -> IResult<&str, Line, LouisParseError> {
     let (input, (rule, comment, _)) = tuple((
         // for some reason alt only allows for 21 choices. As a
         // workaround we need to nest the alt calls, see
@@ -1910,7 +1932,7 @@ fn rule_line(i: &str) -> IResult<&str, Line> {
     ))
 }
 
-fn comment_line(i: &str) -> IResult<&str, Line> {
+fn comment_line(i: &str) -> IResult<&str, Line, LouisParseError> {
     let (input, (_, comment, _)) = tuple((tag("#"), not_line_ending, line_ending))(i)?;
     Ok((
         input,
@@ -1920,12 +1942,12 @@ fn comment_line(i: &str) -> IResult<&str, Line> {
     ))
 }
 
-fn empty_line(i: &str) -> IResult<&str, Line> {
+fn empty_line(i: &str) -> IResult<&str, Line, LouisParseError> {
     let (input, (_, _)) = tuple((space0, line_ending))(i)?;
     Ok((input, Line::Empty))
 }
 
-fn line(i: &str) -> IResult<&str, Line> {
+fn line(i: &str) -> IResult<&str, Line, LouisParseError> {
     let (input, rule) = alt((rule_line, comment_line, empty_line))(i)?;
     Ok((input, rule))
 }
@@ -1944,7 +1966,7 @@ fn expand_include(search_path: &SearchPath, rule: Rule) -> Vec<Rule> {
         // FIXME: how do we upstream io and parsing errors?
         let path = search_path.find_file(&PathBuf::from(filename)).unwrap();
         let included = fs::read_to_string(path).unwrap();
-        let (_, lines) = table(&included).unwrap();
+        let lines = table(&included).unwrap();
         let rules = lines
             .into_iter()
             .filter_map(|line| line.as_rule())
@@ -1965,8 +1987,6 @@ pub fn expand_includes(search_path: &SearchPath, rules: Vec<Rule>) -> Vec<Rule> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nom::error::Error;
-    use nom::error::ErrorKind;
     use nom::Err;
 
     #[test]
@@ -1991,8 +2011,8 @@ mod tests {
     #[test]
     fn char_to_dot_test() {
         assert_eq!(char_to_dot('8'), Ok(BrailleDot::DOT8));
-        assert_eq!(char_to_dot('F'), Err(ParseBrailleError {}));
-        assert_eq!(char_to_dot('z'), Err(ParseBrailleError {}));
+        assert_eq!(char_to_dot('F'), Err(LouisParseError::BadBraille));
+        assert_eq!(char_to_dot('z'), Err(LouisParseError::BadBraille));
     }
 
     #[test]
@@ -2011,25 +2031,16 @@ mod tests {
         assert_eq!(one_unicode_digit("1"), Ok(("", '1')));
         assert_eq!(
             one_unicode_digit("12"),
-            Err(Err::Error(Error {
-                input: "12",
-                code: ErrorKind::Verify
-            }))
+            Err(Err::Error(LouisParseError::BadDigit))
         );
         assert_eq!(
             one_unicode_digit("b"),
-            Err(Err::Error(Error {
-                input: "b",
-                code: ErrorKind::Digit
-            }))
+            Err(Err::Error(LouisParseError::BadDigit))
         );
         assert_eq!(one_unicode_digit("1b"), Ok(("b", '1')));
         assert_eq!(
             one_unicode_digit(""),
-            Err(Err::Error(Error {
-                input: "",
-                code: ErrorKind::Digit
-            }))
+            Err(Err::Error(LouisParseError::BadDigit))
         );
         assert_eq!(one_unicode_digit("໑"), Ok(("", '໑')));
     }
@@ -2141,13 +2152,7 @@ mod tests {
                 ]
             ))
         );
-        assert_eq!(
-            dots("huhu"),
-            Err(Err::Error(Error {
-                input: "huhu",
-                code: ErrorKind::HexDigit
-            }))
-        );
+        assert_eq!(dots("huhu"), Err(Err::Error(LouisParseError::BadBraille)));
     }
 
     #[test]
@@ -2165,13 +2170,7 @@ mod tests {
             braillechars_or_implicit("="),
             Ok(("", BrailleCharsOrImplicit::Implicit))
         );
-        assert_eq!(
-            dots("m"),
-            Err(Err::Error(Error {
-                input: "m",
-                code: ErrorKind::HexDigit
-            }))
-        );
+        assert_eq!(dots("m"), Err(Err::Error(LouisParseError::BadBraille)));
     }
 
     #[test]
@@ -2507,7 +2506,7 @@ mod tests {
         );
         assert_eq!(
             endcapsphrase("endcapsphrase foo 45"),
-            Err(Err::Error(Error::new("foo 45", ErrorKind::Tag)))
+            Err(Err::Error(LouisParseError::Unparseable))
         );
     }
 
@@ -2817,7 +2816,7 @@ mod tests {
         );
         assert_eq!(
             comment_line("# haha 1234    "),
-            Err(Err::Error(Error::new("", ErrorKind::CrLf)))
+            Err(Err::Error(LouisParseError::Unparseable))
         );
     }
 
@@ -2850,29 +2849,26 @@ mod tests {
                 "joinword haha 123\n",
                 "syllable haha 123-1f\n"
             )),
-            Ok((
-                "",
-                vec![
-                    Line::Empty,
-                    Line::Rule {
-                        rule: Rule::Joinword {
-                            word: "haha".to_string(),
-                            dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
-                        },
-                        comment: "".to_string()
+            Ok(vec![
+                Line::Empty,
+                Line::Rule {
+                    rule: Rule::Joinword {
+                        word: "haha".to_string(),
+                        dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
                     },
-                    Line::Rule {
-                        rule: Rule::Syllable {
-                            word: "haha".to_string(),
-                            dots: BrailleCharsOrImplicit::Explicit(vec![
-                                BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3,
-                                BrailleDot::DOT1 | BrailleDot::DOTF
-                            ])
-                        },
-                        comment: "".to_string()
-                    }
-                ]
-            ))
+                    comment: "".to_string()
+                },
+                Line::Rule {
+                    rule: Rule::Syllable {
+                        word: "haha".to_string(),
+                        dots: BrailleCharsOrImplicit::Explicit(vec![
+                            BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3,
+                            BrailleDot::DOT1 | BrailleDot::DOTF
+                        ])
+                    },
+                    comment: "".to_string()
+                }
+            ])
         );
         assert_eq!(
             table(concat!(
@@ -2882,37 +2878,34 @@ mod tests {
                 "joinword haha 123\n",
                 "syllable haha =\n"
             )),
-            Ok((
-                "",
-                vec![
-                    Line::Empty,
-                    Line::Comment {
-                        comment: " just testing".to_string()
+            Ok(vec![
+                Line::Empty,
+                Line::Comment {
+                    comment: " just testing".to_string()
+                },
+                Line::Rule {
+                    rule: Rule::Multind {
+                        opcodes: vec!["always".to_string(), "syllable".to_string()],
+                        dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
+                        prefixes: enum_set!(Prefix::Nocross)
                     },
-                    Line::Rule {
-                        rule: Rule::Multind {
-                            opcodes: vec!["always".to_string(), "syllable".to_string()],
-                            dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
-                            prefixes: enum_set!(Prefix::Nocross)
-                        },
-                        comment: "".to_string()
+                    comment: "".to_string()
+                },
+                Line::Rule {
+                    rule: Rule::Joinword {
+                        word: "haha".to_string(),
+                        dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
                     },
-                    Line::Rule {
-                        rule: Rule::Joinword {
-                            word: "haha".to_string(),
-                            dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
-                        },
-                        comment: "".to_string()
+                    comment: "".to_string()
+                },
+                Line::Rule {
+                    rule: Rule::Syllable {
+                        word: "haha".to_string(),
+                        dots: BrailleCharsOrImplicit::Implicit
                     },
-                    Line::Rule {
-                        rule: Rule::Syllable {
-                            word: "haha".to_string(),
-                            dots: BrailleCharsOrImplicit::Implicit
-                        },
-                        comment: "".to_string()
-                    }
-                ]
-            ))
+                    comment: "".to_string()
+                }
+            ])
         );
     }
 }
