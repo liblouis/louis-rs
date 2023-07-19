@@ -61,11 +61,8 @@ impl DisplayTable {
     pub fn compile(rules: Vec<Rule>) -> DisplayTable {
         let mut mapping = DisplayDefinitions::new();
         for rule in rules {
-            match rule {
-                Rule::Display { ch, dots, .. } => {
-                    mapping.insert(dots_to_unicode(dots).chars().nth(0).unwrap(), ch);
-                }
-                _ => (),
+            if let Rule::Display { ch, dots, .. } = rule {
+                mapping.insert(dots_to_unicode(dots).chars().nth(0).unwrap(), ch);
             }
         }
         DisplayTable {
@@ -100,7 +97,7 @@ pub struct TranslationTable {
 
 impl TranslationTable {
     pub fn compile(rules: Vec<Rule>, direction: Direction) -> Self {
-        let mut char_defs = HashMap::new();
+        let mut character_definitions = HashMap::new();
         let mut translations = HashMap::new();
         let mut undefined: Option<String> = None;
         let rules = rules.into_iter().filter(|r| {
@@ -123,12 +120,14 @@ impl TranslationTable {
                 | Rule::Litdigit { ch, dots }
                 | Rule::Sign { ch, dots, .. }
                 | Rule::Math { ch, dots, .. } => {
-                    char_defs.insert(ch, dots_to_unicode(dots));
+                    character_definitions.insert(ch, dots_to_unicode(dots));
                 }
-                Rule::Letter { ch, dots, .. } => {
-                    if let BrailleCharsOrImplicit::Explicit(explicit_dots) = dots {
-                        char_defs.insert(ch, dots_to_unicode(explicit_dots));
-                    }
+                Rule::Letter {
+                    ch,
+                    dots: BrailleCharsOrImplicit::Explicit(explicit_dots),
+                    ..
+                } => {
+                    character_definitions.insert(ch, dots_to_unicode(explicit_dots));
                 }
                 Rule::Always { chars, dots, .. }
                 | Rule::Word { chars, dots, .. }
@@ -142,15 +141,15 @@ impl TranslationTable {
         }
         if let Some(undefined) = undefined {
             TranslationTable {
-                undefined: undefined,
-                character_definitions: char_defs,
-                translations: translations,
+                undefined,
+                character_definitions,
+                translations,
                 ..Default::default()
             }
         } else {
             TranslationTable {
-                character_definitions: char_defs,
-                translations: translations,
+                character_definitions,
+                translations,
                 ..Default::default()
             }
         }
@@ -196,7 +195,7 @@ impl TranslationTable {
     }
 
     fn apply_undefined<'a>(&'a self, input: &'a str) -> Option<(&'a str, TranslationMapping<'a>)> {
-        let c = input.chars().nth(0)?;
+        let c = input.chars().next()?;
         let (first, rest) = input.split_at(c.to_string().len());
         Some((rest, TranslationMapping::new(first, &self.undefined)))
     }
@@ -205,7 +204,7 @@ impl TranslationTable {
         &'a self,
         input: &'a str,
     ) -> Option<(&'a str, TranslationMapping<'a>)> {
-        let c = input.chars().nth(0)?;
+        let c = input.chars().next()?;
         let braille = self.char_to_braille(c)?;
         // the c.to_string().len() is fishy, but I need to know the
         // byte length of the char so I can split the slice at the
@@ -215,10 +214,8 @@ impl TranslationTable {
     }
 
     fn apply_translations<'a>(&self, input: &'a str) -> Option<(&'a str, TranslationMapping)> {
-        match self.longest_matching_translation(input) {
-            Some((k, v)) => Some((input.split_at(k.len()).1, TranslationMapping::new(k, v))),
-            None => None,
-        }
+        self.longest_matching_translation(input)
+            .map(|(k, v)| (input.split_at(k.len()).1, TranslationMapping::new(k, v)))
     }
 
     /// Find the longest matching translation for given input

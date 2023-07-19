@@ -30,11 +30,7 @@ pub enum TestResult {
 
 impl TestResult {
     pub fn is_failure(&self) -> bool {
-        if let TestResult::Failure { .. } = self {
-            return true;
-        } else {
-            return false;
-        }
+        matches!(self, TestResult::Failure { .. })
     }
 }
 
@@ -80,25 +76,23 @@ impl Test {
         let displayed = display(display_table, &translated);
         if displayed == self.expected {
             if !self.xfail {
-                return TestResult::Success;
+                TestResult::Success
             } else {
-                return TestResult::UnexpectedSuccess {
+                TestResult::UnexpectedSuccess {
                     input: self.input.to_string(),
-                };
+                }
+            }
+        } else if self.xfail {
+            TestResult::ExpectedFailure {
+                input: self.input.to_string(),
+                expected: self.expected.to_string(),
+                actual: displayed,
             }
         } else {
-            if self.xfail {
-                return TestResult::ExpectedFailure {
-                    input: self.input.to_string(),
-                    expected: self.expected.to_string(),
-                    actual: displayed,
-                };
-            } else {
-                return TestResult::Failure {
-                    input: self.input.to_string(),
-                    expected: self.expected.to_string(),
-                    actual: displayed,
-                };
+            TestResult::Failure {
+                input: self.input.to_string(),
+                expected: self.expected.to_string(),
+                actual: displayed,
             }
         }
     }

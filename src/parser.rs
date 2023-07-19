@@ -1182,10 +1182,7 @@ fn nocont(i: &str) -> IResult<&str, Rule, LouisParseError> {
 fn replace(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (_, _, chars, replacement)) =
         tuple((tag("replace"), space1, chars, opt(tuple((space1, chars)))))(i)?;
-    let replacement = match replacement {
-        Some((_, replacement)) => Some(replacement.to_string()),
-        None => None,
-    };
+    let replacement = replacement.map(|(_, replacement)| replacement.to_string());
     Ok((
         input,
         Rule::Replace {
