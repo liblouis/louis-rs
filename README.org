@@ -60,6 +60,14 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
   - [ ] add code to handle word boundaries so we could support beg- and
     endword.
   - [ ] add code to handle braille indication (caps, emphasis, etc)
+- [X] Replace the ~BrailleChar~ type with Unicode braille
+  - this doesn't work as Unicode braille doesn't cater for virtual dots
+- [ ] Add another step to the pipeline similar to the
+  ~expand_includes~ step that normalizes all the
+  ~BrailleCharsOrImplicit::Implicit~ variants into
+  ~BrailleCharsOrImplicit::Explicit~ by building a hashmap of
+  character definitions and then looking up the implicit patterns and
+  replacing them with the explicit dots.
 
 * Open Questions
 - Should the translation API be against ~&str~ or ~&[char]~
