@@ -10,6 +10,7 @@ use crate::parser::Rule;
 use crate::translator::character::CharacterAttributes;
 
 mod character;
+mod indication;
 
 type Corrections = HashMap<String, String>;
 type CharacterDefinitions = HashMap<char, String>;
