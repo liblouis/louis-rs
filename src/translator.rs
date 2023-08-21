@@ -167,20 +167,22 @@ impl TranslationTable {
     }
 
     fn pass1<'a>(&'a self, input: &'a str) -> Vec<TranslationMapping<'a>> {
-        let mut current_input = input;
+        let mut current_pos = 0;
         let mut mappings = Vec::new();
-        while !current_input.is_empty() {
+        while current_pos < input.len() {
             // check if any translations apply
-            if let Some((rest, mapping)) = self.apply_translations(current_input) {
-                current_input = rest;
+            if let Some((consumed, mapping)) = self.apply_translations(input, current_pos) {
+                current_pos += consumed;
                 mappings.push(mapping);
             // check if any character definitions apply
-            } else if let Some((rest, mapping)) = self.apply_character_definition(current_input) {
-                current_input = rest;
+            } else if let Some((consumed, mapping)) =
+                self.apply_character_definition(&input[current_pos..])
+            {
+                current_pos += consumed;
                 mappings.push(mapping);
             // otherwise just use the undefined definition
-            } else if let Some((rest, mapping)) = self.apply_undefined(current_input) {
-                current_input = rest;
+            } else if let Some((consumed, mapping)) = self.apply_undefined(&input[current_pos..]) {
+                current_pos += consumed;
                 mappings.push(mapping);
             } else {
                 // FIXME: what should pass1 do if it can't even apply
@@ -195,28 +197,34 @@ impl TranslationTable {
         self.character_definitions.get(&c)
     }
 
-    fn apply_undefined<'a>(&'a self, input: &'a str) -> Option<(&'a str, TranslationMapping<'a>)> {
+    fn apply_undefined<'a>(&'a self, input: &'a str) -> Option<(usize, TranslationMapping<'a>)> {
         let c = input.chars().next()?;
-        let (first, rest) = input.split_at(c.to_string().len());
-        Some((rest, TranslationMapping::new(first, &self.undefined)))
+        let char_len = c.to_string().len();
+        Some((
+            char_len,
+            TranslationMapping::new(&input[..char_len], &self.undefined),
+        ))
     }
 
     fn apply_character_definition<'a>(
         &'a self,
         input: &'a str,
-    ) -> Option<(&'a str, TranslationMapping<'a>)> {
+    ) -> Option<(usize, TranslationMapping<'a>)> {
         let c = input.chars().next()?;
         let braille = self.char_to_braille(c)?;
         // the c.to_string().len() is fishy, but I need to know the
         // byte length of the char so I can split the slice at the
         // right point
-        let (first, rest) = input.split_at(c.to_string().len());
-        Some((rest, TranslationMapping::new(first, braille)))
+        let char_len = c.to_string().len();
+        Some((
+            char_len,
+            TranslationMapping::new(&input[..char_len], braille),
+        ))
     }
 
-    fn apply_translations<'a>(&self, input: &'a str) -> Option<(&'a str, TranslationMapping)> {
-        self.longest_matching_translation(input)
-            .map(|(k, v)| (input.split_at(k.len()).1, TranslationMapping::new(k, v)))
+    fn apply_translations(&self, input: &str, pos: usize) -> Option<(usize, TranslationMapping)> {
+        self.longest_matching_translation(input, pos)
+            .map(|(k, v)| (k.len(), TranslationMapping::new(k, v)))
     }
 
     /// Find the longest matching translation for given input
@@ -227,10 +235,10 @@ impl TranslationTable {
     // average length of an opcode. A much better implementation will
     // be using a [trie](https://en.wikipedia.org/wiki/Trie), such as
     // the one provided in the [fst crate](https://crates.io/crates/fst)
-    fn longest_matching_translation(&self, input: &str) -> Option<(&String, &String)> {
+    fn longest_matching_translation(&self, input: &str, pos: usize) -> Option<(&String, &String)> {
         self.translations
             .iter()
-            .filter(|(k, _)| input.starts_with(&**k))
+            .filter(|(k, _)| input[pos..].starts_with(&**k))
             .max_by(|a, b| a.0.chars().count().cmp(&b.0.chars().count()))
     }
 }
@@ -297,17 +305,17 @@ mod tests {
         };
         assert_eq!(
             table.apply_character_definition("a"),
-            Some((&""[..], TranslationMapping::new("a", "A")))
+            Some((1, TranslationMapping::new("a", "A")))
         );
         assert_eq!(
             table.apply_character_definition("b"),
-            Some((&""[..], TranslationMapping::new("b", "B")))
+            Some((1, TranslationMapping::new("b", "B")))
         );
         assert_eq!(table.apply_character_definition("x"), None);
         // only consume one char
         assert_eq!(
             table.apply_character_definition("aa"),
-            Some((&"a"[..], TranslationMapping::new("a", "A")))
+            Some((1, TranslationMapping::new("a", "A")))
         );
         // handle weird unicode correctly
         assert_eq!(table.apply_character_definition("🛖a"), None);
@@ -327,15 +335,15 @@ mod tests {
         };
         let ignore = String::new();
         assert_eq!(
-            table.longest_matching_translation("haha"),
+            table.longest_matching_translation("haha", 0),
             Some((&"haha".to_string(), &ignore))
         );
         assert_eq!(
-            table.longest_matching_translation("hahaha"),
+            table.longest_matching_translation("hahaha", 0),
             Some((&"hahaha".to_string(), &ignore))
         );
         assert_eq!(
-            table.longest_matching_translation("hahaho"),
+            table.longest_matching_translation("hahaho", 0),
             Some((&"haha".to_string(), &ignore))
         );
     }
@@ -353,16 +361,16 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            table.apply_translations("haha"),
-            Some((&""[..], TranslationMapping::new("haha", "HA")))
+            table.apply_translations("haha", 0),
+            Some((4, TranslationMapping::new("haha", "HA")))
         );
         assert_eq!(
-            table.apply_translations("hahaha"),
-            Some((&""[..], TranslationMapping::new("hahaha", "HAA")))
+            table.apply_translations("hahaha", 0),
+            Some((6, TranslationMapping::new("hahaha", "HAA")))
         );
         assert_eq!(
-            table.apply_translations("hahaho"),
-            Some((&"ho"[..], TranslationMapping::new("haha", "HA")))
+            table.apply_translations("hahaho", 0),
+            Some((4, TranslationMapping::new("haha", "HA")))
         );
     }
 
