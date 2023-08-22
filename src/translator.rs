@@ -24,10 +24,12 @@ pub enum Constraint {
     WordEnd,
 }
 
+type Constraints = HashSet<Constraint>;
+
 #[derive(Debug, Default, PartialEq)]
 pub struct Translation {
     from: String,
-    constraints: HashSet<Constraint>,
+    constraints: Constraints,
     to: String,
 }
 
@@ -255,6 +257,28 @@ impl TranslationTable {
             .map(|Translation { from, to, .. }| (from.len(), TranslationMapping::new(from, to)))
     }
 
+    fn satisfy_constraint(
+        &self,
+        input: &str,
+        pos: usize,
+        from: &str,
+        constraint: &Constraint,
+    ) -> bool {
+        match constraint {
+            Constraint::WordEnd => {
+                // do unicode word segmentation?
+                true
+            }
+            Constraint::WordStart => true,
+        }
+    }
+
+    fn satisfy_constraints(&self, input: &str, pos: usize, translation: &Translation) -> bool {
+        translation.constraints.iter().fold(true, |acc, c| {
+            acc && self.satisfy_constraint(input, pos, &translation.from, c)
+        })
+    }
+
     /// Find the longest matching translation for given input
 
     // This is a very naive implementation. It basically goes through
@@ -267,6 +291,7 @@ impl TranslationTable {
         self.translations
             .iter()
             .filter(|Translation { from, .. }| input[pos..].starts_with(&**from))
+            .filter(|translation| self.satisfy_constraints(input, pos, &translation))
             .max_by(|a, b| a.from.chars().count().cmp(&b.from.chars().count()))
     }
 }
