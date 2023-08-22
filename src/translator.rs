@@ -51,15 +51,6 @@ enum TranslationMode {
     Caps,
 }
 
-/// Context of a translation
-///
-/// Contains information that is needed to do the translation, such as
-/// whether the previous character is a number, etc
-struct TranslationContext {
-    prev_char: char,
-    mode: TranslationMode,
-}
-
 #[derive(Default, Debug, PartialEq, Eq, Deserialize, Hash, Clone, clap::ValueEnum)]
 pub enum Direction {
     #[default]
