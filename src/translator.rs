@@ -1,6 +1,7 @@
 //! Translate text to braille using liblouis translation tables.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use serde::Deserialize;
 
@@ -15,7 +16,20 @@ mod indication;
 type Corrections = HashMap<String, String>;
 type CharacterDefinitions = HashMap<char, String>;
 type DisplayDefinitions = HashMap<char, char>;
-type Translations = HashMap<String, String>;
+type Translations = Vec<Translation>;
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum Constraint {
+    WordStart,
+    WordEnd,
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct Translation {
+    from: String,
+    constraints: HashSet<Constraint>,
+    to: String,
+}
 
 /// Mapping of an input char to the translated output
 #[derive(Debug, PartialEq)]
@@ -99,7 +113,7 @@ pub struct TranslationTable {
 impl TranslationTable {
     pub fn compile(rules: Vec<Rule>, direction: Direction) -> Self {
         let mut character_definitions = HashMap::new();
-        let mut translations = HashMap::new();
+        let mut translations = Vec::new();
         let mut undefined: Option<String> = None;
         let rules = rules.into_iter().filter(|r| {
             if direction == Direction::Forward {
@@ -130,11 +144,34 @@ impl TranslationTable {
                 } => {
                     character_definitions.insert(ch, dots_to_unicode(explicit_dots));
                 }
-                Rule::Always { chars, dots, .. }
-                | Rule::Word { chars, dots, .. }
-                | Rule::Partword { chars, dots, .. } => {
+                Rule::Always { chars, dots, .. } | Rule::Partword { chars, dots, .. } => {
                     if let BrailleCharsOrImplicit::Explicit(explicit_dots) = dots {
-                        translations.insert(chars, dots_to_unicode(explicit_dots));
+                        translations.push(Translation {
+                            from: chars,
+                            constraints: HashSet::new(),
+                            to: dots_to_unicode(explicit_dots),
+                        });
+                    }
+                }
+                Rule::Word { chars, dots, .. } => {
+                    if let BrailleCharsOrImplicit::Explicit(explicit_dots) = dots {
+                        translations.push(Translation {
+                            from: chars,
+                            constraints: HashSet::from([
+                                Constraint::WordStart,
+                                Constraint::WordEnd,
+                            ]),
+                            to: dots_to_unicode(explicit_dots),
+                        });
+                    }
+                }
+                Rule::Begword { chars, dots, .. } => {
+                    if let BrailleCharsOrImplicit::Explicit(explicit_dots) = dots {
+                        translations.push(Translation {
+                            from: chars,
+                            constraints: HashSet::from([Constraint::WordStart]),
+                            to: dots_to_unicode(explicit_dots),
+                        });
                     }
                 }
                 _ => (), // ignore all other rules for now
@@ -224,7 +261,7 @@ impl TranslationTable {
 
     fn apply_translations(&self, input: &str, pos: usize) -> Option<(usize, TranslationMapping)> {
         self.longest_matching_translation(input, pos)
-            .map(|(k, v)| (k.len(), TranslationMapping::new(k, v)))
+            .map(|Translation { from, to, .. }| (from.len(), TranslationMapping::new(from, to)))
     }
 
     /// Find the longest matching translation for given input
@@ -235,11 +272,11 @@ impl TranslationTable {
     // average length of an opcode. A much better implementation will
     // be using a [trie](https://en.wikipedia.org/wiki/Trie), such as
     // the one provided in the [fst crate](https://crates.io/crates/fst)
-    fn longest_matching_translation(&self, input: &str, pos: usize) -> Option<(&String, &String)> {
+    fn longest_matching_translation(&self, input: &str, pos: usize) -> Option<&Translation> {
         self.translations
             .iter()
-            .filter(|(k, _)| input[pos..].starts_with(&**k))
-            .max_by(|a, b| a.0.chars().count().cmp(&b.0.chars().count()))
+            .filter(|Translation { from, .. }| input[pos..].starts_with(&**from))
+            .max_by(|a, b| a.from.chars().count().cmp(&b.from.chars().count()))
     }
 }
 
@@ -323,12 +360,24 @@ mod tests {
 
     #[test]
     fn longest_matching_translation_test() {
-        let translations = HashMap::from([
-            ("haha".to_string(), "".to_string()),
-            ("ha".to_string(), "".to_string()),
-            ("hahaha".to_string(), "".to_string()),
-            ("hahahi".to_string(), "".to_string()),
-        ]);
+        let translations = vec![
+            Translation {
+                from: "haha".to_string(),
+                ..Default::default()
+            },
+            Translation {
+                from: "ha".to_string(),
+                ..Default::default()
+            },
+            Translation {
+                from: "hahaha".to_string(),
+                ..Default::default()
+            },
+            Translation {
+                from: "hahahi".to_string(),
+                ..Default::default()
+            },
+        ];
         let table = TranslationTable {
             translations: translations,
             ..Default::default()
@@ -336,26 +385,52 @@ mod tests {
         let ignore = String::new();
         assert_eq!(
             table.longest_matching_translation("haha", 0),
-            Some((&"haha".to_string(), &ignore))
+            Some(&Translation {
+                from: "haha".to_string(),
+                ..Default::default()
+            })
         );
         assert_eq!(
             table.longest_matching_translation("hahaha", 0),
-            Some((&"hahaha".to_string(), &ignore))
+            Some(&Translation {
+                from: "hahaha".to_string(),
+                ..Default::default()
+            })
         );
         assert_eq!(
             table.longest_matching_translation("hahaho", 0),
-            Some((&"haha".to_string(), &ignore))
+            Some(&Translation {
+                from: "haha".to_string(),
+                ..Default::default()
+            })
         );
     }
 
     #[test]
     fn apply_translation_test() {
-        let translations = HashMap::from([
-            ("haha".to_string(), "HA".to_string()),
-            ("ha".to_string(), "H".to_string()),
-            ("hahaha".to_string(), "HAA".to_string()),
-            ("hahahi".to_string(), "HAI".to_string()),
-        ]);
+        let translations = vec![
+            Translation {
+                from: "haha".to_string(),
+                to: "HA".to_string(),
+                ..Default::default()
+            },
+            Translation {
+                from: "ha".to_string(),
+                to: "H".to_string(),
+                ..Default::default()
+            },
+            Translation {
+                from: "hahaha".to_string(),
+                to: "HAA".to_string(),
+                ..Default::default()
+            },
+            Translation {
+                from: "hahahi".to_string(),
+                to: "HAI".to_string(),
+                ..Default::default()
+            },
+        ];
+
         let table = TranslationTable {
             translations: translations,
             ..Default::default()
@@ -402,10 +477,19 @@ mod tests {
 
     #[test]
     fn find_translation_test() {
-        let translations = HashMap::from([
-            ("gegen".to_string(), "G".to_string()),
-            ("immer".to_string(), "I".to_string()),
-        ]);
+        let translations = vec![
+            Translation {
+                from: "gegen".to_string(),
+                to: "G".to_string(),
+                ..Default::default()
+            },
+            Translation {
+                from: "immer".to_string(),
+                to: "I".to_string(),
+                ..Default::default()
+            },
+        ];
+
         let table = TranslationTable {
             translations: translations,
             undefined: "X".to_string(),
