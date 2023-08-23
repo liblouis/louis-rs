@@ -395,10 +395,9 @@ mod tests {
             },
         ];
         let table = TranslationTable {
-            translations: translations,
+            translations,
             ..Default::default()
         };
-        let ignore = String::new();
         assert_eq!(
             table.longest_matching_translation("haha", 0),
             Some(&Translation {
@@ -448,7 +447,7 @@ mod tests {
         ];
 
         let table = TranslationTable {
-            translations: translations,
+            translations,
             ..Default::default()
         };
         assert_eq!(
@@ -507,7 +506,7 @@ mod tests {
         ];
 
         let table = TranslationTable {
-            translations: translations,
+            translations,
             undefined: "X".to_string(),
             ..Default::default()
         };
