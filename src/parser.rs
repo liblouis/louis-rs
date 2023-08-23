@@ -3,6 +3,7 @@
 // see https://codeandbitters.com/lets-build-a-parser/ for a lot of
 // inspiration
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 
@@ -27,7 +28,9 @@ use nom::combinator::value;
 use nom::error::ErrorKind;
 use nom::error::ParseError;
 use nom::multi::many0;
+use nom::multi::many1;
 use nom::multi::separated_list1;
+use nom::sequence::delimited;
 use nom::sequence::tuple;
 
 use enumset::enum_set;
@@ -38,7 +41,6 @@ use nom::IResult;
 //use nom_unicode::complete::alpha1 as unicode_alpha1;
 use nom_unicode::complete::digit1 as unicode_digit1;
 use search_path::SearchPath;
-
 #[derive(PartialEq, Debug)]
 pub enum Line {
     Empty,
@@ -1646,6 +1648,181 @@ fn swapcc(i: &str) -> IResult<&str, Rule, LouisParseError> {
     ))
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum MultiPassTestInstruction {
+    Beginning,
+    End,
+    Lookback { len: u8 },
+    VariableTest { var: u8, val: u8, op: RelationalOperator },
+    String { s: String },
+    Dots { dots: BrailleChars },
+    Attributes { attrs: HashSet<MultiPassAttribute>, min_chars: u8, max_chars: u8 },
+    SwapOrAttribute { name: String, min_chars: u8, max_chars: u8 },
+    Negate { instr: Box<MultiPassTestInstruction> },
+    Replace { instr: Vec<MultiPassTestInstruction> },
+}
+
+type MultiPassTest = Vec<MultiPassTestInstruction>;
+
+fn multipass_test(input: &str) -> IResult<&str, MultiPassTest, LouisParseError> {
+    many1(multipass_test_instruction)(input)
+}
+
+fn multipass_test_instruction (input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
+    alt((multipass_test_beginning, 
+        multipass_test_end,
+        multipass_test_lookback,
+        multipass_test_variable,
+        multipass_test_string,
+        multipass_test_dots,
+        multipass_test_attributes,
+        multipass_test_swap,
+        multipass_test_negate,
+        multipass_test_replace))(input)
+}
+
+fn multipass_test_beginning(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
+    let (input, _) = tag("`")(input)?;
+    Ok((input, MultiPassTestInstruction::Beginning))
+}
+
+fn multipass_test_end(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
+    let (input, _) = tag("~")(input)?;
+    Ok((input, MultiPassTestInstruction::End))
+}
+
+fn multipass_test_lookback(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
+    let (input, (_, num)) = tuple((tag("_"), opt(number)))(input)?; // FIXME: number > 0
+    match num {
+        Some(n) => Ok((input, MultiPassTestInstruction::Lookback { len: n })),
+        None => Ok((input, MultiPassTestInstruction::Lookback { len: 1 }))
+    }
+}
+
+fn multipass_test_variable(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
+    let (input, (n1, op, n2)) = tuple((number, multipass_relational_operator, number))(input)?;
+    Ok((input, MultiPassTestInstruction::VariableTest { var: n1, val: n2, op: op }))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RelationalOperator {
+    EQ,
+    GT,
+    LT,
+    GTEQ,
+    LTEQ,
+}
+
+fn multipass_relational_operator(input: &str) -> IResult<&str, RelationalOperator, LouisParseError> {
+    alt((
+        value(RelationalOperator::EQ,   tag("=")),
+        value(RelationalOperator::GTEQ, tag(">=")),
+        value(RelationalOperator::GT,   tag(">")),
+        value(RelationalOperator::LTEQ, tag("<=")),
+        value(RelationalOperator::LT,   tag("<")),
+    ))(input)
+}
+
+fn multipass_test_string(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
+    let (input, (_, s,_)) = tuple((tag("\""), is_not("\""), tag("\"")))(input)?;
+    Ok((input, MultiPassTestInstruction::String { s: s.to_string() }))
+}
+
+fn multipass_test_dots(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
+    let (input, (_, dots)) = tuple((tag("@"), dots))(input)?;
+    Ok((input, MultiPassTestInstruction::Dots { dots: dots }))
+}
+
+fn multipass_test_attributes(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
+    let (input, (_, attrs, range)) = tuple((tag("$"), multipass_attributes, opt(multipass_repeat)))(input)?;
+    match range {
+        Some((min, max)) => Ok((input, MultiPassTestInstruction::Attributes { attrs, min_chars: min, max_chars: max })),
+        None => Ok((input, MultiPassTestInstruction::Attributes { attrs, min_chars: 1, max_chars: 1 })),
+    }
+}
+
+fn multipass_repeat(input: &str) -> IResult<&str, (u8, u8), LouisParseError> {
+    alt((multipass_repeat_any,
+        multipass_repeat_range,
+        multipass_repeat_fixed))(input)
+}
+
+fn multipass_repeat_any(input: &str) -> IResult<&str, (u8, u8), LouisParseError> {
+    let (input, _) = tag(".")(input)?;
+    Ok((input, (1,0)))
+}
+
+fn multipass_repeat_fixed(input: &str) -> IResult<&str, (u8, u8), LouisParseError> {
+    let (input, d) = number(input)?; // FIXME: d > 0
+    Ok((input, (d,d)))
+}
+
+fn multipass_repeat_range(input: &str) -> IResult<&str, (u8, u8), LouisParseError> {
+    let (input, (d1, _, d2)) = tuple((number, tag("-"), number))(input)?; // FIXME: d1 > 0 and d2 >= d1
+    Ok((input, (d1,d2)))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum MultiPassAttribute {
+    Digit,
+    Litdigit,
+    Letter,
+    Sign,
+    Space,
+    Math,
+    Punctuation,
+    Uppercase, 
+    Lowercase,
+    Class1,
+    Class2,
+    Class3,
+    Class4,
+    Any
+}
+
+fn multipass_attributes(input: &str) -> IResult<&str, HashSet<MultiPassAttribute>, LouisParseError> {
+    let (input, attrs) = many1(multipass_attribute)(input)?;
+    let attrs = attrs.into_iter().collect();
+    Ok((input, attrs))
+}
+
+fn multipass_attribute(input: &str) -> IResult<&str, MultiPassAttribute, LouisParseError> {
+    alt((
+        value(MultiPassAttribute::Any,         tag("a")),
+        value(MultiPassAttribute::Digit,       tag("d")),
+        value(MultiPassAttribute::Litdigit,    tag("D")),
+        value(MultiPassAttribute::Letter,      tag("l")),
+        value(MultiPassAttribute::Punctuation, tag("p")),
+        value(MultiPassAttribute::Sign,        tag("S")),
+        value(MultiPassAttribute::Space,       tag("s")),
+        value(MultiPassAttribute::Uppercase,   tag("U")),
+        value(MultiPassAttribute::Lowercase,   tag("u")),
+        value(MultiPassAttribute::Math,        tag("m")),
+        value(MultiPassAttribute::Class1,      tag("w")),
+        value(MultiPassAttribute::Class2,      tag("x")),
+        value(MultiPassAttribute::Class3,      tag("y")),
+        value(MultiPassAttribute::Class4,      tag("z")),
+    ))(input)
+}
+
+fn multipass_test_swap(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
+    let (input, (_, s, range)) = tuple((tag("%"), alpha1, opt(multipass_repeat)))(input)?;
+    match range {
+        Some((min, max)) => Ok((input, MultiPassTestInstruction::SwapOrAttribute { name: s.to_string(), min_chars: min, max_chars: max })),
+        None => Ok((input, MultiPassTestInstruction::SwapOrAttribute { name: s.to_string(), min_chars: 1, max_chars: 1 }))
+    }
+}
+
+fn multipass_test_negate(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
+    let ((input, (_, following))) = tuple((tag("!"), multipass_test_instruction))(input)?;
+    Ok((input, MultiPassTestInstruction::Negate { instr: Box::new(following) }))
+}
+
+fn multipass_test_replace(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
+    let ((input, (_, inner, _))) = tuple((tag("["), multipass_test, tag("]")))(input)?; // FIXME: opt(multipass_test)
+    Ok((input, MultiPassTestInstruction::Replace { instr: inner }))
+}
+
 fn context(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, test, _, action)) =
         tuple((prefixes, tag("context"), space1, chars, space1, chars))(i)?;
@@ -2289,6 +2466,221 @@ mod tests {
                     ch: '.',
                     dots: vec![BrailleDot::DOT4 | BrailleDot::DOT6],
                     prefixes: Prefixes::empty()
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn multipass_test_test(){
+        assert_eq!(
+            multipass_test("\"abc\""),
+            Ok((
+                "",
+                vec![MultiPassTestInstruction::String { s: "abc".to_string() }]
+            ))
+        );
+    }
+
+    #[test]
+    fn multipass_test_instruction_test(){
+        assert_eq!(
+            multipass_test_instruction("`"),
+            Ok((
+                "",
+                MultiPassTestInstruction::Beginning
+            ))
+        );
+    }
+
+    #[test]
+    fn multipass_test_beginning_test() {
+        assert_eq!(
+            multipass_test_beginning("`"),
+            Ok((
+                "",
+                MultiPassTestInstruction::Beginning)
+            )
+        );
+    }
+
+    #[test]
+    fn multipass_test_end_test() {
+        assert_eq!(
+            multipass_test_end("~"),
+            Ok((
+                "",
+                MultiPassTestInstruction::End)
+            )
+        );
+    }
+
+    #[test]
+    fn multipass_test_lookback_test() {
+        assert_eq!(
+            multipass_test_lookback("_"),
+            Ok((
+                "",
+                MultiPassTestInstruction::Lookback { len: 1 })
+            )
+        );
+        assert_eq!(
+            multipass_test_lookback("_2"),
+            Ok((
+                "",
+                MultiPassTestInstruction::Lookback { len: 2 })
+            )
+        );
+    }
+
+    #[test]
+    fn multipass_test_variable_test() {
+        assert_eq!(
+            multipass_test_variable("1=5"),
+            Ok((
+                "",
+                MultiPassTestInstruction::VariableTest { var: 1, val: 5, op: RelationalOperator::EQ }
+            ))
+        );
+        assert_eq!(
+            multipass_test_variable("1<5"),
+            Ok((
+                "",
+                MultiPassTestInstruction::VariableTest { var: 1, val: 5, op: RelationalOperator::LT })
+            )
+        );
+        assert_eq!(
+            multipass_test_variable("1>5"),
+            Ok((
+                "",
+                MultiPassTestInstruction::VariableTest { var: 1, val: 5, op: RelationalOperator::GT })
+            )
+        );
+        assert_eq!(
+            multipass_test_variable("1<=5"),
+            Ok((
+                "",
+                MultiPassTestInstruction::VariableTest { var: 1, val: 5, op: RelationalOperator::LTEQ })
+            )
+        );
+        assert_eq!(
+            multipass_test_variable("1>=5"),
+            Ok((
+                "",
+                MultiPassTestInstruction::VariableTest { var: 1, val: 5, op: RelationalOperator::GTEQ })
+            )
+        );
+    }
+
+    #[test]
+    fn multipass_test_string_test() {
+        assert_eq!(
+            multipass_test_string("\"abc\""),
+            Ok((
+                "",
+                MultiPassTestInstruction::String { s: "abc".to_string() })
+            )
+        );
+    }
+
+    #[test]
+    fn multipass_test_dots_test() {
+        assert_eq!(
+            multipass_test_dots("@123"),
+            Ok((
+                "",
+                MultiPassTestInstruction::Dots { dots: vec!(BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3)})
+            )
+        );
+    }
+
+    #[test]
+    fn multipass_test_attributes_test() {
+        assert_eq!(
+            multipass_test_attributes("$sd"),
+            Ok((
+                "",
+                MultiPassTestInstruction::Attributes { attrs: HashSet::from([MultiPassAttribute::Space, MultiPassAttribute::Digit]), min_chars: 1, max_chars: 1 })
+            )
+        );
+        assert_eq!(
+            multipass_test_attributes("$a."),
+            Ok((
+                "",
+                MultiPassTestInstruction::Attributes { attrs: HashSet::from([MultiPassAttribute::Any]), min_chars: 1, max_chars: 0 })
+            )
+        );
+        assert_eq!(
+            multipass_test_attributes("$p2"),
+            Ok((
+                "",
+                MultiPassTestInstruction::Attributes { attrs: HashSet::from([MultiPassAttribute::Punctuation]), min_chars: 2, max_chars: 2 })
+            )
+        );
+        assert_eq!(
+            multipass_test_attributes("$l1-5"),
+            Ok((
+                "",
+                MultiPassTestInstruction::Attributes { attrs: HashSet::from([MultiPassAttribute::Letter]), min_chars: 1, max_chars: 5 })
+            )
+        );
+    }
+
+    #[test]
+    fn multipass_test_swap_test() {
+        assert_eq!(
+            multipass_test_swap("%foo"),
+            Ok((
+                "",
+                MultiPassTestInstruction::SwapOrAttribute { name: "foo".to_string(), min_chars: 1, max_chars: 1 })
+            )
+        );
+        assert_eq!(
+            multipass_test_swap("%foo."),
+            Ok((
+                "",
+                MultiPassTestInstruction::SwapOrAttribute { name: "foo".to_string(), min_chars: 1, max_chars: 0 })
+            )
+        );
+        assert_eq!(
+            multipass_test_swap("%foo2"),
+            Ok((
+                "",
+                MultiPassTestInstruction::SwapOrAttribute { name: "foo".to_string(), min_chars: 2, max_chars: 2 })
+            )
+        );
+        assert_eq!(
+            multipass_test_swap("%foo1-5"),
+            Ok((
+                "",
+                MultiPassTestInstruction::SwapOrAttribute { name: "foo".to_string(), min_chars: 1, max_chars: 5 })
+            )
+        );
+    }
+
+    #[test]
+    fn multipass_test_negate_test() {
+        assert_eq!(
+            multipass_test_negate("!\"abc\""),
+            Ok((
+                "",
+                MultiPassTestInstruction::Negate { instr: Box::new(MultiPassTestInstruction::String { s: "abc".to_string() })}
+            ))
+        );
+    }
+
+    #[test]
+    fn multipass_test_replace_test() {
+        assert_eq!(
+            multipass_test_replace("[$a]"),
+            Ok((
+                "",
+                MultiPassTestInstruction::Replace {
+                    instr: vec![
+                        MultiPassTestInstruction::Attributes {
+                            attrs: HashSet::from([MultiPassAttribute::Any]), min_chars: 1, max_chars: 1
+                        }
+                    ]
                 }
             ))
         );
