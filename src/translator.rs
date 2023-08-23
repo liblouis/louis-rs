@@ -167,6 +167,15 @@ impl TranslationTable {
                         });
                     }
                 }
+                Rule::Endword { chars, dots, .. } => {
+                    if let BrailleCharsOrImplicit::Explicit(explicit_dots) = dots {
+                        translations.push(Translation {
+                            from: chars,
+                            constraints: HashSet::from([Constraint::WordEnd]),
+                            to: dots_to_unicode(explicit_dots),
+                        });
+                    }
+                }
                 _ => (), // ignore all other rules for now
             }
         }
@@ -266,10 +275,21 @@ impl TranslationTable {
     ) -> bool {
         match constraint {
             Constraint::WordEnd => {
-                // do unicode word segmentation?
-                true
+                // is the next char whitespace?
+                let next_char = input[pos + from.len()..].chars().next();
+                match next_char {
+                    Some(c) => c.is_whitespace(),
+                    None => true,
+                }
             }
-            Constraint::WordStart => true,
+            // is the previous char whitespace?
+            Constraint::WordStart => {
+                let prev_char = input[..pos].chars().last();
+                match prev_char {
+                    Some(c) => c.is_whitespace(),
+                    None => true,
+                }
+            }
         }
     }
 
@@ -461,6 +481,52 @@ mod tests {
         assert_eq!(
             table.apply_translations("hahaho", 0),
             Some((4, TranslationMapping::new("haha", "HA")))
+        );
+    }
+
+    #[test]
+    fn word_boundary_test() {
+        let translations = vec![
+            Translation {
+                from: "ha".to_string(),
+                to: "H1".to_string(),
+		constraints: HashSet::from([Constraint::WordStart])
+            },
+            Translation {
+                from: "ha".to_string(),
+                to: "H2".to_string(),
+		constraints: HashSet::from([Constraint::WordEnd])
+            },
+        ];
+
+        let table = TranslationTable {
+            translations,
+            undefined: "?".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(
+            table.pass1("haha"),
+            vec![
+                TranslationMapping::new("ha", "H1"),
+                TranslationMapping::new("ha", "H2")
+            ]
+        );
+        assert_eq!(
+            table.pass1("hahaha"),
+            vec![
+                TranslationMapping::new("ha", "H1"),
+                TranslationMapping::new("h", "?"),
+                TranslationMapping::new("a", "?"),
+                TranslationMapping::new("ha", "H2")
+            ]
+        );
+        assert_eq!(
+            table.pass1("haho"),
+            vec![
+                TranslationMapping::new("ha", "H1"),
+                TranslationMapping::new("h", "?"),
+                TranslationMapping::new("o", "?")
+            ]
         );
     }
 
