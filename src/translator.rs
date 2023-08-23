@@ -197,12 +197,18 @@ impl TranslationTable {
 
     pub fn translate(&self, input: &str) -> String {
         // apply the corrections
+        let corrected = input;
         // apply the translations
-        self.pass1(input)
+        let translated= self.pass1(&corrected)
             .into_iter()
             .map(|m| m.output)
             .collect::<Vec<&str>>()
-            .concat()
+            .concat();
+        let translated = self.pass2(&translated).into_iter()
+        .map(|m| m.output)
+        .collect::<Vec<&str>>()
+        .concat();
+        translated
     }
 
     fn pass1<'a>(&'a self, input: &'a str) -> Vec<TranslationMapping<'a>> {
@@ -230,6 +236,10 @@ impl TranslationTable {
             }
         }
         mappings
+    }
+
+    fn pass2<'a>(&'a self, input: &'a str) -> Vec<TranslationMapping<'a>> {
+        vec!(TranslationMapping::new(input, &input[0..]))
     }
 
     fn char_to_braille(&self, c: char) -> Option<&String> {
@@ -278,6 +288,7 @@ impl TranslationTable {
                 // is the next char whitespace?
                 let next_char = input[pos + from.len()..].chars().next();
                 match next_char {
+                    // FIXME: instead of using the unicode definition use the liblouis character definitions
                     Some(c) => c.is_whitespace(),
                     None => true,
                 }
@@ -312,6 +323,8 @@ impl TranslationTable {
             .iter()
             .filter(|Translation { from, .. }| input[pos..].starts_with(&**from))
             .filter(|translation| self.satisfy_constraints(input, pos, &translation))
+            // FIXME: maybe use the rule with the most constraints. Current behaviour seems to be to prefer anything but always rules
+            // use the longest match
             .max_by(|a, b| a.from.chars().count().cmp(&b.from.chars().count()))
     }
 }
