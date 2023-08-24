@@ -12,7 +12,6 @@ path = "src/main.rs"
 [dependencies]
 nom = "7"
 nom-unicode = "^0.3"
-enumset = "1.0.6"
 clap = { version = "4.0", features = ["derive"] }
 thiserror = "1.0"
 search_path = "0.1.4"

@@ -336,16 +336,14 @@ mod tests {
     use crate::parser::BrailleDot;
     use crate::parser::Prefixes;
 
-    use enumset::enum_set;
-
     use super::*;
 
     #[test]
     fn compile_display_table_test() {
         let display_table = DisplayTable::compile(vec![Rule::Display {
             ch: 'a',
-            dots: vec![enum_set!(BrailleDot::DOT1)],
-            prefixes: Prefixes::empty(),
+            dots: vec![HashSet::from([BrailleDot::DOT1])],
+            prefixes: Prefixes::new(),
         }]);
         let display_table2 = DisplayTable {
             dots_to_char: HashMap::from([('⠁', 'a')]),
@@ -357,8 +355,8 @@ mod tests {
     fn translate_display_table_test() {
         let display_table = DisplayTable::compile(vec![Rule::Display {
             ch: 'a',
-            dots: vec![enum_set!(BrailleDot::DOT1)],
-            prefixes: Prefixes::empty(),
+            dots: vec![HashSet::from([BrailleDot::DOT1])],
+            prefixes: Prefixes::new(),
         }]);
         assert_eq!(display_table.translate("⠁"), "a");
     }
@@ -368,10 +366,10 @@ mod tests {
         let table = TranslationTable::compile(
             vec![Rule::Letter {
                 ch: 'a',
-                dots: BrailleCharsOrImplicit::Explicit(vec![enum_set!(
-                    BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3
-                )]),
-                prefixes: Prefixes::empty(),
+                dots: BrailleCharsOrImplicit::Explicit(vec![
+                    HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])
+                ]),
+                prefixes: Prefixes::new(),
             }],
             Direction::Forward,
         );

@@ -30,12 +30,7 @@ use nom::error::ParseError;
 use nom::multi::many0;
 use nom::multi::many1;
 use nom::multi::separated_list1;
-use nom::sequence::delimited;
 use nom::sequence::tuple;
-
-use enumset::enum_set;
-use enumset::EnumSet;
-use enumset::EnumSetType;
 
 use nom::IResult;
 //use nom_unicode::complete::alpha1 as unicode_alpha1;
@@ -192,7 +187,7 @@ pub enum Rule {
 }
 
 impl Rule {
-    fn prefixes(&self) -> Option<Prefixes> {
+    fn prefixes(&self) -> Option<&Prefixes> {
         match self {
             Rule::Display { prefixes, .. }
             | Rule::Space { prefixes, .. }
@@ -238,34 +233,34 @@ impl Rule {
             | Rule::Pass3 { prefixes, .. }
             | Rule::Pass4 { prefixes, .. }
             | Rule::Correct { prefixes, .. }
-            | Rule::Match { prefixes, .. } => Some(*prefixes),
+            | Rule::Match { prefixes, .. } => Some(prefixes),
             _ => None,
         }
     }
 
     pub fn is_forward(&self) -> bool {
         match self.prefixes() {
-            Some(prefixes) => !prefixes.contains(Prefix::Nofor),
+            Some(prefixes) => !prefixes.contains(&Prefix::Nofor),
             None => true,
         }
     }
 
     pub fn is_backward(&self) -> bool {
         match self.prefixes() {
-            Some(prefixes) => !prefixes.contains(Prefix::Noback),
+            Some(prefixes) => !prefixes.contains(&Prefix::Noback),
             None => true,
         }
     }
 }
 
-#[derive(EnumSetType, Debug)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Prefix {
     Noback,
     Nofor,
     Nocross,
 }
 
-pub type Prefixes = EnumSet<Prefix>;
+pub type Prefixes = HashSet<Prefix>;
 
 #[derive(PartialEq, Debug)]
 pub enum WithClass {
@@ -275,13 +270,13 @@ pub enum WithClass {
 
 type WithClasses = Vec<WithClass>;
 
-#[derive(EnumSetType, Debug)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum WithMatch {
     Before,
     After,
 }
 
-type WithMatches = EnumSet<WithMatch>;
+type WithMatches = HashSet<WithMatch>;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Position {
@@ -289,7 +284,7 @@ pub enum Position {
     After,
 }
 
-#[derive(EnumSetType, Debug)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum BrailleDot {
     DOT0,
     DOT1,
@@ -309,7 +304,7 @@ pub enum BrailleDot {
     DOTF,
 }
 
-pub type BrailleChar = EnumSet<BrailleDot>;
+pub type BrailleChar = HashSet<BrailleDot>;
 pub type BrailleChars = Vec<BrailleChar>;
 
 #[derive(PartialEq, Debug, Clone)]
@@ -318,7 +313,7 @@ pub enum BrailleCharsOrImplicit {
     Explicit(BrailleChars),
 }
 
-fn dot_to_hex(dot: BrailleDot) -> u32 {
+fn dot_to_hex(dot: &BrailleDot) -> u32 {
     match dot {
         BrailleDot::DOT1 => 0x0001,
         BrailleDot::DOT2 => 0x0002,
@@ -504,17 +499,17 @@ fn before_or_after(input: &str) -> IResult<&str, Position, LouisParseError> {
 fn prefixes(i: &str) -> IResult<&str, Prefixes, LouisParseError> {
     alt((
         value(
-            Prefix::Noback | Prefix::Nocross,
+            HashSet::from([Prefix::Noback, Prefix::Nocross]),
             tuple((tag("noback"), space1, tag("nocross"), space1)),
         ),
         value(
-            Prefix::Nofor | Prefix::Nocross,
+            HashSet::from([Prefix::Nofor, Prefix::Nocross]),
             tuple((tag("nofor"), space1, tag("nocross"), space1)),
         ),
-        value(enum_set!(Prefix::Nofor), tuple((tag("nofor"), space1))),
-        value(enum_set!(Prefix::Noback), tuple((tag("noback"), space1))),
-        value(enum_set!(Prefix::Nocross), tuple((tag("nocross"), space1))),
-        success::<_, _, LouisParseError>(Prefixes::empty()),
+        value(HashSet::from([Prefix::Nofor]), tuple((tag("nofor"), space1))),
+        value(HashSet::from([Prefix::Noback]), tuple((tag("noback"), space1))),
+        value(HashSet::from([Prefix::Nocross]), tuple((tag("nocross"), space1))),
+        success::<_, _, LouisParseError>(Prefixes::new()),
     ))(i)
 }
 
@@ -1814,12 +1809,12 @@ fn multipass_test_swap(input: &str) -> IResult<&str, MultiPassTestInstruction, L
 }
 
 fn multipass_test_negate(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
-    let ((input, (_, following))) = tuple((tag("!"), multipass_test_instruction))(input)?;
+    let (input, (_, following)) = tuple((tag("!"), multipass_test_instruction))(input)?;
     Ok((input, MultiPassTestInstruction::Negate { instr: Box::new(following) }))
 }
 
 fn multipass_test_replace(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
-    let ((input, (_, inner, _))) = tuple((tag("["), multipass_test, tag("]")))(input)?; // FIXME: opt(multipass_test)
+    let (input, (_, inner, _)) = tuple((tag("["), multipass_test, tag("]")))(input)?; // FIXME: opt(multipass_test)
     Ok((input, MultiPassTestInstruction::Replace { instr: inner }))
 }
 
@@ -1955,22 +1950,22 @@ fn with_classes(input: &str) -> IResult<&str, Vec<WithClass>, LouisParseError> {
 fn with_matches(input: &str) -> IResult<&str, WithMatches, LouisParseError> {
     alt((
         value(
-            WithMatch::Before | WithMatch::After,
+	    HashSet::from([WithMatch::Before, WithMatch::After]),
             tuple((tag("empmatchbefore"), space1, tag("empmatchafter"), space1)),
         ),
         value(
-            WithMatch::After | WithMatch::Before,
+	    HashSet::from([WithMatch::After, WithMatch::Before]),
             tuple((tag("empmatchafter"), space1, tag("empmatchbefore"), space1)),
         ),
         value(
-            enum_set!(WithMatch::Before),
+	    HashSet::from([WithMatch::Before]),
             tuple((tag("empmatchbefore"), space1)),
         ),
         value(
-            enum_set!(WithMatch::After),
+	    HashSet::from([WithMatch::After]),
             tuple((tag("empmatchafter"), space1)),
         ),
-        success::<_, _, LouisParseError>(WithMatches::empty()),
+        success::<_, _, LouisParseError>(WithMatches::new()),
     ))(input)
 }
 
@@ -2170,7 +2165,7 @@ mod tests {
     #[test]
     fn dot_to_unicode_test() {
         assert_eq!(
-            dot_to_unicode(enum_set!(BrailleDot::DOT1 | BrailleDot::DOT8)),
+            dot_to_unicode(HashSet::from([BrailleDot::DOT1, BrailleDot::DOT8])),
             '⢁'
         );
     }
@@ -2179,8 +2174,8 @@ mod tests {
     fn dots_to_unicode_test() {
         assert_eq!(
             dots_to_unicode(vec![
-                enum_set!(BrailleDot::DOT1),
-                enum_set!(BrailleDot::DOT8)
+                HashSet::from([BrailleDot::DOT1]),
+                HashSet::from([BrailleDot::DOT8])
             ]),
             "⠁⢀".to_string()
         );
@@ -2244,7 +2239,7 @@ mod tests {
         assert_eq!(
             Rule::Compbrl {
                 chars: "foo".to_string(),
-                prefixes: Prefixes::empty()
+                prefixes: Prefixes::new()
             }
             .is_forward(),
             true
@@ -2252,7 +2247,7 @@ mod tests {
         assert_eq!(
             Rule::Compbrl {
                 chars: "foo".to_string(),
-                prefixes: enum_set!(Prefix::Nofor)
+                prefixes: HashSet::from([Prefix::Nofor])
             }
             .is_forward(),
             false
@@ -2260,7 +2255,7 @@ mod tests {
         assert_eq!(
             Rule::Compbrl {
                 chars: "foo".to_string(),
-                prefixes: enum_set!(Prefix::Noback)
+                prefixes: HashSet::from([Prefix::Noback])
             }
             .is_forward(),
             true
@@ -2273,7 +2268,7 @@ mod tests {
         assert_eq!(
             Rule::Compbrl {
                 chars: "foo".to_string(),
-                prefixes: Prefixes::empty()
+                prefixes: Prefixes::new()
             }
             .is_backward(),
             true
@@ -2281,7 +2276,7 @@ mod tests {
         assert_eq!(
             Rule::Compbrl {
                 chars: "foo".to_string(),
-                prefixes: enum_set!(Prefix::Nofor)
+                prefixes: HashSet::from([Prefix::Nofor])
             }
             .is_backward(),
             true
@@ -2289,7 +2284,7 @@ mod tests {
         assert_eq!(
             Rule::Compbrl {
                 chars: "foo".to_string(),
-                prefixes: enum_set!(Prefix::Noback)
+                prefixes: HashSet::from([Prefix::Noback])
             }
             .is_backward(),
             false
@@ -2302,20 +2297,20 @@ mod tests {
             dots("123"),
             Ok((
                 "",
-                vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
+                vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])]
             ))
         );
         assert_eq!(
             dots("1f"),
-            Ok(("", vec![BrailleDot::DOT1 | BrailleDot::DOTF]))
+            Ok(("", vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOTF])]))
         );
         assert_eq!(
             dots("123-1f"),
             Ok((
                 "",
                 vec![
-                    BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3,
-                    BrailleDot::DOT1 | BrailleDot::DOTF
+                    HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3]),
+                    HashSet::from([BrailleDot::DOT1, BrailleDot::DOTF])
                 ]
             ))
         );
@@ -2324,9 +2319,9 @@ mod tests {
             Ok((
                 "",
                 vec![
-                    BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3,
-                    BrailleDot::DOT1 | BrailleDot::DOTF,
-                    BrailleDot::DOT7 | BrailleDot::DOT8,
+                    HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3]),
+                    HashSet::from([BrailleDot::DOT1, BrailleDot::DOTF]),
+                    HashSet::from([BrailleDot::DOT7, BrailleDot::DOT8]),
                 ]
             ))
         );
@@ -2340,7 +2335,7 @@ mod tests {
             Ok((
                 "",
                 BrailleCharsOrImplicit::Explicit(vec![
-                    BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3
+                    HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])
                 ])
             ))
         );
@@ -2383,21 +2378,21 @@ mod tests {
     fn with_matches_test() {
         assert_eq!(
             with_matches("empmatchbefore empmatchafter "),
-            Ok(("", enum_set![WithMatch::Before | WithMatch::After]))
+            Ok(("", HashSet::from([WithMatch::Before, WithMatch::After])))
         );
         assert_eq!(
             with_matches("empmatchafter empmatchbefore "),
-            Ok(("", enum_set![WithMatch::Before | WithMatch::After]))
+            Ok(("", HashSet::from([WithMatch::Before, WithMatch::After])))
         );
         assert_eq!(
             with_matches("empmatchbefore "),
-            Ok(("", enum_set![WithMatch::Before]))
+            Ok(("", HashSet::from([WithMatch::Before])))
         );
         assert_eq!(
             with_matches("empmatchafter "),
-            Ok(("", enum_set![WithMatch::After]))
+            Ok(("", HashSet::from([WithMatch::After])))
         );
-        assert_eq!(with_matches(""), Ok(("", enum_set![])));
+        assert_eq!(with_matches(""), Ok(("", HashSet::new())));
     }
 
     #[test]
@@ -2420,7 +2415,7 @@ mod tests {
             Ok((
                 "",
                 Rule::Undefined {
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2]
+                    dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2])]
                 }
             ))
         );
@@ -2434,8 +2429,8 @@ mod tests {
                 "",
                 Rule::Display {
                     ch: 'h',
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
-                    prefixes: Prefixes::empty()
+                    dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2])],
+                    prefixes: Prefixes::new()
                 }
             ))
         );
@@ -2449,8 +2444,8 @@ mod tests {
                 "",
                 Rule::Space {
                     ch: '.',
-                    dots: vec![enum_set!(BrailleDot::DOT0)],
-                    prefixes: Prefixes::empty()
+                    dots: vec![HashSet::from([BrailleDot::DOT0])],
+                    prefixes: Prefixes::new()
                 }
             ))
         );
@@ -2464,8 +2459,8 @@ mod tests {
                 "",
                 Rule::Punctuation {
                     ch: '.',
-                    dots: vec![BrailleDot::DOT4 | BrailleDot::DOT6],
-                    prefixes: Prefixes::empty()
+                    dots: vec![HashSet::from([BrailleDot::DOT4, BrailleDot::DOT6])],
+                    prefixes: Prefixes::new()
                 }
             ))
         );
@@ -2589,7 +2584,7 @@ mod tests {
             multipass_test_dots("@123"),
             Ok((
                 "",
-                MultiPassTestInstruction::Dots { dots: vec!(BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3)})
+                MultiPassTestInstruction::Dots { dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])]})
             )
         );
     }
@@ -2694,7 +2689,7 @@ mod tests {
                 "",
                 Rule::Digit {
                     ch: '1',
-                    dots: vec![BrailleDot::DOT2 | BrailleDot::DOT7 | BrailleDot::DOT8]
+                    dots: vec![HashSet::from([BrailleDot::DOT2, BrailleDot::DOT7, BrailleDot::DOT8])]
                 }
             ))
         );
@@ -2705,7 +2700,7 @@ mod tests {
                 Rule::Digit {
                     ch: '۲',
                     dots: vec![
-                        BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT7 | BrailleDot::DOT8
+                        HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT7, BrailleDot::DOT8])
                     ]
                 }
             ))
@@ -2720,7 +2715,7 @@ mod tests {
                 "",
                 Rule::Litdigit {
                     ch: '0',
-                    dots: vec![BrailleDot::DOT2 | BrailleDot::DOT4 | BrailleDot::DOT5]
+                    dots: vec![HashSet::from([BrailleDot::DOT2, BrailleDot::DOT4, BrailleDot::DOT5])]
                 }
             ))
         );
@@ -2736,8 +2731,8 @@ mod tests {
                     name: "mfrac".to_string(),
                     chars: "ab".to_string(),
                     dots: vec![
-                        vec![BrailleDot::DOT3 | BrailleDot::DOTE],
-                        vec![BrailleDot::DOT4 | BrailleDot::DOTE]
+                        vec![HashSet::from([BrailleDot::DOT3, BrailleDot::DOTE])],
+                        vec![HashSet::from([BrailleDot::DOT4, BrailleDot::DOTE])]
                     ]
                 }
             ))
@@ -2752,8 +2747,8 @@ mod tests {
                 "",
                 Rule::Modeletter {
                     attribute: "uppercase".to_string(),
-                    dots: vec![enum_set!(BrailleDot::DOT6)],
-                    prefixes: Prefixes::empty()
+                    dots: vec![HashSet::from([BrailleDot::DOT6])],
+                    prefixes: Prefixes::new()
                 }
             ))
         );
@@ -2766,8 +2761,8 @@ mod tests {
             Ok((
                 "",
                 Rule::Capsletter {
-                    dots: vec![enum_set!(BrailleDot::DOT6)],
-                    prefixes: Prefixes::empty()
+                    dots: vec![HashSet::from([BrailleDot::DOT6])],
+                    prefixes: Prefixes::new()
                 }
             ))
         );
@@ -2781,8 +2776,8 @@ mod tests {
                 "",
                 Rule::Begmodeword {
                     attribute: "uppercase".to_string(),
-                    dots: vec![enum_set!(BrailleDot::DOT6)],
-                    prefixes: Prefixes::empty()
+                    dots: vec![HashSet::from([BrailleDot::DOT6])],
+                    prefixes: Prefixes::new()
                 }
             ))
         );
@@ -2795,8 +2790,8 @@ mod tests {
             Ok((
                 "",
                 Rule::Begcapsword {
-                    dots: vec![enum_set!(BrailleDot::DOT6), enum_set!(BrailleDot::DOT6)],
-                    prefixes: Prefixes::empty()
+                    dots: vec![HashSet::from([BrailleDot::DOT6]), HashSet::from([BrailleDot::DOT6])],
+                    prefixes: Prefixes::new()
                 }
             ))
         );
@@ -2809,8 +2804,8 @@ mod tests {
             Ok((
                 "",
                 Rule::Endcapsword {
-                    dots: vec![enum_set!(BrailleDot::DOT6), enum_set!(BrailleDot::DOT3)],
-                    prefixes: Prefixes::empty()
+                    dots: vec![HashSet::from([BrailleDot::DOT6]), HashSet::from([BrailleDot::DOT3])],
+                    prefixes: Prefixes::new()
                 }
             ))
         );
@@ -2837,9 +2832,9 @@ mod tests {
                 "",
                 Rule::Begcaps {
                     dots: vec![
-                        enum_set!(BrailleDot::DOT6),
-                        enum_set!(BrailleDot::DOT6),
-                        enum_set!(BrailleDot::DOT6)
+                        HashSet::from([BrailleDot::DOT6]),
+                        HashSet::from([BrailleDot::DOT6]),
+                        HashSet::from([BrailleDot::DOT6])
                     ]
                 }
             ))
@@ -2853,7 +2848,7 @@ mod tests {
             Ok((
                 "",
                 Rule::Endcaps {
-                    dots: vec![enum_set!(BrailleDot::DOT6), enum_set!(BrailleDot::DOT3)]
+                    dots: vec![HashSet::from([BrailleDot::DOT6]), HashSet::from([BrailleDot::DOT3])]
                 }
             ))
         );
@@ -2867,8 +2862,8 @@ mod tests {
                 "",
                 Rule::Begcapsphrase {
                     dots: vec![
-                        enum_set!(BrailleDot::DOT4 | BrailleDot::DOT5),
-                        enum_set!(BrailleDot::DOT4 | BrailleDot::DOT5)
+                        HashSet::from([BrailleDot::DOT4, BrailleDot::DOT5]),
+                        HashSet::from([BrailleDot::DOT4, BrailleDot::DOT5])
                     ]
                 }
             ))
@@ -2882,7 +2877,7 @@ mod tests {
             Ok((
                 "",
                 Rule::Endcapsphrase {
-                    dots: vec![BrailleDot::DOT4 | BrailleDot::DOT5],
+                    dots: vec![HashSet::from([BrailleDot::DOT4, BrailleDot::DOT5])],
                     position: Position::Before
                 }
             ))
@@ -2892,7 +2887,7 @@ mod tests {
             Ok((
                 "",
                 Rule::Endcapsphrase {
-                    dots: vec![BrailleDot::DOT4 | BrailleDot::DOT5],
+                    dots: vec![HashSet::from([BrailleDot::DOT4, BrailleDot::DOT5])],
                     position: Position::After
                 }
             ))
@@ -2919,8 +2914,8 @@ mod tests {
                 "",
                 Rule::Display {
                     ch: 'h',
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
-                    prefixes: enum_set!(Prefix::Nocross)
+                    dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2])],
+                    prefixes: HashSet::from([Prefix::Nocross])
                 }
             ))
         );
@@ -2930,8 +2925,8 @@ mod tests {
                 "",
                 Rule::Display {
                     ch: 'h',
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
-                    prefixes: Prefix::Noback | Prefix::Nocross
+                    dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2])],
+                    prefixes: HashSet::from([Prefix::Noback, Prefix::Nocross])
                 }
             ))
         );
@@ -2945,7 +2940,7 @@ mod tests {
                 "",
                 Rule::Largesign {
                     chars: "überall".to_string(),
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
+                    dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])]
                 }
             ))
         );
@@ -2955,7 +2950,7 @@ mod tests {
                 "",
                 Rule::Largesign {
                     chars: "அஇ".to_string(),
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
+                    dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])]
                 }
             ))
         );
@@ -2969,7 +2964,7 @@ mod tests {
                 "",
                 Rule::Joinword {
                     word: "haha".to_string(),
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
+                    dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])]
                 }
             ))
         );
@@ -2979,7 +2974,7 @@ mod tests {
                 "",
                 Rule::Joinword {
                     word: "அஇ".to_string(),
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
+                    dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])]
                 }
             ))
         );
@@ -2993,8 +2988,8 @@ mod tests {
                 "",
                 Rule::Uppercase {
                     ch: 'f',
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
-                    prefixes: Prefixes::empty()
+                    dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])],
+                    prefixes: Prefixes::new()
                 }
             ))
         );
@@ -3004,8 +2999,8 @@ mod tests {
                 "",
                 Rule::Uppercase {
                     ch: 'அ',
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
-                    prefixes: Prefixes::empty()
+                    dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])],
+                    prefixes: Prefixes::new()
                 }
             ))
         );
@@ -3016,13 +3011,9 @@ mod tests {
                 Rule::Uppercase {
                     ch: 'Ә',
                     dots: vec![
-                        BrailleDot::DOT3
-                            | BrailleDot::DOT4
-                            | BrailleDot::DOT5
-                            | BrailleDot::DOT7
-                            | BrailleDot::DOT9
-                    ],
-                    prefixes: Prefixes::empty()
+                        HashSet::from([BrailleDot::DOT3, BrailleDot::DOT4, BrailleDot::DOT5, BrailleDot::DOT7, BrailleDot::DOT9
+                    ])],
+                    prefixes: Prefixes::new()
                 }
             ))
         );
@@ -3036,8 +3027,8 @@ mod tests {
                 "",
                 Rule::Lowercase {
                     ch: 'f',
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
-                    prefixes: Prefixes::empty()
+                    dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])],
+                    prefixes: Prefixes::new()
                 }
             ))
         );
@@ -3047,8 +3038,8 @@ mod tests {
                 "",
                 Rule::Lowercase {
                     ch: 'அ',
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
-                    prefixes: Prefixes::empty()
+                    dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])],
+                    prefixes: Prefixes::new()
                 }
             ))
         );
@@ -3061,9 +3052,9 @@ mod tests {
             Ok((
                 "",
                 Rule::Multind {
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
+                    dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])],
                     opcodes: vec!["lowercase".to_string(), "uppercase".to_string()],
-                    prefixes: Prefixes::empty()
+                    prefixes: Prefixes::new()
                 }
             ))
         );
@@ -3080,9 +3071,9 @@ mod tests {
                 Rule::Always {
                     chars: "world".to_string(),
                     dots: BrailleCharsOrImplicit::Explicit(vec![
-                        BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3
+                        HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])
                     ]),
-                    prefixes: Prefixes::empty(),
+                    prefixes: Prefixes::new(),
                     classes: vec![]
                 }
             ))
@@ -3094,9 +3085,9 @@ mod tests {
                 Rule::Always {
                     chars: "world".to_string(),
                     dots: BrailleCharsOrImplicit::Explicit(vec![
-                        BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3
+                        HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])
                     ]),
-                    prefixes: Prefixes::empty(),
+                    prefixes: Prefixes::new(),
                     classes: vec![WithClass::Before {
                         class: "number".to_string()
                     }]
@@ -3115,17 +3106,17 @@ mod tests {
                     pre: "ab".to_string(),
                     chars: "xyz".to_string(),
                     post: "cd".to_string(),
-                    positions: WithMatches::empty(),
+                    positions: WithMatches::new(),
                     classes: vec![],
                     dots: BrailleCharsOrImplicit::Explicit(vec![
-                        BrailleDot::DOT1 | BrailleDot::DOT3 | BrailleDot::DOT4 | BrailleDot::DOT6,
-                        BrailleDot::DOT1
-                            | BrailleDot::DOT3
-                            | BrailleDot::DOT4
-                            | BrailleDot::DOT5
-                            | BrailleDot::DOT6
+                        HashSet::from([BrailleDot::DOT1, BrailleDot::DOT3, BrailleDot::DOT4, BrailleDot::DOT6]),
+                        HashSet::from([BrailleDot::DOT1,
+                            BrailleDot::DOT3,
+                            BrailleDot::DOT4,
+                            BrailleDot::DOT5,
+                            BrailleDot::DOT6]),
                     ]),
-                    prefixes: Prefixes::empty()
+                    prefixes: Prefixes::new()
                 }
             ))
         );
@@ -3140,7 +3131,7 @@ mod tests {
                 Line::Rule {
                     rule: Rule::Joinword {
                         word: "haha".to_string(),
-                        dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
+                        dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])]
                     },
                     comment: "".to_string()
                 }
@@ -3153,7 +3144,7 @@ mod tests {
                 Line::Rule {
                     rule: Rule::Largesign {
                         chars: "அஇ".to_string(),
-                        dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
+                        dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])]
                     },
                     comment: "".to_string()
                 }
@@ -3167,7 +3158,7 @@ mod tests {
                     rule: Rule::Syllable {
                         word: "haha".to_string(),
                         dots: BrailleCharsOrImplicit::Explicit(vec![
-                            BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3
+                            HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])
                         ])
                     },
                     comment: "".to_string()
@@ -3226,7 +3217,7 @@ mod tests {
                 Line::Rule {
                     rule: Rule::Joinword {
                         word: "haha".to_string(),
-                        dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
+                        dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])]
                     },
                     comment: " comment ".to_string()
                 }
@@ -3247,7 +3238,7 @@ mod tests {
                 Line::Rule {
                     rule: Rule::Joinword {
                         word: "haha".to_string(),
-                        dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
+                        dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])]
                     },
                     comment: "".to_string()
                 },
@@ -3255,8 +3246,8 @@ mod tests {
                     rule: Rule::Syllable {
                         word: "haha".to_string(),
                         dots: BrailleCharsOrImplicit::Explicit(vec![
-                            BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3,
-                            BrailleDot::DOT1 | BrailleDot::DOTF
+                            HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3]),
+                            HashSet::from([BrailleDot::DOT1, BrailleDot::DOTF])
                         ])
                     },
                     comment: "".to_string()
@@ -3279,15 +3270,15 @@ mod tests {
                 Line::Rule {
                     rule: Rule::Multind {
                         opcodes: vec!["always".to_string(), "syllable".to_string()],
-                        dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
-                        prefixes: enum_set!(Prefix::Nocross)
+                        dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])],
+                        prefixes: HashSet::from([Prefix::Nocross])
                     },
                     comment: "".to_string()
                 },
                 Line::Rule {
                     rule: Rule::Joinword {
                         word: "haha".to_string(),
-                        dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
+                        dots: vec![HashSet::from([BrailleDot::DOT1, BrailleDot::DOT2, BrailleDot::DOT3])]
                     },
                     comment: "".to_string()
                 },
