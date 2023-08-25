@@ -1724,7 +1724,7 @@ fn multipass_relational_operator(input: &str) -> IResult<&str, RelationalOperato
 }
 
 fn multipass_test_string(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
-    let (input, (_, s,_)) = tuple((tag("\""), is_not("\""), tag("\"")))(input)?;
+    let (input, s) = delimited(tag("\""), is_not("\""), tag("\""))(input)?;
     Ok((input, MultiPassTestInstruction::String { s: s.to_string() }))
 }
 
@@ -1819,7 +1819,7 @@ fn multipass_test_negate(input: &str) -> IResult<&str, MultiPassTestInstruction,
 }
 
 fn multipass_test_replace(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
-    let ((input, (_, inner, _))) = tuple((tag("["), multipass_test, tag("]")))(input)?; // FIXME: opt(multipass_test)
+    let (input, inner) = delimited(tag("["), multipass_test, tag("]"))(input)?; // FIXME: opt(multipass_test)
     Ok((input, MultiPassTestInstruction::Replace { instr: inner }))
 }
 
