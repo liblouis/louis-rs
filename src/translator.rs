@@ -239,7 +239,7 @@ impl TranslationTable {
     }
 
     fn pass2<'a>(&'a self, input: &'a str) -> Vec<TranslationMapping<'a>> {
-        vec!(TranslationMapping::new(input, &input[0..]))
+        vec![TranslationMapping::new(input, &input[0..])]
     }
 
     fn char_to_braille(&self, c: char) -> Option<&String> {

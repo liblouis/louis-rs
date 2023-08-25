@@ -2589,7 +2589,7 @@ mod tests {
             multipass_test_dots("@123"),
             Ok((
                 "",
-                MultiPassTestInstruction::Dots { dots: vec!(BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3)})
+                MultiPassTestInstruction::Dots { dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]})
             )
         );
     }
