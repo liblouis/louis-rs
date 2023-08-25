@@ -1814,7 +1814,7 @@ fn multipass_test_swap(input: &str) -> IResult<&str, MultiPassTestInstruction, L
 }
 
 fn multipass_test_negate(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
-    let ((input, (_, following))) = tuple((tag("!"), multipass_test_instruction))(input)?;
+    let (input, (_, following)) = tuple((tag("!"), multipass_test_instruction))(input)?;
     Ok((input, MultiPassTestInstruction::Negate { instr: Box::new(following) }))
 }
 
