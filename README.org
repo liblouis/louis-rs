@@ -68,6 +68,7 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
   ~BrailleCharsOrImplicit::Explicit~ by building a hashmap of
   character definitions and then looking up the implicit patterns and
   replacing them with the explicit dots.
+- [ ] experiment with using [[https://insta.rs][insta]] for testing
 
 * Open Questions
 - Should the translation API be against ~&str~ or ~&[char]~
