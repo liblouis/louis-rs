@@ -320,6 +320,7 @@ pub enum BrailleCharsOrImplicit {
 
 fn dot_to_hex(dot: BrailleDot) -> u32 {
     match dot {
+        BrailleDot::DOT0 => 0x0000,
         BrailleDot::DOT1 => 0x0001,
         BrailleDot::DOT2 => 0x0002,
         BrailleDot::DOT3 => 0x0004,
@@ -328,10 +329,19 @@ fn dot_to_hex(dot: BrailleDot) -> u32 {
         BrailleDot::DOT6 => 0x0020,
         BrailleDot::DOT7 => 0x0040,
         BrailleDot::DOT8 => 0x0080,
-        // all other braille dots cannot be mapped to unicode, so they
-        // return the identity bit pattern
-        _ => 0x0000,
+        BrailleDot::DOT9 => 0x0100,
+        BrailleDot::DOTA => 0x0200,
+        BrailleDot::DOTB => 0x0400,
+        BrailleDot::DOTC => 0x0800,
+        BrailleDot::DOTD => 0x1000,
+        BrailleDot::DOTE => 0x2000,
+        BrailleDot::DOTF => 0x4000,
     }
+}
+
+fn has_virtual_dots(char: BrailleChar) -> bool {
+    let virtual_dots = BrailleDot::DOT9 | BrailleDot::DOTA | BrailleDot::DOTB | BrailleDot::DOTC | BrailleDot::DOTD | BrailleDot::DOTE | BrailleDot::DOTF;
+    !virtual_dots.intersection(char).is_empty()
 }
 
 // FIXME: the following two functions should be defined as associated
@@ -340,10 +350,15 @@ fn dot_to_hex(dot: BrailleDot) -> u32 {
 // require the newtype pattern as we do not own these types, see
 // https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#using-the-newtype-pattern-to-implement-external-traits-on-external-types
 fn dot_to_unicode(dot: BrailleChar) -> char {
+    let unicode_plane = if has_virtual_dots(dot) {
+	0xF0000 // Unicode Supplementary Private Use Area-A
+    } else {
+	0x2800 // braille patterns
+    };
     let unicode = dot
         .iter()
         .map(|d| dot_to_hex(d))
-        .fold(0x2800, |acc, x| acc | x);
+        .fold(unicode_plane, |acc, x| acc | x);
     char::from_u32(unicode).unwrap()
 }
 
@@ -2173,6 +2188,10 @@ mod tests {
             dot_to_unicode(enum_set!(BrailleDot::DOT1 | BrailleDot::DOT8)),
             '⢁'
         );
+        assert_eq!(
+            dot_to_unicode(enum_set!(BrailleDot::DOT1 | BrailleDot::DOT9)),
+            '\u{f0101}'
+        );
     }
 
     #[test]
@@ -2183,6 +2202,13 @@ mod tests {
                 enum_set!(BrailleDot::DOT8)
             ]),
             "⠁⢀".to_string()
+        );
+        assert_eq!(
+            dots_to_unicode(vec![
+                enum_set!(BrailleDot::DOT1),
+                enum_set!(BrailleDot::DOT9)
+            ]),
+            "⠁\u{f0100}".to_string()
         );
     }
 
