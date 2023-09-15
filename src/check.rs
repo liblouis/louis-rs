@@ -67,6 +67,7 @@ impl TestSuite {
 pub struct Test {
     input: String,
     expected: String,
+    #[serde(default)]
     xfail: bool,
 }
 

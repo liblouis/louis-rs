@@ -27,74 +27,66 @@ tests:
   - # Lowercase letters
     input: a b c d e f g h i j k l m n o p q r s t u v w x y z
     expected: ⠁ ⠃ ⠉ ⠙ ⠑ ⠋ ⠛ ⠓ ⠊ ⠚ ⠅ ⠇ ⠍ ⠝ ⠕ ⠏ ⠟ ⠗ ⠎ ⠞ ⠥ ⠧ ⠺ ⠭ ⠽ ⠵
-    xfail: false
   - # Uppercase letters
     input: A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
     expected: ⡁ ⡃ ⡉ ⡙ ⡑ ⡋ ⡛ ⡓ ⡊ ⡚ ⡅ ⡇ ⡍ ⡝ ⡕ ⡏ ⡟ ⡗ ⡎ ⡞ ⡥ ⡧ ⡺ ⡭ ⡽ ⡵
-    xfail: false
   - # Single digits
     input: 1 2 3 4 5 6 7 8 9 0
     expected: ⠡ ⠣ ⠩ ⠹ ⠱ ⠫ ⠻ ⠳ ⠪ ⠬
-    xfail: false
   - # Accented letters (lowercase)
     input: á â à ä æ ç é ê è ë í î ì ï ñ ó ô ò ö œ ß ú û ù ü
     expected: ⢁ ⢡ ⢷ ⢜ ⢅ ⢯ ⢿ ⢣ ⢮ ⢫ ⢌ ⢩ ⢊ ⢻ ⢝ ⢬ ⢹ ⢕ ⢪ ⢺ ⢼ ⢥ ⢱ ⢾ ⢳
-    xfail: false
   - # Accented letters (uppercase)
     input: Á Â À Ä Æ Ç É Ê È Ë Í Î Ì Ï Ñ Ó Ô Ò Ö Œ Ú Û Ù Ü
     expected: ⣁ ⣡ ⣷ ⣜ ⣅ ⣯ ⣿ ⣣ ⣮ ⣫ ⣌ ⣩ ⣊ ⣻ ⣝ ⣬ ⣹ ⣕ ⣪ ⣺ ⣥ ⣱ ⣾ ⣳
-    xfail: false
   - # Monetary symbols
     input: $ € £ ¤ ¥
     expected: ⢙ ⢑ ⢏ ⢭ ⢽
-    xfail: false
   - # Arrows
     input: ← → ↑ ↓
     expected: ⢎ ⡱ ⣭ ⣛
-    xfail: false
 
   - input: Ons voorstel is bij uitstek geschikt voor complexe (technische en wiskundige) teksten, al dan niet op een brailleleesregel.
     expected: ⡕⠝⠎ ⠧⠕⠕⠗⠎⠞⠑⠇ ⠊⠎ ⠃⠊⠚ ⠥⠊⠞⠎⠞⠑⠅ ⠛⠑⠎⠉⠓⠊⠅⠞ ⠧⠕⠕⠗ ⠉⠕⠍⠏⠇⠑⠭⠑ ⠦⠞⠑⠉⠓⠝⠊⠎⠉⠓⠑ ⠑⠝ ⠺⠊⠎⠅⠥⠝⠙⠊⠛⠑⠴ ⠞⠑⠅⠎⠞⠑⠝⠂ ⠁⠇ ⠙⠁⠝ ⠝⠊⠑⠞ ⠕⠏ ⠑⠑⠝ ⠃⠗⠁⠊⠇⠇⠑⠇⠑⠑⠎⠗⠑⠛⠑⠇⠲
-    xfail: false
   - input: Voorlooptekens zijn niet nodig, alle karakters passen in 1 braillecel.
     expected: ⡧⠕⠕⠗⠇⠕⠕⠏⠞⠑⠅⠑⠝⠎ ⠵⠊⠚⠝ ⠝⠊⠑⠞ ⠝⠕⠙⠊⠛⠂ ⠁⠇⠇⠑ ⠅⠁⠗⠁⠅⠞⠑⠗⠎ ⠏⠁⠎⠎⠑⠝ ⠊⠝ ⠡ ⠃⠗⠁⠊⠇⠇⠑⠉⠑⠇⠲
-    xfail: false
+
   - input: Een cijfer bestaat uit het "reguliere" cijfer met toevoeging van braillepunt 6.
     expected: ⡑⠑⠝ ⠉⠊⠚⠋⠑⠗ ⠃⠑⠎⠞⠁⠁⠞ ⠥⠊⠞ ⠓⠑⠞ ⠶⠗⠑⠛⠥⠇⠊⠑⠗⠑⠶ ⠉⠊⠚⠋⠑⠗ ⠍⠑⠞ ⠞⠕⠑⠧⠕⠑⠛⠊⠝⠛ ⠧⠁⠝ ⠃⠗⠁⠊⠇⠇⠑⠏⠥⠝⠞ ⠫⠲
-    xfail: false
+
   - input: Alle voortekens verdwijnen, d.w.z. geen (permanent) hoofdletterteken, cijferteken, herstelteken etc.
     expected: ⡁⠇⠇⠑ ⠧⠕⠕⠗⠞⠑⠅⠑⠝⠎ ⠧⠑⠗⠙⠺⠊⠚⠝⠑⠝⠂ ⠙⠲⠺⠲⠵⠲ ⠛⠑⠑⠝ ⠦⠏⠑⠗⠍⠁⠝⠑⠝⠞⠴ ⠓⠕⠕⠋⠙⠇⠑⠞⠞⠑⠗⠞⠑⠅⠑⠝⠂ ⠉⠊⠚⠋⠑⠗⠞⠑⠅⠑⠝⠂ ⠓⠑⠗⠎⠞⠑⠇⠞⠑⠅⠑⠝ ⠑⠞⠉⠲
-    xfail: false
+
   - input: 503,2 + 498,5 = 1001,7.
     expected: ⠱⠬⠩⠂⠣ ⢖ ⠹⠪⠳⠂⠱ ⢶ ⠡⠬⠬⠡⠂⠻⠲
-    xfail: false
+
   - input: (8 -3) *5 =25. 2%=2/100.
     expected: ⠦⠳ ⠤⠩⠴ ⠔⠱ ⢶⠣⠱⠲ ⠣⠿⢶⠣⠌⠡⠬⠬⠲
-    xfail: false
+
   - input: =SUM(B4:OFFSET(B4,0,E2-1))
     expected: ⢶⡎⡥⡍⠦⡃⠹⠒⡕⡋⡋⡎⡑⡞⠦⡃⠹⠂⠬⠂⡑⠣⠤⠡⠴⠴
-    xfail: false
+
   - input: =IF(AND(C2>=C4,C2<=C5),C6)
     expected: ⢶⡊⡋⠦⡁⡝⡙⠦⡉⠣⡢⢶⡉⠹⠂⡉⠣⢔⢶⡉⠱⠴⠂⡉⠫⠴
-    xfail: false
+
   - input: déjà vu, 2 fietsen à €500,
     expected: ⠙⢿⠚⢷ ⠧⠥⠂ ⠣ ⠋⠊⠑⠞⠎⠑⠝ ⢷ ⢑⠱⠬⠬⠂
-    xfail: false
+
   - input: crèche, gêne, paté, reëel,
     expected: ⠉⠗⢮⠉⠓⠑⠂ ⠛⢣⠝⠑⠂ ⠏⠁⠞⢿⠂ ⠗⠑⢫⠑⠇⠂
-    xfail: false
+
   - input: ruïne, vóórkomen, reçu,
     expected: ⠗⠥⢻⠝⠑⠂ ⠧⢬⢬⠗⠅⠕⠍⠑⠝⠂ ⠗⠑⢯⠥⠂
-    xfail: false
+
   - input: "Röntgen. Jan zei: “De bal was ín!”."
     expected: ⡗⢪⠝⠞⠛⠑⠝⠲ ⡚⠁⠝ ⠵⠑⠊⠒ ⣆⡙⠑ ⠃⠁⠇ ⠺⠁⠎ ⢌⠝⠖⣰⠲
-    xfail: false
+
   - input: Jan_Adams07@g-mail.com
     expected: ⡚⠁⠝⠸⡁⠙⠁⠍⠎⠬⠻⠜⠛⠤⠍⠁⠊⠇⠲⠉⠕⠍
-    xfail: false
+
   - input: https://braille-autoriteit.org/
     expected: ⠓⠞⠞⠏⠎⠒⠌⠌⠃⠗⠁⠊⠇⠇⠑⠤⠁⠥⠞⠕⠗⠊⠞⠑⠊⠞⠲⠕⠗⠛⠌
-    xfail: false
+
 
 # forward translation only
 #flags: {testmode: forward}
@@ -102,12 +94,12 @@ tests:
   - # Greek
     input: ΑΒΓ αβγ Σσ
     expected: ⣁⣃⣛ ⢁⢃⢛ ⣎⢎
-    xfail: false
+
   - # Accented letters (lowercase)
     input: Á Ã Å Ā Ă Ą Ò Õ Ø Ō Ŏ Ő Ο
     expected: ⣁ ⣁ ⣁ ⣁ ⣁ ⣁ ⣕ ⣕ ⣕ ⣕ ⣕ ⣕ ⣕
-    xfail: false
+
   - # Accented letters (uppercase)
     input: á ã å ā ă ą ò õ ø ō ŏ ő ο
     expected: ⢁ ⢁ ⢁ ⢁ ⢁ ⢁ ⢕ ⢕ ⢕ ⢕ ⢕ ⢕ ⢕
-    xfail: false
+
