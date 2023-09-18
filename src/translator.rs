@@ -8,6 +8,7 @@ use serde::Deserialize;
 use crate::parser::dots_to_unicode;
 use crate::parser::BrailleCharsOrImplicit;
 use crate::parser::Rule;
+use crate::parser::drop_virtual_dots;
 use crate::translator::character::CharacterAttributes;
 
 mod character;
@@ -208,7 +209,7 @@ impl TranslationTable {
         .map(|m| m.output)
         .collect::<Vec<&str>>()
         .concat();
-        translated
+        translated.chars().map(|c| drop_virtual_dots(c)).collect()
     }
 
     fn pass1<'a>(&'a self, input: &'a str) -> Vec<TranslationMapping<'a>> {

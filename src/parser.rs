@@ -344,6 +344,17 @@ fn has_virtual_dots(char: BrailleChar) -> bool {
     !virtual_dots.intersection(char).is_empty()
 }
 
+pub fn drop_virtual_dots(c: char) -> char {
+    let unicode = c as u32;
+    // FIXME: the Unicode Supplementary Private Use Area-A covers 65,534 code points. Is
+    // that enough for the 8 dots and the 7 virtual dots?
+    if unicode > 0xF0000 && unicode <= 0xFFFFD { // Unicode Supplementary Private Use Area-A
+	char::from_u32((unicode & 0xFF) + 0x2800).unwrap()
+    } else {
+	c
+    }
+}
+
 // FIXME: the following two functions should be defined as associated
 // functions, i.e. inside an impl block for BrailleChar or as an
 // implementation of the From trait. Both solutions would probably
@@ -2191,6 +2202,20 @@ mod tests {
         assert_eq!(
             dot_to_unicode(enum_set!(BrailleDot::DOT1 | BrailleDot::DOT9)),
             '\u{f0101}'
+        );
+    }
+
+    #[test]
+    fn drop_virtual_dots_test() {
+        assert_eq!(
+	    drop_virtual_dots(
+		dot_to_unicode(enum_set!(BrailleDot::DOT1 | BrailleDot::DOT8))),
+            '⢁'
+        );
+        assert_eq!(
+	    drop_virtual_dots(
+		dot_to_unicode(enum_set!(BrailleDot::DOT1 | BrailleDot::DOT9))),
+            '⠁'
         );
     }
 
