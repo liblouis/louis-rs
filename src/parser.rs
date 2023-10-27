@@ -1726,7 +1726,7 @@ fn multipass_test_lookback(input: &str) -> IResult<&str, MultiPassTestInstructio
 }
 
 fn multipass_test_variable(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
-    let (input, (n1, op, n2)) = tuple((number, multipass_relational_operator, number))(input)?;
+    let (input, (_, n1, op, n2)) = tuple((tag("#"), number, multipass_relational_operator, number))(input)?;
     Ok((input, MultiPassTestInstruction::VariableTest { var: n1, val: n2, op: op }))
 }
 
@@ -2587,35 +2587,35 @@ mod tests {
     #[test]
     fn multipass_test_variable_test() {
         assert_eq!(
-            multipass_test_variable("1=5"),
+            multipass_test_variable("#1=5"),
             Ok((
                 "",
                 MultiPassTestInstruction::VariableTest { var: 1, val: 5, op: RelationalOperator::EQ }
             ))
         );
         assert_eq!(
-            multipass_test_variable("1<5"),
+            multipass_test_variable("#1<5"),
             Ok((
                 "",
                 MultiPassTestInstruction::VariableTest { var: 1, val: 5, op: RelationalOperator::LT })
             )
         );
         assert_eq!(
-            multipass_test_variable("1>5"),
+            multipass_test_variable("#1>5"),
             Ok((
                 "",
                 MultiPassTestInstruction::VariableTest { var: 1, val: 5, op: RelationalOperator::GT })
             )
         );
         assert_eq!(
-            multipass_test_variable("1<=5"),
+            multipass_test_variable("#1<=5"),
             Ok((
                 "",
                 MultiPassTestInstruction::VariableTest { var: 1, val: 5, op: RelationalOperator::LTEQ })
             )
         );
         assert_eq!(
-            multipass_test_variable("1>=5"),
+            multipass_test_variable("#1>=5"),
             Ok((
                 "",
                 MultiPassTestInstruction::VariableTest { var: 1, val: 5, op: RelationalOperator::GTEQ })
