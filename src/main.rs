@@ -76,10 +76,10 @@ fn main() {
                 results.iter().filter(|r| r.is_failure()).count()
             );
             for r in results {
-		match r {
-		    TestResult::Success => (),
-		    _ => println!("{:?}", r)
-		}
+                match r {
+                    TestResult::Success => (),
+                    _ => println!("{:?}", r),
+                }
             }
         }
         Commands::Debug { table } => {

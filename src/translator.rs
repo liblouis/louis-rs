@@ -6,9 +6,9 @@ use std::collections::HashSet;
 use serde::Deserialize;
 
 use crate::parser::dots_to_unicode;
+use crate::parser::drop_virtual_dots;
 use crate::parser::BrailleCharsOrImplicit;
 use crate::parser::Rule;
-use crate::parser::drop_virtual_dots;
 use crate::translator::character::CharacterAttributes;
 
 mod character;
@@ -200,15 +200,18 @@ impl TranslationTable {
         // apply the corrections
         let corrected = input;
         // apply the translations
-        let translated= self.pass1(&corrected)
+        let translated = self
+            .pass1(&corrected)
             .into_iter()
             .map(|m| m.output)
             .collect::<Vec<&str>>()
             .concat();
-        let translated = self.pass2(&translated).into_iter()
-        .map(|m| m.output)
-        .collect::<Vec<&str>>()
-        .concat();
+        let translated = self
+            .pass2(&translated)
+            .into_iter()
+            .map(|m| m.output)
+            .collect::<Vec<&str>>()
+            .concat();
         translated.chars().map(|c| drop_virtual_dots(c)).collect()
     }
 
@@ -504,12 +507,12 @@ mod tests {
             Translation {
                 from: "ha".to_string(),
                 to: "H1".to_string(),
-		constraints: HashSet::from([Constraint::WordStart])
+                constraints: HashSet::from([Constraint::WordStart]),
             },
             Translation {
                 from: "ha".to_string(),
                 to: "H2".to_string(),
-		constraints: HashSet::from([Constraint::WordEnd])
+                constraints: HashSet::from([Constraint::WordEnd]),
             },
         ];
 

@@ -348,10 +348,11 @@ pub fn drop_virtual_dots(c: char) -> char {
     let unicode = c as u32;
     // FIXME: the Unicode Supplementary Private Use Area-A covers 65,534 code points. Is
     // that enough for the 8 dots and the 7 virtual dots?
-    if unicode > 0xF0000 && unicode <= 0xFFFFD { // Unicode Supplementary Private Use Area-A
-	char::from_u32((unicode & 0xFF) + 0x2800).unwrap()
+    if unicode > 0xF0000 && unicode <= 0xFFFFD {
+        // Unicode Supplementary Private Use Area-A
+        char::from_u32((unicode & 0xFF) + 0x2800).unwrap()
     } else {
-	c
+        c
     }
 }
 
@@ -362,9 +363,9 @@ pub fn drop_virtual_dots(c: char) -> char {
 // https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#using-the-newtype-pattern-to-implement-external-traits-on-external-types
 fn dot_to_unicode(dot: BrailleChar) -> char {
     let unicode_plane = if has_virtual_dots(dot) {
-	0xF0000 // Unicode Supplementary Private Use Area-A
+        0xF0000 // Unicode Supplementary Private Use Area-A
     } else {
-	0x2800 // braille patterns
+        0x2800 // braille patterns
     };
     let unicode = dot
         .iter()
@@ -1704,7 +1705,8 @@ fn multipass_test_instruction (input: &str) -> IResult<&str, MultiPassTestInstru
         multipass_test_attributes,
         multipass_test_swap,
         multipass_test_negate,
-        multipass_test_replace))(input)
+        multipass_test_replace,
+    ))(input)
 }
 
 fn multipass_test_beginning(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
@@ -1721,7 +1723,7 @@ fn multipass_test_lookback(input: &str) -> IResult<&str, MultiPassTestInstructio
     let (input, (_, num)) = tuple((tag("_"), opt(number)))(input)?; // FIXME: number > 0
     match num {
         Some(n) => Ok((input, MultiPassTestInstruction::Lookback { len: n })),
-        None => Ok((input, MultiPassTestInstruction::Lookback { len: 1 }))
+        None => Ok((input, MultiPassTestInstruction::Lookback { len: 1 })),
     }
 }
 
@@ -1768,24 +1770,26 @@ fn multipass_test_attributes(input: &str) -> IResult<&str, MultiPassTestInstruct
 }
 
 fn multipass_repeat(input: &str) -> IResult<&str, (u8, u8), LouisParseError> {
-    alt((multipass_repeat_any,
+    alt((
+        multipass_repeat_any,
         multipass_repeat_range,
-        multipass_repeat_fixed))(input)
+        multipass_repeat_fixed,
+    ))(input)
 }
 
 fn multipass_repeat_any(input: &str) -> IResult<&str, (u8, u8), LouisParseError> {
     let (input, _) = tag(".")(input)?;
-    Ok((input, (1,0)))
+    Ok((input, (1, 0)))
 }
 
 fn multipass_repeat_fixed(input: &str) -> IResult<&str, (u8, u8), LouisParseError> {
     let (input, d) = number(input)?; // FIXME: d > 0
-    Ok((input, (d,d)))
+    Ok((input, (d, d)))
 }
 
 fn multipass_repeat_range(input: &str) -> IResult<&str, (u8, u8), LouisParseError> {
     let (input, (d1, _, d2)) = tuple((number, tag("-"), number))(input)?; // FIXME: d1 > 0 and d2 >= d1
-    Ok((input, (d1,d2)))
+    Ok((input, (d1, d2)))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1797,13 +1801,13 @@ pub enum MultiPassAttribute {
     Space,
     Math,
     Punctuation,
-    Uppercase, 
+    Uppercase,
     Lowercase,
     Class1,
     Class2,
     Class3,
     Class4,
-    Any
+    Any,
 }
 
 fn multipass_attributes(input: &str) -> IResult<&str, HashSet<MultiPassAttribute>, LouisParseError> {
@@ -2208,13 +2212,15 @@ mod tests {
     #[test]
     fn drop_virtual_dots_test() {
         assert_eq!(
-	    drop_virtual_dots(
-		dot_to_unicode(enum_set!(BrailleDot::DOT1 | BrailleDot::DOT8))),
+            drop_virtual_dots(dot_to_unicode(enum_set!(
+                BrailleDot::DOT1 | BrailleDot::DOT8
+            ))),
             '⢁'
         );
         assert_eq!(
-	    drop_virtual_dots(
-		dot_to_unicode(enum_set!(BrailleDot::DOT1 | BrailleDot::DOT9))),
+            drop_virtual_dots(dot_to_unicode(enum_set!(
+                BrailleDot::DOT1 | BrailleDot::DOT9
+            ))),
             '⠁'
         );
     }
@@ -2523,7 +2529,7 @@ mod tests {
     }
 
     #[test]
-    fn multipass_test_test(){
+    fn multipass_test_test() {
         assert_eq!(
             multipass_test("\"abc\""),
             Ok((
@@ -2534,7 +2540,7 @@ mod tests {
     }
 
     #[test]
-    fn multipass_test_instruction_test(){
+    fn multipass_test_instruction_test() {
         assert_eq!(
             multipass_test_instruction("`"),
             Ok((
