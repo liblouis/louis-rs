@@ -176,13 +176,13 @@ pub enum Rule {
     Swapcc {name: String, chars: String, replacement: String},
 
     // Context Opcodes
-    Context {test: String, action: String, prefixes: Prefixes},
-    Pass2 {test: String, action: String, prefixes: Prefixes},
-    Pass3 {test: String, action: String, prefixes: Prefixes},
-    Pass4 {test: String, action: String, prefixes: Prefixes},
+    Context {test: MultiPassTest, action: String, prefixes: Prefixes},
+    Pass2 {test: MultiPassTest, action: String, prefixes: Prefixes},
+    Pass3 {test: MultiPassTest, action: String, prefixes: Prefixes},
+    Pass4 {test: MultiPassTest, action: String, prefixes: Prefixes},
 
     // Correct Opcode
-    Correct {test: String, action: String, prefixes: Prefixes},
+    Correct {test: MultiPassTest, action: String, prefixes: Prefixes},
 
     // Match Opcode
     Match { pre: String, chars: String, post: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses, positions: WithMatches},
@@ -1675,7 +1675,7 @@ fn swapcc(i: &str) -> IResult<&str, Rule, LouisParseError> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum MultiPassTestInstruction {
+pub enum MultiPassTestInstruction {
     Beginning,
     End,
     Lookback { len: u8 },
@@ -1731,7 +1731,7 @@ fn multipass_test_variable(input: &str) -> IResult<&str, MultiPassTestInstructio
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum RelationalOperator {
+pub enum RelationalOperator {
     EQ,
     GT,
     LT,
@@ -1789,7 +1789,7 @@ fn multipass_repeat_range(input: &str) -> IResult<&str, (u8, u8), LouisParseErro
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum MultiPassAttribute {
+pub enum MultiPassAttribute {
     Digit,
     Litdigit,
     Letter,
@@ -1851,11 +1851,11 @@ fn multipass_test_replace(input: &str) -> IResult<&str, MultiPassTestInstruction
 
 fn context(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, test, _, action)) =
-        tuple((prefixes, tag("context"), space1, chars, space1, chars))(i)?;
+        tuple((prefixes, tag("context"), space1, multipass_test, space1, chars))(i)?;
     Ok((
         input,
         Rule::Context {
-            test: test.to_string(),
+            test: test,
             action: action.to_string(),
             prefixes,
         },
@@ -1864,11 +1864,11 @@ fn context(i: &str) -> IResult<&str, Rule, LouisParseError> {
 
 fn pass2(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, test, _, action)) =
-        tuple((prefixes, tag("pass2"), space1, chars, space1, chars))(i)?;
+        tuple((prefixes, tag("pass2"), space1, multipass_test, space1, chars))(i)?;
     Ok((
         input,
         Rule::Pass2 {
-            test: test.to_string(),
+            test: test,
             action: action.to_string(),
             prefixes,
         },
@@ -1877,11 +1877,11 @@ fn pass2(i: &str) -> IResult<&str, Rule, LouisParseError> {
 
 fn pass3(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, test, _, action)) =
-        tuple((prefixes, tag("pass3"), space1, chars, space1, chars))(i)?;
+        tuple((prefixes, tag("pass3"), space1, multipass_test, space1, chars))(i)?;
     Ok((
         input,
         Rule::Pass3 {
-            test: test.to_string(),
+            test: test,
             action: action.to_string(),
             prefixes,
         },
@@ -1890,11 +1890,11 @@ fn pass3(i: &str) -> IResult<&str, Rule, LouisParseError> {
 
 fn pass4(i: &str) -> IResult<&str, Rule, LouisParseError> {
     let (input, (prefixes, _, _, test, _, action)) =
-        tuple((prefixes, tag("pass4"), space1, chars, space1, chars))(i)?;
+        tuple((prefixes, tag("pass4"), space1, multipass_test, space1, chars))(i)?;
     Ok((
         input,
         Rule::Pass4 {
-            test: test.to_string(),
+            test: test,
             action: action.to_string(),
             prefixes,
         },
@@ -1904,11 +1904,11 @@ fn pass4(i: &str) -> IResult<&str, Rule, LouisParseError> {
 fn correct(i: &str) -> IResult<&str, Rule, LouisParseError> {
     // FIXME: make sure the prefixes are mandatory here
     let (input, (prefixes, _, _, test, _, action)) =
-        tuple((prefixes, tag("correct"), space1, chars, space1, chars))(i)?;
+        tuple((prefixes, tag("correct"), space1, multipass_test, space1, chars))(i)?;
     Ok((
         input,
         Rule::Correct {
-            test: test.to_string(),
+            test: test,
             action: action.to_string(),
             prefixes,
         },
