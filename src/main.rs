@@ -84,9 +84,13 @@ fn main() {
         }
         Commands::Debug { table } => {
             println!("debugging table {:?}", table);
-            let rules = debug(table).unwrap();
-            for rule in rules {
-                println!("{:?}", rule);
+            match debug(table) {
+                Ok(rules) => {
+                    for rule in rules {
+                        println!("{:?}", rule);
+                    }
+                }
+                Err(error) => println!("{:?}", error),
             }
         }
     }
