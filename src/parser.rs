@@ -382,17 +382,17 @@ pub fn dots_to_unicode(dots: BrailleChars) -> String {
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum LouisParseError {
     #[error("invalid braille")]
-    BadBraille,
+    InvalidBraille,
     #[error("invalid unicode literal")]
-    BadUnicodeLiteral,
+    InvalidUnicodeLiteral,
     #[error("invalid digit")]
-    BadDigit,
+    InvalidDigit,
     #[error("invalid prefix")]
-    BadPrefix,
+    InvalidPrefix,
     #[error("invalid match prefix")]
-    BadMatchPrefix,
-    #[error("bad escape sequence")]
-    BadEscape,
+    InvalidMatchPrefix,
+    #[error("invalid escape sequence")]
+    InvalidEscape,
     #[error("unknown parser error")]
     Unparseable,
 }
@@ -425,7 +425,7 @@ fn char_to_dot(char: char) -> Result<BrailleDot, LouisParseError> {
         'd' => Ok(BrailleDot::DOTD),
         'e' => Ok(BrailleDot::DOTE),
         'f' => Ok(BrailleDot::DOTF),
-        _ => Err(LouisParseError::BadBraille {}),
+        _ => Err(LouisParseError::InvalidBraille {}),
     }
 }
 
@@ -444,9 +444,9 @@ fn unicode_literal(input: &str) -> IResult<&str, char, LouisParseError> {
     match u32::from_str_radix(raw_num, 16) {
         Ok(num) => match char::from_u32(num) {
             Some(c) => Ok((rest, c)),
-            None => Err(nom::Err::Failure(LouisParseError::BadUnicodeLiteral)),
+            None => Err(nom::Err::Failure(LouisParseError::InvalidUnicodeLiteral)),
         },
-        Err(_) => Err(nom::Err::Failure(LouisParseError::BadUnicodeLiteral)),
+        Err(_) => Err(nom::Err::Failure(LouisParseError::InvalidUnicodeLiteral)),
     }
 }
 
@@ -491,10 +491,10 @@ fn dots(i: &str) -> IResult<&str, BrailleChars, LouisParseError> {
                 dots.iter().map(|chars| chars_to_dots(chars)).collect();
             match braille_chars {
                 Ok(chars) => Ok((rest, chars)),
-                Err(_) => Err(nom::Err::Error(LouisParseError::BadBraille)),
+                Err(_) => Err(nom::Err::Error(LouisParseError::InvalidBraille)),
             }
         }
-        Err(_) => Err(nom::Err::Error(LouisParseError::BadBraille)),
+        Err(_) => Err(nom::Err::Error(LouisParseError::InvalidBraille)),
     }
 }
 
@@ -507,9 +507,9 @@ fn one_unicode_digit(input: &str) -> IResult<&str, char, LouisParseError> {
     match result {
         Ok((rest, digits)) => match digits.chars().count() {
             1 => Ok((rest, digits.chars().nth(0).unwrap())),
-            _ => Err(nom::Err::Error(LouisParseError::BadDigit)),
+            _ => Err(nom::Err::Error(LouisParseError::InvalidDigit)),
         },
-        Err(_) => Err(nom::Err::Error(LouisParseError::BadDigit)),
+        Err(_) => Err(nom::Err::Error(LouisParseError::InvalidDigit)),
     }
 }
 
@@ -517,7 +517,7 @@ fn number(input: &str) -> IResult<&str, u8, LouisParseError> {
     let (rest, raw_num) = digit1(input)?;
     match raw_num.parse::<u8>() {
         Ok(num) => Ok((rest, num)),
-        Err(_) => Err(nom::Err::Failure(LouisParseError::BadUnicodeLiteral)),
+        Err(_) => Err(nom::Err::Failure(LouisParseError::InvalidUnicodeLiteral)),
     }
 }
 
@@ -2246,8 +2246,8 @@ mod tests {
     #[test]
     fn char_to_dot_test() {
         assert_eq!(char_to_dot('8'), Ok(BrailleDot::DOT8));
-        assert_eq!(char_to_dot('F'), Err(LouisParseError::BadBraille));
-        assert_eq!(char_to_dot('z'), Err(LouisParseError::BadBraille));
+        assert_eq!(char_to_dot('F'), Err(LouisParseError::InvalidBraille));
+        assert_eq!(char_to_dot('z'), Err(LouisParseError::InvalidBraille));
     }
 
     #[test]
@@ -2266,16 +2266,16 @@ mod tests {
         assert_eq!(one_unicode_digit("1"), Ok(("", '1')));
         assert_eq!(
             one_unicode_digit("12"),
-            Err(Err::Error(LouisParseError::BadDigit))
+            Err(Err::Error(LouisParseError::InvalidDigit))
         );
         assert_eq!(
             one_unicode_digit("b"),
-            Err(Err::Error(LouisParseError::BadDigit))
+            Err(Err::Error(LouisParseError::InvalidDigit))
         );
         assert_eq!(one_unicode_digit("1b"), Ok(("b", '1')));
         assert_eq!(
             one_unicode_digit(""),
-            Err(Err::Error(LouisParseError::BadDigit))
+            Err(Err::Error(LouisParseError::InvalidDigit))
         );
         assert_eq!(one_unicode_digit("໑"), Ok(("", '໑')));
     }
@@ -2387,7 +2387,7 @@ mod tests {
                 ]
             ))
         );
-        assert_eq!(dots("huhu"), Err(Err::Error(LouisParseError::BadBraille)));
+        assert_eq!(dots("huhu"), Err(Err::Error(LouisParseError::InvalidBraille)));
     }
 
     #[test]
@@ -2405,7 +2405,7 @@ mod tests {
             braillechars_or_implicit("="),
             Ok(("", BrailleCharsOrImplicit::Implicit))
         );
-        assert_eq!(dots("m"), Err(Err::Error(LouisParseError::BadBraille)));
+        assert_eq!(dots("m"), Err(Err::Error(LouisParseError::InvalidBraille)));
     }
 
     #[test]
