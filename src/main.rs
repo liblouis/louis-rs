@@ -376,7 +376,7 @@ fn char_to_dot(char: char) -> Result<BrailleDot, ParseError> {
 }
 
 fn chars_to_dots(chars: &str) -> Result<BrailleChar, ParseError> {
-    chars.chars().map(|c| char_to_dot(c)).collect()
+    chars.chars().map(char_to_dot).collect()
 }
 
 fn unescape_unicode(chars: &mut Chars) -> Result<char, ParseError> {
@@ -680,7 +680,7 @@ impl<'a> RuleParser<'a> {
 	if s.chars().count() == 1 {
 	    Ok(s.chars().next().unwrap())
 	} else {
-	    Err(ParseError::SingleCharExpected { found: Some(s.into())})
+	    Err(ParseError::SingleCharExpected { found: Some(s)})
 	}
     }
     
@@ -723,7 +723,7 @@ impl<'a> RuleParser<'a> {
 	self.tokens.next()
 	    .ok_or(ParseError::DotsExpected)?
 	    .split('-')
-	    .map(|chars| chars_to_dots(chars))
+	    .map(chars_to_dots)
 	    .collect()
     }
 
@@ -732,7 +732,7 @@ impl<'a> RuleParser<'a> {
 	    .ok_or(ParseError::DotsExpected)?
 	    .split(',')
 	    .map(|chars| chars.split('-')
-		 .map(|chars| chars_to_dots(chars))
+		 .map(chars_to_dots)
 		 .collect())
 	    .collect()
     }
@@ -891,7 +891,7 @@ fn main() {
     let filename = &args[1];
     for (line_no, line) in read_to_string(filename).unwrap().lines().enumerate() {
         // println!("{}", line);
-	if !line.starts_with("#") && !line.is_empty() {
+	if !line.starts_with('#') && !line.is_empty() {
 	    let rule = RuleParser::new(line).rule();
 	    match rule {
 		Ok(rule) => {println!("{:?}", rule)},
