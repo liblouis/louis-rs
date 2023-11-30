@@ -1,4 +1,11 @@
-use std::{collections::HashSet, str::{SplitWhitespace, Chars}, iter::Peekable, num::ParseIntError, fs::read_to_string, env};
+use std::{
+    collections::HashSet,
+    env,
+    fs::read_to_string,
+    iter::Peekable,
+    num::ParseIntError,
+    str::{Chars, SplitWhitespace},
+};
 
 #[derive(Hash, Eq, PartialEq, Debug)]
 enum Prefix {
@@ -18,9 +25,12 @@ type WithClasses = Vec<WithClass>;
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum ParseError {
     #[error("Expected {expected:?} got {found:?}")]
-    TokenExpected{ expected: String, found: Option<String> },
+    TokenExpected {
+        expected: String,
+        found: Option<String>,
+    },
     #[error("Invalid braille {character:?}")]
-    InvalidBraille {character: char},
+    InvalidBraille { character: char },
     #[error("Braille expected")]
     DotsExpected,
     #[error("invalid unicode literal")]
@@ -36,7 +46,7 @@ pub enum ParseError {
     #[error("invalid escape sequence")]
     InvalidEscape,
     #[error("Expected classname, got {found:?}")]
-    ClassNameExpected{ found: Option<String> },
+    ClassNameExpected { found: Option<String> },
     #[error("Opcode expected")]
     OpcodeExpected,
     #[error("Name expected")]
@@ -56,7 +66,7 @@ pub enum ParseError {
     #[error("Match post-pattern expected")]
     MatchPost,
     #[error("Expected a single char, got {found:?}")]
-    SingleCharExpected{ found: Option<String> },
+    SingleCharExpected { found: Option<String> },
     #[error("unknown parser error")]
     Unparseable,
 }
@@ -371,7 +381,7 @@ fn char_to_dot(char: char) -> Result<BrailleDot, ParseError> {
         'd' => Ok(BrailleDot::DOTD),
         'e' => Ok(BrailleDot::DOTE),
         'f' => Ok(BrailleDot::DOTF),
-        invalid => Err(ParseError::InvalidBraille {character: invalid}),
+        invalid => Err(ParseError::InvalidBraille { character: invalid }),
     }
 }
 
@@ -383,16 +393,16 @@ fn unescape_unicode(chars: &mut Chars) -> Result<char, ParseError> {
     let mut s = String::new();
 
     for _ in 0..4 {
-	match chars.next() {
-	    Some(c) => {s.push(c)}
-	    _ => {return Err(ParseError::InvalidUnicodeLiteral)}
-	}
+        match chars.next() {
+            Some(c) => s.push(c),
+            _ => return Err(ParseError::InvalidUnicodeLiteral),
+        }
     }
 
     if let Ok(n) = u32::from_str_radix(&s, 16) {
-	if let Some(c) = char::from_u32(n) {
-	    return Ok(c);
-	}
+        if let Some(c) = char::from_u32(n) {
+            return Ok(c);
+        }
     }
     Err(ParseError::InvalidUnicodeLiteral)
 }
@@ -417,7 +427,7 @@ pub fn unescape(s: &str) -> Result<String, ParseError> {
             Some('e') => new.push('\u{001B}'),
             Some('\\') => new.push('\\'),
             Some('x') => new.push(unescape_unicode(&mut iter)?),
-            _ => return Err(ParseError::InvalidEscape)
+            _ => return Err(ParseError::InvalidEscape),
         };
     }
     Ok(new)
@@ -449,318 +459,338 @@ struct RuleParser<'a> {
 }
 
 impl<'a> RuleParser<'a> {
-
     fn new(source: &'a str) -> Self {
-	Self {
-	    tokens: source.split_whitespace().peekable(),
-	}
+        Self {
+            tokens: source.split_whitespace().peekable(),
+        }
     }
 
-    fn nofor(&mut self) ->Option<Prefix> {
-	match self.tokens.next_if_eq(&"nofor") {
-	    Some(_) => Some(Prefix::Nofor),
-	    _ => None
-	}
+    fn nofor(&mut self) -> Option<Prefix> {
+        match self.tokens.next_if_eq(&"nofor") {
+            Some(_) => Some(Prefix::Nofor),
+            _ => None,
+        }
     }
-    
-    fn noback(&mut self) ->Option<Prefix> {
-	match self.tokens.next_if_eq(&"noback") {
-	    Some(_) => Some(Prefix::Noback),
-	    _ => None
-	}
+
+    fn noback(&mut self) -> Option<Prefix> {
+        match self.tokens.next_if_eq(&"noback") {
+            Some(_) => Some(Prefix::Noback),
+            _ => None,
+        }
     }
-    
-    fn nocross(&mut self) ->Option<Prefix> {
-	match self.tokens.next_if_eq(&"nocross") {
-	    Some(_) => Some(Prefix::Nocross),
-	    _ => None
-	}
+
+    fn nocross(&mut self) -> Option<Prefix> {
+        match self.tokens.next_if_eq(&"nocross") {
+            Some(_) => Some(Prefix::Nocross),
+            _ => None,
+        }
     }
-    
+
     fn prefix(&mut self) -> Option<HashSet<Prefix>> {
-	let mut prefixes: HashSet<Prefix> = HashSet::new();
-	if let Some(prefix) = self.nofor() {
-	    prefixes.insert(prefix);
-	} else if let Some(prefix) = self.noback() {
-	    prefixes.insert(prefix);
-	}
-	if let Some(prefix) = self.nocross() {
-	    prefixes.insert(prefix);
-	}
-	if prefixes.is_empty() {
-	    return None
-	}
-	Some(prefixes)
+        let mut prefixes: HashSet<Prefix> = HashSet::new();
+        if let Some(prefix) = self.nofor() {
+            prefixes.insert(prefix);
+        } else if let Some(prefix) = self.noback() {
+            prefixes.insert(prefix);
+        }
+        if let Some(prefix) = self.nocross() {
+            prefixes.insert(prefix);
+        }
+        if prefixes.is_empty() {
+            return None;
+        }
+        Some(prefixes)
     }
 
     fn with_class(&mut self) -> Result<Option<WithClass>, ParseError> {
-	if self.tokens.next_if_eq(&"before").is_some() {
-	    match self.tokens.next() {
-		Some(class) => {return Ok(Some(WithClass::Before{class: class.into()}))},
-		None => {return Err(ParseError::ClassNameExpected { found: None })}
-	    }
-	}
-	if self.tokens.next_if_eq(&"after").is_some() {
-	    match self.tokens.next() {
-		Some(class) => {return Ok(Some(WithClass::After{class: class.into()}))},
-		None => {return Err(ParseError::ClassNameExpected { found: None })}, 
-	    }
-	}
-	Ok(None)
+        if self.tokens.next_if_eq(&"before").is_some() {
+            match self.tokens.next() {
+                Some(class) => {
+                    return Ok(Some(WithClass::Before {
+                        class: class.into(),
+                    }))
+                }
+                None => return Err(ParseError::ClassNameExpected { found: None }),
+            }
+        }
+        if self.tokens.next_if_eq(&"after").is_some() {
+            match self.tokens.next() {
+                Some(class) => {
+                    return Ok(Some(WithClass::After {
+                        class: class.into(),
+                    }))
+                }
+                None => return Err(ParseError::ClassNameExpected { found: None }),
+            }
+        }
+        Ok(None)
     }
-    
+
     fn with_classes(&mut self) -> Result<Option<WithClasses>, ParseError> {
-	let mut classes = WithClasses::new();
-	while self.tokens.peek() == Some(&"before") || self.tokens.peek() == Some(&"after") {
-	    if let Some(class) = self.with_class()? {
-		classes.push(class);
-	    }
-	}
-	Ok(Some(classes))
+        let mut classes = WithClasses::new();
+        while self.tokens.peek() == Some(&"before") || self.tokens.peek() == Some(&"after") {
+            if let Some(class) = self.with_class()? {
+                classes.push(class);
+            }
+        }
+        Ok(Some(classes))
     }
 
     fn opcode(&mut self) -> Result<Opcode, ParseError> {
-	if let Some(token) = self.tokens.next() {
-	    match token {
-		"include" => Ok(Opcode::Include),
-		"undefined" => Ok(Opcode::Undefined),
-		"display" => Ok(Opcode::Display),
-		"multind" => Ok(Opcode::Multind),
-		"space" => Ok(Opcode::Space),
-		"punctuation" => Ok(Opcode::Punctuation),
-		"digit" => Ok(Opcode::Digit),
-		"grouping" => Ok(Opcode::Grouping),
-		"letter" => Ok(Opcode::Letter),
-		"base" => Ok(Opcode::Base),
-		"lowercase" => Ok(Opcode::Lowercase),
-		"uppercase" => Ok(Opcode::Uppercase),
-		"litdigit" => Ok(Opcode::Litdigit),
-		"sign" => Ok(Opcode::Sign),
-		"math" => Ok(Opcode::Math),
+        if let Some(token) = self.tokens.next() {
+            match token {
+                "include" => Ok(Opcode::Include),
+                "undefined" => Ok(Opcode::Undefined),
+                "display" => Ok(Opcode::Display),
+                "multind" => Ok(Opcode::Multind),
+                "space" => Ok(Opcode::Space),
+                "punctuation" => Ok(Opcode::Punctuation),
+                "digit" => Ok(Opcode::Digit),
+                "grouping" => Ok(Opcode::Grouping),
+                "letter" => Ok(Opcode::Letter),
+                "base" => Ok(Opcode::Base),
+                "lowercase" => Ok(Opcode::Lowercase),
+                "uppercase" => Ok(Opcode::Uppercase),
+                "litdigit" => Ok(Opcode::Litdigit),
+                "sign" => Ok(Opcode::Sign),
+                "math" => Ok(Opcode::Math),
 
-		// Braille Indicator Opcodes
-		"modeletter" => Ok(Opcode::Modeletter),
-		"capsletter" => Ok(Opcode::Capsletter),
-		"begmodeword" => Ok(Opcode::Begmodeword),
-		"begcapsword" => Ok(Opcode::Begcapsword),
-		"endcapsword" => Ok(Opcode::Endcapsword),
-		"capsmodechars" => Ok(Opcode::Capsmodechars),
-		"begcaps" => Ok(Opcode::Begcaps),
-		"endcaps" => Ok(Opcode::Endcaps),
-		"begcapsphrase" => Ok(Opcode::Begcapsphrase),
-		"endcapsphrase" => Ok(Opcode::Endcapsphrase),
-		"lencapsphrase" => Ok(Opcode::Lencapsphrase),
-		"letsign" => Ok(Opcode::Letsign),
-		"noletsign" => Ok(Opcode::Noletsign),
-		"noletsignbefore" => Ok(Opcode::Noletsignbefore),
-		"noletsignafter" => Ok(Opcode::Noletsignafter),
-		"nocontractsign" => Ok(Opcode::Nocontractsign),
-		"numsign" => Ok(Opcode::Numsign),
-		"nonumsign" => Ok(Opcode::Nonumsign),
-		"numericnocontchars" => Ok(Opcode::Numericnocontchars),
-		"numericmodechars" => Ok(Opcode::Numericmodechars),
-		"midendnumericmodechars" => Ok(Opcode::Midendnumericmodechars),
-		
-		"begmodephrase" => Ok(Opcode::Begmodephrase),
-		"endmodephrase" => Ok(Opcode::Endmodephrase),
-		"lenmodephrase" => Ok(Opcode::Lenmodephrase),
-		    
-		// Opcodes for Standing Alone Sequences
-		"seqdelimiter" => Ok(Opcode::Seqdelimiter),
-		"seqbeforechars" => Ok(Opcode::Seqbeforechars),
-		"seqafterchars" => Ok(Opcode::Seqafterchars),
-		"seqafterpattern" => Ok(Opcode::Seqafterpattern),
-		"seqafterexpression" => Ok(Opcode::Seqafterexpression),
-		    
-		// Emphasis Opcodes
-		"class" => Ok(Opcode::Class),
-		"emphclass" => Ok(Opcode::Emphclass),
-		"begemph" => Ok(Opcode::Begemph),
-		"endemph" => Ok(Opcode::Endemph),
-		"noemphchars" => Ok(Opcode::Noemphchars),
-		"emphletter" => Ok(Opcode::Emphletter),
-		"begemphword" => Ok(Opcode::Begemphword),
-		"endemphword" => Ok(Opcode::Endemphword),
-		"emphmodechars" => Ok(Opcode::Emphmodechars),
-		"begemphphrase" => Ok(Opcode::Begemphphrase),
-		"endemphphrase" => Ok(Opcode::Endemphphrase),
-		"lenemphphrase" => Ok(Opcode::Lenemphphrase),
-		    
-		// Special Symbol Opcodes
-		"decpoint" => Ok(Opcode::Decpoint),
-		"hyphen" => Ok(Opcode::Hyphen),
-		    
-		// Special Processing Opcodes
-		"capsnocont" => Ok(Opcode::Capsnocont),
-		    
-		// Translation Opcodes
-		"compbrl" => Ok(Opcode::Compbrl),
-		"comp6" => Ok(Opcode::Comp6),
-		"nocont" => Ok(Opcode::Nocont),
-		"replace" => Ok(Opcode::Replace),
-		"always" => Ok(Opcode::Always),
-		"repeated" => Ok(Opcode::Repeated),
-		"repword" => Ok(Opcode::Repword),
-		"rependword" => Ok(Opcode::Rependword),
-		"largesign" => Ok(Opcode::Largesign),
-		"word" => Ok(Opcode::Word),
-		"syllable" => Ok(Opcode::Syllable),
-		"joinword" => Ok(Opcode::Joinword),
-		"lowword" => Ok(Opcode::Lowword),
-		"contraction" => Ok(Opcode::Contraction),
-		"sufword" => Ok(Opcode::Sufword),
-		"prfword" => Ok(Opcode::Prfword),
-		"begword" => Ok(Opcode::Begword),
-		"begmidword" => Ok(Opcode::Begmidword),
-		"midword" => Ok(Opcode::Midword),
-		"midendword" => Ok(Opcode::Midendword),
-		"endword" => Ok(Opcode::Endword),
-		"partword" => Ok(Opcode::Partword),
-		"exactdots" => Ok(Opcode::Exactdots),
-		"prepunc" => Ok(Opcode::Prepunc),
-		"postpunc" => Ok(Opcode::Postpunc),
-		"begnum" => Ok(Opcode::Begnum),
-		"midnum" => Ok(Opcode::Midnum),
-		"endnum" => Ok(Opcode::Endnum),
-		"joinnum" => Ok(Opcode::Joinnum),
-		    
-		// Computer braille
-		"begcomp" => Ok(Opcode::Begcomp),
-		"endcomp" => Ok(Opcode::Endcomp),
-		    
-		// Character-Class Opcodes
-		"attribute" => Ok(Opcode::Attribute),
-		    
-		// Swap Opcodes
-		"swapcd" => Ok(Opcode::Swapcd),
-		"swapdd" => Ok(Opcode::Swapdd),
-		"swapcc" => Ok(Opcode::Swapcc),
-		    
-		// Context and Multipass Opcodes
-		"context" => Ok(Opcode::Context),
-		"pass2" => Ok(Opcode::Pass2),
-		"pass3" => Ok(Opcode::Pass3),
-		"pass4" => Ok(Opcode::Pass4),
-		    
-		// The correct Opcode
-		"correct" => Ok(Opcode::Correct),
-		    
-		// The match Opcode
-		"match" => Ok(Opcode::Match),
-		"literal" => Ok(Opcode::Literal),
-		_ => Err(ParseError::OpcodeExpected)
-	    }
-	} else {
-	    Err(ParseError::OpcodeExpected)
-	}
+                // Braille Indicator Opcodes
+                "modeletter" => Ok(Opcode::Modeletter),
+                "capsletter" => Ok(Opcode::Capsletter),
+                "begmodeword" => Ok(Opcode::Begmodeword),
+                "begcapsword" => Ok(Opcode::Begcapsword),
+                "endcapsword" => Ok(Opcode::Endcapsword),
+                "capsmodechars" => Ok(Opcode::Capsmodechars),
+                "begcaps" => Ok(Opcode::Begcaps),
+                "endcaps" => Ok(Opcode::Endcaps),
+                "begcapsphrase" => Ok(Opcode::Begcapsphrase),
+                "endcapsphrase" => Ok(Opcode::Endcapsphrase),
+                "lencapsphrase" => Ok(Opcode::Lencapsphrase),
+                "letsign" => Ok(Opcode::Letsign),
+                "noletsign" => Ok(Opcode::Noletsign),
+                "noletsignbefore" => Ok(Opcode::Noletsignbefore),
+                "noletsignafter" => Ok(Opcode::Noletsignafter),
+                "nocontractsign" => Ok(Opcode::Nocontractsign),
+                "numsign" => Ok(Opcode::Numsign),
+                "nonumsign" => Ok(Opcode::Nonumsign),
+                "numericnocontchars" => Ok(Opcode::Numericnocontchars),
+                "numericmodechars" => Ok(Opcode::Numericmodechars),
+                "midendnumericmodechars" => Ok(Opcode::Midendnumericmodechars),
+
+                "begmodephrase" => Ok(Opcode::Begmodephrase),
+                "endmodephrase" => Ok(Opcode::Endmodephrase),
+                "lenmodephrase" => Ok(Opcode::Lenmodephrase),
+
+                // Opcodes for Standing Alone Sequences
+                "seqdelimiter" => Ok(Opcode::Seqdelimiter),
+                "seqbeforechars" => Ok(Opcode::Seqbeforechars),
+                "seqafterchars" => Ok(Opcode::Seqafterchars),
+                "seqafterpattern" => Ok(Opcode::Seqafterpattern),
+                "seqafterexpression" => Ok(Opcode::Seqafterexpression),
+
+                // Emphasis Opcodes
+                "class" => Ok(Opcode::Class),
+                "emphclass" => Ok(Opcode::Emphclass),
+                "begemph" => Ok(Opcode::Begemph),
+                "endemph" => Ok(Opcode::Endemph),
+                "noemphchars" => Ok(Opcode::Noemphchars),
+                "emphletter" => Ok(Opcode::Emphletter),
+                "begemphword" => Ok(Opcode::Begemphword),
+                "endemphword" => Ok(Opcode::Endemphword),
+                "emphmodechars" => Ok(Opcode::Emphmodechars),
+                "begemphphrase" => Ok(Opcode::Begemphphrase),
+                "endemphphrase" => Ok(Opcode::Endemphphrase),
+                "lenemphphrase" => Ok(Opcode::Lenemphphrase),
+
+                // Special Symbol Opcodes
+                "decpoint" => Ok(Opcode::Decpoint),
+                "hyphen" => Ok(Opcode::Hyphen),
+
+                // Special Processing Opcodes
+                "capsnocont" => Ok(Opcode::Capsnocont),
+
+                // Translation Opcodes
+                "compbrl" => Ok(Opcode::Compbrl),
+                "comp6" => Ok(Opcode::Comp6),
+                "nocont" => Ok(Opcode::Nocont),
+                "replace" => Ok(Opcode::Replace),
+                "always" => Ok(Opcode::Always),
+                "repeated" => Ok(Opcode::Repeated),
+                "repword" => Ok(Opcode::Repword),
+                "rependword" => Ok(Opcode::Rependword),
+                "largesign" => Ok(Opcode::Largesign),
+                "word" => Ok(Opcode::Word),
+                "syllable" => Ok(Opcode::Syllable),
+                "joinword" => Ok(Opcode::Joinword),
+                "lowword" => Ok(Opcode::Lowword),
+                "contraction" => Ok(Opcode::Contraction),
+                "sufword" => Ok(Opcode::Sufword),
+                "prfword" => Ok(Opcode::Prfword),
+                "begword" => Ok(Opcode::Begword),
+                "begmidword" => Ok(Opcode::Begmidword),
+                "midword" => Ok(Opcode::Midword),
+                "midendword" => Ok(Opcode::Midendword),
+                "endword" => Ok(Opcode::Endword),
+                "partword" => Ok(Opcode::Partword),
+                "exactdots" => Ok(Opcode::Exactdots),
+                "prepunc" => Ok(Opcode::Prepunc),
+                "postpunc" => Ok(Opcode::Postpunc),
+                "begnum" => Ok(Opcode::Begnum),
+                "midnum" => Ok(Opcode::Midnum),
+                "endnum" => Ok(Opcode::Endnum),
+                "joinnum" => Ok(Opcode::Joinnum),
+
+                // Computer braille
+                "begcomp" => Ok(Opcode::Begcomp),
+                "endcomp" => Ok(Opcode::Endcomp),
+
+                // Character-Class Opcodes
+                "attribute" => Ok(Opcode::Attribute),
+
+                // Swap Opcodes
+                "swapcd" => Ok(Opcode::Swapcd),
+                "swapdd" => Ok(Opcode::Swapdd),
+                "swapcc" => Ok(Opcode::Swapcc),
+
+                // Context and Multipass Opcodes
+                "context" => Ok(Opcode::Context),
+                "pass2" => Ok(Opcode::Pass2),
+                "pass3" => Ok(Opcode::Pass3),
+                "pass4" => Ok(Opcode::Pass4),
+
+                // The correct Opcode
+                "correct" => Ok(Opcode::Correct),
+
+                // The match Opcode
+                "match" => Ok(Opcode::Match),
+                "literal" => Ok(Opcode::Literal),
+                _ => Err(ParseError::OpcodeExpected),
+            }
+        } else {
+            Err(ParseError::OpcodeExpected)
+        }
     }
 
     fn name(&mut self) -> Result<String, ParseError> {
-	self.tokens.next()
-	    .ok_or(ParseError::NameExpected)
-	    .map(|s| s.to_string())
+        self.tokens
+            .next()
+            .ok_or(ParseError::NameExpected)
+            .map(|s| s.to_string())
     }
-    
+
     fn many_names(&mut self) -> Result<Vec<String>, ParseError> {
-	let mut names: Vec<String> = Vec::new();
-	while let Some(name) = self.tokens.next() {
-	    names.push(name.into());
-	}
-	if names.len() > 1 {
-	    	Ok(names)
-	} else {
-	    Err(ParseError::TokenExpected { expected: "At least one name expected".into(), found: None })
-	}
+        let mut names: Vec<String> = Vec::new();
+        while let Some(name) = self.tokens.next() {
+            names.push(name.into());
+        }
+        if names.len() > 1 {
+            Ok(names)
+        } else {
+            Err(ParseError::TokenExpected {
+                expected: "At least one name expected".into(),
+                found: None,
+            })
+        }
     }
-    
+
     fn one_char(&mut self) -> Result<char, ParseError> {
-	let s = self.tokens.next()
-	    .ok_or(ParseError::SingleCharExpected { found: None})?;
-	let s = unescape(s)?;
-	if s.chars().count() == 1 {
-	    Ok(s.chars().next().unwrap())
-	} else {
-	    Err(ParseError::SingleCharExpected { found: Some(s)})
-	}
+        let s = self
+            .tokens
+            .next()
+            .ok_or(ParseError::SingleCharExpected { found: None })?;
+        let s = unescape(s)?;
+        if s.chars().count() == 1 {
+            Ok(s.chars().next().unwrap())
+        } else {
+            Err(ParseError::SingleCharExpected { found: Some(s) })
+        }
     }
-    
+
     fn number(&mut self) -> Result<i32, ParseError> {
-	let s = self.tokens.next()
-	    .ok_or(ParseError::NumberExpected { found: None})?;
-	let number = s.parse::<i32>()?;
-	Ok(number)
+        let s = self
+            .tokens
+            .next()
+            .ok_or(ParseError::NumberExpected { found: None })?;
+        let number = s.parse::<i32>()?;
+        Ok(number)
     }
-    
+
     fn chars(&mut self) -> Result<String, ParseError> {
-	let s = self.tokens.next()
-	    .ok_or(ParseError::CharsExpected)?;
-	unescape(s)
+        let s = self.tokens.next().ok_or(ParseError::CharsExpected)?;
+        unescape(s)
     }
-    
+
     fn maybe_chars(&mut self) -> Option<String> {
-	self.tokens.next()
-	    .map(|s| s.to_string())
+        self.tokens.next().map(|s| s.to_string())
     }
-    
+
     fn filename(&mut self) -> Result<String, ParseError> {
-	self.tokens.next()
-	    .ok_or(ParseError::FilenameExpected)
-	    .map(|s| s.to_string())
+        self.tokens
+            .next()
+            .ok_or(ParseError::FilenameExpected)
+            .map(|s| s.to_string())
     }
-    
+
     fn position(&mut self) -> Result<Position, ParseError> {
-	if self.tokens.next_if_eq(&"before").is_some() {
-	    return Ok(Position::Before);
-	}
-	if self.tokens.next_if_eq(&"after").is_some() {
-	    return Ok(Position::After);
-	}
-	Err(ParseError::TokenExpected { expected: "Before/After".into(),
-					found: self.tokens.peek().map(|&s| s.into()) })
+        if self.tokens.next_if_eq(&"before").is_some() {
+            return Ok(Position::Before);
+        }
+        if self.tokens.next_if_eq(&"after").is_some() {
+            return Ok(Position::After);
+        }
+        Err(ParseError::TokenExpected {
+            expected: "Before/After".into(),
+            found: self.tokens.peek().map(|&s| s.into()),
+        })
     }
-    
+
     fn dots(&mut self) -> Result<BrailleChars, ParseError> {
-	self.tokens.next()
-	    .ok_or(ParseError::DotsExpected)?
-	    .split('-')
-	    .map(chars_to_dots)
-	    .collect()
+        self.tokens
+            .next()
+            .ok_or(ParseError::DotsExpected)?
+            .split('-')
+            .map(chars_to_dots)
+            .collect()
     }
 
     fn many_dots(&mut self) -> Result<Vec<BrailleChars>, ParseError> {
-	self.tokens.next()
-	    .ok_or(ParseError::DotsExpected)?
-	    .split(',')
-	    .map(|chars| chars.split('-')
-		 .map(chars_to_dots)
-		 .collect())
-	    .collect()
+        self.tokens
+            .next()
+            .ok_or(ParseError::DotsExpected)?
+            .split(',')
+            .map(|chars| chars.split('-').map(chars_to_dots).collect())
+            .collect()
     }
-    
+
     fn multi_test(&mut self) -> Result<String, ParseError> {
-	self.tokens.next()
-	    .ok_or(ParseError::Multitest)
-	    .map(|s| s.to_string())
+        self.tokens
+            .next()
+            .ok_or(ParseError::Multitest)
+            .map(|s| s.to_string())
     }
-    
+
     fn multi_action(&mut self) -> Result<String, ParseError> {
-	self.tokens.next()
-	    .ok_or(ParseError::MultiAction)
-	    .map(|s| s.to_string())
+        self.tokens
+            .next()
+            .ok_or(ParseError::MultiAction)
+            .map(|s| s.to_string())
     }
-    
+
     fn match_pre(&mut self) -> Result<String, ParseError> {
-	self.tokens.next()
-	    .ok_or(ParseError::MatchPre)
-	    .map(|s| s.to_string())
+        self.tokens
+            .next()
+            .ok_or(ParseError::MatchPre)
+            .map(|s| s.to_string())
     }
-    
+
     fn match_post(&mut self) -> Result<String, ParseError> {
-	self.tokens.next()
-	    .ok_or(ParseError::MatchPost)
-	    .map(|s| s.to_string())
+        self.tokens
+            .next()
+            .ok_or(ParseError::MatchPost)
+            .map(|s| s.to_string())
     }
-    
+
     fn rule(&mut self) -> Result<Rule, ParseError> {
 	let _prefix = self.prefix();
 	let _classes = self.with_classes();
@@ -882,7 +912,6 @@ impl<'a> RuleParser<'a> {
 	};
 	Ok(opcode)
     }
-
 }
 
 fn main() {
@@ -891,13 +920,17 @@ fn main() {
     let filename = &args[1];
     for (line_no, line) in read_to_string(filename).unwrap().lines().enumerate() {
         // println!("{}", line);
-	if !line.starts_with('#') && !line.is_empty() {
-	    let rule = RuleParser::new(line).rule();
-	    match rule {
-		Ok(rule) => {println!("{:?}", rule)},
-		Err(e) => {eprintln!("{}:{}: {:?}", filename, line_no+1, e);}
-	    }
-	}
+        if !line.starts_with('#') && !line.is_empty() {
+            let rule = RuleParser::new(line).rule();
+            match rule {
+                Ok(rule) => {
+                    println!("{:?}", rule)
+                }
+                Err(e) => {
+                    eprintln!("{}:{}: {:?}", filename, line_no + 1, e);
+                }
+            }
+        }
     }
 }
 
@@ -908,7 +941,10 @@ mod tests {
     #[test]
     fn nocross_test() {
         assert_eq!(Some(Prefix::Nocross), RuleParser::new(&"nocross").nocross());
-        assert_eq!(Some(Prefix::Nocross), RuleParser::new(&"nocross nofor").nocross());
+        assert_eq!(
+            Some(Prefix::Nocross),
+            RuleParser::new(&"nocross nofor").nocross()
+        );
         assert_eq!(None, RuleParser::new(&"nofor nocross").nocross());
         assert_eq!(None, RuleParser::new(&"nofor").nocross());
     }
@@ -916,45 +952,87 @@ mod tests {
     #[test]
     fn nofor_test() {
         assert_eq!(Some(Prefix::Nofor), RuleParser::new(&" nofor ").nofor());
-        assert_eq!(Some(Prefix::Nofor), RuleParser::new(&"nofor nocross").nofor());
+        assert_eq!(
+            Some(Prefix::Nofor),
+            RuleParser::new(&"nofor nocross").nofor()
+        );
         assert_eq!(None, RuleParser::new(&"nocross nofor").nofor());
         assert_eq!(None, RuleParser::new(&"").nofor());
     }
 
     #[test]
     fn withclass_test() {
-        assert_eq!(Ok(Some(WithClass::Before { class: "foo".into() })), RuleParser::new(&"before foo ").with_class());
-        assert_eq!(Ok(Some(WithClass::After { class: "foo".into() })), RuleParser::new(&" after foo ").with_class());
-        assert_eq!(Err(ParseError::ClassNameExpected { found: None }), RuleParser::new(&" after ").with_class());
+        assert_eq!(
+            Ok(Some(WithClass::Before {
+                class: "foo".into()
+            })),
+            RuleParser::new(&"before foo ").with_class()
+        );
+        assert_eq!(
+            Ok(Some(WithClass::After {
+                class: "foo".into()
+            })),
+            RuleParser::new(&" after foo ").with_class()
+        );
+        assert_eq!(
+            Err(ParseError::ClassNameExpected { found: None }),
+            RuleParser::new(&" after ").with_class()
+        );
     }
 
     #[test]
     fn withclasses_test() {
         assert_eq!(
-	    Ok(Some(vec![
-		WithClass::Before { class: "foo".into() },
-		WithClass::After  { class: "bar".into() },
-	    ])),
-	    RuleParser::new(&"before foo after bar").with_classes());
-	
-        assert_eq!(Err(ParseError::ClassNameExpected { found: None }), RuleParser::new(&"before foo after").with_classes());
+            Ok(Some(vec![
+                WithClass::Before {
+                    class: "foo".into()
+                },
+                WithClass::After {
+                    class: "bar".into()
+                },
+            ])),
+            RuleParser::new(&"before foo after bar").with_classes()
+        );
+
+        assert_eq!(
+            Err(ParseError::ClassNameExpected { found: None }),
+            RuleParser::new(&"before foo after").with_classes()
+        );
     }
 
     #[test]
     fn opcode_test() {
         assert_eq!(Ok(Opcode::Include), RuleParser::new(&"include").opcode());
-        assert_eq!(Ok(Opcode::Always), RuleParser::new(&"always foo after").opcode());
+        assert_eq!(
+            Ok(Opcode::Always),
+            RuleParser::new(&"always foo after").opcode()
+        );
 
-        assert_eq!(Err(ParseError::OpcodeExpected), RuleParser::new(&"h").opcode());
-        assert_eq!(Err(ParseError::OpcodeExpected), RuleParser::new(&"hello world").opcode());
+        assert_eq!(
+            Err(ParseError::OpcodeExpected),
+            RuleParser::new(&"h").opcode()
+        );
+        assert_eq!(
+            Err(ParseError::OpcodeExpected),
+            RuleParser::new(&"hello world").opcode()
+        );
     }
 
     #[test]
     fn rule_test() {
-        assert_eq!(Ok(Rule::Include{ file: "foo.ctb".into()}), RuleParser::new(&"include foo.ctb").rule());
-        assert_eq!(Err(ParseError::FilenameExpected), RuleParser::new(&"include").rule());
-        assert_eq!(Err(ParseError::OpcodeExpected), RuleParser::new(&"Include foo.ctb").rule());
+        assert_eq!(
+            Ok(Rule::Include {
+                file: "foo.ctb".into()
+            }),
+            RuleParser::new(&"include foo.ctb").rule()
+        );
+        assert_eq!(
+            Err(ParseError::FilenameExpected),
+            RuleParser::new(&"include").rule()
+        );
+        assert_eq!(
+            Err(ParseError::OpcodeExpected),
+            RuleParser::new(&"Include foo.ctb").rule()
+        );
+    }
 }
-
-}
-
