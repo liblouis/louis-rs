@@ -1143,7 +1143,6 @@ impl<'a> RuleParser<'a> {
         let _classes = self.with_classes();
         let matches = self.with_matches();
         let opcode = match self.opcode()? {
-            // make sure constraints are only allowed for some opcodes
             Opcode::Include
             | Opcode::Undefined
             | Opcode::Display
@@ -1201,6 +1200,7 @@ impl<'a> RuleParser<'a> {
             | Opcode::Swapcc
             | Opcode::Swapdd
             | Opcode::Literal
+            // make sure constraints are only allowed for some opcodes
                 if constraints.is_some() =>
             {
                 return Err(ParseError::InvalidConstraint {
