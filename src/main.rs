@@ -51,8 +51,11 @@ enum ParseError {
     InvalidNumber(#[from] ParseIntError),
     #[error("invalid escape sequence")]
     InvalidEscape,
-    #[error("Constraints {constraints:?} not allowed for opcode")]
-    InvalidConstraint { constraints: Constraints },
+    #[error("Constraints {constraints:?} not allowed for opcode {opcode:?}")]
+    InvalidConstraint {
+        constraints: Constraints,
+        opcode: Opcode,
+    },
     #[error("Expected classname, got {found:?}")]
     ClassNameExpected { found: Option<String> },
     #[error("Opcode expected")]
@@ -1143,7 +1146,7 @@ impl<'a> RuleParser<'a> {
         let _classes = self.with_classes();
         let matches = self.with_matches();
         let opcode = match self.opcode()? {
-            Opcode::Include
+            opcode @ (Opcode::Include
             | Opcode::Undefined
             | Opcode::Display
             | Opcode::Digit
@@ -1199,11 +1202,12 @@ impl<'a> RuleParser<'a> {
             | Opcode::Swapcd
             | Opcode::Swapcc
             | Opcode::Swapdd
-            | Opcode::Literal
+            | Opcode::Literal)
             // make sure constraints are only allowed for some opcodes
                 if constraints.is_some() =>
             {
                 return Err(ParseError::InvalidConstraint {
+		    opcode,
                     constraints: constraints.unwrap(),
                 })
             }
