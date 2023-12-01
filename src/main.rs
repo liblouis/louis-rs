@@ -256,7 +256,7 @@ enum Rule {
     },
     Letter {
         chars: String,
-        dots: BrailleChars,
+        dots: Braille,
         constraints: Option<Constraints>,
     },
     Base {
@@ -469,7 +469,7 @@ enum Rule {
     },
     Comp6 {
         chars: String,
-        dots: BrailleChars,
+        dots: Braille,
     },
     Nocont {
         chars: String,
@@ -480,7 +480,7 @@ enum Rule {
     },
     Always {
         chars: String,
-        dots: BrailleChars,
+        dots: Braille,
         constraints: Option<Constraints>,
     },
     Repeated {
@@ -502,12 +502,12 @@ enum Rule {
     },
     Word {
         chars: String,
-        dots: BrailleChars,
+        dots: Braille,
         constraints: Option<Constraints>,
     },
     Syllable {
         chars: String,
-        dots: BrailleChars,
+        dots: Braille,
     },
     Joinword {
         chars: String,
@@ -523,37 +523,37 @@ enum Rule {
     },
     Sufword {
         chars: String,
-        dots: BrailleChars,
+        dots: Braille,
         constraints: Option<Constraints>,
     },
     Prfword {
         chars: String,
-        dots: BrailleChars,
+        dots: Braille,
         constraints: Option<Constraints>,
     },
     Begword {
         chars: String,
-        dots: BrailleChars,
+        dots: Braille,
         constraints: Option<Constraints>,
     },
     Begmidword {
         chars: String,
-        dots: BrailleChars,
+        dots: Braille,
         constraints: Option<Constraints>,
     },
     Midword {
         chars: String,
-        dots: BrailleChars,
+        dots: Braille,
         constraints: Option<Constraints>,
     },
     Midendword {
         chars: String,
-        dots: BrailleChars,
+        dots: Braille,
         constraints: Option<Constraints>,
     },
     Endword {
         chars: String,
-        dots: BrailleChars,
+        dots: Braille,
         constraints: Option<Constraints>,
     },
     Partword {
@@ -586,7 +586,7 @@ enum Rule {
     },
     Endnum {
         chars: String,
-        dots: BrailleChars,
+        dots: Braille,
         constraints: Option<Constraints>,
     },
     Joinnum {
@@ -645,7 +645,7 @@ enum Rule {
         pre: String,
         chars: String,
         post: String,
-        dots: BrailleChars,
+        dots: Braille,
         constraints: Option<Constraints>,
         matches: Option<WithMatches>,
     },
@@ -676,6 +676,12 @@ pub enum BrailleDot {
 
 pub type BrailleChar = HashSet<BrailleDot>;
 pub type BrailleChars = Vec<BrailleChar>;
+
+#[derive(PartialEq, Debug)]
+enum Braille {
+    Implicit,
+    Explicit(BrailleChars),
+}
 
 #[derive(PartialEq, Debug)]
 pub enum Position {
@@ -723,6 +729,10 @@ fn chars_to_dots(chars: &str) -> Result<BrailleChar, ParseError> {
     chars.chars().map(char_to_dot).collect()
 }
 
+fn braille_chars(chars: &str) -> Result<BrailleChars, ParseError> {
+    chars.split('-').map(chars_to_dots).collect()
+}
+
 fn unescape_unicode(chars: &mut Chars) -> Result<char, ParseError> {
     let mut s = String::new();
 
@@ -738,7 +748,7 @@ fn unescape_unicode(chars: &mut Chars) -> Result<char, ParseError> {
             return Ok(c);
         }
     }
-    Err(ParseError::InvalidUnicodeLiteral { found: Some(s)})
+    Err(ParseError::InvalidUnicodeLiteral { found: Some(s) })
 }
 
 fn unescape(s: &str) -> Result<String, ParseError> {
@@ -1099,13 +1109,24 @@ impl<'a> RuleParser<'a> {
         })
     }
 
-    fn dots(&mut self) -> Result<BrailleChars, ParseError> {
+    fn dots(&mut self) -> Result<Braille, ParseError> {
+        let token = self.tokens
+            .next()
+            .ok_or(ParseError::DotsExpected)?;
+	if token == "=" {
+	    Ok(Braille::Implicit)
+	} else {
+	    Ok(Braille::Explicit(braille_chars(token)?))
+	}
+    }
+
+    fn explicit_dots(&mut self) -> Result<BrailleChars, ParseError> {
         self.tokens
             .next()
             .ok_or(ParseError::DotsExpected)?
-            .split('-')
-            .map(chars_to_dots)
-            .collect()
+	    .split('-')
+	    .map(chars_to_dots)
+	    .collect()
     }
 
     fn many_dots(&mut self) -> Result<Vec<BrailleChars>, ParseError> {
@@ -1221,34 +1242,32 @@ impl<'a> RuleParser<'a> {
             Opcode::Include => Rule::Include {
                 file: self.filename()?,
             },
-            Opcode::Undefined => Rule::Undefined {
-                dots: self.dots()?,
-            },
-            Opcode::Display => Rule::Display { dots: self.dots()? },
+            Opcode::Undefined => Rule::Undefined { dots: self.explicit_dots()? },
+            Opcode::Display => Rule::Display { dots: self.explicit_dots()? },
             Opcode::Multind => Rule::Multind {
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 names: self.many_names()?,
                 constraints,
             },
 
             Opcode::Space => Rule::Space {
                 chars: self.chars()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Punctuation => Rule::Punctuation {
                 chars: self.chars()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Digit => Rule::Digit {
                 character: self.one_char()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
             },
             Opcode::Grouping => Rule::Grouping {
                 name: self.name()?,
                 chars: self.chars()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
             },
             Opcode::Letter => Rule::Letter {
                 chars: self.chars()?,
@@ -1262,65 +1281,65 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Lowercase => Rule::Lowercase {
                 character: self.one_char()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Uppercase => Rule::Uppercase {
                 character: self.one_char()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Litdigit => Rule::Litdigit {
                 character: self.one_char()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
             },
             Opcode::Sign => Rule::Sign {
                 character: self.one_char()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Math => Rule::Math {
                 character: self.one_char()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
 
             Opcode::Modeletter => Rule::Modeletter {
                 name: self.name()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Capsletter => Rule::Capsletter {
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Begmodeword => Rule::Begmodeword {
                 name: self.name()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Begcapsword => Rule::Begcapsword {
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Endcapsword => Rule::Endcapsword {
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Capsmodechars => Rule::Capsmodechars {
                 chars: self.chars()?,
             },
-            Opcode::Begcaps => Rule::Begcaps { dots: self.dots()? },
-            Opcode::Endcaps => Rule::Endcaps { dots: self.dots()? },
-            Opcode::Begcapsphrase => Rule::Begcapsphrase { dots: self.dots()? },
+            Opcode::Begcaps => Rule::Begcaps { dots: self.explicit_dots()? },
+            Opcode::Endcaps => Rule::Endcaps { dots: self.explicit_dots()? },
+            Opcode::Begcapsphrase => Rule::Begcapsphrase { dots: self.explicit_dots()? },
             Opcode::Endcapsphrase => Rule::Endcapsphrase {
                 position: self.position()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
             },
             Opcode::Lencapsphrase => Rule::Lencapsphrase {
                 number: self.number()?,
             },
-            Opcode::Letsign => Rule::Letsign { dots: self.dots()? },
+            Opcode::Letsign => Rule::Letsign { dots: self.explicit_dots()? },
             Opcode::Noletsign => Rule::Noletsign {
                 chars: self.chars()?,
             },
@@ -1330,9 +1349,9 @@ impl<'a> RuleParser<'a> {
             Opcode::Noletsignafter => Rule::Noletsignafter {
                 chars: self.chars()?,
             },
-            Opcode::Nocontractsign => Rule::Nocontractsign { dots: self.dots()? },
-            Opcode::Numsign => Rule::Numsign { dots: self.dots()? },
-            Opcode::Nonumsign => Rule::Nonumsign { dots: self.dots()? },
+            Opcode::Nocontractsign => Rule::Nocontractsign { dots: self.explicit_dots()? },
+            Opcode::Numsign => Rule::Numsign { dots: self.explicit_dots()? },
+            Opcode::Nonumsign => Rule::Nonumsign { dots: self.explicit_dots()? },
             Opcode::Numericnocontchars => Rule::Numericnocontchars {
                 chars: self.chars()?,
             },
@@ -1345,12 +1364,12 @@ impl<'a> RuleParser<'a> {
 
             Opcode::Begmodephrase => Rule::Begmodephrase {
                 name: self.name()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
             },
             Opcode::Endmodephrase => Rule::Endmodephrase {
                 name: self.name()?,
                 position: self.position()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
             },
             Opcode::Lenmodephrase => Rule::Lenmodephrase {
                 name: self.name()?,
@@ -1380,12 +1399,12 @@ impl<'a> RuleParser<'a> {
             Opcode::Emphclass => Rule::Emphclass { name: self.name()? },
             Opcode::Begemph => Rule::Begemph {
                 name: self.name()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Endemph => Rule::Endemph {
                 name: self.name()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Noemphchars => Rule::Noemphchars {
@@ -1394,15 +1413,15 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Emphletter => Rule::Emphletter {
                 name: self.name()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
             },
             Opcode::Begemphword => Rule::Begemphword {
                 name: self.name()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
             },
             Opcode::Endemphword => Rule::Endemphword {
                 name: self.name()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
             },
             Opcode::Emphmodechars => Rule::Emphmodechars {
                 name: self.name()?,
@@ -1410,12 +1429,12 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Begemphphrase => Rule::Begemphphrase {
                 name: self.name()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
             },
             Opcode::Endemphphrase => Rule::Endemphphrase {
                 name: self.name()?,
                 position: self.position()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
             },
             Opcode::Lenemphphrase => Rule::Lenemphphrase {
                 name: self.name()?,
@@ -1423,21 +1442,21 @@ impl<'a> RuleParser<'a> {
             },
 
             Opcode::Begcomp => Rule::Begcomp {
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Endcomp => Rule::Endcomp {
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
 
             Opcode::Decpoint => Rule::Decpoint {
                 chars: self.chars()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
             },
             Opcode::Hyphen => Rule::Hyphen {
                 chars: self.chars()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
 
@@ -1465,20 +1484,20 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Repeated => Rule::Repeated {
                 chars: self.chars()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Repword => Rule::Repword {
                 chars: self.chars()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
             },
             Opcode::Rependword => Rule::Rependword {
                 chars: self.chars()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
             },
             Opcode::Largesign => Rule::Largesign {
                 chars: self.chars()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
             },
             Opcode::Word => Rule::Word {
                 chars: self.chars()?,
@@ -1491,11 +1510,11 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Joinword => Rule::Joinword {
                 chars: self.chars()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
             },
             Opcode::Lowword => Rule::Lowword {
                 chars: self.chars()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Contraction => Rule::Contraction {
@@ -1538,7 +1557,7 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Partword => Rule::Partword {
                 chars: self.chars()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Exactdots => Rule::Exactdots {
@@ -1546,22 +1565,22 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Prepunc => Rule::Prepunc {
                 chars: self.chars()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Postpunc => Rule::Postpunc {
                 chars: self.chars()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Begnum => Rule::Begnum {
                 chars: self.chars()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Midnum => Rule::Midnum {
                 chars: self.chars()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
             Opcode::Endnum => Rule::Endnum {
@@ -1571,7 +1590,7 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Joinnum => Rule::Joinnum {
                 chars: self.chars()?,
-                dots: self.dots()?,
+                dots: self.explicit_dots()?,
                 constraints,
             },
 
