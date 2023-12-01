@@ -38,7 +38,7 @@ type WithMatches = HashSet<WithMatch>;
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 enum ParseError {
-    #[error("Expected {expected:?} got {found:?}")]
+    #[error("Expected {expected:?}, got {found:?}")]
     TokenExpected {
         expected: String,
         found: Option<String>,
@@ -47,8 +47,8 @@ enum ParseError {
     InvalidBraille { character: char },
     #[error("Braille expected")]
     DotsExpected,
-    #[error("invalid unicode literal")]
-    InvalidUnicodeLiteral,
+    #[error("invalid unicode literal {found:?}")]
+    InvalidUnicodeLiteral { found: Option<String> },
     #[error("invalid digit")]
     InvalidDigit,
     #[error("invalid number")]
@@ -730,7 +730,7 @@ fn unescape_unicode(chars: &mut Chars) -> Result<char, ParseError> {
     for _ in 0..4 {
         match chars.next() {
             Some(c) => s.push(c),
-            _ => return Err(ParseError::InvalidUnicodeLiteral),
+            _ => return Err(ParseError::InvalidUnicodeLiteral { found: None }),
         }
     }
 
@@ -739,7 +739,7 @@ fn unescape_unicode(chars: &mut Chars) -> Result<char, ParseError> {
             return Ok(c);
         }
     }
-    Err(ParseError::InvalidUnicodeLiteral)
+    Err(ParseError::InvalidUnicodeLiteral { found: Some(s)})
 }
 
 fn unescape(s: &str) -> Result<String, ParseError> {
