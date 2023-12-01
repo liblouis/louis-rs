@@ -49,10 +49,6 @@ pub enum ParseError {
     InvalidDigit,
     #[error("invalid number")]
     InvalidNumber(#[from] ParseIntError),
-    #[error("invalid prefix")]
-    InvalidPrefix,
-    #[error("invalid match prefix")]
-    InvalidMatchPrefix,
     #[error("invalid escape sequence")]
     InvalidEscape,
     #[error("Expected classname, got {found:?}")]
@@ -68,13 +64,13 @@ pub enum ParseError {
     #[error("Number expected, got {found:?}")]
     NumberExpected { found: Option<String> },
     #[error("Multipass test expected")]
-    Multitest,
+    MultitestExpected,
     #[error("Multipass action expected")]
-    MultiAction,
+    MultiActionExpected,
     #[error("Match pre-pattern expected")]
-    MatchPre,
+    MatchPreExpected,
     #[error("Match post-pattern expected")]
-    MatchPost,
+    MatchPostExpected,
     #[error("Expected a single char, got {found:?}")]
     SingleCharExpected { found: Option<String> },
     #[error("unknown parser error")]
@@ -794,28 +790,28 @@ impl<'a> RuleParser<'a> {
     fn multi_test(&mut self) -> Result<String, ParseError> {
         self.tokens
             .next()
-            .ok_or(ParseError::Multitest)
+            .ok_or(ParseError::MultitestExpected)
             .map(|s| s.to_string())
     }
 
     fn multi_action(&mut self) -> Result<String, ParseError> {
         self.tokens
             .next()
-            .ok_or(ParseError::MultiAction)
+            .ok_or(ParseError::MultiActionExpected)
             .map(|s| s.to_string())
     }
 
     fn match_pre(&mut self) -> Result<String, ParseError> {
         self.tokens
             .next()
-            .ok_or(ParseError::MatchPre)
+            .ok_or(ParseError::MatchPreExpected)
             .map(|s| s.to_string())
     }
 
     fn match_post(&mut self) -> Result<String, ParseError> {
         self.tokens
             .next()
-            .ok_or(ParseError::MatchPost)
+            .ok_or(ParseError::MatchPostExpected)
             .map(|s| s.to_string())
     }
 
