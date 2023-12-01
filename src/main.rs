@@ -1662,7 +1662,7 @@ impl<'a> RuleParser<'a> {
 fn read_file(filename: &str) {
     for (line_no, line) in read_to_string(filename).unwrap().lines().enumerate() {
         // println!("{}", line);
-        if !line.starts_with('#') && !line.is_empty() {
+        if !line.starts_with('#') && !line.trim().is_empty() {
             let rule = RuleParser::new(line).rule();
             match rule {
                 Ok(rule) => {
