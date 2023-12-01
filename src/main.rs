@@ -1,7 +1,11 @@
+use std::io::BufRead;
+use std::io::Write;
+use std::process::exit;
 use std::{
     collections::HashSet,
     env,
     fs::read_to_string,
+    io,
     iter::Peekable,
     num::ParseIntError,
     str::{Chars, SplitWhitespace},
@@ -1634,10 +1638,7 @@ impl<'a> RuleParser<'a> {
     }
 }
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
-
-    let filename = &args[1];
+fn read_file(filename: &str) {
     for (line_no, line) in read_to_string(filename).unwrap().lines().enumerate() {
         // println!("{}", line);
         if !line.starts_with('#') && !line.is_empty() {
@@ -1651,6 +1652,43 @@ fn main() {
                 }
             }
         }
+    }
+}
+
+fn repl() {
+    print!("> ");
+    io::stdout().flush().unwrap();
+
+    let stdin = io::stdin();
+    for line in stdin.lock().lines() {
+        match line {
+            Ok(line) => {
+                if !line.starts_with('#') && !line.is_empty() {
+                    let rule = RuleParser::new(&line).rule();
+                    match rule {
+                        Ok(rule) => {
+                            println!("{:?}", rule)
+                        }
+                        Err(e) => {
+                            eprintln!("{:?}", e);
+                        }
+                    }
+                    print!("> ");
+                    io::stdout().flush().unwrap();
+                }
+            }
+            _ => exit(0),
+        }
+    }
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    let filename = &args.get(1);
+    match filename {
+        Some(filename) => read_file(filename),
+        None => repl(),
     }
 }
 
