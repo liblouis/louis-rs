@@ -224,7 +224,6 @@ enum Rule {
         file: String,
     },
     Undefined {
-        chars: String,
         dots: BrailleChars,
     },
     Display {
@@ -1223,7 +1222,6 @@ impl<'a> RuleParser<'a> {
                 file: self.filename()?,
             },
             Opcode::Undefined => Rule::Undefined {
-                chars: self.chars()?,
                 dots: self.dots()?,
             },
             Opcode::Display => Rule::Display { dots: self.dots()? },
