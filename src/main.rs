@@ -1029,7 +1029,9 @@ impl<'a> RuleParser<'a> {
                 // The match Opcode
                 "match" => Ok(Opcode::Match),
                 "literal" => Ok(Opcode::Literal),
-                unknown => Err(ParseError::OpcodeExpected { found: Some(unknown.into()) }),
+                unknown => Err(ParseError::OpcodeExpected {
+                    found: Some(unknown.into()),
+                }),
             }
         } else {
             Err(ParseError::OpcodeExpected { found: None })
