@@ -62,8 +62,8 @@ enum ParseError {
     },
     #[error("Expected classname, got {found:?}")]
     ClassNameExpected { found: Option<String> },
-    #[error("Opcode expected")]
-    OpcodeExpected,
+    #[error("Opcode expected, got {found:?}")]
+    OpcodeExpected { found: Option<String> },
     #[error("Name expected")]
     NameExpected,
     #[error("Characters expected")]
@@ -1019,10 +1019,10 @@ impl<'a> RuleParser<'a> {
                 // The match Opcode
                 "match" => Ok(Opcode::Match),
                 "literal" => Ok(Opcode::Literal),
-                _ => Err(ParseError::OpcodeExpected),
+                unknown => Err(ParseError::OpcodeExpected { found: Some(unknown.into()) }),
             }
         } else {
-            Err(ParseError::OpcodeExpected)
+            Err(ParseError::OpcodeExpected { found: None })
         }
     }
 
