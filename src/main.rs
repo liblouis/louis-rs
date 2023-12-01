@@ -213,119 +213,438 @@ enum Opcode {
 
 #[derive(PartialEq, Debug)]
 enum Rule {
-    Include { file: String },
-    Undefined { chars: String, dots: BrailleChars },
-    Display { dots: BrailleChars },
-    Multind { dots: BrailleChars, names: Vec<String>, constraints: Option<Constraints> },
+    Include {
+        file: String,
+    },
+    Undefined {
+        chars: String,
+        dots: BrailleChars,
+    },
+    Display {
+        dots: BrailleChars,
+    },
+    Multind {
+        dots: BrailleChars,
+        names: Vec<String>,
+        constraints: Option<Constraints>,
+    },
 
-    Space { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Punctuation { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Digit { character: char, dots: BrailleChars },
-    Grouping { name: String, chars: String, dots: BrailleChars },
-    Letter { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Base { name: String, from: char, to: char },
-    Lowercase { character: char, dots: BrailleChars, constraints: Option<Constraints> },
-    Uppercase { character: char, dots: BrailleChars, constraints: Option<Constraints> },
-    Litdigit { character: char, dots: BrailleChars },
-    Sign { character: char, dots: BrailleChars, constraints: Option<Constraints> },
-    Math { character: char, dots: BrailleChars, constraints: Option<Constraints> },
+    Space {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Punctuation {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Digit {
+        character: char,
+        dots: BrailleChars,
+    },
+    Grouping {
+        name: String,
+        chars: String,
+        dots: BrailleChars,
+    },
+    Letter {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Base {
+        name: String,
+        from: char,
+        to: char,
+    },
+    Lowercase {
+        character: char,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Uppercase {
+        character: char,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Litdigit {
+        character: char,
+        dots: BrailleChars,
+    },
+    Sign {
+        character: char,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Math {
+        character: char,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
 
-    Modeletter { name: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Capsletter { dots: BrailleChars, constraints: Option<Constraints> },
-    Begmodeword { name: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Begcapsword { dots: BrailleChars, constraints: Option<Constraints> },
-    Endcapsword { dots: BrailleChars, constraints: Option<Constraints> },
-    Capsmodechars { chars: String },
-    Begcaps { dots: BrailleChars },
-    Endcaps { dots: BrailleChars },
-    Begcapsphrase { dots: BrailleChars },
-    Endcapsphrase { dots: BrailleChars, position: Position },
-    Lencapsphrase { number: i32 },
-    Letsign { dots: BrailleChars },
-    Noletsign { chars: String },
-    Noletsignbefore { chars: String },
-    Noletsignafter { chars: String },
-    Nocontractsign { dots: BrailleChars },
-    Numsign { dots: BrailleChars },
-    Nonumsign { dots: BrailleChars },
-    Numericnocontchars { chars: String },
-    Numericmodechars { chars: String },
-    Midendnumericmodechars { chars: String },
+    Modeletter {
+        name: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Capsletter {
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Begmodeword {
+        name: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Begcapsword {
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Endcapsword {
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Capsmodechars {
+        chars: String,
+    },
+    Begcaps {
+        dots: BrailleChars,
+    },
+    Endcaps {
+        dots: BrailleChars,
+    },
+    Begcapsphrase {
+        dots: BrailleChars,
+    },
+    Endcapsphrase {
+        dots: BrailleChars,
+        position: Position,
+    },
+    Lencapsphrase {
+        number: i32,
+    },
+    Letsign {
+        dots: BrailleChars,
+    },
+    Noletsign {
+        chars: String,
+    },
+    Noletsignbefore {
+        chars: String,
+    },
+    Noletsignafter {
+        chars: String,
+    },
+    Nocontractsign {
+        dots: BrailleChars,
+    },
+    Numsign {
+        dots: BrailleChars,
+    },
+    Nonumsign {
+        dots: BrailleChars,
+    },
+    Numericnocontchars {
+        chars: String,
+    },
+    Numericmodechars {
+        chars: String,
+    },
+    Midendnumericmodechars {
+        chars: String,
+    },
 
-    Begmodephrase { name: String, dots: BrailleChars },
-    Endmodephrase { name: String, dots: BrailleChars, position: Position },
-    Lenmodephrase { name: String, number: i32 },
+    Begmodephrase {
+        name: String,
+        dots: BrailleChars,
+    },
+    Endmodephrase {
+        name: String,
+        dots: BrailleChars,
+        position: Position,
+    },
+    Lenmodephrase {
+        name: String,
+        number: i32,
+    },
 
-    Seqdelimiter { chars: String },
-    Seqbeforechars { chars: String },
-    Seqafterchars { chars: String },
-    Seqafterpattern { chars: String },
-    Seqafterexpression { chars: String },
+    Seqdelimiter {
+        chars: String,
+    },
+    Seqbeforechars {
+        chars: String,
+    },
+    Seqafterchars {
+        chars: String,
+    },
+    Seqafterpattern {
+        chars: String,
+    },
+    Seqafterexpression {
+        chars: String,
+    },
 
-    Class { name: String, chars: String },
-    Emphclass { name: String },
-    Begemph { name: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Endemph { name: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Noemphchars { name: String, chars: String },
-    Emphletter { name: String, dots: BrailleChars },
-    Begemphword { name: String, dots: BrailleChars },
-    Endemphword { name: String, dots: BrailleChars },
-    Emphmodechars { name: String, chars: String},
-    Begemphphrase { name: String, dots: BrailleChars },
-    Endemphphrase { name: String, dots: BrailleChars, position: Position },
-    Lenemphphrase { name: String, number: i32 },
+    Class {
+        name: String,
+        chars: String,
+    },
+    Emphclass {
+        name: String,
+    },
+    Begemph {
+        name: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Endemph {
+        name: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Noemphchars {
+        name: String,
+        chars: String,
+    },
+    Emphletter {
+        name: String,
+        dots: BrailleChars,
+    },
+    Begemphword {
+        name: String,
+        dots: BrailleChars,
+    },
+    Endemphword {
+        name: String,
+        dots: BrailleChars,
+    },
+    Emphmodechars {
+        name: String,
+        chars: String,
+    },
+    Begemphphrase {
+        name: String,
+        dots: BrailleChars,
+    },
+    Endemphphrase {
+        name: String,
+        dots: BrailleChars,
+        position: Position,
+    },
+    Lenemphphrase {
+        name: String,
+        number: i32,
+    },
 
-    Begcomp { dots: BrailleChars, constraints: Option<Constraints> },
-    Endcomp { dots: BrailleChars, constraints: Option<Constraints> },
+    Begcomp {
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Endcomp {
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
 
-    Decpoint { chars: String, dots: BrailleChars },
-    Hyphen { dots: BrailleChars, constraints: Option<Constraints> },
+    Decpoint {
+        chars: String,
+        dots: BrailleChars,
+    },
+    Hyphen {
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
 
-    Capsnocont {  },
+    Capsnocont {},
 
-    Compbrl { chars: String, constraints: Option<Constraints> },
-    Comp6 { chars: String, dots: BrailleChars },
-    Nocont { chars: String },
-    Replace { chars: String, replacement: Option<String> },
-    Always { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Repeated { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Repword { chars: String, dots: BrailleChars },
-    Rependword { chars: String, dots: BrailleChars },
-    Largesign { chars: String, dots: BrailleChars },
-    Word { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Syllable { chars: String, dots: BrailleChars },
-    Joinword { chars: String, dots: BrailleChars },
-    Lowword { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Contraction { chars: String },
-    Sufword { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Prfword { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Begword { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Begmidword { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Midword { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Midendword { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Endword { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Partword { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Exactdots { chars: String },
-    Prepunc { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Postpunc { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Begnum { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Midnum { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Endnum { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
-    Joinnum { chars: String, dots: BrailleChars, constraints: Option<Constraints> },
+    Compbrl {
+        chars: String,
+        constraints: Option<Constraints>,
+    },
+    Comp6 {
+        chars: String,
+        dots: BrailleChars,
+    },
+    Nocont {
+        chars: String,
+    },
+    Replace {
+        chars: String,
+        replacement: Option<String>,
+    },
+    Always {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Repeated {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Repword {
+        chars: String,
+        dots: BrailleChars,
+    },
+    Rependword {
+        chars: String,
+        dots: BrailleChars,
+    },
+    Largesign {
+        chars: String,
+        dots: BrailleChars,
+    },
+    Word {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Syllable {
+        chars: String,
+        dots: BrailleChars,
+    },
+    Joinword {
+        chars: String,
+        dots: BrailleChars,
+    },
+    Lowword {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Contraction {
+        chars: String,
+    },
+    Sufword {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Prfword {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Begword {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Begmidword {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Midword {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Midendword {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Endword {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Partword {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Exactdots {
+        chars: String,
+    },
+    Prepunc {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Postpunc {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Begnum {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Midnum {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Endnum {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
+    Joinnum {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+    },
 
-    Swapcd { name: String, chars: String, dots: Vec<BrailleChars> },
-    Swapdd { name: String, dots: Vec<BrailleChars>, replacement: Vec<BrailleChars> },
-    Swapcc { name: String, chars: String, replacement: String },
+    Swapcd {
+        name: String,
+        chars: String,
+        dots: Vec<BrailleChars>,
+    },
+    Swapdd {
+        name: String,
+        dots: Vec<BrailleChars>,
+        replacement: Vec<BrailleChars>,
+    },
+    Swapcc {
+        name: String,
+        chars: String,
+        replacement: String,
+    },
 
-    Attribute { name: String, chars: String },
-    Context { test: String, action: String, constraints: Option<Constraints> },
-    Pass2 { test: String, action: String, constraints: Option<Constraints> },
-    Pass3 { test: String, action: String, constraints: Option<Constraints> },
-    Pass4 { test: String, action: String, constraints: Option<Constraints> },
-    Correct { test: String, action: String, constraints: Option<Constraints> },
+    Attribute {
+        name: String,
+        chars: String,
+    },
+    Context {
+        test: String,
+        action: String,
+        constraints: Option<Constraints>,
+    },
+    Pass2 {
+        test: String,
+        action: String,
+        constraints: Option<Constraints>,
+    },
+    Pass3 {
+        test: String,
+        action: String,
+        constraints: Option<Constraints>,
+    },
+    Pass4 {
+        test: String,
+        action: String,
+        constraints: Option<Constraints>,
+    },
+    Correct {
+        test: String,
+        action: String,
+        constraints: Option<Constraints>,
+    },
 
-    Match { pre: String, chars: String, post: String, dots: BrailleChars, constraints: Option<Constraints>, matches: Option<WithMatches> },
-    Literal { chars: String },
+    Match {
+        pre: String,
+        chars: String,
+        post: String,
+        dots: BrailleChars,
+        constraints: Option<Constraints>,
+        matches: Option<WithMatches>,
+    },
+    Literal {
+        chars: String,
+    },
 }
 
 #[derive(Hash, PartialEq, Eq, Debug)]
@@ -546,8 +865,10 @@ impl<'a> RuleParser<'a> {
 
     fn with_matches(&mut self) -> Option<WithMatches> {
         let mut matches = WithMatches::new();
-	// TODO: make sure "empmatchbefore empmatchbefore" is not allowed
-        while self.tokens.peek() == Some(&"empmatchbefore") || self.tokens.peek() == Some(&"empmatchafter") {
+        // TODO: make sure "empmatchbefore empmatchbefore" is not allowed
+        while self.tokens.peek() == Some(&"empmatchbefore")
+            || self.tokens.peek() == Some(&"empmatchafter")
+        {
             if self.tokens.next_if_eq(&"empmatchbefore").is_some() {
                 matches.insert(WithMatch::Before);
             }
@@ -555,11 +876,11 @@ impl<'a> RuleParser<'a> {
                 matches.insert(WithMatch::After);
             }
         }
-	if !matches.is_empty() {
+        if !matches.is_empty() {
             Some(matches)
-	} else {
-	    None
-	}
+        } else {
+            None
+        }
     }
 
     fn opcode(&mut self) -> Result<Opcode, ParseError> {
@@ -818,121 +1139,6 @@ impl<'a> RuleParser<'a> {
     }
 
     fn rule(&mut self) -> Result<Rule, ParseError> {
-	    Opcode::Include => Rule::Include { file: self.filename()? },
-	    Opcode::Undefined => Rule::Undefined { chars: self.chars()?, dots: self.dots()?},
-	    Opcode::Display => Rule::Display { dots: self.dots()? },
-	    Opcode::Multind => Rule::Multind { dots: self.dots()?, names: self.many_names()?, constraints },
-
-	    Opcode::Space => Rule::Space { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Punctuation => Rule::Punctuation { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Digit => Rule::Digit { character: self.one_char()?, dots: self.dots()? },
-	    Opcode::Grouping => Rule::Grouping { name: self.name()?, chars: self.chars()?, dots: self.dots()? },
-	    Opcode::Letter => Rule::Letter { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Base => Rule::Base { name: self.name()?, from: self.one_char()?, to: self.one_char()? },
-	    Opcode::Lowercase => Rule::Lowercase { character: self.one_char()?, dots: self.dots()?, constraints },
-	    Opcode::Uppercase => Rule::Uppercase { character: self.one_char()?, dots: self.dots()?, constraints },
-	    Opcode::Litdigit => Rule::Litdigit { character: self.one_char()?, dots: self.dots()? },
-	    Opcode::Sign => Rule::Sign { character: self.one_char()?, dots: self.dots()?, constraints },
-	    Opcode::Math => Rule::Math { character: self.one_char()?, dots: self.dots()?, constraints },
-
-	    Opcode::Modeletter => Rule::Modeletter { name: self.name()?, dots: self.dots()?, constraints },
-	    Opcode::Capsletter =>  Rule::Capsletter { dots: self.dots()?, constraints },
-	    Opcode::Begmodeword => Rule::Begmodeword { name: self.name()?, dots: self.dots()?, constraints },
-	    Opcode::Begcapsword => Rule::Begcapsword { dots: self.dots()?, constraints },
-	    Opcode::Endcapsword => Rule::Endcapsword { dots: self.dots()?, constraints },
-	    Opcode::Capsmodechars => Rule::Capsmodechars { chars: self.chars()? },
-	    Opcode::Begcaps => Rule::Begcaps { dots: self.dots()? },
-	    Opcode::Endcaps => Rule::Endcaps { dots: self.dots()? },
-	    Opcode::Begcapsphrase => Rule::Begcapsphrase { dots: self.dots()? },
-	    Opcode::Endcapsphrase => Rule::Endcapsphrase { position: self.position()?, dots: self.dots()? },
-	    Opcode::Lencapsphrase => Rule::Lencapsphrase { number: self.number()? },
-	    Opcode::Letsign => Rule::Letsign { dots: self.dots()? },
-	    Opcode::Noletsign => Rule::Noletsign { chars: self.chars()? },
-	    Opcode::Noletsignbefore => Rule::Noletsignbefore { chars: self.chars()? },
-	    Opcode::Noletsignafter =>  Rule::Noletsignafter { chars: self.chars()? },
-	    Opcode::Nocontractsign =>  Rule::Nocontractsign { dots: self.dots()? },
-	    Opcode::Numsign => Rule::Numsign { dots: self.dots()? },
-	    Opcode::Nonumsign => Rule::Nonumsign { dots: self.dots()? },
-	    Opcode::Numericnocontchars => Rule::Numericnocontchars { chars: self.chars()? },
-	    Opcode::Numericmodechars => Rule::Numericmodechars { chars: self.chars()? },
-	    Opcode::Midendnumericmodechars => Rule::Midendnumericmodechars { chars: self.chars()? },
-
-	    Opcode::Begmodephrase => Rule::Begmodephrase { name: self.name()?, dots: self.dots()? },
-	    Opcode::Endmodephrase => Rule::Endmodephrase { name: self.name()?, position: self.position()?, dots: self.dots()? },
-	    Opcode::Lenmodephrase => Rule::Lenmodephrase { name: self.name()?, number: self.number()? },
-	    
-	    Opcode::Seqdelimiter => Rule::Seqdelimiter { chars: self.chars()? },
-	    Opcode::Seqbeforechars => Rule::Seqbeforechars { chars: self.chars()? },
-	    Opcode::Seqafterchars => Rule::Seqafterchars { chars: self.chars()? },
-	    Opcode::Seqafterpattern => Rule::Seqafterpattern { chars: self.chars()? },
-	    Opcode::Seqafterexpression => Rule::Seqafterexpression { chars: self.chars()? },
-	    
-	    Opcode::Class => Rule::Class { name: self.name()?, chars: self.chars()? },
-	    Opcode::Emphclass => Rule::Emphclass { name: self.name()? },
-	    Opcode::Begemph => Rule::Begemph { name: self.name()?, dots: self.dots()?, constraints },
-	    Opcode::Endemph => Rule::Endemph { name: self.name()?, dots: self.dots()?, constraints },
-	    Opcode::Noemphchars => Rule::Noemphchars { name: self.name()?, chars: self.chars()? },
-	    Opcode::Emphletter => Rule::Emphletter { name: self.name()?, dots: self.dots()? },
-	    Opcode::Begemphword => Rule::Begemphword { name: self.name()?, dots: self.dots()? },
-	    Opcode::Endemphword => Rule::Endemphword { name: self.name()?, dots: self.dots()? },
-	    Opcode::Emphmodechars => Rule::Emphmodechars { name: self.name()?, chars: self.chars()? },
-	    Opcode::Begemphphrase => Rule::Begemphphrase { name: self.name()?, dots: self.dots()? },
-	    Opcode::Endemphphrase => Rule::Endemphphrase { name: self.name()?, position: self.position()?, dots: self.dots()? },
-	    Opcode::Lenemphphrase => Rule::Lenemphphrase { name: self.name()?, number: self.number()? },
-
-	    Opcode::Begcomp => Rule::Begcomp { dots: self.dots()?, constraints },
-	    Opcode::Endcomp => Rule::Endcomp { dots: self.dots()?, constraints },
-
-	    Opcode::Decpoint => Rule::Decpoint { chars: self.chars()?, dots: self.dots()? },
-	    Opcode::Hyphen => Rule::Hyphen { dots: self.dots()?, constraints },
-
-	    Opcode::Capsnocont => Rule::Capsnocont {},
-
-	    Opcode::Compbrl => Rule::Compbrl { chars: self.chars()?, constraints },
-	    Opcode::Comp6 => Rule::Comp6 { chars: self.chars()?, dots: self.dots()? },
-	    Opcode::Nocont => Rule::Nocont { chars: self.chars()? },
-	    Opcode::Replace => Rule::Replace { chars: self.chars()?, replacement: self.maybe_chars() },
-	    Opcode::Always => Rule::Always { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Repeated => Rule::Repeated { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Repword => Rule::Repword { chars: self.chars()?, dots: self.dots()? },
-	    Opcode::Rependword => Rule::Rependword { chars: self.chars()?, dots: self.dots()? },
-	    Opcode::Largesign => Rule::Largesign { chars: self.chars()?, dots: self.dots()? },
-	    Opcode::Word => Rule::Word { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Syllable => Rule::Syllable { chars: self.chars()?, dots: self.dots()? },
-	    Opcode::Joinword => Rule::Joinword { chars: self.chars()?, dots: self.dots()? },
-	    Opcode::Lowword => Rule::Lowword { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Contraction => Rule::Contraction { chars: self.chars()? },
-	    Opcode::Sufword => Rule::Sufword { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Prfword => Rule::Prfword { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Begword => Rule::Begword { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Begmidword => Rule::Begmidword { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Midword => Rule::Midword { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Midendword => Rule::Midendword { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Endword => Rule::Endword { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Partword => Rule::Partword { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Exactdots => Rule::Exactdots { chars: self.chars()? },
-	    Opcode::Prepunc => Rule::Prepunc { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Postpunc => Rule::Postpunc { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Begnum => Rule::Begnum { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Midnum => Rule::Midnum { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Endnum => Rule::Endnum { chars: self.chars()?, dots: self.dots()?, constraints },
-	    Opcode::Joinnum => Rule::Joinnum { chars: self.chars()?, dots: self.dots()?, constraints },
-
-	    Opcode::Attribute => Rule::Attribute { name: self.name()?, chars: self.chars()? },
-	    
-	    Opcode::Swapcd => Rule::Swapcd { name: self.name()?, chars: self.chars()?, dots: self.many_dots()? },
-	    Opcode::Swapdd => Rule::Swapdd { name: self.name()?, dots: self.many_dots()?, replacement: self.many_dots()? },
-	    Opcode::Swapcc => Rule::Swapcc { name: self.name()?, chars: self.chars()?, replacement: self.chars()? },
-
-	    Opcode::Context => Rule::Context { test: self.multi_test()?, action: self.multi_action()?, constraints },
-	    Opcode::Pass2 => Rule::Pass2 { test: self.multi_test()?, action: self.multi_action()?, constraints },
-	    Opcode::Pass3 => Rule::Pass3 { test: self.multi_test()?, action: self.multi_action()?, constraints },
-	    Opcode::Pass4 => Rule::Pass4 { test: self.multi_test()?, action: self.multi_action()?, constraints },
-	    Opcode::Correct => Rule::Correct { test: self.multi_test()?, action: self.multi_action()?, constraints },
-	    
-	    Opcode::Match => Rule::Match { pre: self.match_pre()?, chars: self.chars()?, post: self.match_post()?, dots: self.dots()?, matches, constraints },
-	    Opcode::Literal => Rule::Literal { chars: self.chars()? },
-	};
         let constraints = self.constraints();
         let _classes = self.with_classes();
         let matches = self.with_matches();
@@ -1004,6 +1210,422 @@ impl<'a> RuleParser<'a> {
             opcode => opcode,
         };
         let rule = match opcode {
+            Opcode::Include => Rule::Include {
+                file: self.filename()?,
+            },
+            Opcode::Undefined => Rule::Undefined {
+                chars: self.chars()?,
+                dots: self.dots()?,
+            },
+            Opcode::Display => Rule::Display { dots: self.dots()? },
+            Opcode::Multind => Rule::Multind {
+                dots: self.dots()?,
+                names: self.many_names()?,
+                constraints,
+            },
+
+            Opcode::Space => Rule::Space {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Punctuation => Rule::Punctuation {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Digit => Rule::Digit {
+                character: self.one_char()?,
+                dots: self.dots()?,
+            },
+            Opcode::Grouping => Rule::Grouping {
+                name: self.name()?,
+                chars: self.chars()?,
+                dots: self.dots()?,
+            },
+            Opcode::Letter => Rule::Letter {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Base => Rule::Base {
+                name: self.name()?,
+                from: self.one_char()?,
+                to: self.one_char()?,
+            },
+            Opcode::Lowercase => Rule::Lowercase {
+                character: self.one_char()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Uppercase => Rule::Uppercase {
+                character: self.one_char()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Litdigit => Rule::Litdigit {
+                character: self.one_char()?,
+                dots: self.dots()?,
+            },
+            Opcode::Sign => Rule::Sign {
+                character: self.one_char()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Math => Rule::Math {
+                character: self.one_char()?,
+                dots: self.dots()?,
+                constraints,
+            },
+
+            Opcode::Modeletter => Rule::Modeletter {
+                name: self.name()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Capsletter => Rule::Capsletter {
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Begmodeword => Rule::Begmodeword {
+                name: self.name()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Begcapsword => Rule::Begcapsword {
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Endcapsword => Rule::Endcapsword {
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Capsmodechars => Rule::Capsmodechars {
+                chars: self.chars()?,
+            },
+            Opcode::Begcaps => Rule::Begcaps { dots: self.dots()? },
+            Opcode::Endcaps => Rule::Endcaps { dots: self.dots()? },
+            Opcode::Begcapsphrase => Rule::Begcapsphrase { dots: self.dots()? },
+            Opcode::Endcapsphrase => Rule::Endcapsphrase {
+                position: self.position()?,
+                dots: self.dots()?,
+            },
+            Opcode::Lencapsphrase => Rule::Lencapsphrase {
+                number: self.number()?,
+            },
+            Opcode::Letsign => Rule::Letsign { dots: self.dots()? },
+            Opcode::Noletsign => Rule::Noletsign {
+                chars: self.chars()?,
+            },
+            Opcode::Noletsignbefore => Rule::Noletsignbefore {
+                chars: self.chars()?,
+            },
+            Opcode::Noletsignafter => Rule::Noletsignafter {
+                chars: self.chars()?,
+            },
+            Opcode::Nocontractsign => Rule::Nocontractsign { dots: self.dots()? },
+            Opcode::Numsign => Rule::Numsign { dots: self.dots()? },
+            Opcode::Nonumsign => Rule::Nonumsign { dots: self.dots()? },
+            Opcode::Numericnocontchars => Rule::Numericnocontchars {
+                chars: self.chars()?,
+            },
+            Opcode::Numericmodechars => Rule::Numericmodechars {
+                chars: self.chars()?,
+            },
+            Opcode::Midendnumericmodechars => Rule::Midendnumericmodechars {
+                chars: self.chars()?,
+            },
+
+            Opcode::Begmodephrase => Rule::Begmodephrase {
+                name: self.name()?,
+                dots: self.dots()?,
+            },
+            Opcode::Endmodephrase => Rule::Endmodephrase {
+                name: self.name()?,
+                position: self.position()?,
+                dots: self.dots()?,
+            },
+            Opcode::Lenmodephrase => Rule::Lenmodephrase {
+                name: self.name()?,
+                number: self.number()?,
+            },
+
+            Opcode::Seqdelimiter => Rule::Seqdelimiter {
+                chars: self.chars()?,
+            },
+            Opcode::Seqbeforechars => Rule::Seqbeforechars {
+                chars: self.chars()?,
+            },
+            Opcode::Seqafterchars => Rule::Seqafterchars {
+                chars: self.chars()?,
+            },
+            Opcode::Seqafterpattern => Rule::Seqafterpattern {
+                chars: self.chars()?,
+            },
+            Opcode::Seqafterexpression => Rule::Seqafterexpression {
+                chars: self.chars()?,
+            },
+
+            Opcode::Class => Rule::Class {
+                name: self.name()?,
+                chars: self.chars()?,
+            },
+            Opcode::Emphclass => Rule::Emphclass { name: self.name()? },
+            Opcode::Begemph => Rule::Begemph {
+                name: self.name()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Endemph => Rule::Endemph {
+                name: self.name()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Noemphchars => Rule::Noemphchars {
+                name: self.name()?,
+                chars: self.chars()?,
+            },
+            Opcode::Emphletter => Rule::Emphletter {
+                name: self.name()?,
+                dots: self.dots()?,
+            },
+            Opcode::Begemphword => Rule::Begemphword {
+                name: self.name()?,
+                dots: self.dots()?,
+            },
+            Opcode::Endemphword => Rule::Endemphword {
+                name: self.name()?,
+                dots: self.dots()?,
+            },
+            Opcode::Emphmodechars => Rule::Emphmodechars {
+                name: self.name()?,
+                chars: self.chars()?,
+            },
+            Opcode::Begemphphrase => Rule::Begemphphrase {
+                name: self.name()?,
+                dots: self.dots()?,
+            },
+            Opcode::Endemphphrase => Rule::Endemphphrase {
+                name: self.name()?,
+                position: self.position()?,
+                dots: self.dots()?,
+            },
+            Opcode::Lenemphphrase => Rule::Lenemphphrase {
+                name: self.name()?,
+                number: self.number()?,
+            },
+
+            Opcode::Begcomp => Rule::Begcomp {
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Endcomp => Rule::Endcomp {
+                dots: self.dots()?,
+                constraints,
+            },
+
+            Opcode::Decpoint => Rule::Decpoint {
+                chars: self.chars()?,
+                dots: self.dots()?,
+            },
+            Opcode::Hyphen => Rule::Hyphen {
+                dots: self.dots()?,
+                constraints,
+            },
+
+            Opcode::Capsnocont => Rule::Capsnocont {},
+
+            Opcode::Compbrl => Rule::Compbrl {
+                chars: self.chars()?,
+                constraints,
+            },
+            Opcode::Comp6 => Rule::Comp6 {
+                chars: self.chars()?,
+                dots: self.dots()?,
+            },
+            Opcode::Nocont => Rule::Nocont {
+                chars: self.chars()?,
+            },
+            Opcode::Replace => Rule::Replace {
+                chars: self.chars()?,
+                replacement: self.maybe_chars(),
+            },
+            Opcode::Always => Rule::Always {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Repeated => Rule::Repeated {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Repword => Rule::Repword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+            },
+            Opcode::Rependword => Rule::Rependword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+            },
+            Opcode::Largesign => Rule::Largesign {
+                chars: self.chars()?,
+                dots: self.dots()?,
+            },
+            Opcode::Word => Rule::Word {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Syllable => Rule::Syllable {
+                chars: self.chars()?,
+                dots: self.dots()?,
+            },
+            Opcode::Joinword => Rule::Joinword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+            },
+            Opcode::Lowword => Rule::Lowword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Contraction => Rule::Contraction {
+                chars: self.chars()?,
+            },
+            Opcode::Sufword => Rule::Sufword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Prfword => Rule::Prfword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Begword => Rule::Begword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Begmidword => Rule::Begmidword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Midword => Rule::Midword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Midendword => Rule::Midendword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Endword => Rule::Endword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Partword => Rule::Partword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Exactdots => Rule::Exactdots {
+                chars: self.chars()?,
+            },
+            Opcode::Prepunc => Rule::Prepunc {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Postpunc => Rule::Postpunc {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Begnum => Rule::Begnum {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Midnum => Rule::Midnum {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Endnum => Rule::Endnum {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Joinnum => Rule::Joinnum {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+
+            Opcode::Attribute => Rule::Attribute {
+                name: self.name()?,
+                chars: self.chars()?,
+            },
+
+            Opcode::Swapcd => Rule::Swapcd {
+                name: self.name()?,
+                chars: self.chars()?,
+                dots: self.many_dots()?,
+            },
+            Opcode::Swapdd => Rule::Swapdd {
+                name: self.name()?,
+                dots: self.many_dots()?,
+                replacement: self.many_dots()?,
+            },
+            Opcode::Swapcc => Rule::Swapcc {
+                name: self.name()?,
+                chars: self.chars()?,
+                replacement: self.chars()?,
+            },
+
+            Opcode::Context => Rule::Context {
+                test: self.multi_test()?,
+                action: self.multi_action()?,
+                constraints,
+            },
+            Opcode::Pass2 => Rule::Pass2 {
+                test: self.multi_test()?,
+                action: self.multi_action()?,
+                constraints,
+            },
+            Opcode::Pass3 => Rule::Pass3 {
+                test: self.multi_test()?,
+                action: self.multi_action()?,
+                constraints,
+            },
+            Opcode::Pass4 => Rule::Pass4 {
+                test: self.multi_test()?,
+                action: self.multi_action()?,
+                constraints,
+            },
+            Opcode::Correct => Rule::Correct {
+                test: self.multi_test()?,
+                action: self.multi_action()?,
+                constraints,
+            },
+
+            Opcode::Match => Rule::Match {
+                pre: self.match_pre()?,
+                chars: self.chars()?,
+                post: self.match_post()?,
+                dots: self.dots()?,
+                matches,
+                constraints,
+            },
+            Opcode::Literal => Rule::Literal {
+                chars: self.chars()?,
+            },
+        };
         Ok(rule)
     }
 }
@@ -1034,7 +1656,10 @@ mod tests {
 
     #[test]
     fn nocross_test() {
-        assert_eq!(Some(Constraint::Nocross), RuleParser::new(&"nocross").nocross());
+        assert_eq!(
+            Some(Constraint::Nocross),
+            RuleParser::new(&"nocross").nocross()
+        );
         assert_eq!(
             Some(Constraint::Nocross),
             RuleParser::new(&"nocross nofor").nocross()
@@ -1122,10 +1747,7 @@ mod tests {
             Some(HashSet::from([WithMatch::Before])),
             RuleParser::new(&"empmatchbefore match").with_matches()
         );
-        assert_eq!(
-            None,
-            RuleParser::new(&"match").with_matches()
-        );
+        assert_eq!(None, RuleParser::new(&"match").with_matches());
         assert_eq!(
             Some(HashSet::from([WithMatch::After, WithMatch::Before])),
             RuleParser::new(&"empmatchbefore empmatchafter match").with_matches()
