@@ -22,6 +22,14 @@ pub enum WithClass {
 
 type WithClasses = Vec<WithClass>;
 
+#[derive(Hash, PartialEq, Eq, Debug)]
+pub enum WithMatch {
+    Before,
+    After,
+}
+
+type WithMatches = HashSet<WithMatch>;
+
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum ParseError {
     #[error("Expected {expected:?} got {found:?}")]
@@ -316,7 +324,7 @@ enum Rule {
     Pass4 { test: String, action: String },
     Correct { test: String, action: String },
 
-    Match { pre: String, chars: String, post: String, dots: BrailleChars },
+    Match { pre: String, chars: String, post: String, dots: BrailleChars, constraints: Option<Constraints>, matches: Option<WithMatches> },
     Literal { chars: String },
 }
 
@@ -534,6 +542,24 @@ impl<'a> RuleParser<'a> {
             }
         }
         Ok(Some(classes))
+    }
+
+    fn with_matches(&mut self) -> Option<WithMatches> {
+        let mut matches = WithMatches::new();
+	// TODO: make sure "empmatchbefore empmatchbefore" is not allowed
+        while self.tokens.peek() == Some(&"empmatchbefore") || self.tokens.peek() == Some(&"empmatchafter") {
+            if self.tokens.next_if_eq(&"empmatchbefore").is_some() {
+                matches.insert(WithMatch::Before);
+            }
+            if self.tokens.next_if_eq(&"empmatchafter").is_some() {
+                matches.insert(WithMatch::After);
+            }
+        }
+	if !matches.is_empty() {
+            Some(matches)
+	} else {
+	    None
+	}
     }
 
     fn opcode(&mut self) -> Result<Opcode, ParseError> {
@@ -794,6 +820,7 @@ impl<'a> RuleParser<'a> {
     fn rule(&mut self) -> Result<Rule, ParseError> {
 	let _prefix = self.prefix();
 	let _classes = self.with_classes();
+	let matches = self.with_matches();
 	let opcode = match self.opcode()? {
 	    Opcode::Include => Rule::Include { file: self.filename()? },
 	    Opcode::Undefined => Rule::Undefined { chars: self.chars()?, dots: self.dots()?},
@@ -907,7 +934,7 @@ impl<'a> RuleParser<'a> {
 	    Opcode::Pass4 => Rule::Pass4 { test: self.multi_test()?, action: self.multi_action()? },
 	    Opcode::Correct => Rule::Correct { test: self.multi_test()?, action: self.multi_action()? },
 	    
-	    Opcode::Match => Rule::Match { pre: self.match_pre()?, chars: self.chars()?, post: self.match_post()?, dots: self.dots()? },
+	    Opcode::Match => Rule::Match { pre: self.match_pre()?, chars: self.chars()?, post: self.match_post()?, dots: self.dots()?, matches, constraints },
 	    Opcode::Literal => Rule::Literal { chars: self.chars()? },
 	};
 	Ok(opcode)
@@ -1015,6 +1042,26 @@ mod tests {
         assert_eq!(
             Err(ParseError::OpcodeExpected),
             RuleParser::new(&"hello world").opcode()
+        );
+    }
+
+    #[test]
+    fn with_matches_test() {
+        assert_eq!(
+            Some(HashSet::from([WithMatch::After])),
+            RuleParser::new(&"empmatchafter match").with_matches()
+        );
+        assert_eq!(
+            Some(HashSet::from([WithMatch::Before])),
+            RuleParser::new(&"empmatchbefore match").with_matches()
+        );
+        assert_eq!(
+            None,
+            RuleParser::new(&"match").with_matches()
+        );
+        assert_eq!(
+            Some(HashSet::from([WithMatch::After, WithMatch::Before])),
+            RuleParser::new(&"empmatchbefore empmatchafter match").with_matches()
         );
     }
 
