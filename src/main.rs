@@ -33,7 +33,7 @@ pub enum WithMatch {
 type WithMatches = HashSet<WithMatch>;
 
 #[derive(thiserror::Error, Debug, PartialEq)]
-pub enum ParseError {
+enum ParseError {
     #[error("Expected {expected:?} got {found:?}")]
     TokenExpected {
         expected: String,
@@ -51,6 +51,8 @@ pub enum ParseError {
     InvalidNumber(#[from] ParseIntError),
     #[error("invalid escape sequence")]
     InvalidEscape,
+    #[error("Constraints {constraints:?} not allowed for opcode")]
+    InvalidConstraint { constraints: Constraints },
     #[error("Expected classname, got {found:?}")]
     ClassNameExpected { found: Option<String> },
     #[error("Opcode expected")]
@@ -413,7 +415,7 @@ fn unescape_unicode(chars: &mut Chars) -> Result<char, ParseError> {
     Err(ParseError::InvalidUnicodeLiteral)
 }
 
-pub fn unescape(s: &str) -> Result<String, ParseError> {
+fn unescape(s: &str) -> Result<String, ParseError> {
     let mut iter = s.chars();
     let mut new = String::new();
 
@@ -816,10 +818,6 @@ impl<'a> RuleParser<'a> {
     }
 
     fn rule(&mut self) -> Result<Rule, ParseError> {
-	let constraints = self.constraints();
-	let _classes = self.with_classes();
-	let matches = self.with_matches();
-	let opcode = match self.opcode()? {
 	    Opcode::Include => Rule::Include { file: self.filename()? },
 	    Opcode::Undefined => Rule::Undefined { chars: self.chars()?, dots: self.dots()?},
 	    Opcode::Display => Rule::Display { dots: self.dots()? },
@@ -935,7 +933,78 @@ impl<'a> RuleParser<'a> {
 	    Opcode::Match => Rule::Match { pre: self.match_pre()?, chars: self.chars()?, post: self.match_post()?, dots: self.dots()?, matches, constraints },
 	    Opcode::Literal => Rule::Literal { chars: self.chars()? },
 	};
-	Ok(opcode)
+        let constraints = self.constraints();
+        let _classes = self.with_classes();
+        let matches = self.with_matches();
+        let opcode = match self.opcode()? {
+            // make sure constraints are only allowed for some opcodes
+            Opcode::Include
+            | Opcode::Undefined
+            | Opcode::Display
+            | Opcode::Digit
+            | Opcode::Grouping
+            | Opcode::Base
+            | Opcode::Litdigit
+            | Opcode::Capsmodechars
+            | Opcode::Begcaps
+            | Opcode::Endcaps
+            | Opcode::Begcapsphrase
+            | Opcode::Endcapsphrase
+            | Opcode::Lencapsphrase
+            | Opcode::Letsign
+            | Opcode::Noletsign
+            | Opcode::Noletsignbefore
+            | Opcode::Noletsignafter
+            | Opcode::Nocontractsign
+            | Opcode::Numsign
+            | Opcode::Numericnocontchars
+            | Opcode::Numericmodechars
+            | Opcode::Midendnumericmodechars
+            | Opcode::Begmodephrase
+            | Opcode::Endmodephrase
+            | Opcode::Lenmodephrase
+            | Opcode::Seqdelimiter
+            | Opcode::Seqbeforechars
+            | Opcode::Seqafterchars
+            | Opcode::Seqafterpattern
+            | Opcode::Seqafterexpression
+            | Opcode::Class
+            | Opcode::Emphclass
+            | Opcode::Noemphchars
+            | Opcode::Emphletter
+            | Opcode::Begemphword
+            | Opcode::Endemphword
+            | Opcode::Emphmodechars
+            | Opcode::Begemphphrase
+            | Opcode::Endemphphrase
+            | Opcode::Lenemphphrase
+            | Opcode::Decpoint
+            | Opcode::Capsnocont
+            | Opcode::Comp6
+            | Opcode::Nocont
+            | Opcode::Replace
+            | Opcode::Repword
+            | Opcode::Rependword
+            | Opcode::Largesign
+            | Opcode::Syllable
+            | Opcode::Joinword
+            | Opcode::Contraction
+            | Opcode::Exactdots
+            | Opcode::Attribute
+            | Opcode::Swapcd
+            | Opcode::Swapcc
+            | Opcode::Swapdd
+            | Opcode::Literal
+                if constraints.is_some() =>
+            {
+                return Err(ParseError::InvalidConstraint {
+                    constraints: constraints.unwrap(),
+                })
+            }
+            opcode => opcode,
+        };
+        let rule = match opcode {
+        Ok(rule)
     }
 }
 
