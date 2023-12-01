@@ -457,6 +457,7 @@ enum Rule {
         dots: BrailleChars,
     },
     Hyphen {
+        chars: String,
         dots: BrailleChars,
         constraints: Option<Constraints>,
     },
@@ -1437,6 +1438,7 @@ impl<'a> RuleParser<'a> {
                 dots: self.dots()?,
             },
             Opcode::Hyphen => Rule::Hyphen {
+                chars: self.chars()?,
                 dots: self.dots()?,
                 constraints,
             },
