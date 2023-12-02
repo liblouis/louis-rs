@@ -1806,11 +1806,15 @@ mod tests {
         );
 
         assert_eq!(
-            Err(ParseError::OpcodeExpected),
+            Err(ParseError::OpcodeExpected {
+                found: Some("h".into())
+            }),
             RuleParser::new(&"h").opcode()
         );
         assert_eq!(
-            Err(ParseError::OpcodeExpected),
+            Err(ParseError::OpcodeExpected {
+                found: Some("hello".into())
+            }),
             RuleParser::new(&"hello world").opcode()
         );
     }
@@ -1845,7 +1849,9 @@ mod tests {
             RuleParser::new(&"include").rule()
         );
         assert_eq!(
-            Err(ParseError::OpcodeExpected),
+            Err(ParseError::OpcodeExpected {
+                found: Some("Include".into())
+            }),
             RuleParser::new(&"Include foo.ctb").rule()
         );
     }
