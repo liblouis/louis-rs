@@ -1112,23 +1112,21 @@ impl<'a> RuleParser<'a> {
     }
 
     fn dots(&mut self) -> Result<Braille, ParseError> {
-        let token = self.tokens
-            .next()
-            .ok_or(ParseError::DotsExpected)?;
-	if token == "=" {
-	    Ok(Braille::Implicit)
-	} else {
-	    Ok(Braille::Explicit(braille_chars(token)?))
-	}
+        let token = self.tokens.next().ok_or(ParseError::DotsExpected)?;
+        if token == "=" {
+            Ok(Braille::Implicit)
+        } else {
+            Ok(Braille::Explicit(braille_chars(token)?))
+        }
     }
 
     fn explicit_dots(&mut self) -> Result<BrailleChars, ParseError> {
         self.tokens
             .next()
             .ok_or(ParseError::DotsExpected)?
-	    .split('-')
-	    .map(chars_to_dots)
-	    .collect()
+            .split('-')
+            .map(chars_to_dots)
+            .collect()
     }
 
     fn many_dots(&mut self) -> Result<Vec<BrailleChars>, ParseError> {
@@ -1243,9 +1241,12 @@ impl<'a> RuleParser<'a> {
         let rule = match opcode {
             Opcode::Include => Rule::Include {
                 file: self.filename()?,
+            Opcode::Undefined => Rule::Undefined {
+                dots: self.explicit_dots()?,
             },
-            Opcode::Undefined => Rule::Undefined { dots: self.explicit_dots()? },
-            Opcode::Display => Rule::Display { dots: self.explicit_dots()? },
+            Opcode::Display => Rule::Display {
+                dots: self.explicit_dots()?,
+            },
             Opcode::Multind => Rule::Multind {
                 dots: self.explicit_dots()?,
                 names: self.many_names()?,
@@ -1331,9 +1332,15 @@ impl<'a> RuleParser<'a> {
             Opcode::Capsmodechars => Rule::Capsmodechars {
                 chars: self.chars()?,
             },
-            Opcode::Begcaps => Rule::Begcaps { dots: self.explicit_dots()? },
-            Opcode::Endcaps => Rule::Endcaps { dots: self.explicit_dots()? },
-            Opcode::Begcapsphrase => Rule::Begcapsphrase { dots: self.explicit_dots()? },
+            Opcode::Begcaps => Rule::Begcaps {
+                dots: self.explicit_dots()?,
+            },
+            Opcode::Endcaps => Rule::Endcaps {
+                dots: self.explicit_dots()?,
+            },
+            Opcode::Begcapsphrase => Rule::Begcapsphrase {
+                dots: self.explicit_dots()?,
+            },
             Opcode::Endcapsphrase => Rule::Endcapsphrase {
                 position: self.position()?,
                 dots: self.explicit_dots()?,
@@ -1341,7 +1348,9 @@ impl<'a> RuleParser<'a> {
             Opcode::Lencapsphrase => Rule::Lencapsphrase {
                 number: self.number()?,
             },
-            Opcode::Letsign => Rule::Letsign { dots: self.explicit_dots()? },
+            Opcode::Letsign => Rule::Letsign {
+                dots: self.explicit_dots()?,
+            },
             Opcode::Noletsign => Rule::Noletsign {
                 chars: self.chars()?,
             },
@@ -1351,9 +1360,15 @@ impl<'a> RuleParser<'a> {
             Opcode::Noletsignafter => Rule::Noletsignafter {
                 chars: self.chars()?,
             },
-            Opcode::Nocontractsign => Rule::Nocontractsign { dots: self.explicit_dots()? },
-            Opcode::Numsign => Rule::Numsign { dots: self.explicit_dots()? },
-            Opcode::Nonumsign => Rule::Nonumsign { dots: self.explicit_dots()? },
+            Opcode::Nocontractsign => Rule::Nocontractsign {
+                dots: self.explicit_dots()?,
+            },
+            Opcode::Numsign => Rule::Numsign {
+                dots: self.explicit_dots()?,
+            },
+            Opcode::Nonumsign => Rule::Nonumsign {
+                dots: self.explicit_dots()?,
+            },
             Opcode::Numericnocontchars => Rule::Numericnocontchars {
                 chars: self.chars()?,
             },
