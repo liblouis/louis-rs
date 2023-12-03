@@ -18,7 +18,26 @@ enum Constraint {
     Nocross,
 }
 
-type Constraints = HashSet<Constraint>;
+// type Constraints = HashSet<Constraint>;
+
+#[derive(PartialEq, Debug)]
+enum Direction {
+    Forward,
+    Backward,
+    Both
+}
+
+#[derive(PartialEq, Debug)]
+struct Constraints {
+    across_syllable_boundaries: bool,
+    direction: Direction
+}
+
+impl Default for Constraints {
+    fn default() -> Self {
+	Self { across_syllable_boundaries: true, direction: Direction::Both }
+    }
+}
 
 #[derive(PartialEq, Debug)]
 pub enum WithClass {
@@ -232,18 +251,18 @@ enum Rule {
     Multind {
         dots: BrailleChars,
         names: Vec<String>,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
 
     Space {
         chars: String,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Punctuation {
         chars: String,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Digit {
         character: char,
@@ -257,7 +276,7 @@ enum Rule {
     Letter {
         chars: String,
         dots: Braille,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Base {
         name: String,
@@ -267,12 +286,12 @@ enum Rule {
     Lowercase {
         character: char,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Uppercase {
         character: char,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Litdigit {
         character: char,
@@ -281,35 +300,35 @@ enum Rule {
     Sign {
         character: char,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Math {
         character: char,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
 
     Modeletter {
         name: String,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Capsletter {
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Begmodeword {
         name: String,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Begcapsword {
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Endcapsword {
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Capsmodechars {
         chars: String,
@@ -401,12 +420,12 @@ enum Rule {
     Begemph {
         name: String,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Endemph {
         name: String,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Noemphchars {
         name: String,
@@ -444,11 +463,11 @@ enum Rule {
 
     Begcomp {
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Endcomp {
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
 
     Decpoint {
@@ -458,14 +477,14 @@ enum Rule {
     Hyphen {
         chars: String,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
 
     Capsnocont {},
 
     Compbrl {
         chars: String,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Comp6 {
         chars: String,
@@ -481,12 +500,12 @@ enum Rule {
     Always {
         chars: String,
         dots: Braille,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Repeated {
         chars: String,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Repword {
         chars: String,
@@ -503,7 +522,7 @@ enum Rule {
     Word {
         chars: String,
         dots: Braille,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Syllable {
         chars: String,
@@ -516,7 +535,7 @@ enum Rule {
     Lowword {
         chars: String,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Contraction {
         chars: String,
@@ -524,42 +543,42 @@ enum Rule {
     Sufword {
         chars: String,
         dots: Braille,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Prfword {
         chars: String,
         dots: Braille,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Begword {
         chars: String,
         dots: Braille,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Begmidword {
         chars: String,
         dots: Braille,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Midword {
         chars: String,
         dots: Braille,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Midendword {
         chars: String,
         dots: Braille,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Endword {
         chars: String,
         dots: Braille,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Partword {
         chars: String,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Exactdots {
         chars: String,
@@ -567,32 +586,32 @@ enum Rule {
     Prepunc {
         chars: String,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Postpunc {
         chars: String,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Begnum {
         chars: String,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Midnum {
         chars: String,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Endnum {
         chars: String,
         dots: Braille,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Joinnum {
         chars: String,
         dots: BrailleChars,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
 
     Swapcd {
@@ -618,27 +637,27 @@ enum Rule {
     Context {
         test: String,
         action: String,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Pass2 {
         test: String,
         action: String,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Pass3 {
         test: String,
         action: String,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Pass4 {
         test: String,
         action: String,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
     Correct {
         test: String,
         action: String,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
     },
 
     Match {
@@ -646,7 +665,7 @@ enum Rule {
         chars: String,
         post: String,
         dots: Braille,
-        constraints: Option<Constraints>,
+        constraints: Constraints,
         matches: Option<WithMatches>,
     },
     Literal {
@@ -830,20 +849,17 @@ impl<'a> RuleParser<'a> {
         }
     }
 
-    fn constraints(&mut self) -> Option<Constraints> {
-        let mut constraints: Constraints = HashSet::new();
-        if let Some(constraint) = self.nofor() {
-            constraints.insert(constraint);
-        } else if let Some(constraint) = self.noback() {
-            constraints.insert(constraint);
+    fn constraints(&mut self) -> Constraints {
+        let mut constraints = Constraints::default();
+        if let Some(_) = self.nofor() {
+            constraints.direction = Direction::Backward;
+        } else if let Some(_) = self.noback() {
+            constraints.direction = Direction::Forward;
         }
-        if let Some(constraint) = self.nocross() {
-            constraints.insert(constraint);
+        if let Some(_) = self.nocross() {
+            constraints.across_syllable_boundaries = false;
         }
-        if constraints.is_empty() {
-            return None;
-        }
-        Some(constraints)
+        constraints
     }
 
     fn with_class(&mut self) -> Result<Option<WithClass>, ParseError> {
@@ -1229,11 +1245,11 @@ impl<'a> RuleParser<'a> {
             | Opcode::Swapdd
             | Opcode::Literal)
             // make sure constraints are only allowed for some opcodes
-                if constraints.is_some() =>
+                if constraints != Constraints::default() =>
             {
                 return Err(ParseError::InvalidConstraint {
 		    opcode,
-                    constraints: constraints.unwrap(),
+                    constraints: constraints,
                 })
             }
             opcode => opcode,
