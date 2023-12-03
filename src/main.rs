@@ -796,6 +796,18 @@ fn unescape(s: &str) -> Result<String, ParseError> {
     Ok(new)
 }
 
+/// Return an error if there are constraints
+fn fail_if_constraints(constraints: Constraints, opcode: Opcode) -> Result<(), ParseError> {
+    if constraints != Constraints::default() {
+	Err(ParseError::InvalidConstraint {
+            constraints: constraints,
+            opcode,
+        })
+    } else {
+	Ok(())
+    }
+}
+
 // fn dot_to_hex(dot: &BrailleDot) -> u32 {
 //     match dot {
 //         BrailleDot::DOT0 => 0x0000,
@@ -1255,8 +1267,12 @@ impl<'a> RuleParser<'a> {
             opcode => opcode,
         };
         let rule = match opcode {
-            Opcode::Include => Rule::Include {
-                file: self.filename()?,
+            Opcode::Include => {
+                fail_if_constraints(constraints, opcode)?;
+                Rule::Include {
+                    file: self.filename()?,
+                }
+            }
             Opcode::Undefined => Rule::Undefined {
                 dots: self.explicit_dots()?,
             },
