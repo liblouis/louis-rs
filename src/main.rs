@@ -246,7 +246,9 @@ enum Rule {
         dots: BrailleChars,
     },
     Display {
+        character: char,
         dots: BrailleChars,
+        constraints: Constraints,
     },
     Multind {
         dots: BrailleChars,
@@ -267,6 +269,7 @@ enum Rule {
     Digit {
         character: char,
         dots: BrailleChars,
+        constraints: Constraints,
     },
     Grouping {
         name: String,
@@ -296,6 +299,7 @@ enum Rule {
     Litdigit {
         character: char,
         dots: BrailleChars,
+        constraints: Constraints,
     },
     Sign {
         character: char,
@@ -1206,13 +1210,17 @@ impl<'a> RuleParser<'a> {
                     file: self.filename()?,
                 }
             }
-            Opcode::Display => Rule::Display {
-                dots: self.explicit_dots()?,
-            },
             Opcode::Undefined => {
                 fail_if_constraints(constraints, opcode)?;
 		Rule::Undefined {
                     dots: self.explicit_dots()?,
+		}
+	    },
+            Opcode::Display => {
+		Rule::Display {
+                    character: self.one_char()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
 		}
 	    },
             Opcode::Multind => Rule::Multind {
