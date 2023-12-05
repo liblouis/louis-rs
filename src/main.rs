@@ -577,7 +577,7 @@ enum Rule {
     },
     Partword {
         chars: String,
-        dots: BrailleChars,
+        dots: Braille,
         constraints: Constraints,
     },
     Exactdots {
@@ -1645,7 +1645,7 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Partword => Rule::Partword {
                 chars: self.chars()?,
-                dots: self.explicit_dots()?,
+                dots: self.dots()?,
                 constraints,
             },
             Opcode::Exactdots => {
