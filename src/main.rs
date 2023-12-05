@@ -24,18 +24,21 @@ enum Constraint {
 enum Direction {
     Forward,
     Backward,
-    Both
+    Both,
 }
 
 #[derive(PartialEq, Debug)]
 struct Constraints {
     across_syllable_boundaries: bool,
-    direction: Direction
+    direction: Direction,
 }
 
 impl Default for Constraints {
     fn default() -> Self {
-	Self { across_syllable_boundaries: true, direction: Direction::Both }
+        Self {
+            across_syllable_boundaries: true,
+            direction: Direction::Both,
+        }
     }
 }
 
@@ -803,12 +806,12 @@ fn unescape(s: &str) -> Result<String, ParseError> {
 /// Return an error if there are constraints
 fn fail_if_constraints(constraints: Constraints, opcode: Opcode) -> Result<(), ParseError> {
     if constraints != Constraints::default() {
-	Err(ParseError::InvalidConstraint {
+        Err(ParseError::InvalidConstraint {
             constraints: constraints,
             opcode,
         })
     } else {
-	Ok(())
+        Ok(())
     }
 }
 
@@ -1202,7 +1205,7 @@ impl<'a> RuleParser<'a> {
         let constraints = self.constraints();
         let _classes = self.with_classes();
         let matches = self.with_matches();
-	let opcode = self.opcode()?;
+        let opcode = self.opcode()?;
         let rule = match opcode {
             Opcode::Include => {
                 fail_if_constraints(constraints, opcode)?;
@@ -1212,17 +1215,15 @@ impl<'a> RuleParser<'a> {
             }
             Opcode::Undefined => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Undefined {
+                Rule::Undefined {
                     dots: self.explicit_dots()?,
-		}
-	    },
-            Opcode::Display => {
-		Rule::Display {
-                    character: self.one_char()?,
-                    dots: self.explicit_dots()?,
-                    constraints,
-		}
-	    },
+                }
+            }
+            Opcode::Display => Rule::Display {
+                character: self.one_char()?,
+                dots: self.explicit_dots()?,
+                constraints,
+            },
             Opcode::Multind => Rule::Multind {
                 dots: self.explicit_dots()?,
                 names: self.many_names()?,
@@ -1239,18 +1240,16 @@ impl<'a> RuleParser<'a> {
                 dots: self.explicit_dots()?,
                 constraints,
             },
+            Opcode::Digit => Rule::Digit {
+                character: self.one_char()?,
+                dots: self.explicit_dots()?,
+                constraints,
+            },
             Opcode::Grouping => Rule::Grouping {
                 name: self.name()?,
                 chars: self.chars()?,
                 dots: self.explicit_dots()?,
             },
-            Opcode::Digit => {
-		Rule::Digit {
-                    character: self.one_char()?,
-                    dots: self.explicit_dots()?,
-		    constraints,
-		}
-	    },
             Opcode::Letter => Rule::Letter {
                 chars: self.chars()?,
                 dots: self.dots()?,
@@ -1258,12 +1257,12 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Base => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Base {
+                Rule::Base {
                     name: self.name()?,
                     from: self.one_char()?,
                     to: self.one_char()?,
-		}
-	    },
+                }
+            }
             Opcode::Lowercase => Rule::Lowercase {
                 character: self.one_char()?,
                 dots: self.explicit_dots()?,
@@ -1274,13 +1273,11 @@ impl<'a> RuleParser<'a> {
                 dots: self.explicit_dots()?,
                 constraints,
             },
-            Opcode::Litdigit => {
-		Rule::Litdigit {
-                    character: self.one_char()?,
-                    dots: self.explicit_dots()?,
-		    constraints,
-		}
-	    },
+            Opcode::Litdigit => Rule::Litdigit {
+                character: self.one_char()?,
+                dots: self.explicit_dots()?,
+                constraints,
+            },
             Opcode::Sign => Rule::Sign {
                 character: self.one_char()?,
                 dots: self.explicit_dots()?,
@@ -1316,145 +1313,167 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Capsmodechars => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Capsmodechars {
+                Rule::Capsmodechars {
                     chars: self.chars()?,
-		}
-	    },
+                }
+            }
             Opcode::Begcaps => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Begcaps {
+                Rule::Begcaps {
                     dots: self.explicit_dots()?,
-		}
-	    },
+                }
+            }
             Opcode::Endcaps => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Endcaps {
+                Rule::Endcaps {
                     dots: self.explicit_dots()?,
-		}
-	    },
+                }
+            }
             Opcode::Begcapsphrase => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Begcapsphrase {
+                Rule::Begcapsphrase {
                     dots: self.explicit_dots()?,
-		}
-	    },
+                }
+            }
             Opcode::Endcapsphrase => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Endcapsphrase {
-                position: self.position()?,
-                dots: self.explicit_dots()?,
-            }},
+                Rule::Endcapsphrase {
+                    position: self.position()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
             Opcode::Lencapsphrase => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Lencapsphrase {
-                number: self.number()?,
-            }},
+                Rule::Lencapsphrase {
+                    number: self.number()?,
+                }
+            }
             Opcode::Letsign => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Letsign {
-                dots: self.explicit_dots()?,
-            }},
+                Rule::Letsign {
+                    dots: self.explicit_dots()?,
+                }
+            }
             Opcode::Noletsign => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Noletsign {
-                chars: self.chars()?,
-            }},
+                Rule::Noletsign {
+                    chars: self.chars()?,
+                }
+            }
             Opcode::Noletsignbefore => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Noletsignbefore {
-                chars: self.chars()?,
-            }},
+                Rule::Noletsignbefore {
+                    chars: self.chars()?,
+                }
+            }
             Opcode::Noletsignafter => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Noletsignafter {
-                chars: self.chars()?,
-            }},
+                Rule::Noletsignafter {
+                    chars: self.chars()?,
+                }
+            }
             Opcode::Nocontractsign => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Nocontractsign {
-                dots: self.explicit_dots()?,
-            }},
+                Rule::Nocontractsign {
+                    dots: self.explicit_dots()?,
+                }
+            }
             Opcode::Numsign => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Numsign {
-                dots: self.explicit_dots()?,
-            }},
+                Rule::Numsign {
+                    dots: self.explicit_dots()?,
+                }
+            }
             Opcode::Nonumsign => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Nonumsign {
-                dots: self.explicit_dots()?,
-            }},
+                Rule::Nonumsign {
+                    dots: self.explicit_dots()?,
+                }
+            }
             Opcode::Numericnocontchars => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Numericnocontchars {
-                chars: self.chars()?,
-            }},
+                Rule::Numericnocontchars {
+                    chars: self.chars()?,
+                }
+            }
             Opcode::Numericmodechars => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Numericmodechars {
-                chars: self.chars()?,
-            }},
+                Rule::Numericmodechars {
+                    chars: self.chars()?,
+                }
+            }
             Opcode::Midendnumericmodechars => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Midendnumericmodechars {
-                chars: self.chars()?,
-            }},
+                Rule::Midendnumericmodechars {
+                    chars: self.chars()?,
+                }
+            }
 
             Opcode::Begmodephrase => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Begmodephrase {
-                name: self.name()?,
-                dots: self.explicit_dots()?,
-            }},
+                Rule::Begmodephrase {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
             Opcode::Endmodephrase => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Endmodephrase {
-                name: self.name()?,
-                position: self.position()?,
-                dots: self.explicit_dots()?,
-            }},
+                Rule::Endmodephrase {
+                    name: self.name()?,
+                    position: self.position()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
             Opcode::Lenmodephrase => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Lenmodephrase {
-                name: self.name()?,
-                number: self.number()?,
-            }},
+                Rule::Lenmodephrase {
+                    name: self.name()?,
+                    number: self.number()?,
+                }
+            }
 
             Opcode::Seqdelimiter => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Seqdelimiter {
-                chars: self.chars()?,
-            }},
+                Rule::Seqdelimiter {
+                    chars: self.chars()?,
+                }
+            }
             Opcode::Seqbeforechars => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Seqbeforechars {
-                chars: self.chars()?,
-            }},
+                Rule::Seqbeforechars {
+                    chars: self.chars()?,
+                }
+            }
             Opcode::Seqafterchars => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Seqafterchars {
-                chars: self.chars()?,
-            }},
+                Rule::Seqafterchars {
+                    chars: self.chars()?,
+                }
+            }
             Opcode::Seqafterpattern => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Seqafterpattern {
-                chars: self.chars()?,
-            }},
+                Rule::Seqafterpattern {
+                    chars: self.chars()?,
+                }
+            }
             Opcode::Seqafterexpression => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Seqafterexpression {
-                chars: self.chars()?,
-            }},
+                Rule::Seqafterexpression {
+                    chars: self.chars()?,
+                }
+            }
 
             Opcode::Class => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Class {
-                name: self.name()?,
-                chars: self.chars()?,
-            }},
+                Rule::Class {
+                    name: self.name()?,
+                    chars: self.chars()?,
+                }
+            }
             Opcode::Emphclass => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Emphclass { name: self.name()? }},
+                Rule::Emphclass { name: self.name()? }
+            }
             Opcode::Begemph => Rule::Begemph {
                 name: self.name()?,
                 dots: self.explicit_dots()?,
@@ -1467,53 +1486,61 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Noemphchars => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Noemphchars {
-                name: self.name()?,
-                chars: self.chars()?,
-            }},
+                Rule::Noemphchars {
+                    name: self.name()?,
+                    chars: self.chars()?,
+                }
+            }
             Opcode::Emphletter => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Emphletter {
-                name: self.name()?,
-                dots: self.explicit_dots()?,
-            }},
+                Rule::Emphletter {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
             Opcode::Begemphword => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Begemphword {
-                name: self.name()?,
-                dots: self.explicit_dots()?,
-            }},
+                Rule::Begemphword {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
             Opcode::Endemphword => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Endemphword {
-                name: self.name()?,
-                dots: self.explicit_dots()?,
-            }},
+                Rule::Endemphword {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
             Opcode::Emphmodechars => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Emphmodechars {
-                name: self.name()?,
-                chars: self.chars()?,
-            }},
+                Rule::Emphmodechars {
+                    name: self.name()?,
+                    chars: self.chars()?,
+                }
+            }
             Opcode::Begemphphrase => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Begemphphrase {
-                name: self.name()?,
-                dots: self.explicit_dots()?,
-            }},
+                Rule::Begemphphrase {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
             Opcode::Endemphphrase => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Endemphphrase {
-                name: self.name()?,
-                position: self.position()?,
-                dots: self.explicit_dots()?,
-            }},
+                Rule::Endemphphrase {
+                    name: self.name()?,
+                    position: self.position()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
             Opcode::Lenemphphrase => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Lenemphphrase {
-                name: self.name()?,
-                number: self.number()?,
-            }},
+                Rule::Lenemphphrase {
+                    name: self.name()?,
+                    number: self.number()?,
+                }
+            }
 
             Opcode::Begcomp => Rule::Begcomp {
                 dots: self.explicit_dots()?,
@@ -1526,10 +1553,11 @@ impl<'a> RuleParser<'a> {
 
             Opcode::Decpoint => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Decpoint {
-                chars: self.chars()?,
-                dots: self.explicit_dots()?,
-            }},
+                Rule::Decpoint {
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
             Opcode::Hyphen => Rule::Hyphen {
                 chars: self.chars()?,
                 dots: self.explicit_dots()?,
@@ -1538,7 +1566,8 @@ impl<'a> RuleParser<'a> {
 
             Opcode::Capsnocont => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Capsnocont {}},
+                Rule::Capsnocont {}
+            }
 
             Opcode::Compbrl => Rule::Compbrl {
                 chars: self.chars()?,
@@ -1546,21 +1575,24 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Comp6 => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Comp6 {
-                chars: self.chars()?,
-                dots: self.dots()?,
-            }},
+                Rule::Comp6 {
+                    chars: self.chars()?,
+                    dots: self.dots()?,
+                }
+            }
             Opcode::Nocont => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Nocont {
-                chars: self.chars()?,
-            }},
+                Rule::Nocont {
+                    chars: self.chars()?,
+                }
+            }
             Opcode::Replace => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Replace {
-                chars: self.chars()?,
-                replacement: self.maybe_chars(),
-            }},
+                Rule::Replace {
+                    chars: self.chars()?,
+                    replacement: self.maybe_chars(),
+                }
+            }
             Opcode::Always => Rule::Always {
                 chars: self.chars()?,
                 dots: self.dots()?,
@@ -1573,22 +1605,25 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Repword => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Repword {
-                chars: self.chars()?,
-                dots: self.explicit_dots()?,
-            }},
+                Rule::Repword {
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
             Opcode::Rependword => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Rependword {
-                chars: self.chars()?,
-                dots: self.explicit_dots()?,
-            }},
+                Rule::Rependword {
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
             Opcode::Largesign => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Largesign {
-                chars: self.chars()?,
-                dots: self.explicit_dots()?,
-            }},
+                Rule::Largesign {
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
             Opcode::Word => Rule::Word {
                 chars: self.chars()?,
                 dots: self.dots()?,
@@ -1596,16 +1631,18 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Syllable => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Syllable {
-                chars: self.chars()?,
-                dots: self.dots()?,
-            }},
+                Rule::Syllable {
+                    chars: self.chars()?,
+                    dots: self.dots()?,
+                }
+            }
             Opcode::Joinword => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Joinword {
-                chars: self.chars()?,
-                dots: self.explicit_dots()?,
-            }},
+                Rule::Joinword {
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
             Opcode::Lowword => Rule::Lowword {
                 chars: self.chars()?,
                 dots: self.explicit_dots()?,
@@ -1613,9 +1650,10 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Contraction => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Contraction {
-                chars: self.chars()?,
-            }},
+                Rule::Contraction {
+                    chars: self.chars()?,
+                }
+            }
             Opcode::Sufword => Rule::Sufword {
                 chars: self.chars()?,
                 dots: self.dots()?,
@@ -1658,9 +1696,10 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Exactdots => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Exactdots {
-                chars: self.chars()?,
-            }},
+                Rule::Exactdots {
+                    chars: self.chars()?,
+                }
+            }
             Opcode::Prepunc => Rule::Prepunc {
                 chars: self.chars()?,
                 dots: self.explicit_dots()?,
@@ -1694,32 +1733,36 @@ impl<'a> RuleParser<'a> {
 
             Opcode::Attribute => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Attribute {
-                name: self.name()?,
-                chars: self.chars()?,
-            }},
+                Rule::Attribute {
+                    name: self.name()?,
+                    chars: self.chars()?,
+                }
+            }
 
             Opcode::Swapcd => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Swapcd {
-                name: self.name()?,
-                chars: self.chars()?,
-                dots: self.many_dots()?,
-            }},
+                Rule::Swapcd {
+                    name: self.name()?,
+                    chars: self.chars()?,
+                    dots: self.many_dots()?,
+                }
+            }
             Opcode::Swapdd => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Swapdd {
-                name: self.name()?,
-                dots: self.many_dots()?,
-                replacement: self.many_dots()?,
-            }},
+                Rule::Swapdd {
+                    name: self.name()?,
+                    dots: self.many_dots()?,
+                    replacement: self.many_dots()?,
+                }
+            }
             Opcode::Swapcc => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Swapcc {
-                name: self.name()?,
-                chars: self.chars()?,
-                replacement: self.chars()?,
-            }},
+                Rule::Swapcc {
+                    name: self.name()?,
+                    chars: self.chars()?,
+                    replacement: self.chars()?,
+                }
+            }
 
             Opcode::Context => Rule::Context {
                 test: self.multi_test()?,
@@ -1757,9 +1800,10 @@ impl<'a> RuleParser<'a> {
             },
             Opcode::Literal => {
                 fail_if_constraints(constraints, opcode)?;
-		Rule::Literal {
-                chars: self.chars()?,
-            }},
+                Rule::Literal {
+                    chars: self.chars()?,
+                }
+            }
         };
         Ok(rule)
     }
