@@ -69,6 +69,8 @@ enum ParseError {
     InvalidBraille { character: char },
     #[error("Braille expected")]
     DotsExpected,
+    #[error("Comma separated tuple of Braille expected")]
+    DotsTupleExpected,
     #[error("invalid unicode literal {found:?}")]
     InvalidUnicodeLiteral { found: Option<String> },
     #[error("invalid digit")]
@@ -521,6 +523,7 @@ enum Rule {
     Rependword {
         chars: String,
         dots: BrailleChars,
+        other: BrailleChars,
     },
     Largesign {
         chars: String,
@@ -1612,9 +1615,18 @@ impl<'a> RuleParser<'a> {
             }
             Opcode::Rependword => {
                 fail_if_constraints(constraints, opcode)?;
+		let chars = self.chars()?;
+		let many_dots = self.many_dots()?;
+		if many_dots.len() != 2 {
+		    return Err(ParseError::DotsTupleExpected)
+		}
+		let mut iterator = many_dots.into_iter();
+		let dots = iterator.next().unwrap();
+		let other = iterator.next().unwrap();
                 Rule::Rependword {
-                    chars: self.chars()?,
-                    dots: self.explicit_dots()?,
+                    chars,
+                    dots,
+		    other,
                 }
             }
             Opcode::Largesign => {
