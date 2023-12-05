@@ -807,7 +807,7 @@ fn unescape(s: &str) -> Result<String, ParseError> {
 fn fail_if_constraints(constraints: Constraints, opcode: Opcode) -> Result<(), ParseError> {
     if constraints != Constraints::default() {
         Err(ParseError::InvalidConstraint {
-            constraints: constraints,
+            constraints,
             opcode,
         })
     } else {
@@ -870,12 +870,12 @@ impl<'a> RuleParser<'a> {
 
     fn constraints(&mut self) -> Constraints {
         let mut constraints = Constraints::default();
-        if let Some(_) = self.nofor() {
+        if self.nofor().is_some() {
             constraints.direction = Direction::Backward;
-        } else if let Some(_) = self.noback() {
+        } else if self.noback().is_some() {
             constraints.direction = Direction::Forward;
         }
-        if let Some(_) = self.nocross() {
+        if self.nocross().is_some() {
             constraints.across_syllable_boundaries = false;
         }
         constraints
