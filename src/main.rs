@@ -20,10 +20,11 @@ enum Constraint {
 
 // type Constraints = HashSet<Constraint>;
 
-#[derive(PartialEq, Debug)]
+#[derive(Default, PartialEq, Debug)]
 enum Direction {
     Forward,
     Backward,
+    #[default]
     Both,
 }
 
@@ -79,11 +80,13 @@ enum ParseError {
     InvalidNumber(#[from] ParseIntError),
     #[error("invalid escape sequence")]
     InvalidEscape,
-    #[error("Constraints {constraints:?} not allowed for opcode {opcode:?}")]
-    InvalidConstraint {
-        constraints: Constraints,
+    #[error("Direction {direction:?} not allowed for opcode {opcode:?}")]
+    InvalidDirection {
+        direction: Direction,
         opcode: Opcode,
     },
+    #[error("Nocross not allowed for opcode {opcode:?}")]
+    InvalidNocross { opcode: Opcode },
     #[error("Expected classname, got {found:?}")]
     ClassNameExpected { found: Option<String> },
     #[error("Opcode expected, got {found:?}")]
@@ -253,28 +256,28 @@ enum Rule {
     Display {
         character: char,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Multind {
         dots: BrailleChars,
         names: Vec<String>,
-        constraints: Constraints,
+        direction: Direction,
     },
 
     Space {
         chars: String,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Punctuation {
         chars: String,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Digit {
         character: char,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Grouping {
         name: String,
@@ -284,7 +287,7 @@ enum Rule {
     Letter {
         chars: String,
         dots: Braille,
-        constraints: Constraints,
+        direction: Direction,
     },
     Base {
         name: String,
@@ -294,50 +297,50 @@ enum Rule {
     Lowercase {
         character: char,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Uppercase {
         character: char,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Litdigit {
         character: char,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Sign {
         character: char,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Math {
         character: char,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
 
     Modeletter {
         name: String,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Capsletter {
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Begmodeword {
         name: String,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Begcapsword {
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Endcapsword {
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Capsmodechars {
         chars: String,
@@ -429,12 +432,12 @@ enum Rule {
     Begemph {
         name: String,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Endemph {
         name: String,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Noemphchars {
         name: String,
@@ -472,11 +475,11 @@ enum Rule {
 
     Begcomp {
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Endcomp {
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
 
     Decpoint {
@@ -486,14 +489,14 @@ enum Rule {
     Hyphen {
         chars: String,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
 
     Capsnocont {},
 
     Compbrl {
         chars: String,
-        constraints: Constraints,
+        direction: Direction,
     },
     Comp6 {
         chars: String,
@@ -509,12 +512,13 @@ enum Rule {
     Always {
         chars: String,
         dots: Braille,
-        constraints: Constraints,
+        direction: Direction,
+        nocross: bool,
     },
     Repeated {
         chars: String,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Repword {
         chars: String,
@@ -532,7 +536,7 @@ enum Rule {
     Word {
         chars: String,
         dots: Braille,
-        constraints: Constraints,
+        direction: Direction,
     },
     Syllable {
         chars: String,
@@ -545,7 +549,7 @@ enum Rule {
     Lowword {
         chars: String,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Contraction {
         chars: String,
@@ -553,42 +557,50 @@ enum Rule {
     Sufword {
         chars: String,
         dots: Braille,
-        constraints: Constraints,
+        direction: Direction,
+        nocross: bool,
     },
     Prfword {
         chars: String,
         dots: Braille,
-        constraints: Constraints,
+        direction: Direction,
+        nocross: bool,
     },
     Begword {
         chars: String,
         dots: Braille,
-        constraints: Constraints,
+        direction: Direction,
+        nocross: bool,
     },
     Begmidword {
         chars: String,
         dots: Braille,
-        constraints: Constraints,
+        direction: Direction,
+        nocross: bool,
     },
     Midword {
         chars: String,
         dots: Braille,
-        constraints: Constraints,
+        direction: Direction,
+        nocross: bool,
     },
     Midendword {
         chars: String,
         dots: Braille,
-        constraints: Constraints,
+        direction: Direction,
+        nocross: bool,
     },
     Endword {
         chars: String,
         dots: Braille,
-        constraints: Constraints,
+        direction: Direction,
+        nocross: bool,
     },
     Partword {
         chars: String,
         dots: Braille,
-        constraints: Constraints,
+        direction: Direction,
+        nocross: bool,
     },
     Exactdots {
         chars: String,
@@ -596,32 +608,32 @@ enum Rule {
     Prepunc {
         chars: String,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Postpunc {
         chars: String,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Begnum {
         chars: String,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Midnum {
         chars: String,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
     Endnum {
         chars: String,
         dots: Braille,
-        constraints: Constraints,
+        direction: Direction,
     },
     Joinnum {
         chars: String,
         dots: BrailleChars,
-        constraints: Constraints,
+        direction: Direction,
     },
 
     Swapcd {
@@ -647,27 +659,27 @@ enum Rule {
     Context {
         test: String,
         action: String,
-        constraints: Constraints,
+        direction: Direction,
     },
     Pass2 {
         test: String,
         action: String,
-        constraints: Constraints,
+        direction: Direction,
     },
     Pass3 {
         test: String,
         action: String,
-        constraints: Constraints,
+        direction: Direction,
     },
     Pass4 {
         test: String,
         action: String,
-        constraints: Constraints,
+        direction: Direction,
     },
     Correct {
         test: String,
         action: String,
-        constraints: Constraints,
+        direction: Direction,
     },
 
     Match {
@@ -675,7 +687,7 @@ enum Rule {
         chars: String,
         post: String,
         dots: Braille,
-        constraints: Constraints,
+        direction: Direction,
         matches: Option<WithMatches>,
     },
     Literal {
@@ -806,13 +818,25 @@ fn unescape(s: &str) -> Result<String, ParseError> {
     Ok(new)
 }
 
-/// Return an error if there are constraints
-fn fail_if_constraints(constraints: Constraints, opcode: Opcode) -> Result<(), ParseError> {
-    if constraints != Constraints::default() {
-        Err(ParseError::InvalidConstraint {
-            constraints,
-            opcode,
-        })
+/// Return an error if a direction or nocross have been specified
+fn fail_if_direction_or_nocross(
+    direction: Direction,
+    nocross: bool,
+    opcode: Opcode,
+) -> Result<(), ParseError> {
+    if direction != Direction::default() {
+        Err(ParseError::InvalidDirection { direction, opcode })
+    } else if nocross {
+        Err(ParseError::InvalidNocross { opcode })
+    } else {
+        Ok(())
+    }
+}
+
+/// Return an error if nocross has been specified
+fn fail_if_nocross(nocross: bool, opcode: Opcode) -> Result<(), ParseError> {
+    if nocross {
+        Err(ParseError::InvalidNocross { opcode })
     } else {
         Ok(())
     }
@@ -871,17 +895,18 @@ impl<'a> RuleParser<'a> {
         }
     }
 
-    fn constraints(&mut self) -> Constraints {
-        let mut constraints = Constraints::default();
+    fn direction(&mut self) -> Direction {
         if self.nofor().is_some() {
-            constraints.direction = Direction::Backward;
+            Direction::Backward
         } else if self.noback().is_some() {
-            constraints.direction = Direction::Forward;
+            Direction::Forward
+        } else {
+            Direction::Both
         }
-        if self.nocross().is_some() {
-            constraints.across_syllable_boundaries = false;
-        }
-        constraints
+    }
+
+    fn across_syllable_boundaries(&mut self) -> bool {
+        self.nocross().is_some()
     }
 
     fn with_class(&mut self) -> Result<Option<WithClass>, ParseError> {
@@ -1205,222 +1230,273 @@ impl<'a> RuleParser<'a> {
     }
 
     fn rule(&mut self) -> Result<Rule, ParseError> {
-        let constraints = self.constraints();
+        let direction = self.direction();
+        let nocross = self.across_syllable_boundaries();
         let _classes = self.with_classes();
         let matches = self.with_matches();
         let opcode = self.opcode()?;
         let rule = match opcode {
             Opcode::Include => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Include {
                     file: self.filename()?,
                 }
             }
             Opcode::Undefined => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Undefined {
                     dots: self.explicit_dots()?,
                 }
             }
-            Opcode::Display => Rule::Display {
-                character: self.one_char()?,
-                dots: self.explicit_dots()?,
-                constraints,
-            },
-            Opcode::Multind => Rule::Multind {
-                dots: self.explicit_dots()?,
-                names: self.many_names()?,
-                constraints,
-            },
-
-            Opcode::Space => Rule::Space {
-                chars: self.chars()?,
-                dots: self.explicit_dots()?,
-                constraints,
-            },
-            Opcode::Punctuation => Rule::Punctuation {
-                chars: self.chars()?,
-                dots: self.explicit_dots()?,
-                constraints,
-            },
-            Opcode::Digit => Rule::Digit {
-                character: self.one_char()?,
-                dots: self.explicit_dots()?,
-                constraints,
-            },
-            Opcode::Grouping => Rule::Grouping {
-                name: self.name()?,
-                chars: self.chars()?,
-                dots: self.explicit_dots()?,
-            },
-            Opcode::Letter => Rule::Letter {
-                chars: self.chars()?,
-                dots: self.dots()?,
-                constraints,
-            },
+            Opcode::Display => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Display {
+                    character: self.one_char()?,
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
+            Opcode::Multind => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Multind {
+                    dots: self.explicit_dots()?,
+                    names: self.many_names()?,
+                    direction,
+                }
+            }
+            Opcode::Space => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Space {
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
+            Opcode::Punctuation => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Punctuation {
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
+            Opcode::Digit => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Digit {
+                    character: self.one_char()?,
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
+            Opcode::Grouping => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Grouping {
+                    name: self.name()?,
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Letter => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Letter {
+                    chars: self.chars()?,
+                    dots: self.dots()?,
+                    direction,
+                }
+            }
             Opcode::Base => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Base {
                     name: self.name()?,
                     from: self.one_char()?,
                     to: self.one_char()?,
                 }
             }
-            Opcode::Lowercase => Rule::Lowercase {
-                character: self.one_char()?,
-                dots: self.explicit_dots()?,
-                constraints,
-            },
-            Opcode::Uppercase => Rule::Uppercase {
-                character: self.one_char()?,
-                dots: self.explicit_dots()?,
-                constraints,
-            },
-            Opcode::Litdigit => Rule::Litdigit {
-                character: self.one_char()?,
-                dots: self.explicit_dots()?,
-                constraints,
-            },
-            Opcode::Sign => Rule::Sign {
-                character: self.one_char()?,
-                dots: self.explicit_dots()?,
-                constraints,
-            },
-            Opcode::Math => Rule::Math {
-                character: self.one_char()?,
-                dots: self.explicit_dots()?,
-                constraints,
-            },
+            Opcode::Lowercase => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Lowercase {
+                    character: self.one_char()?,
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
+            Opcode::Uppercase => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Uppercase {
+                    character: self.one_char()?,
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
+            Opcode::Litdigit => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Litdigit {
+                    character: self.one_char()?,
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
+            Opcode::Sign => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Sign {
+                    character: self.one_char()?,
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
+            Opcode::Math => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Math {
+                    character: self.one_char()?,
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
 
-            Opcode::Modeletter => Rule::Modeletter {
-                name: self.name()?,
-                dots: self.explicit_dots()?,
-                constraints,
-            },
-            Opcode::Capsletter => Rule::Capsletter {
-                dots: self.explicit_dots()?,
-                constraints,
-            },
-            Opcode::Begmodeword => Rule::Begmodeword {
-                name: self.name()?,
-                dots: self.explicit_dots()?,
-                constraints,
-            },
-            Opcode::Begcapsword => Rule::Begcapsword {
-                dots: self.explicit_dots()?,
-                constraints,
-            },
-            Opcode::Endcapsword => Rule::Endcapsword {
-                dots: self.explicit_dots()?,
-                constraints,
-            },
+            Opcode::Modeletter => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Modeletter {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
+            Opcode::Capsletter => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Capsletter {
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
+            Opcode::Begmodeword => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Begmodeword {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
+            Opcode::Begcapsword => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Begcapsword {
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
+            Opcode::Endcapsword => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Endcapsword {
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
             Opcode::Capsmodechars => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Capsmodechars {
                     chars: self.chars()?,
                 }
             }
             Opcode::Begcaps => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Begcaps {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Endcaps => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Endcaps {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Begcapsphrase => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Begcapsphrase {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Endcapsphrase => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Endcapsphrase {
                     position: self.position()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Lencapsphrase => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Lencapsphrase {
                     number: self.number()?,
                 }
             }
             Opcode::Letsign => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Letsign {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Noletsign => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Noletsign {
                     chars: self.chars()?,
                 }
             }
             Opcode::Noletsignbefore => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Noletsignbefore {
                     chars: self.chars()?,
                 }
             }
             Opcode::Noletsignafter => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Noletsignafter {
                     chars: self.chars()?,
                 }
             }
             Opcode::Nocontractsign => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Nocontractsign {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Numsign => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Numsign {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Nonumsign => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Nonumsign {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Numericnocontchars => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Numericnocontchars {
                     chars: self.chars()?,
                 }
             }
             Opcode::Numericmodechars => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Numericmodechars {
                     chars: self.chars()?,
                 }
             }
             Opcode::Midendnumericmodechars => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Midendnumericmodechars {
                     chars: self.chars()?,
                 }
             }
 
             Opcode::Begmodephrase => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Begmodephrase {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Endmodephrase => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Endmodephrase {
                     name: self.name()?,
                     position: self.position()?,
@@ -1428,7 +1504,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Lenmodephrase => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Lenmodephrase {
                     name: self.name()?,
                     number: self.number()?,
@@ -1436,101 +1512,107 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Seqdelimiter => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Seqdelimiter {
                     chars: self.chars()?,
                 }
             }
             Opcode::Seqbeforechars => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Seqbeforechars {
                     chars: self.chars()?,
                 }
             }
             Opcode::Seqafterchars => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Seqafterchars {
                     chars: self.chars()?,
                 }
             }
             Opcode::Seqafterpattern => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Seqafterpattern {
                     chars: self.chars()?,
                 }
             }
             Opcode::Seqafterexpression => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Seqafterexpression {
                     chars: self.chars()?,
                 }
             }
 
             Opcode::Class => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Class {
                     name: self.name()?,
                     chars: self.chars()?,
                 }
             }
             Opcode::Emphclass => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Emphclass { name: self.name()? }
             }
-            Opcode::Begemph => Rule::Begemph {
-                name: self.name()?,
-                dots: self.explicit_dots()?,
-                constraints,
-            },
-            Opcode::Endemph => Rule::Endemph {
-                name: self.name()?,
-                dots: self.explicit_dots()?,
-                constraints,
-            },
+            Opcode::Begemph => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Begemph {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
+            Opcode::Endemph => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Endemph {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
             Opcode::Noemphchars => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Noemphchars {
                     name: self.name()?,
                     chars: self.chars()?,
                 }
             }
             Opcode::Emphletter => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Emphletter {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Begemphword => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Begemphword {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Endemphword => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Endemphword {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Emphmodechars => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Emphmodechars {
                     name: self.name()?,
                     chars: self.chars()?,
                 }
             }
             Opcode::Begemphphrase => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Begemphphrase {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Endemphphrase => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Endemphphrase {
                     name: self.name()?,
                     position: self.position()?,
@@ -1538,59 +1620,71 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Lenemphphrase => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Lenemphphrase {
                     name: self.name()?,
                     number: self.number()?,
                 }
             }
 
-            Opcode::Begcomp => Rule::Begcomp {
-                dots: self.explicit_dots()?,
-                constraints,
-            },
-            Opcode::Endcomp => Rule::Endcomp {
-                dots: self.explicit_dots()?,
-                constraints,
-            },
+            Opcode::Begcomp => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Begcomp {
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
+            Opcode::Endcomp => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Endcomp {
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
 
             Opcode::Decpoint => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Decpoint {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
                 }
             }
-            Opcode::Hyphen => Rule::Hyphen {
-                chars: self.chars()?,
-                dots: self.explicit_dots()?,
-                constraints,
-            },
+            Opcode::Hyphen => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Hyphen {
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
 
             Opcode::Capsnocont => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Capsnocont {}
             }
 
-            Opcode::Compbrl => Rule::Compbrl {
-                chars: self.chars()?,
-                constraints,
-            },
+            Opcode::Compbrl => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Compbrl {
+                    chars: self.chars()?,
+                    direction,
+                }
+            }
             Opcode::Comp6 => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Comp6 {
                     chars: self.chars()?,
                     dots: self.dots()?,
                 }
             }
             Opcode::Nocont => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Nocont {
                     chars: self.chars()?,
                 }
             }
             Opcode::Replace => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Replace {
                     chars: self.chars()?,
                     replacement: self.maybe_chars(),
@@ -1599,69 +1693,75 @@ impl<'a> RuleParser<'a> {
             Opcode::Always => Rule::Always {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                constraints,
+                direction,
+                nocross,
             },
-            Opcode::Repeated => Rule::Repeated {
-                chars: self.chars()?,
-                dots: self.explicit_dots()?,
-                constraints,
-            },
+            Opcode::Repeated => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Repeated {
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
             Opcode::Repword => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Repword {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Rependword => {
-                fail_if_constraints(constraints, opcode)?;
-		let chars = self.chars()?;
-		let many_dots = self.many_dots()?;
-		if many_dots.len() != 2 {
-		    return Err(ParseError::DotsTupleExpected)
-		}
-		let mut iterator = many_dots.into_iter();
-		let dots = iterator.next().unwrap();
-		let other = iterator.next().unwrap();
-                Rule::Rependword {
-                    chars,
-                    dots,
-		    other,
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
+                let chars = self.chars()?;
+                let many_dots = self.many_dots()?;
+                if many_dots.len() != 2 {
+                    return Err(ParseError::DotsTupleExpected);
                 }
+                let mut iterator = many_dots.into_iter();
+                let dots = iterator.next().unwrap();
+                let other = iterator.next().unwrap();
+                Rule::Rependword { chars, dots, other }
             }
             Opcode::Largesign => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Largesign {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
                 }
             }
-            Opcode::Word => Rule::Word {
-                chars: self.chars()?,
-                dots: self.dots()?,
-                constraints,
-            },
+            Opcode::Word => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Word {
+                    chars: self.chars()?,
+                    dots: self.dots()?,
+                    direction,
+                }
+            }
             Opcode::Syllable => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Syllable {
                     chars: self.chars()?,
                     dots: self.dots()?,
                 }
             }
             Opcode::Joinword => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Joinword {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
                 }
             }
-            Opcode::Lowword => Rule::Lowword {
-                chars: self.chars()?,
-                dots: self.explicit_dots()?,
-                constraints,
-            },
+            Opcode::Lowword => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Lowword {
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                    direction,
+                }
+            }
             Opcode::Contraction => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Contraction {
                     chars: self.chars()?,
                 }
@@ -1669,45 +1769,53 @@ impl<'a> RuleParser<'a> {
             Opcode::Sufword => Rule::Sufword {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                constraints,
+                direction,
+                nocross,
             },
             Opcode::Prfword => Rule::Prfword {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                constraints,
+                direction,
+                nocross,
             },
             Opcode::Begword => Rule::Begword {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                constraints,
+                direction,
+                nocross,
             },
             Opcode::Begmidword => Rule::Begmidword {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                constraints,
+                direction,
+                nocross,
             },
             Opcode::Midword => Rule::Midword {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                constraints,
+                direction,
+                nocross,
             },
             Opcode::Midendword => Rule::Midendword {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                constraints,
+                direction,
+                nocross,
             },
             Opcode::Endword => Rule::Endword {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                constraints,
+                direction,
+                nocross,
             },
             Opcode::Partword => Rule::Partword {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                constraints,
+                direction,
+                nocross,
             },
             Opcode::Exactdots => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Exactdots {
                     chars: self.chars()?,
                 }
@@ -1715,36 +1823,36 @@ impl<'a> RuleParser<'a> {
             Opcode::Prepunc => Rule::Prepunc {
                 chars: self.chars()?,
                 dots: self.explicit_dots()?,
-                constraints,
+                direction,
             },
             Opcode::Postpunc => Rule::Postpunc {
                 chars: self.chars()?,
                 dots: self.explicit_dots()?,
-                constraints,
+                direction,
             },
             Opcode::Begnum => Rule::Begnum {
                 chars: self.chars()?,
                 dots: self.explicit_dots()?,
-                constraints,
+                direction,
             },
             Opcode::Midnum => Rule::Midnum {
                 chars: self.chars()?,
                 dots: self.explicit_dots()?,
-                constraints,
+                direction,
             },
             Opcode::Endnum => Rule::Endnum {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                constraints,
+                direction,
             },
             Opcode::Joinnum => Rule::Joinnum {
                 chars: self.chars()?,
                 dots: self.explicit_dots()?,
-                constraints,
+                direction,
             },
 
             Opcode::Attribute => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Attribute {
                     name: self.name()?,
                     chars: self.chars()?,
@@ -1752,7 +1860,7 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Swapcd => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Swapcd {
                     name: self.name()?,
                     chars: self.chars()?,
@@ -1760,7 +1868,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Swapdd => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Swapdd {
                     name: self.name()?,
                     dots: self.many_dots()?,
@@ -1768,7 +1876,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Swapcc => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Swapcc {
                     name: self.name()?,
                     chars: self.chars()?,
@@ -1776,42 +1884,60 @@ impl<'a> RuleParser<'a> {
                 }
             }
 
-            Opcode::Context => Rule::Context {
-                test: self.multi_test()?,
-                action: self.multi_action()?,
-                constraints,
-            },
-            Opcode::Pass2 => Rule::Pass2 {
-                test: self.multi_test()?,
-                action: self.multi_action()?,
-                constraints,
-            },
-            Opcode::Pass3 => Rule::Pass3 {
-                test: self.multi_test()?,
-                action: self.multi_action()?,
-                constraints,
-            },
-            Opcode::Pass4 => Rule::Pass4 {
-                test: self.multi_test()?,
-                action: self.multi_action()?,
-                constraints,
-            },
-            Opcode::Correct => Rule::Correct {
-                test: self.multi_test()?,
-                action: self.multi_action()?,
-                constraints,
-            },
+            Opcode::Context => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Context {
+                    test: self.multi_test()?,
+                    action: self.multi_action()?,
+                    direction,
+                }
+            }
+            Opcode::Pass2 => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Pass2 {
+                    test: self.multi_test()?,
+                    action: self.multi_action()?,
+                    direction,
+                }
+            }
+            Opcode::Pass3 => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Pass3 {
+                    test: self.multi_test()?,
+                    action: self.multi_action()?,
+                    direction,
+                }
+            }
+            Opcode::Pass4 => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Pass4 {
+                    test: self.multi_test()?,
+                    action: self.multi_action()?,
+                    direction,
+                }
+            }
+            Opcode::Correct => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Correct {
+                    test: self.multi_test()?,
+                    action: self.multi_action()?,
+                    direction,
+                }
+            }
 
-            Opcode::Match => Rule::Match {
-                pre: self.match_pre()?,
-                chars: self.chars()?,
-                post: self.match_post()?,
-                dots: self.dots()?,
-                matches,
-                constraints,
-            },
+            Opcode::Match => {
+                fail_if_nocross(nocross, opcode)?;
+                Rule::Match {
+                    pre: self.match_pre()?,
+                    chars: self.chars()?,
+                    post: self.match_post()?,
+                    dots: self.dots()?,
+                    matches,
+                    direction,
+                }
+            }
             Opcode::Literal => {
-                fail_if_constraints(constraints, opcode)?;
+                fail_if_direction_or_nocross(direction, nocross, opcode)?;
                 Rule::Literal {
                     chars: self.chars()?,
                 }
