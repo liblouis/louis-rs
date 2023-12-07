@@ -1156,15 +1156,16 @@ impl<'a> RuleParser<'a> {
     }
 
     fn name(&mut self) -> Result<String, ParseError> {
-        let name = self.tokens
+        let name = self
+            .tokens
             .next()
             .ok_or(ParseError::NameExpected)
             .map(|s| s.to_string())?;
-	if name.chars().all(|c| c.is_ascii_alphanumeric()) {
-	    Ok(name)
-	} else {
-	    Err(ParseError::InvalidName {name})
-	}
+        if name.chars().all(|c| c.is_ascii_alphanumeric()) {
+            Ok(name)
+        } else {
+            Err(ParseError::InvalidName { name })
+        }
     }
 
     fn many_names(&mut self) -> Result<Vec<String>, ParseError> {
