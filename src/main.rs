@@ -111,8 +111,6 @@ enum ParseError {
     MatchPostExpected,
     #[error("Expected a single char, got {found:?}")]
     SingleCharExpected { found: Option<String> },
-    #[error("unknown parser error")]
-    Unparseable,
 }
 
 #[derive(PartialEq, Debug)]
