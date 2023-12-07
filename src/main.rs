@@ -828,10 +828,10 @@ fn braille_chars(chars: &str) -> Result<BrailleChars, ParseError> {
     chars.split('-').map(chars_to_dots).collect()
 }
 
-fn unescape_unicode(chars: &mut Chars) -> Result<char, ParseError> {
+fn unescape_unicode(chars: &mut Chars, len: u8) -> Result<char, ParseError> {
     let mut s = String::new();
 
-    for _ in 0..4 {
+    for _ in 0..len {
         match chars.next() {
             Some(c) => s.push(c),
             _ => return Err(ParseError::InvalidUnicodeLiteral { found: None }),
@@ -865,7 +865,8 @@ fn unescape(s: &str) -> Result<String, ParseError> {
             Some('v') => new.push('\u{000B}'),
             Some('e') => new.push('\u{001B}'),
             Some('\\') => new.push('\\'),
-            Some('x') => new.push(unescape_unicode(&mut iter)?),
+            Some('x') => new.push(unescape_unicode(&mut iter, 4)?),
+            Some('y') => new.push(unescape_unicode(&mut iter, 5)?),
             _ => return Err(ParseError::InvalidEscape),
         };
     }
