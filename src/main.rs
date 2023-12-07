@@ -20,7 +20,7 @@ enum Constraint {
 
 // type Constraints = HashSet<Constraint>;
 
-#[derive(Default, PartialEq, Debug)]
+#[derive(Default, PartialEq, Clone, Debug)]
 enum Direction {
     Forward,
     Backward,
@@ -695,6 +695,60 @@ enum Rule {
     Literal {
         chars: String,
     },
+}
+
+impl Rule {
+    fn direction(&self) -> Direction {
+        match self {
+            Rule::Display { direction, .. }
+            | Rule::Multind { direction, .. }
+            | Rule::Space { direction, .. }
+            | Rule::Punctuation { direction, .. }
+            | Rule::Digit { direction, .. }
+            | Rule::Letter { direction, .. }
+            | Rule::Lowercase { direction, .. }
+            | Rule::Uppercase { direction, .. }
+            | Rule::Litdigit { direction, .. }
+            | Rule::Sign { direction, .. }
+            | Rule::Math { direction, .. }
+            | Rule::Modeletter { direction, .. }
+            | Rule::Capsletter { direction, .. }
+            | Rule::Begmodeword { direction, .. }
+            | Rule::Begcapsword { direction, .. }
+            | Rule::Endcapsword { direction, .. }
+            | Rule::Begemph { direction, .. }
+            | Rule::Endemph { direction, .. }
+            | Rule::Begcomp { direction, .. }
+            | Rule::Endcomp { direction, .. }
+            | Rule::Hyphen { direction, .. }
+            | Rule::Compbrl { direction, .. }
+            | Rule::Always { direction, .. }
+            | Rule::Repeated { direction, .. }
+            | Rule::Word { direction, .. }
+            | Rule::Lowword { direction, .. }
+            | Rule::Sufword { direction, .. }
+            | Rule::Prfword { direction, .. }
+            | Rule::Begword { direction, .. }
+            | Rule::Begmidword { direction, .. }
+            | Rule::Midword { direction, .. }
+            | Rule::Midendword { direction, .. }
+            | Rule::Endword { direction, .. }
+            | Rule::Partword { direction, .. }
+            | Rule::Prepunc { direction, .. }
+            | Rule::Postpunc { direction, .. }
+            | Rule::Begnum { direction, .. }
+            | Rule::Midnum { direction, .. }
+            | Rule::Endnum { direction, .. }
+            | Rule::Joinnum { direction, .. }
+            | Rule::Context { direction, .. }
+            | Rule::Pass2 { direction, .. }
+            | Rule::Pass3 { direction, .. }
+            | Rule::Pass4 { direction, .. }
+            | Rule::Correct { direction, .. }
+            | Rule::Match { direction, .. } => direction.clone(),
+            _ => Direction::Both,
+        }
+    }
 }
 
 #[derive(Hash, PartialEq, Eq, Debug)]
