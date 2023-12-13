@@ -1,11 +1,7 @@
 use std::io::BufRead;
 use std::io::Write;
 use std::process::exit;
-use std::{
-    env,
-    fs::read_to_string,
-    io,
-};
+use std::{env, fs::read_to_string, io};
 
 mod parser;
 use parser::RuleParser;
@@ -63,4 +59,3 @@ fn main() {
         None => repl(),
     }
 }
-
