@@ -68,7 +68,7 @@ impl<'a> TestParser<'a> {
     }
 
     fn ascii_number(&mut self) -> Result<u8, ParseError> {
-	let mut s: Vec<char> = Vec::new();
+	let mut s = String::new();
 	while let Some(c) = self.chars.peek() {
 	    if c.is_ascii_digit() {
 		s.push(self.chars.next().unwrap());
@@ -76,7 +76,6 @@ impl<'a> TestParser<'a> {
 		break;
 	    }
 	}
-	let s: String = s.into_iter().collect();
 	let number = s.parse::<u8>()?;
 	Ok(number)
     }
