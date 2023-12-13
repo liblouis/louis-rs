@@ -29,11 +29,11 @@ enum Attribute {
 
 #[derive(Debug, PartialEq, Eq)]
 enum Operator {
-    EQ,
-    GT,
-    LT,
-    GTEQ,
-    LTEQ,
+    Eq,
+    Gt,
+    Lt,
+    GtEq,
+    LtEq,
 }
 
 
