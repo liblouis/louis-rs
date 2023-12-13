@@ -5,6 +5,8 @@ use std::{
     str::{Chars, SplitWhitespace},
 };
 
+mod multipass;
+
 #[derive(Hash, Eq, PartialEq, Debug)]
 enum Constraint {
     Nofor,
