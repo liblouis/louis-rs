@@ -69,8 +69,7 @@ impl<'a> TestParser<'a> {
 
     fn ascii_number(&mut self) -> Result<u8, ParseError> {
 	let mut s = String::new();
-	while let Some(c) = self.chars.peek() {
-	    if !c.is_ascii_digit() {break;}
+	while let Some(c) = self.chars.peek().filter(|c| c.is_ascii_digit()) {
 	    s.push(self.chars.next().unwrap());
 	}
 	let number = s.parse::<u8>()?;
