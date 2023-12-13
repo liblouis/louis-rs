@@ -3,11 +3,13 @@ use std::{collections::HashSet, iter::Peekable, num::ParseIntError, str::Chars};
 use super::BrailleChars;
 
 #[derive(thiserror::Error, Debug, PartialEq)]
-enum ParseError {
+pub enum ParseError {
     #[error("Expected {expected:?}, got {found:?}")]
     CharExpected { expected: char, found: Option<char> },
     #[error("invalid number")]
     InvalidNumber(#[from] ParseIntError),
+    #[error("Expected a number, a range or a dot")]
+    QuantifierExpected,
     #[error("Unknown error")]
     Unknown,
 }
@@ -47,14 +49,21 @@ enum Operator {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+enum Quantifier {
+    Number(u8),
+    Range(u8, u8),
+    Any,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 enum TestInstruction {
     Lookback {
         len: u8,
     },
-    VariableTest {
+    Variable {
         var: u8,
-        val: u8,
         op: Operator,
+        number: u8,
     },
     String {
         s: String,
@@ -64,13 +73,11 @@ enum TestInstruction {
     },
     Attributes {
         attrs: HashSet<Attribute>,
-        min_chars: u8,
-        max_chars: u8,
+        quantifier: Option<Quantifier>,
     },
-    SwapOrAttribute {
+    Class {
         name: String,
-        min_chars: u8,
-        max_chars: u8,
+        quantifier: Option<Quantifier>,
     },
     Negate {
         instr: Box<TestInstruction>,
@@ -91,31 +98,18 @@ impl<'a> TestParser<'a> {
         }
     }
 
-    pub fn test(&mut self) -> Result<Test, ParseError> {
-        match self.chars.peek() {
-            //	    Some('_') => self.lookback(),
-            _ => Err(ParseError::Unknown),
-        }
-    }
-
     fn ascii_number(&mut self) -> Result<u8, ParseError> {
         let mut s = String::new();
-        while let Some(c) = self.chars.peek().filter(|c| c.is_ascii_digit()) {
+        while self.chars.peek().filter(|c| c.is_ascii_digit()).is_some() {
             s.push(self.chars.next().unwrap());
         }
         let number = s.parse::<u8>()?;
         Ok(number)
     }
 
-    fn lookback(&mut self) -> Result<TestInstruction, ParseError> {
+    fn consume(&mut self, expected: char) -> Result<(), ParseError> {
         match self.chars.next() {
-            Some('_') => {
-                let n = match self.chars.peek() {
-                    Some(c) if c.is_ascii_digit() => self.ascii_number()?,
-                    _ => 1,
-                };
-                Ok(TestInstruction::Lookback { len: n })
-            }
+            Some(e) if e == expected => Ok(()),
             Some(c) => Err(ParseError::CharExpected {
                 expected: '_',
                 found: Some(c),
@@ -125,6 +119,68 @@ impl<'a> TestParser<'a> {
                 found: None,
             }),
         }
+    }
+
+    fn quantifier(&mut self) -> Result<Option<Quantifier>, ParseError> {
+        match self.chars.peek() {
+            Some('.') => {
+                self.chars.next();
+                Ok(Some(Quantifier::Any))
+            }
+            Some(c) if c.is_ascii_digit() => {
+                let min = self.ascii_number()?;
+                if self.chars.next_if_eq(&'-').is_some() {
+                    let max = self.ascii_number()?;
+                    Ok(Some(Quantifier::Range(min, max)))
+                } else {
+                    Ok(Some(Quantifier::Number(min)))
+                }
+            }
+            _ => Ok(None),
+        }
+    }
+
+    fn class(&mut self) -> Result<TestInstruction, ParseError> {
+        self.consume('%')?;
+        let mut name = String::new();
+        while self.chars.peek().filter(|c| c.is_alphabetic()).is_some() {
+            name.push(self.chars.next().unwrap());
+        }
+        Ok(TestInstruction::Class {
+            name,
+            quantifier: self.quantifier()?,
+        })
+    }
+
+    fn lookback(&mut self) -> Result<TestInstruction, ParseError> {
+        self.consume('_')?;
+        let n = match self.chars.peek() {
+            Some(c) if c.is_ascii_digit() => self.ascii_number()?,
+            _ => 1,
+        };
+        Ok(TestInstruction::Lookback { len: n })
+    }
+
+    pub fn test(&mut self) -> Result<TestInstruction, ParseError> {
+        match self.chars.peek() {
+            Some('_') => Ok(self.lookback()?),
+            Some('%') => Ok(self.class()?),
+            _ => Err(ParseError::Unknown),
+        }
+    }
+
+    pub fn tests(&mut self) -> Result<Test, ParseError> {
+        let only_at_beginning = self.chars.next_if_eq(&'`').is_some();
+        let mut tests: Vec<TestInstruction> = Vec::new();
+        while let Some(c) = self.chars.peek() {
+            tests.push(self.test()?);
+        }
+        let only_at_end = self.chars.next_if_eq(&'~').is_some();
+        Ok(Test {
+            only_at_beginning,
+            only_at_end,
+            tests,
+        })
     }
 }
 
