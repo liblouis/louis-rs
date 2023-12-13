@@ -1,6 +1,16 @@
-use std::{collections::HashSet, iter::Peekable, str::Chars};
+use std::{collections::HashSet, iter::Peekable, str::Chars, num::ParseIntError};
 
-use super::{BrailleChars, ParseError};
+use super::{BrailleChars};
+
+#[derive(thiserror::Error, Debug, PartialEq)]
+enum ParseError {
+    #[error("Expected {expected:?}, got {found:?}")]
+    CharExpected { expected: char, found: Option<char>},
+    #[error("invalid number")]
+    InvalidNumber(#[from] ParseIntError),
+    #[error("Unknown error")]
+    Unknown,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Test {
@@ -63,7 +73,7 @@ impl<'a> TestParser<'a> {
     pub fn test (&mut self) -> Result<Test, ParseError> {
 	match self.chars.peek() {
 //	    Some('_') => self.lookback(),
-	    _ => Err(ParseError::MultiTestExpected)
+	    _ => Err(ParseError::Unknown)
 	}
     }
 
@@ -77,14 +87,17 @@ impl<'a> TestParser<'a> {
     }
     
     fn lookback(&mut self) -> Result<TestInstruction, ParseError> {
-	if self.chars.next_if_eq(&'_').is_some() { // consume the '_'
-	    let n = match self.chars.peek() {
-		Some(c) if c.is_ascii_digit() => self.ascii_number()?,
-		_ => 1
-	    };
-	    Ok(TestInstruction::Lookback { len: n })
-	} else {
-	    Err(ParseError::MultiTestExpected)
+	match self.chars.next() {
+	    Some('_') => {
+		let n = match self.chars.peek() {
+		    Some(c) if c.is_ascii_digit() => self.ascii_number()?,
+		    _ => 1
+		};
+		Ok(TestInstruction::Lookback { len: n })
+	    },
+	    Some(c) => Err(ParseError::CharExpected { expected: '_', found: Some(c)}),
+	    _ => Err(ParseError::CharExpected { expected: '_', found: None})
+		
 	}
     }
 }
@@ -111,7 +124,7 @@ mod tests {
         assert_eq!(TestParser::new("_ ").lookback(),Ok(TestInstruction::Lookback { len: 1 }));
         assert_eq!(TestParser::new("_abc").lookback(),Ok(TestInstruction::Lookback { len: 1 }));
         assert_eq!(TestParser::new("_12abc").lookback(),Ok(TestInstruction::Lookback { len: 12 }));
-        assert_eq!(TestParser::new(" _ ").lookback(), Err(ParseError::MultiTestExpected));
+        assert_eq!(TestParser::new(" _ ").lookback(), Err(ParseError::CharExpected { expected: '_', found: Some(' ') }));
     }
 
 }
