@@ -14,7 +14,7 @@ tests          ::= "`"? test+ "~"?
 string         ::= '"' [^"] '"'
 
 dot            ::= [:xdigit:]+ ; at most 15 hex digits and unique
-dots           ::= dot ("-" dot)+
+dots           ::= '@' dot ("-" dot)+
 
 quantifier     ::= (number | number "-" number | ".")
 attributes     ::= "$" ("a" | "d" | "D" | "l" | "m" | "p" | "S" | "s" | "U" | "u" | "w" | "x" | "y" | "z")+ quantifier?
