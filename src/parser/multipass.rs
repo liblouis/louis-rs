@@ -90,10 +90,10 @@ enum TestInstruction {
         quantifier: Option<Quantifier>,
     },
     Negate {
-        instr: Box<TestInstruction>,
+        tests: Box<TestInstruction>,
     },
     Replace {
-        instr: Vec<TestInstruction>,
+        tests: Vec<TestInstruction>,
     },
 }
 
@@ -264,23 +264,35 @@ impl<'a> TestParser<'a> {
         }
     }
 
-    pub fn test(&mut self) -> Result<TestInstruction, ParseError> {
+    fn replacement(&mut self) -> Result<TestInstruction, ParseError> {
+        self.consume('[')?;
+        let tests = self.many_tests()?;
+        self.consume(']')?;
+        Ok(TestInstruction::Replace { tests })
+    }
+
         match self.chars.peek() {
             Some('_') => Ok(self.lookback()?),
             Some('%') => Ok(self.class()?),
             Some('@') => Ok(self.dots()?),
             Some('"') => Ok(self.string()?),
             Some('$') => Ok(self.attributes()?),
+            Some('[') => Ok(self.replacement()?),
             _ => Err(ParseError::InvalidTest),
         }
     }
 
-    pub fn tests(&mut self) -> Result<Test, ParseError> {
-        let only_at_beginning = self.chars.next_if_eq(&'`').is_some();
+    fn many_tests(&mut self) -> Result<Vec<TestInstruction>, ParseError> {
         let mut tests: Vec<TestInstruction> = Vec::new();
         while self.chars.peek().is_some() {
             tests.push(self.test()?);
         }
+        Ok(tests)
+    }
+
+    pub fn tests(&mut self) -> Result<Test, ParseError> {
+        let only_at_beginning = self.chars.next_if_eq(&'`').is_some();
+        let tests = self.many_tests()?;
         let only_at_end = self.chars.next_if_eq(&'~').is_some();
         Ok(Test {
             only_at_beginning,
