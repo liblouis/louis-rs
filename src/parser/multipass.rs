@@ -11,7 +11,7 @@ pub enum ParseError {
     #[error("Invalid braille")]
     InvalidBraille(#[from] braille::ParseError),
     #[error("Invalid test")]
-    InvalidTest,
+    InvalidTest { found: Option<char> },
     #[error("Invalid class name")]
     InvalidClass,
     #[error("Invalid attribute")]
@@ -323,8 +323,9 @@ impl<'a> TestParser<'a> {
             Some('$') => Ok(self.attributes()?),
             Some('[') => Ok(self.replacement()?),
             Some('#') => Ok(self.variable()?),
-            _ => Err(ParseError::InvalidTest),
             Some('!') => Ok(self.negate()?),
+            Some(c) => Err(ParseError::InvalidTest { found: Some(*c) }),
+            _ => Err(ParseError::InvalidTest { found: None }),
         }
     }
 
