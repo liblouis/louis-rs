@@ -106,6 +106,13 @@ fn is_attribute(c: &char) -> bool {
     }
 }
 
+fn is_test(c: &char) -> bool {
+    match c {
+        '_' | '%' | '@' | '"' | '$' | '[' | '#' | '!' => true,
+        _ => false,
+    }
+}
+
 fn is_class_digit(c: &char) -> bool {
     match c {
         '1' | '2' | '3' | '4' | '5' | '6' | '7' => true,
@@ -331,7 +338,7 @@ impl<'a> TestParser<'a> {
 
     fn many_tests(&mut self) -> Result<Vec<TestInstruction>, ParseError> {
         let mut tests: Vec<TestInstruction> = Vec::new();
-        while self.chars.peek().is_some() {
+        while self.chars.peek().filter(|&c| is_test(c)).is_some() {
             tests.push(self.test()?);
         }
         Ok(tests)
