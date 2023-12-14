@@ -1,6 +1,6 @@
 use std::{collections::HashSet, iter::Peekable, num::ParseIntError, str::Chars};
 
-use super::BrailleChars;
+use super::braille::{self, braille_chars, BrailleChars};
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum ParseError {
@@ -8,6 +8,8 @@ pub enum ParseError {
     CharExpected { expected: char, found: Option<char> },
     #[error("Invalid number")]
     InvalidNumber(#[from] ParseIntError),
+    #[error("Invalid braille")]
+    InvalidBraille(#[from] braille::ParseError),
     #[error("Invalid test")]
     InvalidTest,
     #[error("Invalid class name")]
@@ -201,7 +203,9 @@ impl<'a> TestParser<'a> {
         // this is a tad annoying right now due to the fact that we
         // have a separate ParseError for the main parser and for
         // multipass
-        Ok(TestInstruction::Dots { dots: todo!() })
+        Ok(TestInstruction::Dots {
+            dots: braille_chars(&dots)?,
+        })
     }
 
     fn string(&mut self) -> Result<TestInstruction, ParseError> {

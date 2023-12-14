@@ -5,6 +5,9 @@ use std::{
     str::{Chars, SplitWhitespace},
 };
 
+use self::braille::{braille_chars, chars_to_dots, BrailleChars};
+
+mod braille;
 mod multipass;
 
 #[derive(Hash, Eq, PartialEq, Debug)]
@@ -62,8 +65,8 @@ pub enum ParseError {
         expected: String,
         found: Option<String>,
     },
-    #[error("Invalid braille {character:?}")]
-    InvalidBraille { character: char },
+    #[error("Invalid braille")]
+    InvalidBraille(#[from] braille::ParseError),
     #[error("Braille expected")]
     DotsExpected,
     #[error("Comma separated tuple of Braille expected")]
@@ -745,29 +748,6 @@ impl Rule {
     }
 }
 
-#[derive(Hash, PartialEq, Eq, Debug)]
-pub enum BrailleDot {
-    DOT0,
-    DOT1,
-    DOT2,
-    DOT3,
-    DOT4,
-    DOT5,
-    DOT6,
-    DOT7,
-    DOT8,
-    DOT9,
-    DOTA,
-    DOTB,
-    DOTC,
-    DOTD,
-    DOTE,
-    DOTF,
-}
-
-pub type BrailleChar = HashSet<BrailleDot>;
-pub type BrailleChars = Vec<BrailleChar>;
-
 #[derive(PartialEq, Debug)]
 pub enum Braille {
     Implicit,
@@ -778,50 +758,6 @@ pub enum Braille {
 pub enum Position {
     Before,
     After,
-}
-
-// fn has_virtual_dots(char: &BrailleChar) -> bool {
-//     let virtual_dots = HashSet::from([
-// 	BrailleDot::DOT9,
-// 	BrailleDot::DOTA,
-// 	BrailleDot::DOTB,
-// 	BrailleDot::DOTC,
-// 	BrailleDot::DOTD,
-// 	BrailleDot::DOTE,
-// 	BrailleDot::DOTF]);
-//     !virtual_dots.intersection(char)
-// 	.collect::<HashSet<_>>()
-// 	.is_empty()
-// }
-
-fn char_to_dot(char: char) -> Result<BrailleDot, ParseError> {
-    match char {
-        '0' => Ok(BrailleDot::DOT0),
-        '1' => Ok(BrailleDot::DOT1),
-        '2' => Ok(BrailleDot::DOT2),
-        '3' => Ok(BrailleDot::DOT3),
-        '4' => Ok(BrailleDot::DOT4),
-        '5' => Ok(BrailleDot::DOT5),
-        '6' => Ok(BrailleDot::DOT6),
-        '7' => Ok(BrailleDot::DOT7),
-        '8' => Ok(BrailleDot::DOT8),
-        '9' => Ok(BrailleDot::DOT9),
-        'a' => Ok(BrailleDot::DOTA),
-        'b' => Ok(BrailleDot::DOTB),
-        'c' => Ok(BrailleDot::DOTC),
-        'd' => Ok(BrailleDot::DOTD),
-        'e' => Ok(BrailleDot::DOTE),
-        'f' => Ok(BrailleDot::DOTF),
-        invalid => Err(ParseError::InvalidBraille { character: invalid }),
-    }
-}
-
-fn chars_to_dots(chars: &str) -> Result<BrailleChar, ParseError> {
-    chars.chars().map(char_to_dot).collect()
-}
-
-fn braille_chars(chars: &str) -> Result<BrailleChars, ParseError> {
-    chars.split('-').map(chars_to_dots).collect()
 }
 
 fn unescape_unicode(chars: &mut Chars, len: u8) -> Result<char, ParseError> {
@@ -1246,6 +1182,11 @@ impl<'a> RuleParser<'a> {
             .ok_or(ParseError::DotsExpected)?
             .split('-')
             .map(chars_to_dots)
+            // FIXME: it feels really weird that we manually have to
+            // map braille::ParseError to ParseError. I thought the
+            // thisError crate implements the from trait between the
+            // two?
+            .map(|r| r.map_err(|e| ParseError::InvalidBraille(e)))
             .collect()
     }
 
@@ -1254,7 +1195,15 @@ impl<'a> RuleParser<'a> {
             .next()
             .ok_or(ParseError::DotsExpected)?
             .split(',')
-            .map(|chars| chars.split('-').map(chars_to_dots).collect())
+            .map(|chars| {
+                chars
+                    .split('-')
+                    .map(chars_to_dots)
+                    // FIXME: it feels really weird that we manually have to
+                    // map braille::ParseError to ParseError.
+                    .map(|r| r.map_err(|e| ParseError::InvalidBraille(e)))
+                    .collect()
+            })
             .collect()
     }
 
