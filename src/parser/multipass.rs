@@ -6,8 +6,14 @@ use super::BrailleChars;
 pub enum ParseError {
     #[error("Expected {expected:?}, got {found:?}")]
     CharExpected { expected: char, found: Option<char> },
-    #[error("invalid number")]
+    #[error("Invalid number")]
     InvalidNumber(#[from] ParseIntError),
+    #[error("Invalid class name")]
+    InvalidClass,
+    #[error("Invalid attribute")]
+    InvalidAttribute { found: Option<char> },
+    #[error("Invalid quantifier")]
+    InvalidQuantifier,
     #[error("Expected a number, a range or a dot")]
     QuantifierExpected,
     #[error("Unknown error")]
@@ -87,6 +93,20 @@ enum TestInstruction {
     },
 }
 
+fn is_attribute(c: &char) -> bool {
+    match c {
+        'a' | 'd' | 'D' | 'l' | 'm' | 'p' | 'S' | 's' | 'U' | 'u' | 'w' | 'x' | 'y' | 'z' => true,
+        _ => false,
+    }
+}
+
+fn is_class_digit(c: &char) -> bool {
+    match c {
+        '1' | '2' | '3' | '4' | '5' | '6' | '7' => true,
+        _ => false,
+    }
+}
+
 pub struct TestParser<'a> {
     chars: Peekable<Chars<'a>>,
 }
@@ -121,7 +141,7 @@ impl<'a> TestParser<'a> {
         }
     }
 
-    fn quantifier(&mut self) -> Result<Option<Quantifier>, ParseError> {
+    fn maybe_quantifier(&mut self) -> Result<Option<Quantifier>, ParseError> {
         match self.chars.peek() {
             Some('.') => {
                 self.chars.next();
@@ -130,7 +150,12 @@ impl<'a> TestParser<'a> {
             Some(c) if c.is_ascii_digit() => {
                 let min = self.ascii_number()?;
                 if self.chars.next_if_eq(&'-').is_some() {
-                    let max = self.ascii_number()?;
+                    let max = match self.ascii_number() {
+                        Ok(n) => n,
+                        _ => {
+                            return Err(ParseError::InvalidQuantifier);
+                        }
+                    };
                     Ok(Some(Quantifier::Range(min, max)))
                 } else {
                     Ok(Some(Quantifier::Number(min)))
@@ -146,10 +171,45 @@ impl<'a> TestParser<'a> {
         while self.chars.peek().filter(|c| c.is_alphabetic()).is_some() {
             name.push(self.chars.next().unwrap());
         }
-        Ok(TestInstruction::Class {
-            name,
-            quantifier: self.quantifier()?,
-        })
+        if self.chars.peek().filter(|c| is_class_digit(c)).is_some() {
+            name.push(self.chars.next().unwrap());
+        }
+        if name.is_empty() {
+            Err(ParseError::InvalidClass)
+        } else {
+            Ok(TestInstruction::Class {
+                name,
+                quantifier: self.maybe_quantifier()?,
+            })
+        }
+    }
+
+    fn dots(&mut self) -> Result<TestInstruction, ParseError> {
+        self.consume('@')?;
+        let mut dots = String::new();
+        while self
+            .chars
+            .peek()
+            .filter(|c| c.is_ascii_hexdigit())
+            .is_some()
+        {
+            dots.push(self.chars.next().unwrap());
+        }
+        // convert dots to actual dots
+        // this is a tad annoying right now due to the fact that we
+        // have a separate ParseError for the main parser and for
+        // multipass
+        Ok(TestInstruction::Dots { dots: todo!() })
+    }
+
+    fn string(&mut self) -> Result<TestInstruction, ParseError> {
+        self.consume('"')?;
+        let mut s = String::new();
+        while self.chars.peek().filter(|&c| *c != '"').is_some() {
+            s.push(self.chars.next().unwrap());
+        }
+        self.consume('"')?;
+        Ok(TestInstruction::String { s })
     }
 
     fn lookback(&mut self) -> Result<TestInstruction, ParseError> {
@@ -161,10 +221,50 @@ impl<'a> TestParser<'a> {
         Ok(TestInstruction::Lookback { len: n })
     }
 
+    fn attribute(&mut self) -> Result<Attribute, ParseError> {
+        match self.chars.next() {
+            Some('a') => Ok(Attribute::Any),
+            Some('d') => Ok(Attribute::Digit),
+            Some('D') => Ok(Attribute::Litdigit),
+            Some('l') => Ok(Attribute::Letter),
+            Some('m') => Ok(Attribute::Math),
+            Some('p') => Ok(Attribute::Punctuation),
+            Some('S') => Ok(Attribute::Sign),
+            Some('s') => Ok(Attribute::Space),
+            Some('U') => Ok(Attribute::Uppercase),
+            Some('u') => Ok(Attribute::Lowercase),
+            Some('w') => Ok(Attribute::Class1),
+            Some('x') => Ok(Attribute::Class2),
+            Some('y') => Ok(Attribute::Class3),
+            Some('z') => Ok(Attribute::Class4),
+            Some(c) => Err(ParseError::InvalidAttribute { found: Some(c) }),
+            _ => Err(ParseError::InvalidAttribute { found: None }),
+        }
+    }
+
+    fn attributes(&mut self) -> Result<TestInstruction, ParseError> {
+        self.consume('$')?;
+        let mut attrs: HashSet<Attribute> = HashSet::new();
+        while self.chars.peek().filter(|&c| is_attribute(c)).is_some() {
+            attrs.insert(self.attribute()?);
+        }
+        if attrs.is_empty() {
+            Err(ParseError::InvalidAttribute { found: None })
+        } else {
+            Ok(TestInstruction::Attributes {
+                attrs,
+                quantifier: self.maybe_quantifier()?,
+            })
+        }
+    }
+
     pub fn test(&mut self) -> Result<TestInstruction, ParseError> {
         match self.chars.peek() {
             Some('_') => Ok(self.lookback()?),
             Some('%') => Ok(self.class()?),
+            Some('@') => Ok(self.dots()?),
+            Some('"') => Ok(self.string()?),
+            Some('$') => Ok(self.attributes()?),
             _ => Err(ParseError::Unknown),
         }
     }
@@ -226,6 +326,97 @@ mod tests {
                 expected: '_',
                 found: Some(' ')
             })
+        );
+    }
+
+    #[test]
+    fn attributes_test() {
+        assert_eq!(
+            TestParser::new("$a").attributes(),
+            Ok(TestInstruction::Attributes {
+                attrs: HashSet::from([Attribute::Any]),
+                quantifier: None
+            })
+        );
+        assert_eq!(
+            TestParser::new("$ay").attributes(),
+            Ok(TestInstruction::Attributes {
+                attrs: HashSet::from([Attribute::Any, Attribute::Class3]),
+                quantifier: None
+            })
+        );
+        assert_eq!(
+            TestParser::new("$").attributes(),
+            Err(ParseError::InvalidAttribute { found: None })
+        );
+        assert_eq!(
+            TestParser::new("$h").attributes(),
+            Err(ParseError::InvalidAttribute { found: None })
+        );
+    }
+
+    #[test]
+    fn class_test() {
+        assert_eq!(
+            TestParser::new("%foo").class(),
+            Ok(TestInstruction::Class {
+                name: "foo".into(),
+                quantifier: None
+            })
+        );
+        assert_eq!(
+            TestParser::new("%3").class(),
+            Ok(TestInstruction::Class {
+                name: "3".into(),
+                quantifier: None
+            })
+        );
+        assert_eq!(TestParser::new("%").class(), Err(ParseError::InvalidClass));
+        assert_eq!(TestParser::new("% ").class(), Err(ParseError::InvalidClass));
+        assert_eq!(
+            TestParser::new("%🐂").class(),
+            Err(ParseError::InvalidClass)
+        );
+        assert_eq!(TestParser::new("%8").class(), Err(ParseError::InvalidClass));
+    }
+
+    #[test]
+    fn quantifier_test() {
+        assert_eq!(
+            TestParser::new("$a ").attributes(),
+            Ok(TestInstruction::Attributes {
+                attrs: HashSet::from([Attribute::Any]),
+                quantifier: None
+            })
+        );
+        assert_eq!(
+            TestParser::new("$a.").attributes(),
+            Ok(TestInstruction::Attributes {
+                attrs: HashSet::from([Attribute::Any]),
+                quantifier: Some(Quantifier::Any)
+            })
+        );
+        assert_eq!(
+            TestParser::new("$a3").attributes(),
+            Ok(TestInstruction::Attributes {
+                attrs: HashSet::from([Attribute::Any]),
+                quantifier: Some(Quantifier::Number(3))
+            })
+        );
+        assert_eq!(
+            TestParser::new("$a3-5").attributes(),
+            Ok(TestInstruction::Attributes {
+                attrs: HashSet::from([Attribute::Any]),
+                quantifier: Some(Quantifier::Range(3, 5))
+            })
+        );
+        assert_eq!(
+            TestParser::new("$a1-").attributes(),
+            Err(ParseError::InvalidQuantifier)
+        );
+        assert_eq!(
+            TestParser::new("$a1-a").attributes(),
+            Err(ParseError::InvalidQuantifier)
         );
     }
 }
