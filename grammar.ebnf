@@ -8,7 +8,7 @@
 
 context_rule   ::= "context" tests action
 
-test           ::= "!"? (string | dots | attributes | class | grouping_left | grouping_right | replacement | back | variable)
+test           ::= "!"? (string | dots | attributes | class | grouping_left | grouping_right | replacement | lookback | variable)
 tests          ::= "`"? test+ "~"?
 
 string         ::= '"' [^"] '"'
