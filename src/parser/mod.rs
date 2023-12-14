@@ -5,7 +5,10 @@ use std::{
     str::{Chars, SplitWhitespace},
 };
 
-use self::braille::{braille_chars, chars_to_dots, BrailleChars};
+use self::{
+    braille::{braille_chars, chars_to_dots, BrailleChars},
+    multipass::Test,
+};
 
 mod braille;
 mod multipass;
@@ -656,27 +659,27 @@ pub enum Rule {
         chars: String,
     },
     Context {
-        test: String,
+        test: multipass::Test,
         action: String,
         direction: Direction,
     },
     Pass2 {
-        test: String,
+        test: multipass::Test,
         action: String,
         direction: Direction,
     },
     Pass3 {
-        test: String,
+        test: multipass::Test,
         action: String,
         direction: Direction,
     },
     Pass4 {
-        test: String,
+        test: multipass::Test,
         action: String,
         direction: Direction,
     },
     Correct {
-        test: String,
+        test: multipass::Test,
         action: String,
         direction: Direction,
     },
@@ -1207,11 +1210,16 @@ impl<'a> RuleParser<'a> {
             .collect()
     }
 
-    fn multi_test(&mut self) -> Result<String, ParseError> {
+    fn multi_test(&mut self) -> Result<Test, ParseError> {
         self.tokens
             .next()
             .ok_or(ParseError::MultiTestExpected)
             .map(|s| s.to_string())
+            .map(|s| {
+                multipass::TestParser::new(&s)
+                    .tests()
+                    .map_err(|e| ParseError::MultiTestExpected)
+            })?
     }
 
     fn multi_action(&mut self) -> Result<String, ParseError> {
