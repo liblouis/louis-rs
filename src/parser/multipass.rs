@@ -16,12 +16,14 @@ pub enum ParseError {
     InvalidClass,
     #[error("Invalid attribute")]
     InvalidAttribute { found: Option<char> },
+    #[error("Invalid variable name")]
+    InvalidVariableName,
     #[error("Invalid quantifier")]
     InvalidQuantifier,
+    #[error("Invalid operator")]
+    InvalidOperator { found: Option<char> },
     #[error("Expected a number, a range or a dot")]
     QuantifierExpected,
-    #[error("Unknown error")]
-    Unknown,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -73,7 +75,7 @@ enum TestInstruction {
     Variable {
         var: u8,
         op: Operator,
-        number: u8,
+        operand: u8,
     },
     String {
         s: String,
@@ -271,6 +273,40 @@ impl<'a> TestParser<'a> {
         Ok(TestInstruction::Replace { tests })
     }
 
+    fn operator(&mut self) -> Result<Operator, ParseError> {
+        match self.chars.next() {
+            Some('=') => Ok(Operator::Eq),
+            Some('<') => match self.chars.peek() {
+                Some('=') => {
+                    self.chars.next();
+                    Ok(Operator::LtEq)
+                }
+                Some(_) => Ok(Operator::Lt),
+                _ => Err(ParseError::InvalidOperator { found: None }),
+            },
+            Some('>') => match self.chars.peek() {
+                Some('=') => {
+                    self.chars.next();
+                    Ok(Operator::GtEq)
+                }
+                Some(_) => Ok(Operator::Gt),
+                _ => Err(ParseError::InvalidOperator { found: None }),
+            },
+            Some(c) => Err(ParseError::InvalidOperator { found: Some(c) }),
+            _ => Err(ParseError::InvalidOperator { found: None }),
+        }
+    }
+
+    fn variable(&mut self) -> Result<TestInstruction, ParseError> {
+        self.consume('#')?;
+        Ok(TestInstruction::Variable {
+            var: self.ascii_number().map_err(|_| ParseError::InvalidVariableName)?,
+            op: self.operator()?,
+            operand: self.ascii_number()?,
+        })
+    }
+
+    fn test(&mut self) -> Result<TestInstruction, ParseError> {
         match self.chars.peek() {
             Some('_') => Ok(self.lookback()?),
             Some('%') => Ok(self.class()?),
@@ -278,6 +314,7 @@ impl<'a> TestParser<'a> {
             Some('"') => Ok(self.string()?),
             Some('$') => Ok(self.attributes()?),
             Some('[') => Ok(self.replacement()?),
+            Some('#') => Ok(self.variable()?),
             _ => Err(ParseError::InvalidTest),
         }
     }
@@ -435,6 +472,43 @@ mod tests {
         assert_eq!(
             TestParser::new("$a1-a").attributes(),
             Err(ParseError::InvalidQuantifier)
+        );
+    }
+    #[test]
+    fn variable_test() {
+        assert_eq!(
+            TestParser::new("#1<2").variable(),
+            Ok(TestInstruction::Variable { var: 1, op: Operator::Lt, operand: 2 })
+        );
+        assert_eq!(
+            TestParser::new("#1<=2").variable(),
+            Ok(TestInstruction::Variable { var: 1, op: Operator::LtEq, operand: 2 })
+        );
+        assert_eq!(
+            TestParser::new("#1=3").variable(),
+            Ok(TestInstruction::Variable { var: 1, op: Operator::Eq, operand: 3 })
+        );
+        assert_eq!(
+            TestParser::new("#a=3").variable(),
+            Err(ParseError::InvalidVariableName)
+        );
+        assert_ne!(
+            TestParser::new("#3=a").variable(),
+            Ok(TestInstruction::Variable { var: 1, op: Operator::Eq, operand: 3 })
+        );
+        assert_eq!(
+            TestParser::new("#").variable(),
+            Err(ParseError::InvalidVariableName)
+        );
+        assert_eq!(
+            TestParser::new("#3").variable(),
+	    Err(ParseError::InvalidOperator { found: None }),
+        );
+        assert_ne!(
+            TestParser::new("#3=").variable(),
+	    //Err(ParseError::InvalidNumber(ParseIntError { kind: Empty })),
+
+            Ok(TestInstruction::Variable { var: 1, op: Operator::Eq, operand: 3 })
         );
     }
 }
