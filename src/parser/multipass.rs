@@ -8,6 +8,8 @@ pub enum ParseError {
     CharExpected { expected: char, found: Option<char> },
     #[error("Invalid number")]
     InvalidNumber(#[from] ParseIntError),
+    #[error("Invalid test")]
+    InvalidTest,
     #[error("Invalid class name")]
     InvalidClass,
     #[error("Invalid attribute")]
@@ -265,7 +267,7 @@ impl<'a> TestParser<'a> {
             Some('@') => Ok(self.dots()?),
             Some('"') => Ok(self.string()?),
             Some('$') => Ok(self.attributes()?),
-            _ => Err(ParseError::Unknown),
+            _ => Err(ParseError::InvalidTest),
         }
     }
 
