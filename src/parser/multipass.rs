@@ -28,8 +28,8 @@ pub enum ParseError {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Test {
-    only_at_beginning: bool,
-    only_at_end: bool,
+    at_beginning: bool,
+    at_end: bool,
     tests: Vec<TestInstruction>,
 }
 
@@ -328,12 +328,12 @@ impl<'a> TestParser<'a> {
     }
 
     pub fn tests(&mut self) -> Result<Test, ParseError> {
-        let only_at_beginning = self.chars.next_if_eq(&'`').is_some();
+        let at_beginning = self.chars.next_if_eq(&'`').is_some();
         let tests = self.many_tests()?;
-        let only_at_end = self.chars.next_if_eq(&'~').is_some();
+        let at_end = self.chars.next_if_eq(&'~').is_some();
         Ok(Test {
-            only_at_beginning,
-            only_at_end,
+            at_beginning,
+            at_end,
             tests,
         })
     }
