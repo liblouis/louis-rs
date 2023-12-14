@@ -525,7 +525,42 @@ mod tests {
             TestParser::new("#3=").variable(),
 	    //Err(ParseError::InvalidNumber(ParseIntError { kind: Empty })),
 
-            Ok(TestInstruction::Variable { var: 1, op: Operator::Eq, operand: 3 })
+    #[test]
+    fn replacement_test() {
+        assert_eq!(
+            TestParser::new("[]").replacement(),
+            Ok(TestInstruction::Replace { tests: vec![] })
+        );
+        assert_eq!(
+            TestParser::new("[%foo]").replacement(),
+            Ok(TestInstruction::Replace {
+                tests: vec![TestInstruction::Class {
+                    name: "foo".into(),
+                    quantifier: None
+                }]
+            })
+        );
+    }
+
+    #[test]
+    fn test_test() {
+        assert_eq!(
+            TestParser::new("$d[]%digitletter").tests(),
+            Ok(Test {
+                at_beginning: false,
+                at_end: false,
+                tests: vec![
+                    TestInstruction::Attributes {
+                        attrs: HashSet::from([Attribute::Digit]),
+                        quantifier: None
+                    },
+                    TestInstruction::Replace { tests: vec![] },
+                    TestInstruction::Class {
+                        name: "digitletter".into(),
+                        quantifier: None
+                    }
+                ]
+            })
         );
     }
 }
