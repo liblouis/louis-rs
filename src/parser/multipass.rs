@@ -92,7 +92,7 @@ enum TestInstruction {
         quantifier: Option<Quantifier>,
     },
     Negate {
-        tests: Box<TestInstruction>,
+        test: Box<TestInstruction>,
     },
     Replace {
         tests: Vec<TestInstruction>,
@@ -306,6 +306,14 @@ impl<'a> TestParser<'a> {
         })
     }
 
+    fn negate(&mut self) -> Result<TestInstruction, ParseError> {
+        self.consume('!')?;
+        let test = self.test()?;
+        Ok(TestInstruction::Negate {
+            test: Box::new(test),
+        })
+    }
+
     fn test(&mut self) -> Result<TestInstruction, ParseError> {
         match self.chars.peek() {
             Some('_') => Ok(self.lookback()?),
@@ -316,6 +324,7 @@ impl<'a> TestParser<'a> {
             Some('[') => Ok(self.replacement()?),
             Some('#') => Ok(self.variable()?),
             _ => Err(ParseError::InvalidTest),
+            Some('!') => Ok(self.negate()?),
         }
     }
 
