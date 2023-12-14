@@ -274,7 +274,7 @@ impl<'a> TestParser<'a> {
     pub fn tests(&mut self) -> Result<Test, ParseError> {
         let only_at_beginning = self.chars.next_if_eq(&'`').is_some();
         let mut tests: Vec<TestInstruction> = Vec::new();
-        while let Some(c) = self.chars.peek() {
+        while self.chars.peek().is_some() {
             tests.push(self.test()?);
         }
         let only_at_end = self.chars.next_if_eq(&'~').is_some();
