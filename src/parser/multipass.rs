@@ -140,7 +140,7 @@ impl<'a> TestParser<'a> {
                 found: Some(c),
             }),
             _ => Err(ParseError::CharExpected {
-                expected: '_',
+                expected: expected,
                 found: None,
             }),
         }
