@@ -3,7 +3,7 @@ use std::collections::HashSet;
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum ParseError {
     #[error("Invalid braille {character:?}")]
-    InvalidBraille { character: char },
+    InvalidBraille { character: Option<char> },
 }
 
 #[derive(Hash, PartialEq, Eq, Debug)]
@@ -66,9 +66,68 @@ fn char_to_dot(char: char) -> Result<BrailleDot, ParseError> {
 }
 
 pub fn chars_to_dots(chars: &str) -> Result<BrailleChar, ParseError> {
-    chars.chars().map(char_to_dot).collect()
+    if chars.is_empty() {
+        Err(ParseError::InvalidBraille { character: None })
+    } else {
+        chars.chars().map(char_to_dot).collect()
+    }
 }
 
 pub fn braille_chars(chars: &str) -> Result<BrailleChars, ParseError> {
     chars.split('-').map(chars_to_dots).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chars_to_dots_test() {
+        assert_eq!(
+            chars_to_dots("123"),
+            Ok(HashSet::from([
+                BrailleDot::Dot1,
+                BrailleDot::Dot2,
+                BrailleDot::Dot3
+            ]))
+        );
+        assert_eq!(
+            chars_to_dots("1a"),
+            Ok(HashSet::from([BrailleDot::Dot1, BrailleDot::DotA,]))
+        );
+        assert_eq!(chars_to_dots("a"), Ok(HashSet::from([BrailleDot::DotA,])));
+        assert_eq!(
+            chars_to_dots("z"),
+            Err(ParseError::InvalidBraille {
+                character: Some('z')
+            })
+        );
+    }
+
+    #[test]
+    fn braille_chars_test() {
+        assert_eq!(
+            braille_chars("1-1"),
+            Ok(vec![
+                HashSet::from([BrailleDot::Dot1]),
+                HashSet::from([BrailleDot::Dot1])
+            ])
+        );
+        assert_eq!(
+            braille_chars("1-"),
+            Err(ParseError::InvalidBraille { character: None })
+        );
+        assert_eq!(
+            braille_chars("-1"),
+            Err(ParseError::InvalidBraille { character: None })
+        );
+        assert_eq!(
+            braille_chars("-"),
+            Err(ParseError::InvalidBraille { character: None })
+        );
+        assert_eq!(
+            braille_chars(""),
+            Err(ParseError::InvalidBraille { character: None })
+        );
+    }
 }
