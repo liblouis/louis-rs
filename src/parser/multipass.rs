@@ -98,24 +98,15 @@ enum TestInstruction {
 }
 
 fn is_attribute(c: &char) -> bool {
-    match c {
-        'a' | 'd' | 'D' | 'l' | 'm' | 'p' | 'S' | 's' | 'U' | 'u' | 'w' | 'x' | 'y' | 'z' => true,
-        _ => false,
-    }
+    matches!(c, 'a' | 'd' | 'D' | 'l' | 'm' | 'p' | 'S' | 's' | 'U' | 'u' | 'w' | 'x' | 'y' | 'z')
 }
 
 fn is_test(c: &char) -> bool {
-    match c {
-        '_' | '%' | '@' | '"' | '$' | '[' | '#' | '!' => true,
-        _ => false,
-    }
+    matches!(c, '_' | '%' | '@' | '"' | '$' | '[' | '#' | '!')
 }
 
 fn is_class_digit(c: &char) -> bool {
-    match c {
-        '1' | '2' | '3' | '4' | '5' | '6' | '7' => true,
-        _ => false,
-    }
+    matches!(c, '1'..='7')
 }
 
 pub struct TestParser<'a> {
