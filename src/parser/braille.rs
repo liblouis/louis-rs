@@ -43,6 +43,10 @@ pub type BrailleChars = Vec<BrailleChar>;
 // 	.is_empty()
 // }
 
+pub fn is_braille_dot(c: char) -> bool {
+    matches!(c, '0'..='9' | 'a'..='f')
+}
+
 fn char_to_dot(char: char) -> Result<BrailleDot, ParseError> {
     match char {
         '0' => Ok(BrailleDot::Dot0),

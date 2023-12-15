@@ -1,6 +1,6 @@
 use std::{collections::HashSet, iter::Peekable, num::ParseIntError, str::Chars};
 
-use super::braille::{self, braille_chars, BrailleChars};
+use super::braille::{self, braille_chars, is_braille_dot, BrailleChars, BrailleDot};
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum ParseError {
@@ -192,7 +192,7 @@ impl<'a> TestParser<'a> {
         while self
             .chars
             .peek()
-            .filter(|c| c.is_ascii_hexdigit())
+            .filter(|c| is_braille_dot(**c) || **c == '-')
             .is_some()
         {
             dots.push(self.chars.next().unwrap());
