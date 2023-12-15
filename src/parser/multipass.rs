@@ -197,13 +197,15 @@ impl<'a> TestParser<'a> {
         {
             dots.push(self.chars.next().unwrap());
         }
-        // convert dots to actual dots
-        // this is a tad annoying right now due to the fact that we
-        // have a separate ParseError for the main parser and for
-        // multipass
-        Ok(TestInstruction::Dots {
-            dots: braille_chars(&dots)?,
-        })
+        if dots.is_empty() {
+            Err(ParseError::InvalidBraille(
+                braille::ParseError::InvalidBraille { character: None },
+            ))
+        } else {
+            Ok(TestInstruction::Dots {
+                dots: braille_chars(&dots)?,
+            })
+        }
     }
 
     fn string(&mut self) -> Result<TestInstruction, ParseError> {
@@ -359,6 +361,41 @@ mod tests {
         assert_eq!(TestParser::new("1abc").ascii_number(), Ok(1));
         assert_ne!(TestParser::new(" 1").ascii_number(), Ok(1));
         assert_ne!(TestParser::new("a1").ascii_number(), Ok(1));
+    }
+
+    #[test]
+    fn dots_test() {
+        assert_eq!(
+            TestParser::new("@123").dots(),
+            Ok(TestInstruction::Dots {
+                dots: vec![HashSet::from([
+                    BrailleDot::Dot1,
+                    BrailleDot::Dot2,
+                    BrailleDot::Dot3
+                ])]
+            })
+        );
+        assert_eq!(
+            TestParser::new("@").dots(),
+            Err(ParseError::InvalidBraille(
+                braille::ParseError::InvalidBraille { character: None }
+            ))
+        );
+        assert_eq!(
+            TestParser::new("@-").dots(),
+            Err(ParseError::InvalidBraille(
+                braille::ParseError::InvalidBraille { character: None }
+            ))
+        );
+        assert_eq!(
+            TestParser::new("@1-2").dots(),
+            Ok(TestInstruction::Dots {
+                dots: vec![
+                    HashSet::from([BrailleDot::Dot1]),
+                    HashSet::from([BrailleDot::Dot2])
+                ]
+            })
+        );
     }
 
     #[test]
