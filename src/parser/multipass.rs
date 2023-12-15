@@ -22,6 +22,8 @@ pub enum ParseError {
     InvalidQuantifier,
     #[error("Invalid operator")]
     InvalidOperator { found: Option<char> },
+    #[error("Invalid escape sequence")]
+    InvalidEscapeSequence { found: Option<char> },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -211,11 +213,34 @@ impl<'a> TestParser<'a> {
         }
     }
 
+    fn handle_escape_sequence(&mut self, c: char) -> Result<char, ParseError> {
+        if c != '\\' {
+            Ok(c)
+        } else {
+            // handle \" and \s
+            match self.chars.peek() {
+                Some('s') => {
+                    self.chars.next();
+                    Ok(' ')
+                }
+                Some('"') => {
+                    self.chars.next();
+                    Ok('"')
+                }
+                // pass through any other escape chars
+                Some(_) => Ok(c),
+                _ => return Err(ParseError::InvalidEscapeSequence { found: None }),
+            }
+        }
+    }
+
     fn string(&mut self) -> Result<TestInstruction, ParseError> {
         self.consume('"')?;
         let mut s = String::new();
         while self.chars.peek().filter(|&c| *c != '"').is_some() {
-            s.push(self.chars.next().unwrap());
+            let raw = self.chars.next().unwrap();
+            let c = self.handle_escape_sequence(raw)?;
+            s.push(c);
         }
         self.consume('"')?;
         Ok(TestInstruction::String { s })
@@ -402,7 +427,31 @@ mod tests {
     }
 
     #[test]
-    fn look_back_test() {
+    fn string_test() {
+        assert_eq!(
+            TestParser::new(r#""test""#).string(),
+            Ok(TestInstruction::String { s: "test".into() })
+        );
+        assert_eq!(
+            TestParser::new(r#"",_""#).string(),
+            Ok(TestInstruction::String { s: ",_".into() })
+        );
+        assert_eq!(
+            TestParser::new(r#"", ""#).string(),
+            Ok(TestInstruction::String { s: ", ".into() })
+        );
+        assert_eq!(
+            TestParser::new(r#""-\"""#).string(),
+            Ok(TestInstruction::String { s: "-\"".into() })
+        );
+        assert_eq!(
+            TestParser::new(r#"".\s\"""#).string(),
+            Ok(TestInstruction::String { s: ". \"".into() })
+        );
+    }
+
+    #[test]
+    fn lookback_test() {
         assert_eq!(
             TestParser::new("_123").lookback(),
             Ok(TestInstruction::Lookback { len: 123 })
