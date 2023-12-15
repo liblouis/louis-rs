@@ -133,7 +133,7 @@ impl<'a> TestParser<'a> {
         match self.chars.next() {
             Some(e) if e == expected => Ok(()),
             Some(c) => Err(ParseError::CharExpected {
-                expected: '_',
+                expected: expected,
                 found: Some(c),
             }),
             _ => Err(ParseError::CharExpected {
