@@ -98,7 +98,10 @@ enum TestInstruction {
 }
 
 fn is_attribute(c: &char) -> bool {
-    matches!(c, 'a' | 'd' | 'D' | 'l' | 'm' | 'p' | 'S' | 's' | 'U' | 'u' | 'w' | 'x' | 'y' | 'z')
+    matches!(
+        c,
+        'a' | 'd' | 'D' | 'l' | 'm' | 'p' | 'S' | 's' | 'U' | 'u' | 'w' | 'x' | 'y' | 'z'
+    )
 }
 
 fn is_test(c: &char) -> bool {
