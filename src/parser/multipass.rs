@@ -18,12 +18,10 @@ pub enum ParseError {
     InvalidAttribute { found: Option<char> },
     #[error("Invalid variable name")]
     InvalidVariableName,
-    #[error("Invalid quantifier")]
+    #[error("Invalid quantifier, expected a number, a range or a dot")]
     InvalidQuantifier,
     #[error("Invalid operator")]
     InvalidOperator { found: Option<char> },
-    #[error("Expected a number, a range or a dot")]
-    QuantifierExpected,
 }
 
 #[derive(Debug, PartialEq, Eq)]
