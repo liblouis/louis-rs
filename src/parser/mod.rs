@@ -104,9 +104,11 @@ pub enum ParseError {
     #[error("Number expected, got {found:?}")]
     NumberExpected { found: Option<String> },
     #[error("Multipass test expected")]
-    MultiTestExpected,
+    MultipassTestExpected,
     #[error("Multipass action expected")]
-    MultiActionExpected,
+    MultipassActionExpected,
+    #[error("Invalid multipass test")]
+    InvalidMultipassTest(#[from] multipass::ParseError),
     #[error("Match pre-pattern expected")]
     MatchPreExpected,
     #[error("Match post-pattern expected")]
@@ -1210,22 +1212,22 @@ impl<'a> RuleParser<'a> {
             .collect()
     }
 
-    fn multi_test(&mut self) -> Result<Test, ParseError> {
+    fn multipass_test(&mut self) -> Result<Test, ParseError> {
         self.tokens
             .next()
-            .ok_or(ParseError::MultiTestExpected)
+            .ok_or(ParseError::MultipassTestExpected)
             .map(|s| s.to_string())
             .map(|s| {
                 multipass::TestParser::new(&s)
                     .tests()
-                    .map_err(|e| ParseError::MultiTestExpected)
+                    .map_err(|e| ParseError::InvalidMultipassTest(e))
             })?
     }
 
-    fn multi_action(&mut self) -> Result<String, ParseError> {
+    fn multipass_action(&mut self) -> Result<String, ParseError> {
         self.tokens
             .next()
-            .ok_or(ParseError::MultiActionExpected)
+            .ok_or(ParseError::MultipassActionExpected)
             .map(|s| s.to_string())
     }
 
@@ -1901,40 +1903,40 @@ impl<'a> RuleParser<'a> {
             Opcode::Context => {
                 fail_if_nocross(nocross, opcode)?;
                 Rule::Context {
-                    test: self.multi_test()?,
-                    action: self.multi_action()?,
+                    test: self.multipass_test()?,
+                    action: self.multipass_action()?,
                     direction,
                 }
             }
             Opcode::Pass2 => {
                 fail_if_nocross(nocross, opcode)?;
                 Rule::Pass2 {
-                    test: self.multi_test()?,
-                    action: self.multi_action()?,
+                    test: self.multipass_test()?,
+                    action: self.multipass_action()?,
                     direction,
                 }
             }
             Opcode::Pass3 => {
                 fail_if_nocross(nocross, opcode)?;
                 Rule::Pass3 {
-                    test: self.multi_test()?,
-                    action: self.multi_action()?,
+                    test: self.multipass_test()?,
+                    action: self.multipass_action()?,
                     direction,
                 }
             }
             Opcode::Pass4 => {
                 fail_if_nocross(nocross, opcode)?;
                 Rule::Pass4 {
-                    test: self.multi_test()?,
-                    action: self.multi_action()?,
+                    test: self.multipass_test()?,
+                    action: self.multipass_action()?,
                     direction,
                 }
             }
             Opcode::Correct => {
                 fail_if_nocross(nocross, opcode)?;
                 Rule::Correct {
-                    test: self.multi_test()?,
-                    action: self.multi_action()?,
+                    test: self.multipass_test()?,
+                    action: self.multipass_action()?,
                     direction,
                 }
             }
