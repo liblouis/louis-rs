@@ -1,6 +1,6 @@
 use std::{collections::HashSet, iter::Peekable, num::ParseIntError, str::Chars};
 
-use super::braille::{self, braille_chars, is_braille_dot, BrailleChars, BrailleDot};
+use super::braille::{self, braille_chars, is_braille_dot, BrailleChars};
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum ParseError {
@@ -379,6 +379,7 @@ impl<'a> TestParser<'a> {
 
 #[cfg(test)]
 mod tests {
+    use super::braille::BrailleDot;
     use super::*;
 
     #[test]
