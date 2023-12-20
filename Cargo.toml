@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 thiserror = "1.0"
+search_path = "0.1.4"

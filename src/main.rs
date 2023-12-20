@@ -1,24 +1,42 @@
 use std::io::BufRead;
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::exit;
-use std::{env, fs::read_to_string, io};
+use std::{env, io};
 
 mod parser;
+use parser::expand_includes;
+use parser::table;
 use parser::RuleParser;
+use parser::TableError;
+use search_path::SearchPath;
+
+fn print_errors(errors: Vec<TableError>) {
+    for error in errors {
+        match error {
+            TableError::ParseError { file, line, error } => {
+                eprintln!("{}:{}: {}", file, line, error)
+            }
+            _ => eprintln!("{}", error),
+        }
+    }
+}
 
 fn read_file(filename: &str) {
-    for (line_no, line) in read_to_string(filename).unwrap().lines().enumerate() {
-        // println!("{}", line);
-        if !line.trim().starts_with('#') && !line.trim().is_empty() {
-            let rule = RuleParser::new(line).rule();
-            match rule {
-                Ok(rule) => {
-                    println!("{:?}", rule)
-                }
-                Err(e) => {
-                    eprintln!("{}:{}: {:?}", filename, line_no + 1, e);
+    let search_path = &SearchPath::new_or("LOUIS_TABLE_PATH", ".");
+    match table(&PathBuf::from(filename)) {
+        Ok(rules) => match expand_includes(search_path, rules) {
+            Ok(rules) => {
+                for rule in rules {
+                    println!("{:?}", rule);
                 }
             }
+            Err(errors) => {
+		print_errors(errors);
+            }
+        },
+        Err(errors) => {
+	    print_errors(errors);
         }
     }
 }

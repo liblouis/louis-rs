@@ -1,9 +1,15 @@
 use std::{
     collections::HashSet,
+    ffi::OsStr,
+    fs::read_to_string,
+    io,
     iter::Peekable,
     num::ParseIntError,
+    path::{Path, PathBuf},
     str::{Chars, SplitWhitespace},
 };
+
+use search_path::SearchPath;
 
 use self::{
     braille::{braille_chars, chars_to_dots, BrailleChars},
@@ -107,7 +113,7 @@ pub enum ParseError {
     MultipassTestExpected,
     #[error("Multipass action expected")]
     MultipassActionExpected,
-    #[error("Invalid multipass test")]
+    #[error("Invalid multipass test: {0}")]
     InvalidMultipassTest(#[from] multipass::ParseError),
     #[error("Match pre-pattern expected")]
     MatchPreExpected,
@@ -1960,6 +1966,86 @@ impl<'a> RuleParser<'a> {
             }
         };
         Ok(rule)
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum TableError {
+    #[error("Parse error {error:?} on line {line:?}")]
+    ParseError {
+        file: String,
+        line: usize,
+        error: ParseError,
+    },
+    #[error("Cannot read table")]
+    TableNotReadable(#[from] io::Error),
+    #[error("Cannot find table {path:?}")]
+    TableNotFound { path: PathBuf },
+    #[error("Table format not supported {path:?}")]
+    FormatNotSupported { path: PathBuf },
+}
+
+pub fn table(file: &PathBuf) -> Result<Vec<Rule>, Vec<TableError>> {
+    let (rules, errors): (Vec<_>, Vec<_>) = read_to_string(file)
+        .or_else(|e| Err(vec![TableError::TableNotReadable(e)]))?
+        .lines()
+        .enumerate()
+        // drop comments and empty lines
+        .filter(|(_, line)| !line.trim().starts_with('#') && !line.trim().is_empty())
+        .map(|(line_no, line)| {
+            // parse the line
+            RuleParser::new(line).rule().or_else(|e| {
+                Err(TableError::ParseError {
+                    file: file.to_string_lossy().into(),
+                    line: line_no,
+                    error: e,
+                })
+            })
+        })
+        .partition(Result::is_ok);
+    let rules: Vec<_> = rules.into_iter().map(Result::unwrap).collect();
+    let errors: Vec<_> = errors.into_iter().map(Result::unwrap_err).collect();
+    if errors.is_empty() {
+        Ok(rules)
+    } else {
+        Err(errors)
+    }
+}
+
+fn expand_include(search_path: &SearchPath, rule: Rule) -> Result<Vec<Rule>, Vec<TableError>> {
+    if let Rule::Include { ref file } = rule {
+        let path = Path::new(file);
+        if path.extension().and_then(OsStr::to_str) == Some("dic") {
+            return Err(vec![TableError::FormatNotSupported { path: path.into() }]);
+        }
+        let path = search_path
+            .find_file(path)
+            .ok_or(vec![TableError::TableNotFound { path: path.into() }])?;
+        let rules = table(&path)?;
+        Ok(expand_includes(search_path, rules)?)
+    } else {
+        Ok(vec![rule])
+    }
+}
+
+pub fn expand_includes(
+    search_path: &SearchPath,
+    rules: Vec<Rule>,
+) -> Result<Vec<Rule>, Vec<TableError>> {
+    let (rules, errors): (Vec<_>, Vec<_>) = rules
+        .into_iter()
+        .map(|rule| expand_include(search_path, rule))
+        .partition(Result::is_ok);
+    let rules: Vec<_> = rules.into_iter().map(Result::unwrap).flatten().collect();
+    let errors: Vec<_> = errors
+        .into_iter()
+        .map(Result::unwrap_err)
+        .flatten()
+        .collect();
+    if errors.is_empty() {
+        Ok(rules)
+    } else {
+        Err(errors)
     }
 }
 
