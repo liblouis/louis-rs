@@ -1985,7 +1985,7 @@ pub enum TableError {
     FormatNotSupported { path: PathBuf },
 }
 
-pub fn table(file: &PathBuf) -> Result<Vec<Rule>, Vec<TableError>> {
+pub fn table(file: &Path) -> Result<Vec<Rule>, Vec<TableError>> {
     let (rules, errors): (Vec<_>, Vec<_>) = read_to_string(file)
         .or_else(|e| Err(vec![TableError::TableNotReadable(e)]))?
         .lines()

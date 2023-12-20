@@ -1,6 +1,6 @@
 use std::io::BufRead;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::exit;
 use std::{env, io};
 
@@ -24,7 +24,7 @@ fn print_errors(errors: Vec<TableError>) {
 
 fn read_file(filename: &str) {
     let search_path = &SearchPath::new_or("LOUIS_TABLE_PATH", ".");
-    match table(&PathBuf::from(filename)) {
+    match table(Path::new(filename)) {
         Ok(rules) => match expand_includes(search_path, rules) {
             Ok(rules) => {
                 for rule in rules {
