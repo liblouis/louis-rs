@@ -1,6 +1,6 @@
 mod trie;
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Translation {
     from: String,
     to: String,

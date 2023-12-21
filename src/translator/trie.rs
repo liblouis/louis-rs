@@ -3,24 +3,24 @@ use std::collections::HashMap;
 use super::Translation;
 
 #[derive(Default, Debug)]
-struct TrieNode<'a> {
-    translation: Option<&'a Translation>,
-    children: HashMap<char, TrieNode<'a>>,
+struct TrieNode {
+    translation: Option<Translation>,
+    children: HashMap<char, TrieNode>,
 }
 
 #[derive(Default, Debug)]
-pub struct Trie<'a> {
-    root: TrieNode<'a>,
+pub struct Trie {
+    root: TrieNode,
 }
 
-impl<'a> Trie<'a> {
+impl Trie {
     pub fn new() -> Self {
         Trie {
             root: TrieNode::default(),
         }
     }
 
-    pub fn insert(&mut self, word: &str, translation: &'a Translation) {
+    pub fn insert(&mut self, word: &str, translation: Translation) {
         let mut current_node = &mut self.root;
 
         for c in word.chars() {
@@ -37,7 +37,7 @@ impl<'a> Trie<'a> {
             match current_node.children.get(&c) {
                 Some(node) => {
                     current_node = node;
-                    if let Some(translation) = node.translation {
+                    if let Some(ref translation) = node.translation {
                         matching_rules.push(translation)
                     }
                 }
@@ -85,11 +85,11 @@ mod tests {
             from: "foobar".into(),
             to: "FOOBAR".into(),
         };
-        trie.insert("a", &a);
-        trie.insert("f", &f);
-        trie.insert("fo", &fo);
-        trie.insert("foo", &foo);
-        trie.insert("foobar", &foobar);
+        trie.insert("a", a.clone());
+        trie.insert("f", f.clone());
+        trie.insert("fo", fo.clone());
+        trie.insert("foo", foo.clone());
+        trie.insert("foobar", foobar.clone());
         assert_eq!(trie.find_translations("a"), vec![&a]);
         assert_eq!(trie.find_translations("f"), vec![&f]);
         assert_eq!(trie.find_translations("fo"), vec![&f, &fo]);
