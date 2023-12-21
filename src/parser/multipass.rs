@@ -138,11 +138,11 @@ impl<'a> TestParser<'a> {
         match self.chars.next() {
             Some(e) if e == expected => Ok(()),
             Some(c) => Err(ParseError::CharExpected {
-                expected: expected,
+                expected,
                 found: Some(c),
             }),
             _ => Err(ParseError::CharExpected {
-                expected: expected,
+                expected,
                 found: None,
             }),
         }
@@ -229,7 +229,7 @@ impl<'a> TestParser<'a> {
                 }
                 // pass through any other escape chars
                 Some(_) => Ok(c),
-                _ => return Err(ParseError::InvalidEscapeSequence { found: None }),
+                _ => Err(ParseError::InvalidEscapeSequence { found: None }),
             }
         }
     }

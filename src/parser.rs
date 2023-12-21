@@ -1197,7 +1197,7 @@ impl<'a> RuleParser<'a> {
             // map braille::ParseError to ParseError. I thought the
             // thisError crate implements the from trait between the
             // two?
-            .map(|r| r.map_err(|e| ParseError::InvalidBraille(e)))
+            .map(|r| r.map_err(ParseError::InvalidBraille))
             .collect()
     }
 
@@ -1212,7 +1212,7 @@ impl<'a> RuleParser<'a> {
                     .map(chars_to_dots)
                     // FIXME: it feels really weird that we manually have to
                     // map braille::ParseError to ParseError.
-                    .map(|r| r.map_err(|e| ParseError::InvalidBraille(e)))
+                    .map(|r| r.map_err(ParseError::InvalidBraille))
                     .collect()
             })
             .collect()
@@ -1226,7 +1226,7 @@ impl<'a> RuleParser<'a> {
             .map(|s| {
                 multipass::TestParser::new(&s)
                     .tests()
-                    .map_err(|e| ParseError::InvalidMultipassTest(e))
+                    .map_err(ParseError::InvalidMultipassTest)
             })?
     }
 
@@ -1987,20 +1987,20 @@ pub enum TableError {
 
 pub fn table(file: &Path) -> Result<Vec<Rule>, Vec<TableError>> {
     let (rules, errors): (Vec<_>, Vec<_>) = read_to_string(file)
-        .or_else(|e| Err(vec![TableError::TableNotReadable(e)]))?
+        .map_err(|e| vec![TableError::TableNotReadable(e)])?
         .lines()
         .enumerate()
         // drop comments and empty lines
         .filter(|(_, line)| !line.trim().starts_with('#') && !line.trim().is_empty())
         .map(|(line_no, line)| {
             // parse the line
-            RuleParser::new(line).rule().or_else(|e| {
-                Err(TableError::ParseError {
+            RuleParser::new(line)
+                .rule()
+                .map_err(|e| TableError::ParseError {
                     file: file.to_string_lossy().into(),
                     line: line_no,
                     error: e,
                 })
-            })
         })
         .partition(Result::is_ok);
     let rules: Vec<_> = rules.into_iter().map(Result::unwrap).collect();
@@ -2036,12 +2036,8 @@ pub fn expand_includes(
         .into_iter()
         .map(|rule| expand_include(search_path, rule))
         .partition(Result::is_ok);
-    let rules: Vec<_> = rules.into_iter().map(Result::unwrap).flatten().collect();
-    let errors: Vec<_> = errors
-        .into_iter()
-        .map(Result::unwrap_err)
-        .flatten()
-        .collect();
+    let rules: Vec<_> = rules.into_iter().flat_map(Result::unwrap).collect();
+    let errors: Vec<_> = errors.into_iter().flat_map(Result::unwrap_err).collect();
     if errors.is_empty() {
         Ok(rules)
     } else {
