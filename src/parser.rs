@@ -280,7 +280,7 @@ pub enum Rule {
         direction: Direction,
     },
     Punctuation {
-        chars: String,
+        character: char,
         dots: BrailleChars,
         direction: Direction,
     },
@@ -1297,7 +1297,7 @@ impl<'a> RuleParser<'a> {
             Opcode::Punctuation => {
                 fail_if_nocross(nocross, opcode)?;
                 Rule::Punctuation {
-                    chars: self.chars()?,
+                    character: self.one_char()?,
                     dots: self.explicit_dots()?,
                     direction,
                 }
