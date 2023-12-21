@@ -1,9 +1,9 @@
+use std::io;
 use std::io::BufRead;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::exit;
-use std::io;
 
 use clap::{Parser, Subcommand};
 
@@ -54,11 +54,11 @@ fn read_file(file: &Path) {
                 }
             }
             Err(errors) => {
-		print_errors(errors);
+                print_errors(errors);
             }
         },
         Err(errors) => {
-	    print_errors(errors);
+            print_errors(errors);
         }
     }
 }
@@ -94,9 +94,9 @@ fn main() {
     let args = Cli::parse();
 
     match args.command {
-	Commands::Parse { table } => match table {
-	    Some(table) => read_file(table.as_path()),
-	    None => repl(),
-	},
+        Commands::Parse { table } => match table {
+            Some(table) => read_file(table.as_path()),
+            None => repl(),
+        },
     }
 }
