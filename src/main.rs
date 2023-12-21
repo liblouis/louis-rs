@@ -14,6 +14,8 @@ use parser::RuleParser;
 use parser::TableError;
 use search_path::SearchPath;
 
+mod translator;
+
 #[derive(Debug, Subcommand)]
 enum Commands {
     /// Parse and print debug information about the given table <TABLE>
