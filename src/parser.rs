@@ -275,7 +275,7 @@ pub enum Rule {
     },
 
     Space {
-        chars: String,
+        character: char,
         dots: BrailleChars,
         direction: Direction,
     },
@@ -1289,7 +1289,7 @@ impl<'a> RuleParser<'a> {
             Opcode::Space => {
                 fail_if_nocross(nocross, opcode)?;
                 Rule::Space {
-                    chars: self.chars()?,
+                    character: self.one_char()?,
                     dots: self.explicit_dots()?,
                     direction,
                 }
