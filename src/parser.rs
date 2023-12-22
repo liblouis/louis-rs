@@ -842,27 +842,6 @@ fn fail_if_nocross(nocross: bool, opcode: Opcode) -> Result<(), ParseError> {
     }
 }
 
-// fn dot_to_hex(dot: &BrailleDot) -> u32 {
-//     match dot {
-//         BrailleDot::DOT0 => 0x0000,
-//         BrailleDot::DOT1 => 0x0001,
-//         BrailleDot::DOT2 => 0x0002,
-//         BrailleDot::DOT3 => 0x0004,
-//         BrailleDot::DOT4 => 0x0008,
-//         BrailleDot::DOT5 => 0x0010,
-//         BrailleDot::DOT6 => 0x0020,
-//         BrailleDot::DOT7 => 0x0040,
-//         BrailleDot::DOT8 => 0x0080,
-//         BrailleDot::DOT9 => 0x0100,
-//         BrailleDot::DOTA => 0x0200,
-//         BrailleDot::DOTB => 0x0400,
-//         BrailleDot::DOTC => 0x0800,
-//         BrailleDot::DOTD => 0x1000,
-//         BrailleDot::DOTE => 0x2000,
-//         BrailleDot::DOTF => 0x4000,
-//     }
-// }
-
 pub struct RuleParser<'a> {
     tokens: Peekable<SplitWhitespace<'a>>,
 }

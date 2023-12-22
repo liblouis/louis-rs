@@ -25,25 +25,22 @@ impl<'a> TranslationMapping<'a> {
 
 #[derive(Debug)]
 pub struct TranslationTable {
-    undefined: Translation,
+    undefined: Option<Translation>,
     trie: Trie,
 }
 
 impl TranslationTable {
     pub fn compile(rules: &Vec<Rule>) -> Self {
-        let mut undefined = Translation {
-            from: "".into(),
-            to: "_".into(),
-        };
+        let mut undefined = None;
         let mut trie = Trie::new();
 
         for rule in rules {
             match rule {
                 Rule::Undefined { dots } => {
-                    undefined = Translation {
+                    undefined = Some(Translation {
                         from: "".into(),
                         to: dots_to_unicode(dots),
-                    };
+                    });
                 }
                 Rule::Space {
                     character, dots, ..
