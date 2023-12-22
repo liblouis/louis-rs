@@ -55,10 +55,7 @@ mod tests {
     #[test]
     fn empty_trie_test() {
         let trie = Trie::new();
-        assert_eq!(
-            trie.find_translations("foo"),
-            Vec::<&Translation>::new()
-        );
+        assert_eq!(trie.find_translations("foo"), Vec::<&Translation>::new());
     }
 
     #[test]
