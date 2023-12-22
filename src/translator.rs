@@ -1,3 +1,7 @@
+use trie::Trie;
+
+use crate::parser::{dots_to_unicode, Braille, Rule};
+
 mod trie;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -18,3 +22,98 @@ impl<'a> TranslationMapping<'a> {
         TranslationMapping { input, output }
     }
 }
+
+#[derive(Debug)]
+pub struct TranslationTable {
+    undefined: Translation,
+    trie: Trie,
+}
+
+impl TranslationTable {
+    pub fn compile(rules: &Vec<Rule>) -> Self {
+        let mut undefined = Translation {
+            from: "".into(),
+            to: "_".into(),
+        };
+        let mut trie = Trie::new();
+
+        for rule in rules {
+            match rule {
+                Rule::Undefined { dots } => {
+                    undefined = Translation {
+                        from: "".into(),
+                        to: dots_to_unicode(dots),
+                    };
+                }
+                Rule::Space {
+                    character, dots, ..
+                }
+                | Rule::Punctuation {
+                    character, dots, ..
+                }
+                | Rule::Digit {
+                    character, dots, ..
+                }
+                | Rule::Letter {
+                    character,
+                    dots: Braille::Explicit(dots),
+                    ..
+                }
+                | Rule::Lowercase {
+                    character, dots, ..
+                }
+                | Rule::Uppercase {
+                    character, dots, ..
+                }
+                | Rule::Litdigit {
+                    character, dots, ..
+                }
+                | Rule::Sign {
+                    character, dots, ..
+                }
+                | Rule::Math {
+                    character, dots, ..
+                } => trie.insert(
+                    &character.to_string(),
+                    Translation {
+                        from: character.to_string(),
+                        to: dots_to_unicode(dots),
+                    },
+                ),
+                Rule::Comp6 {
+                    chars,
+                    dots: Braille::Explicit(dots),
+                    ..
+                }
+                | Rule::Always {
+                    chars,
+                    dots: Braille::Explicit(dots),
+                    ..
+                }
+                | Rule::Word {
+                    chars,
+                    dots: Braille::Explicit(dots),
+                    ..
+                }
+                | Rule::Begword {
+                    chars,
+                    dots: Braille::Explicit(dots),
+                    ..
+                }
+                | Rule::Endword {
+                    chars,
+                    dots: Braille::Explicit(dots),
+                    ..
+                } => trie.insert(
+                    chars,
+                    Translation {
+                        from: chars.into(),
+                        to: dots_to_unicode(dots),
+                    },
+                ),
+                _ => (),
+            }
+        }
+        TranslationTable { undefined, trie }
+    }
+
