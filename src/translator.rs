@@ -23,6 +23,15 @@ impl<'a> TranslationMapping<'a> {
     }
 }
 
+impl<'a> From<&'a Translation> for TranslationMapping<'a> {
+    fn from(translation: &'a Translation) -> Self {
+        Self {
+            input: &translation.from,
+            output: &translation.to,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct TranslationTable {
     undefined: Option<Translation>,
@@ -115,31 +124,49 @@ impl TranslationTable {
     }
 
     pub fn translate(&self, input: &str) -> String {
-        let mut translations: Vec<Translation> = Vec::new();
+        let mut translations: Vec<TranslationMapping> = Vec::new();
         let mut current = input;
-        loop {
+        let default_replacement = "?";
+        while !current.is_empty() {
             let candidates = self.trie.find_translations(current);
-            let translation = if let Some(longest) = candidates.last() {
-                *longest
+            if let Some(t) = candidates.last() {
+                let mapping = TranslationMapping::from(*t);
+                current = current.strip_prefix(mapping.input).unwrap();
+                translations.push(mapping);
             } else {
-                match current.chars().next() {
-                    Some(c) => Translation {
-                        from: c.to_string(),
-                        to: self.undefined.to,
-                    },
-                    _ => {
-                        break;
-                    }
-                }
-            };
-            translations.push(translation.clone());
-            current = match current.strip_prefix(&translation.from) {
-                Some(i) => i,
-                None => {
-                    break;
-                }
-            };
+                let replacement = match self.undefined {
+                    Some(ref r) => &r.to,
+                    None => default_replacement,
+                };
+                let next_char = current.chars().next().unwrap();
+                let mapping = TranslationMapping {
+                    input: &current[..next_char.len_utf8()],
+                    output: replacement,
+                };
+                current = current.strip_prefix(mapping.input).unwrap();
+                translations.push(mapping);
+            }
         }
-        translations.into_iter().map(|t| t.to).collect()
+        translations.iter().map(|t| t.output).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::RuleParser;
+
+    #[test]
+    fn translate_test() {
+        let rules = vec![
+            RuleParser::new("always foo 123").rule().unwrap(),
+            RuleParser::new("always bar 456").rule().unwrap(),
+            RuleParser::new("space \\s 0").rule().unwrap(),
+        ];
+        let table = TranslationTable::compile(&rules);
+        assert_eq!(table.translate("foobar"), "⠇⠸");
+        assert_eq!(table.translate("  "), "⠀⠀");
+        assert_eq!(table.translate("🐂"), "?");
     }
 }
