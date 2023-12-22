@@ -295,7 +295,7 @@ pub enum Rule {
         dots: BrailleChars,
     },
     Letter {
-        chars: String,
+        character: char,
         dots: Braille,
         direction: Direction,
     },
@@ -1321,7 +1321,7 @@ impl<'a> RuleParser<'a> {
             Opcode::Letter => {
                 fail_if_nocross(nocross, opcode)?;
                 Rule::Letter {
-                    chars: self.chars()?,
+                    character: self.one_char()?,
                     dots: self.dots()?,
                     direction,
                 }
