@@ -9,3 +9,4 @@ edition = "2021"
 thiserror = "1.0"
 search_path = "0.1.4"
 clap = { version = "4.4.11", features = ["derive"] }
+enumset = "1.1.3"
