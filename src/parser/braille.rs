@@ -83,6 +83,66 @@ pub fn braille_chars(chars: &str) -> Result<BrailleChars, ParseError> {
     chars.split('-').map(chars_to_dots).collect()
 }
 
+fn dot_to_hex(dot: &BrailleDot) -> u32 {
+    match dot {
+        BrailleDot::Dot0 => 0x0000,
+        BrailleDot::Dot1 => 0x0001,
+        BrailleDot::Dot2 => 0x0002,
+        BrailleDot::Dot3 => 0x0004,
+        BrailleDot::Dot4 => 0x0008,
+        BrailleDot::Dot5 => 0x0010,
+        BrailleDot::Dot6 => 0x0020,
+        BrailleDot::Dot7 => 0x0040,
+        BrailleDot::Dot8 => 0x0080,
+        BrailleDot::Dot9 => 0x0100,
+        BrailleDot::DotA => 0x0200,
+        BrailleDot::DotB => 0x0400,
+        BrailleDot::DotC => 0x0800,
+        BrailleDot::DotD => 0x1000,
+        BrailleDot::DotE => 0x2000,
+        BrailleDot::DotF => 0x4000,
+    }
+}
+
+fn has_virtual_dots(char: &BrailleChar) -> bool {
+    let virtual_dots = HashSet::from([
+        BrailleDot::Dot9,
+        BrailleDot::DotA,
+        BrailleDot::DotB,
+        BrailleDot::DotC,
+        BrailleDot::DotD,
+        BrailleDot::DotE,
+        BrailleDot::DotF,
+    ]);
+    !virtual_dots
+        .intersection(char)
+        .collect::<HashSet<_>>()
+        .is_empty()
+}
+
+// FIXME: the following two functions should be defined as associated
+// functions, i.e. inside an impl block for BrailleChar or as an
+// implementation of the From trait. Both solutions would probably
+// require the newtype pattern as we do not own these types, see
+// https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#using-the-newtype-pattern-to-implement-external-traits-on-external-types
+fn dot_to_unicode(dot: &BrailleChar) -> char {
+    let unicode_plane = if has_virtual_dots(dot) {
+        0xF0000 // Unicode Supplementary Private Use Area-A
+    } else {
+        0x2800 // braille patterns
+    };
+    let unicode = dot
+        .iter()
+        .map(dot_to_hex)
+        .fold(unicode_plane, |acc, x| acc | x);
+    char::from_u32(unicode).unwrap()
+}
+
+/// Map `BrailleChars` to a string containing unicode braille
+pub fn dots_to_unicode(dots: &BrailleChars) -> String {
+    dots.iter().map(dot_to_unicode).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,6 +194,18 @@ mod tests {
         assert_eq!(
             braille_chars(""),
             Err(ParseError::InvalidBraille { character: None })
+        );
+    }
+
+    #[test]
+    fn dots_to_unicode_test() {
+        assert_eq!(
+            dots_to_unicode(&vec![HashSet::from([BrailleDot::Dot1, BrailleDot::Dot8])]),
+            "⢁".to_string()
+        );
+        assert_eq!(
+            dots_to_unicode(&vec![HashSet::from([BrailleDot::Dot1, BrailleDot::Dot9])]),
+            "\u{f0101}".to_string()
         );
     }
 }

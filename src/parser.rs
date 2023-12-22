@@ -16,6 +16,8 @@ use self::{
     multipass::Test,
 };
 
+pub use braille::dots_to_unicode;
+
 mod braille;
 mod multipass;
 
