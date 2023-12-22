@@ -30,7 +30,8 @@ enum Commands {
     Translate {
         /// Braille table to use for the translation
         table: PathBuf,
-        /// String to translate
+        /// String to translate. If no input is specified, a REPL is
+        /// opened and each line you enter is translated.
         input: Option<String>,
     },
 }
