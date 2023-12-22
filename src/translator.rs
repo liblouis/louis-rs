@@ -126,7 +126,11 @@ impl TranslationTable {
                 _ => (),
             }
         }
-        TranslationTable { undefined, direction, trie }
+        TranslationTable {
+            undefined,
+            direction,
+            trie,
+        }
     }
 
     pub fn translate(&self, input: &str) -> String {

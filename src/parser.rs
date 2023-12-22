@@ -31,7 +31,7 @@ enum Constraint {
 
 // type Constraints = HashSet<Constraint>;
 
-#[derive(EnumSetType, Debug)]
+#[derive(EnumSetType, Debug, clap::ValueEnum)]
 pub enum Direction {
     Forward,
     Backward,

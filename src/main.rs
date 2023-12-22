@@ -34,6 +34,8 @@ enum Commands {
         /// String to translate. If no input is specified, a REPL is
         /// opened and each line you enter is translated.
         input: Option<String>,
+        #[arg(value_enum, short, long, default_value_t=Direction::Forward)]
+        direction: Direction,
     },
 }
 
@@ -77,11 +79,11 @@ fn parse(file: &Path) {
     }
 }
 
-fn translate(table: &Path, input: &str) {
+fn translate(table: &Path, direction: Direction, input: &str) {
     let rules = parser::table(table);
     match rules {
         Ok(rules) => {
-            let table = TranslationTable::compile(rules, Direction::Forward);
+            let table = TranslationTable::compile(rules, direction);
             println!("{}", table.translate(input));
         }
         Err(errors) => {
@@ -127,13 +129,17 @@ fn main() {
             Some(table) => parse(table.as_path()),
             None => repl(Box::new(parse_line)),
         },
-        Commands::Translate { table, input } => match input {
-            Some(input) => translate(&table, &input),
+        Commands::Translate {
+            table,
+            input,
+            direction,
+        } => match input {
+            Some(input) => translate(&table, direction, &input),
             None => {
                 let rules = parser::table(&table);
                 match rules {
                     Ok(rules) => {
-                        let table = TranslationTable::compile(rules, Direction::Forward);
+                        let table = TranslationTable::compile(rules, direction);
                         repl(Box::new(move |input| {
                             println!("{}", table.translate(&input))
                         }));
