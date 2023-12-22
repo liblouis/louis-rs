@@ -117,3 +117,32 @@ impl TranslationTable {
         TranslationTable { undefined, trie }
     }
 
+    pub fn translate(&self, input: &str) -> String {
+        let mut translations: Vec<Translation> = Vec::new();
+        let mut current = input;
+        loop {
+            let candidates = self.trie.find_translations(current);
+            let translation = if let Some(longest) = candidates.last() {
+                *longest
+            } else {
+                match current.chars().next() {
+                    Some(c) => Translation {
+                        from: c.to_string(),
+                        to: self.undefined.to,
+                    },
+                    _ => {
+                        break;
+                    }
+                }
+            };
+            translations.push(translation.clone());
+            current = match current.strip_prefix(&translation.from) {
+                Some(i) => i,
+                None => {
+                    break;
+                }
+            };
+        }
+        translations.into_iter().map(|t| t.to).collect()
+    }
+}
