@@ -1,0 +1,131 @@
+#+title: Experimental liblouis re-implementation in Rust
+
+An experiment at re-writing liblouis in Rust.
+
+* Usage
+
+#+BEGIN_SRC shell
+$ cargo test
+#+END_SRC
+
+* Rationale
+Many if not most of the CVEs of liblouis are rooted in the hand
+crafted parsing functions of liblouis.
+
+Moving to Rust for solid memory management and to a parser combinator
+like nom would be of tremendeous help to avoid the buffer overflow
+problems.
+
+* Status
+At the moment this is nothing but an experiment, basically an extended
+afternoon hack.
+
+Support for meatier bits of the liblouis syntax such as the test and
+action expressions in the multipart opcodes is missing.
+
+At the same time it is IMHO amazing how far you can get with very
+little code...
+
+* Prerequisites
+
+- You need the [[https://www.rust-lang.org/][Rust tool chain]].
+
+* Contributing
+If you have any improvements or comments please feel free to file a
+pull request or an issue.
+
+* Acknowledgements
+
+The parser is built from the grammar used in [[https://github.com/liblouis/tree-sitter-liblouis][tree-sitter-liblouis]],
+which is a port of the [[https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form][EBNF grammar]] in [[https://github.com/liblouis/rewrite-louis][rewrite-louis]], which in turn is
+a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][Parsing expression grammar]] from [[https://github.com/liblouis/louis-parser][louis-parser]].
+
+* References
+- [[https://dev.to/timclicks/two-trie-implementations-in-rust-ones-super-fast-2f3m][Two trie implementations in Rust]]
+
+* Todo
+- [X] List the line number of an error
+- [X] Complete the parser
+  - [X] handle the '=' braille pattern
+  - [X] handle escaped unicode digit in ~litdigit~
+  - [X] handle escaped space ('\s')
+- [ ] extend the code to handle character attributes. I think quite a
+  bit is already there (data types), but the rules are ignored
+  currently.
+- [ ] add support for prefix handling. Just ignore the rule when
+  constructing the translation table for forward or backward
+  translation.
+- [ ] add support for backward translation
+- [ ] add support for cursor handling
+- [ ] extend the translation functionality, e.g.
+  - [ ] add code to handle word boundaries so we could support beg- and
+    endword.
+  - [ ] add code to handle braille indication (caps, emphasis, etc)
+- [X] Replace the ~BrailleChar~ type with Unicode braille
+  - this doesn't work as Unicode braille doesn't cater for virtual dots
+- [ ] Add another step to the pipeline similar to the
+  ~expand_includes~ step that normalizes all the
+  ~BrailleCharsOrImplicit::Implicit~ variants into
+  ~BrailleCharsOrImplicit::Explicit~ by building a hashmap of
+  character definitions and then looking up the implicit patterns and
+  replacing them with the explicit dots.
+- [ ] experiment with using [[https://insta.rs][insta]] for testing
+
+* Open Questions
+- Should the translation API be against ~&str~ or ~&[char]~
+  - most likely ~&str~, as that is the basic data type for strings
+- use a trie, e.g. the fst crate
+- how to handle emphasis?
+- if the translation API is against ~&str~, how are we going to do the
+  typeform information?
+- There is basic support for checking based on YAML files. However,
+  the supported syntax is more normalized. It is not clear whether we
+  can support the existing syntax.
+- what are we going to do with hyphenation? The parser doesn't handle
+  hyphenation files currently. Should it? We could instead just use one
+  of the hyphenation crates, e.g.
+  https://docs.rs/hyphenation/latest/hyphenation/
+  - the lou_hyphenate API call: I think we should definitely drop this
+    in the Rust version.
+  - the nocross opcode: It would be great if we could reuse something,
+    although I'm not entirely sure that is possible.
+    - I think the [[https://docs.rs/hyphenation/latest/hyphenation/][hyphenation crate]] fits the bill just nicely. You
+      feed it the hyphenation tables (either the ones from the
+      liblouis distribution or the ones from libhyphen) and then you
+      just query it for hyphenation
+      #+begin_src rust
+	extern crate hyphenation;
+
+	use hyphenation::{Hyphenator, Standard, Language};
+	use hyphenation::Load;
+
+	let path_to_dict = "/path/to/english-dictionary.bincode";
+	let en_us = Standard::from_path(Language::EnglishUS, path_to_dict)?;
+
+	let hyphenated = en_us.hyphenate("anfractuous");
+
+	let breaks = &hyphenated.breaks;
+	assert_eq!(breaks, &[2, 6, 8]);
+
+	let hyphenated_segments : Vec<&str>= hyphenated.iter().collect()
+	assert_eq!(hyphenated_segments, &["an-", "frac-", "tu-", "ous"]);
+
+      #+end_src
+
+* License
+
+Copyright (C) 2023 Swiss Library for the Blind, Visually Impaired and Print Disabled
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see
+<https://www.gnu.org/licenses/>.
