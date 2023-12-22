@@ -14,6 +14,7 @@ use parser::RuleParser;
 use parser::TableError;
 use search_path::SearchPath;
 
+use crate::parser::Direction;
 use crate::translator::TranslationTable;
 
 mod translator;
@@ -80,7 +81,7 @@ fn translate(table: &Path, input: &str) {
     let rules = parser::table(table);
     match rules {
         Ok(rules) => {
-            let table = TranslationTable::compile(&rules);
+            let table = TranslationTable::compile(rules, Direction::Forward);
             println!("{}", table.translate(input));
         }
         Err(errors) => {
@@ -132,7 +133,7 @@ fn main() {
                 let rules = parser::table(&table);
                 match rules {
                     Ok(rules) => {
-                        let table = TranslationTable::compile(&rules);
+                        let table = TranslationTable::compile(rules, Direction::Forward);
                         repl(Box::new(move |input| {
                             println!("{}", table.translate(&input))
                         }));

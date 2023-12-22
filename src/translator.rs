@@ -1,6 +1,6 @@
 use trie::Trie;
 
-use crate::parser::{dots_to_unicode, Braille, Rule};
+use crate::parser::{dots_to_unicode, Braille, Direction, Rule};
 
 mod trie;
 
@@ -36,19 +36,25 @@ impl<'a> From<&'a Translation> for TranslationMapping<'a> {
 pub struct TranslationTable {
     undefined: Option<Translation>,
     trie: Trie,
+    direction: Direction,
 }
 
 impl TranslationTable {
-    pub fn compile(rules: &Vec<Rule>) -> Self {
+    pub fn compile(rules: Vec<Rule>, direction: Direction) -> Self {
         let mut undefined = None;
         let mut trie = Trie::new();
+
+        let rules: Vec<Rule> = rules
+            .into_iter()
+            .filter(|r| r.directions().contains(direction))
+            .collect();
 
         for rule in rules {
             match rule {
                 Rule::Undefined { dots } => {
                     undefined = Some(Translation {
                         from: "".into(),
-                        to: dots_to_unicode(dots),
+                        to: dots_to_unicode(&dots),
                     });
                 }
                 Rule::Space {
@@ -83,7 +89,7 @@ impl TranslationTable {
                     &character.to_string(),
                     Translation {
                         from: character.to_string(),
-                        to: dots_to_unicode(dots),
+                        to: dots_to_unicode(&dots),
                     },
                 ),
                 Rule::Comp6 {
@@ -111,16 +117,16 @@ impl TranslationTable {
                     dots: Braille::Explicit(dots),
                     ..
                 } => trie.insert(
-                    chars,
+                    &chars,
                     Translation {
-                        from: chars.into(),
-                        to: dots_to_unicode(dots),
+                        from: chars.to_string(),
+                        to: dots_to_unicode(&dots),
                     },
                 ),
                 _ => (),
             }
         }
-        TranslationTable { undefined, trie }
+        TranslationTable { undefined, direction, trie }
     }
 
     pub fn translate(&self, input: &str) -> String {
@@ -164,7 +170,7 @@ mod tests {
             RuleParser::new("always bar 456").rule().unwrap(),
             RuleParser::new("space \\s 0").rule().unwrap(),
         ];
-        let table = TranslationTable::compile(&rules);
+        let table = TranslationTable::compile(rules, Direction::Forward);
         assert_eq!(table.translate("foobar"), "⠇⠸");
         assert_eq!(table.translate("  "), "⠀⠀");
         assert_eq!(table.translate("🐂"), "?");

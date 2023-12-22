@@ -9,7 +9,7 @@ use std::{
     str::{Chars, SplitWhitespace},
 };
 
-use enumset::{EnumSetType, EnumSet};
+use enumset::{EnumSet, EnumSetType};
 use search_path::SearchPath;
 
 use self::{
@@ -709,7 +709,7 @@ pub enum Rule {
 }
 
 impl Rule {
-    fn directions(&self) -> Directions {
+    pub fn directions(&self) -> Directions {
         match self {
             Rule::Display { directions, .. }
             | Rule::Multind { directions, .. }
