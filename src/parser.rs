@@ -9,7 +9,9 @@ use std::{
     str::{Chars, SplitWhitespace},
 };
 
+use enumset::enum_set;
 use enumset::{EnumSet, EnumSetType};
+
 use search_path::SearchPath;
 
 use self::{
@@ -22,14 +24,16 @@ pub use braille::dots_to_unicode;
 mod braille;
 mod multipass;
 
-#[derive(Hash, Eq, PartialEq, Debug)]
-enum Constraint {
+#[derive(EnumSetType, Debug)]
+pub enum Constraint {
     Nofor,
     Noback,
     Nocross,
 }
 
-// type Constraints = HashSet<Constraint>;
+type Constraints = EnumSet<Constraint>;
+
+const DIRECTIONS: Constraints = enum_set!(Constraint::Nofor | Constraint::Noback);
 
 #[derive(EnumSetType, Debug, clap::ValueEnum)]
 pub enum Direction {
@@ -39,18 +43,16 @@ pub enum Direction {
 
 type Directions = EnumSet<Direction>;
 
-#[derive(PartialEq, Debug)]
-struct Constraints {
-    across_syllable_boundaries: bool,
-    direction: Direction,
-}
-
-// impl Default for Constraints {
-//     fn default() -> Self {
-//         Self {
-//             across_syllable_boundaries: true,
-//             direction: Direction::Both,
-//         }
+// impl From<Constraints> for Directions {
+//     fn from(value: Constraints) -> Self {
+//         let mut dirs = Directions::empty();
+// 	if !value.contains(Constraint::Nofor) {
+// 	    dirs.insert(Direction::Forward)
+// 	}
+// 	if !value.contains(Constraint::Noback) {
+// 	    dirs.insert(Direction::Backward)
+// 	}
+// 	dirs
 //     }
 // }
 
@@ -93,13 +95,11 @@ pub enum ParseError {
     InvalidEscape,
     #[error("Names can only contain a-z and A-Z, got {name:?}")]
     InvalidName { name: String },
-    #[error("Direction {directions:?} not allowed for opcode {opcode:?}")]
-    InvalidDirection {
-        directions: Directions,
+    #[error("Constraints '{constraints:?}' not allowed for opcode {opcode:?}.")]
+    InvalidConstraints {
+        constraints: Constraints,
         opcode: Opcode,
     },
-    #[error("Nocross not allowed for opcode {opcode:?}")]
-    InvalidNocross { opcode: Opcode },
     #[error("Expected classname, got {found:?}")]
     ClassNameExpected { found: Option<String> },
     #[error("Opcode expected, got {found:?}")]
@@ -819,25 +819,17 @@ fn unescape(s: &str) -> Result<String, ParseError> {
     Ok(new)
 }
 
-/// Return an error if a direction or nocross have been specified
-fn fail_if_direction_or_nocross(
-    directions: Directions,
-    nocross: bool,
+/// Return an error if actual contains more constraints than expected
+fn fail_if_invalid_constraints(
+    expected: Constraints,
+    actual: Constraints,
     opcode: Opcode,
 ) -> Result<(), ParseError> {
-    if directions != Direction::Forward | Direction::Backward {
-        Err(ParseError::InvalidDirection { directions, opcode })
-    } else if nocross {
-        Err(ParseError::InvalidNocross { opcode })
-    } else {
-        Ok(())
-    }
-}
-
-/// Return an error if nocross has been specified
-fn fail_if_nocross(nocross: bool, opcode: Opcode) -> Result<(), ParseError> {
-    if nocross {
-        Err(ParseError::InvalidNocross { opcode })
+    if !actual.difference(expected).is_empty() {
+        Err(ParseError::InvalidConstraints {
+            constraints: actual.difference(expected),
+            opcode,
+        })
     } else {
         Ok(())
     }
@@ -875,18 +867,17 @@ impl<'a> RuleParser<'a> {
         }
     }
 
-    fn direction(&mut self) -> Directions {
-        if self.nofor().is_some() {
-            Direction::Backward.into()
-        } else if self.noback().is_some() {
-            Direction::Forward.into()
-        } else {
-            Direction::Forward | Direction::Backward
+    fn constraints(&mut self) -> Constraints {
+        let mut constraints = Constraints::EMPTY;
+        if let Some(c) = self.nofor() {
+            constraints.insert(c);
+        } else if let Some(c) = self.noback() {
+            constraints.insert(c);
         }
-    }
-
-    fn across_syllable_boundaries(&mut self) -> bool {
-        self.nocross().is_some()
+        if let Some(c) = self.nocross() {
+            constraints.insert(c);
+        }
+        constraints
     }
 
     fn with_class(&mut self) -> Result<Option<WithClass>, ParseError> {
@@ -1234,26 +1225,33 @@ impl<'a> RuleParser<'a> {
     }
 
     pub fn rule(&mut self) -> Result<Rule, ParseError> {
-        let directions = self.direction();
-        let nocross = self.across_syllable_boundaries();
+        let constraints = self.constraints();
+        let nocross = constraints.contains(Constraint::Nocross);
+        let mut directions = Directions::all();
+        if constraints.contains(Constraint::Nofor) {
+            directions.remove(Direction::Forward);
+        }
+        if constraints.contains(Constraint::Noback) {
+            directions.remove(Direction::Backward);
+        }
         let _classes = self.with_classes();
         let matches = self.with_matches();
         let opcode = self.opcode()?;
         let rule = match opcode {
             Opcode::Include => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Include {
                     file: self.filename()?,
                 }
             }
             Opcode::Undefined => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Undefined {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Display => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Display {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1261,7 +1259,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Multind => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Multind {
                     dots: self.explicit_dots()?,
                     names: self.many_names()?,
@@ -1269,7 +1267,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Space => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Space {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1277,7 +1275,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Punctuation => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Punctuation {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1285,7 +1283,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Digit => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Digit {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1293,7 +1291,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Grouping => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Grouping {
                     name: self.name()?,
                     chars: self.chars()?,
@@ -1301,7 +1299,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Letter => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Letter {
                     character: self.one_char()?,
                     dots: self.dots()?,
@@ -1309,7 +1307,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Base => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Base {
                     name: self.name()?,
                     from: self.one_char()?,
@@ -1317,7 +1315,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Lowercase => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Lowercase {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1325,7 +1323,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Uppercase => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Uppercase {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1333,7 +1331,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Litdigit => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Litdigit {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1341,7 +1339,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Sign => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Sign {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1349,7 +1347,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Math => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Math {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1358,7 +1356,7 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Modeletter => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Modeletter {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
@@ -1366,14 +1364,14 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Capsletter => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Capsletter {
                     dots: self.explicit_dots()?,
                     directions,
                 }
             }
             Opcode::Begmodeword => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Begmodeword {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
@@ -1381,126 +1379,126 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Begcapsword => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Begcapsword {
                     dots: self.explicit_dots()?,
                     directions,
                 }
             }
             Opcode::Endcapsword => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Endcapsword {
                     dots: self.explicit_dots()?,
                     directions,
                 }
             }
             Opcode::Capsmodechars => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Capsmodechars {
                     chars: self.chars()?,
                 }
             }
             Opcode::Begcaps => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Begcaps {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Endcaps => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Endcaps {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Begcapsphrase => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Begcapsphrase {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Endcapsphrase => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Endcapsphrase {
                     position: self.position()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Lencapsphrase => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Lencapsphrase {
                     number: self.number()?,
                 }
             }
             Opcode::Letsign => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Letsign {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Noletsign => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Noletsign {
                     chars: self.chars()?,
                 }
             }
             Opcode::Noletsignbefore => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Noletsignbefore {
                     chars: self.chars()?,
                 }
             }
             Opcode::Noletsignafter => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Noletsignafter {
                     chars: self.chars()?,
                 }
             }
             Opcode::Nocontractsign => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Nocontractsign {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Numsign => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Numsign {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Nonumsign => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Nonumsign {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Numericnocontchars => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Numericnocontchars {
                     chars: self.chars()?,
                 }
             }
             Opcode::Numericmodechars => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Numericmodechars {
                     chars: self.chars()?,
                 }
             }
             Opcode::Midendnumericmodechars => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Midendnumericmodechars {
                     chars: self.chars()?,
                 }
             }
 
             Opcode::Begmodephrase => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Begmodephrase {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Endmodephrase => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Endmodephrase {
                     name: self.name()?,
                     position: self.position()?,
@@ -1508,7 +1506,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Lenmodephrase => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Lenmodephrase {
                     name: self.name()?,
                     number: self.number()?,
@@ -1516,49 +1514,49 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Seqdelimiter => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Seqdelimiter {
                     chars: self.chars()?,
                 }
             }
             Opcode::Seqbeforechars => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Seqbeforechars {
                     chars: self.chars()?,
                 }
             }
             Opcode::Seqafterchars => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Seqafterchars {
                     chars: self.chars()?,
                 }
             }
             Opcode::Seqafterpattern => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Seqafterpattern {
                     chars: self.chars()?,
                 }
             }
             Opcode::Seqafterexpression => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Seqafterexpression {
                     chars: self.chars()?,
                 }
             }
 
             Opcode::Class => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Class {
                     name: self.name()?,
                     chars: self.chars()?,
                 }
             }
             Opcode::Emphclass => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Emphclass { name: self.name()? }
             }
             Opcode::Begemph => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Begemph {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
@@ -1566,7 +1564,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Endemph => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Endemph {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
@@ -1574,49 +1572,49 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Noemphchars => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Noemphchars {
                     name: self.name()?,
                     chars: self.chars()?,
                 }
             }
             Opcode::Emphletter => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Emphletter {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Begemphword => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Begemphword {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Endemphword => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Endemphword {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Emphmodechars => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Emphmodechars {
                     name: self.name()?,
                     chars: self.chars()?,
                 }
             }
             Opcode::Begemphphrase => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Begemphphrase {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Endemphphrase => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Endemphphrase {
                     name: self.name()?,
                     position: self.position()?,
@@ -1624,7 +1622,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Lenemphphrase => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Lenemphphrase {
                     name: self.name()?,
                     number: self.number()?,
@@ -1632,14 +1630,14 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Begcomp => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Begcomp {
                     dots: self.explicit_dots()?,
                     directions,
                 }
             }
             Opcode::Endcomp => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Endcomp {
                     dots: self.explicit_dots()?,
                     directions,
@@ -1647,14 +1645,14 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Decpoint => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Decpoint {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Hyphen => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Hyphen {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
@@ -1663,32 +1661,32 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Capsnocont => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Capsnocont {}
             }
 
             Opcode::Compbrl => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Compbrl {
                     chars: self.chars()?,
                     directions,
                 }
             }
             Opcode::Comp6 => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Comp6 {
                     chars: self.chars()?,
                     dots: self.dots()?,
                 }
             }
             Opcode::Nocont => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Nocont {
                     chars: self.chars()?,
                 }
             }
             Opcode::Replace => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Replace {
                     chars: self.chars()?,
                     replacement: self.maybe_chars(),
@@ -1701,7 +1699,7 @@ impl<'a> RuleParser<'a> {
                 nocross,
             },
             Opcode::Repeated => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Repeated {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
@@ -1709,14 +1707,14 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Repword => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Repword {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Rependword => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 let chars = self.chars()?;
                 let many_dots = self.many_dots()?;
                 if many_dots.len() != 2 {
@@ -1728,14 +1726,14 @@ impl<'a> RuleParser<'a> {
                 Rule::Rependword { chars, dots, other }
             }
             Opcode::Largesign => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Largesign {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Word => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Word {
                     chars: self.chars()?,
                     dots: self.dots()?,
@@ -1743,21 +1741,21 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Syllable => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Syllable {
                     chars: self.chars()?,
                     dots: self.dots()?,
                 }
             }
             Opcode::Joinword => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Joinword {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Lowword => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Lowword {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
@@ -1765,7 +1763,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Contraction => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Contraction {
                     chars: self.chars()?,
                 }
@@ -1819,7 +1817,7 @@ impl<'a> RuleParser<'a> {
                 nocross,
             },
             Opcode::Exactdots => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Exactdots {
                     chars: self.chars()?,
                 }
@@ -1856,7 +1854,7 @@ impl<'a> RuleParser<'a> {
             },
 
             Opcode::Attribute => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Attribute {
                     name: self.name()?,
                     chars: self.chars()?,
@@ -1864,7 +1862,7 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Swapcd => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Swapcd {
                     name: self.name()?,
                     chars: self.chars()?,
@@ -1872,7 +1870,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Swapdd => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Swapdd {
                     name: self.name()?,
                     dots: self.many_dots()?,
@@ -1880,7 +1878,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Swapcc => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Swapcc {
                     name: self.name()?,
                     chars: self.chars()?,
@@ -1889,7 +1887,7 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Context => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Context {
                     test: self.multipass_test()?,
                     action: self.multipass_action()?,
@@ -1897,7 +1895,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Pass2 => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Pass2 {
                     test: self.multipass_test()?,
                     action: self.multipass_action()?,
@@ -1905,7 +1903,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Pass3 => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Pass3 {
                     test: self.multipass_test()?,
                     action: self.multipass_action()?,
@@ -1913,7 +1911,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Pass4 => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Pass4 {
                     test: self.multipass_test()?,
                     action: self.multipass_action()?,
@@ -1921,7 +1919,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Correct => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Correct {
                     test: self.multipass_test()?,
                     action: self.multipass_action()?,
@@ -1930,7 +1928,7 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Match => {
-                fail_if_nocross(nocross, opcode)?;
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Match {
                     pre: self.match_pre()?,
                     chars: self.chars()?,
@@ -1941,7 +1939,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Literal => {
-                fail_if_direction_or_nocross(directions, nocross, opcode)?;
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Literal {
                     chars: self.chars()?,
                 }
@@ -2030,6 +2028,7 @@ pub fn expand_includes(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use enumset::enum_set;
 
     #[test]
     fn nocross_test() {
@@ -2054,6 +2053,61 @@ mod tests {
         );
         assert_eq!(None, RuleParser::new(&"nocross nofor").nofor());
         assert_eq!(None, RuleParser::new(&"").nofor());
+    }
+
+    #[test]
+    fn constraints_test() {
+        assert_eq!(
+            enum_set!(Constraint::Nofor),
+            RuleParser::new(&" nofor ").constraints()
+        );
+        assert_eq!(
+            enum_set!(Constraint::Nofor | Constraint::Nocross),
+            RuleParser::new(&"nofor nocross").constraints()
+        );
+        assert_eq!(None, RuleParser::new(&"nocross nofor").nofor());
+        assert_eq!(None, RuleParser::new(&"").nofor());
+    }
+
+    #[test]
+    fn fail_if_invalid_constraints_test() {
+        assert_eq!(
+            Ok(()),
+            fail_if_invalid_constraints(Constraints::empty(), Constraints::empty(), Opcode::Space)
+        );
+        assert_eq!(
+            Err(ParseError::InvalidConstraints {
+                constraints: enum_set!(Constraint::Nofor),
+                opcode: Opcode::Space
+            }),
+            fail_if_invalid_constraints(
+                Constraints::empty(),
+                enum_set!(Constraint::Nofor),
+                Opcode::Space
+            )
+        );
+        assert_eq!(
+            Err(ParseError::InvalidConstraints {
+                constraints: enum_set!(Constraint::Nofor | Constraint::Nocross),
+                opcode: Opcode::Space
+            }),
+            fail_if_invalid_constraints(
+                Constraints::empty(),
+                enum_set!(Constraint::Nofor | Constraint::Nocross),
+                Opcode::Space
+            )
+        );
+        assert_eq!(
+            Err(ParseError::InvalidConstraints {
+                constraints: enum_set!(Constraint::Nocross),
+                opcode: Opcode::Space
+            }),
+            fail_if_invalid_constraints(
+                enum_set!(Constraint::Nofor | Constraint::Noback),
+                enum_set!(Constraint::Nofor | Constraint::Nocross),
+                Opcode::Space
+            )
+        );
     }
 
     #[test]
