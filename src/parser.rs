@@ -748,15 +748,15 @@ impl Rule {
             | Rule::Pass4 { constraints, .. }
             | Rule::Correct { constraints, .. }
             | Rule::Match { constraints, .. } => {
+		let mut dirs = Directions::all();
                 if constraints.contains(Constraint::Nofor) {
-                    enum_set!(Direction::Backward)
+                    dirs.remove(Direction::Forward);
                 } else if constraints.contains(Constraint::Noback) {
-                    enum_set!(Direction::Forward)
-                } else {
-                    Direction::Forward | Direction::Backward
+                    dirs.remove(Direction::Backward);
                 }
+		dirs
             }
-            _ => Direction::Forward | Direction::Backward,
+            _ => Directions::ALL,
         }
     }
 }
