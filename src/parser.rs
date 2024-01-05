@@ -269,28 +269,28 @@ pub enum Rule {
     Display {
         character: char,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Multind {
         dots: BrailleChars,
         names: Vec<String>,
-	constraints: Constraints,
+        constraints: Constraints,
     },
 
     Space {
         character: char,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Punctuation {
         character: char,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Digit {
         character: char,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Grouping {
         name: String,
@@ -300,7 +300,7 @@ pub enum Rule {
     Letter {
         character: char,
         dots: Braille,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Base {
         name: String,
@@ -310,50 +310,50 @@ pub enum Rule {
     Lowercase {
         character: char,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Uppercase {
         character: char,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Litdigit {
         character: char,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Sign {
         character: char,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Math {
         character: char,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
 
     Modeletter {
         name: String,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Capsletter {
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Begmodeword {
         name: String,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Begcapsword {
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Endcapsword {
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Capsmodechars {
         chars: String,
@@ -445,12 +445,12 @@ pub enum Rule {
     Begemph {
         name: String,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Endemph {
         name: String,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Noemphchars {
         name: String,
@@ -488,11 +488,11 @@ pub enum Rule {
 
     Begcomp {
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Endcomp {
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
 
     Decpoint {
@@ -502,14 +502,14 @@ pub enum Rule {
     Hyphen {
         chars: String,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
 
     Capsnocont {},
 
     Compbrl {
         chars: String,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Comp6 {
         chars: String,
@@ -525,12 +525,12 @@ pub enum Rule {
     Always {
         chars: String,
         dots: Braille,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Repeated {
         chars: String,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Repword {
         chars: String,
@@ -548,7 +548,7 @@ pub enum Rule {
     Word {
         chars: String,
         dots: Braille,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Syllable {
         chars: String,
@@ -561,7 +561,7 @@ pub enum Rule {
     Lowword {
         chars: String,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Contraction {
         chars: String,
@@ -569,42 +569,42 @@ pub enum Rule {
     Sufword {
         chars: String,
         dots: Braille,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Prfword {
         chars: String,
         dots: Braille,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Begword {
         chars: String,
         dots: Braille,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Begmidword {
         chars: String,
         dots: Braille,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Midword {
         chars: String,
         dots: Braille,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Midendword {
         chars: String,
         dots: Braille,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Endword {
         chars: String,
         dots: Braille,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Partword {
         chars: String,
         dots: Braille,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Exactdots {
         chars: String,
@@ -612,32 +612,32 @@ pub enum Rule {
     Prepunc {
         chars: String,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Postpunc {
         chars: String,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Begnum {
         chars: String,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Midnum {
         chars: String,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Endnum {
         chars: String,
         dots: Braille,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Joinnum {
         chars: String,
         dots: BrailleChars,
-	constraints: Constraints,
+        constraints: Constraints,
     },
 
     Swapcd {
@@ -663,27 +663,27 @@ pub enum Rule {
     Context {
         test: multipass::Test,
         action: String,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Pass2 {
         test: multipass::Test,
         action: String,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Pass3 {
         test: multipass::Test,
         action: String,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Pass4 {
         test: multipass::Test,
         action: String,
-	constraints: Constraints,
+        constraints: Constraints,
     },
     Correct {
         test: multipass::Test,
         action: String,
-	constraints: Constraints,
+        constraints: Constraints,
     },
 
     Match {
@@ -691,7 +691,7 @@ pub enum Rule {
         chars: String,
         post: String,
         dots: Braille,
-	constraints: Constraints,
+        constraints: Constraints,
         matches: Option<WithMatches>,
     },
     Literal {
@@ -748,14 +748,14 @@ impl Rule {
             | Rule::Pass4 { constraints, .. }
             | Rule::Correct { constraints, .. }
             | Rule::Match { constraints, .. } => {
-		if constraints.contains(Constraint::Nofor) {
-		    enum_set!(Direction::Backward)
-		} else if constraints.contains(Constraint::Noback) {
-		    enum_set!(Direction::Forward)
-		} else {
-		    Direction::Forward | Direction::Backward
-		}
-	    },
+                if constraints.contains(Constraint::Nofor) {
+                    enum_set!(Direction::Backward)
+                } else if constraints.contains(Constraint::Noback) {
+                    enum_set!(Direction::Forward)
+                } else {
+                    Direction::Forward | Direction::Backward
+                }
+            }
             _ => Direction::Forward | Direction::Backward,
         }
     }
