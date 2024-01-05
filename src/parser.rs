@@ -269,28 +269,28 @@ pub enum Rule {
     Display {
         character: char,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Multind {
         dots: BrailleChars,
         names: Vec<String>,
-        directions: Directions,
+	constraints: Constraints,
     },
 
     Space {
         character: char,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Punctuation {
         character: char,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Digit {
         character: char,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Grouping {
         name: String,
@@ -300,7 +300,7 @@ pub enum Rule {
     Letter {
         character: char,
         dots: Braille,
-        directions: Directions,
+	constraints: Constraints,
     },
     Base {
         name: String,
@@ -310,50 +310,50 @@ pub enum Rule {
     Lowercase {
         character: char,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Uppercase {
         character: char,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Litdigit {
         character: char,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Sign {
         character: char,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Math {
         character: char,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
 
     Modeletter {
         name: String,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Capsletter {
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Begmodeword {
         name: String,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Begcapsword {
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Endcapsword {
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Capsmodechars {
         chars: String,
@@ -445,12 +445,12 @@ pub enum Rule {
     Begemph {
         name: String,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Endemph {
         name: String,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Noemphchars {
         name: String,
@@ -488,11 +488,11 @@ pub enum Rule {
 
     Begcomp {
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Endcomp {
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
 
     Decpoint {
@@ -502,14 +502,14 @@ pub enum Rule {
     Hyphen {
         chars: String,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
 
     Capsnocont {},
 
     Compbrl {
         chars: String,
-        directions: Directions,
+	constraints: Constraints,
     },
     Comp6 {
         chars: String,
@@ -525,13 +525,12 @@ pub enum Rule {
     Always {
         chars: String,
         dots: Braille,
-        directions: Directions,
-        nocross: bool,
+	constraints: Constraints,
     },
     Repeated {
         chars: String,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Repword {
         chars: String,
@@ -549,7 +548,7 @@ pub enum Rule {
     Word {
         chars: String,
         dots: Braille,
-        directions: Directions,
+	constraints: Constraints,
     },
     Syllable {
         chars: String,
@@ -562,7 +561,7 @@ pub enum Rule {
     Lowword {
         chars: String,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Contraction {
         chars: String,
@@ -570,50 +569,42 @@ pub enum Rule {
     Sufword {
         chars: String,
         dots: Braille,
-        directions: Directions,
-        nocross: bool,
+	constraints: Constraints,
     },
     Prfword {
         chars: String,
         dots: Braille,
-        directions: Directions,
-        nocross: bool,
+	constraints: Constraints,
     },
     Begword {
         chars: String,
         dots: Braille,
-        directions: Directions,
-        nocross: bool,
+	constraints: Constraints,
     },
     Begmidword {
         chars: String,
         dots: Braille,
-        directions: Directions,
-        nocross: bool,
+	constraints: Constraints,
     },
     Midword {
         chars: String,
         dots: Braille,
-        directions: Directions,
-        nocross: bool,
+	constraints: Constraints,
     },
     Midendword {
         chars: String,
         dots: Braille,
-        directions: Directions,
-        nocross: bool,
+	constraints: Constraints,
     },
     Endword {
         chars: String,
         dots: Braille,
-        directions: Directions,
-        nocross: bool,
+	constraints: Constraints,
     },
     Partword {
         chars: String,
         dots: Braille,
-        directions: Directions,
-        nocross: bool,
+	constraints: Constraints,
     },
     Exactdots {
         chars: String,
@@ -621,32 +612,32 @@ pub enum Rule {
     Prepunc {
         chars: String,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Postpunc {
         chars: String,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Begnum {
         chars: String,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Midnum {
         chars: String,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
     Endnum {
         chars: String,
         dots: Braille,
-        directions: Directions,
+	constraints: Constraints,
     },
     Joinnum {
         chars: String,
         dots: BrailleChars,
-        directions: Directions,
+	constraints: Constraints,
     },
 
     Swapcd {
@@ -672,27 +663,27 @@ pub enum Rule {
     Context {
         test: multipass::Test,
         action: String,
-        directions: Directions,
+	constraints: Constraints,
     },
     Pass2 {
         test: multipass::Test,
         action: String,
-        directions: Directions,
+	constraints: Constraints,
     },
     Pass3 {
         test: multipass::Test,
         action: String,
-        directions: Directions,
+	constraints: Constraints,
     },
     Pass4 {
         test: multipass::Test,
         action: String,
-        directions: Directions,
+	constraints: Constraints,
     },
     Correct {
         test: multipass::Test,
         action: String,
-        directions: Directions,
+	constraints: Constraints,
     },
 
     Match {
@@ -700,7 +691,7 @@ pub enum Rule {
         chars: String,
         post: String,
         dots: Braille,
-        directions: Directions,
+	constraints: Constraints,
         matches: Option<WithMatches>,
     },
     Literal {
@@ -711,52 +702,60 @@ pub enum Rule {
 impl Rule {
     pub fn directions(&self) -> Directions {
         match self {
-            Rule::Display { directions, .. }
-            | Rule::Multind { directions, .. }
-            | Rule::Space { directions, .. }
-            | Rule::Punctuation { directions, .. }
-            | Rule::Digit { directions, .. }
-            | Rule::Letter { directions, .. }
-            | Rule::Lowercase { directions, .. }
-            | Rule::Uppercase { directions, .. }
-            | Rule::Litdigit { directions, .. }
-            | Rule::Sign { directions, .. }
-            | Rule::Math { directions, .. }
-            | Rule::Modeletter { directions, .. }
-            | Rule::Capsletter { directions, .. }
-            | Rule::Begmodeword { directions, .. }
-            | Rule::Begcapsword { directions, .. }
-            | Rule::Endcapsword { directions, .. }
-            | Rule::Begemph { directions, .. }
-            | Rule::Endemph { directions, .. }
-            | Rule::Begcomp { directions, .. }
-            | Rule::Endcomp { directions, .. }
-            | Rule::Hyphen { directions, .. }
-            | Rule::Compbrl { directions, .. }
-            | Rule::Always { directions, .. }
-            | Rule::Repeated { directions, .. }
-            | Rule::Word { directions, .. }
-            | Rule::Lowword { directions, .. }
-            | Rule::Sufword { directions, .. }
-            | Rule::Prfword { directions, .. }
-            | Rule::Begword { directions, .. }
-            | Rule::Begmidword { directions, .. }
-            | Rule::Midword { directions, .. }
-            | Rule::Midendword { directions, .. }
-            | Rule::Endword { directions, .. }
-            | Rule::Partword { directions, .. }
-            | Rule::Prepunc { directions, .. }
-            | Rule::Postpunc { directions, .. }
-            | Rule::Begnum { directions, .. }
-            | Rule::Midnum { directions, .. }
-            | Rule::Endnum { directions, .. }
-            | Rule::Joinnum { directions, .. }
-            | Rule::Context { directions, .. }
-            | Rule::Pass2 { directions, .. }
-            | Rule::Pass3 { directions, .. }
-            | Rule::Pass4 { directions, .. }
-            | Rule::Correct { directions, .. }
-            | Rule::Match { directions, .. } => directions.clone(),
+            Rule::Display { constraints, .. }
+            | Rule::Multind { constraints, .. }
+            | Rule::Space { constraints, .. }
+            | Rule::Punctuation { constraints, .. }
+            | Rule::Digit { constraints, .. }
+            | Rule::Letter { constraints, .. }
+            | Rule::Lowercase { constraints, .. }
+            | Rule::Uppercase { constraints, .. }
+            | Rule::Litdigit { constraints, .. }
+            | Rule::Sign { constraints, .. }
+            | Rule::Math { constraints, .. }
+            | Rule::Modeletter { constraints, .. }
+            | Rule::Capsletter { constraints, .. }
+            | Rule::Begmodeword { constraints, .. }
+            | Rule::Begcapsword { constraints, .. }
+            | Rule::Endcapsword { constraints, .. }
+            | Rule::Begemph { constraints, .. }
+            | Rule::Endemph { constraints, .. }
+            | Rule::Begcomp { constraints, .. }
+            | Rule::Endcomp { constraints, .. }
+            | Rule::Hyphen { constraints, .. }
+            | Rule::Compbrl { constraints, .. }
+            | Rule::Always { constraints, .. }
+            | Rule::Repeated { constraints, .. }
+            | Rule::Word { constraints, .. }
+            | Rule::Lowword { constraints, .. }
+            | Rule::Sufword { constraints, .. }
+            | Rule::Prfword { constraints, .. }
+            | Rule::Begword { constraints, .. }
+            | Rule::Begmidword { constraints, .. }
+            | Rule::Midword { constraints, .. }
+            | Rule::Midendword { constraints, .. }
+            | Rule::Endword { constraints, .. }
+            | Rule::Partword { constraints, .. }
+            | Rule::Prepunc { constraints, .. }
+            | Rule::Postpunc { constraints, .. }
+            | Rule::Begnum { constraints, .. }
+            | Rule::Midnum { constraints, .. }
+            | Rule::Endnum { constraints, .. }
+            | Rule::Joinnum { constraints, .. }
+            | Rule::Context { constraints, .. }
+            | Rule::Pass2 { constraints, .. }
+            | Rule::Pass3 { constraints, .. }
+            | Rule::Pass4 { constraints, .. }
+            | Rule::Correct { constraints, .. }
+            | Rule::Match { constraints, .. } => {
+		if constraints.contains(Constraint::Nofor) {
+		    enum_set!(Direction::Backward)
+		} else if constraints.contains(Constraint::Noback) {
+		    enum_set!(Direction::Forward)
+		} else {
+		    Direction::Forward | Direction::Backward
+		}
+	    },
             _ => Direction::Forward | Direction::Backward,
         }
     }
@@ -1226,14 +1225,6 @@ impl<'a> RuleParser<'a> {
 
     pub fn rule(&mut self) -> Result<Rule, ParseError> {
         let constraints = self.constraints();
-        let nocross = constraints.contains(Constraint::Nocross);
-        let mut directions = Directions::all();
-        if constraints.contains(Constraint::Nofor) {
-            directions.remove(Direction::Forward);
-        }
-        if constraints.contains(Constraint::Noback) {
-            directions.remove(Direction::Backward);
-        }
         let _classes = self.with_classes();
         let matches = self.with_matches();
         let opcode = self.opcode()?;
@@ -1255,7 +1246,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Display {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Multind => {
@@ -1263,7 +1254,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Multind {
                     dots: self.explicit_dots()?,
                     names: self.many_names()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Space => {
@@ -1271,7 +1262,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Space {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Punctuation => {
@@ -1279,7 +1270,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Punctuation {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Digit => {
@@ -1287,7 +1278,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Digit {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Grouping => {
@@ -1303,7 +1294,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Letter {
                     character: self.one_char()?,
                     dots: self.dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Base => {
@@ -1319,7 +1310,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Lowercase {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Uppercase => {
@@ -1327,7 +1318,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Uppercase {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Litdigit => {
@@ -1335,7 +1326,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Litdigit {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Sign => {
@@ -1343,7 +1334,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Sign {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Math => {
@@ -1351,7 +1342,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Math {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
 
@@ -1360,14 +1351,14 @@ impl<'a> RuleParser<'a> {
                 Rule::Modeletter {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Capsletter => {
                 fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Capsletter {
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Begmodeword => {
@@ -1375,21 +1366,21 @@ impl<'a> RuleParser<'a> {
                 Rule::Begmodeword {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Begcapsword => {
                 fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Begcapsword {
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Endcapsword => {
                 fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Endcapsword {
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Capsmodechars => {
@@ -1560,7 +1551,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Begemph {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Endemph => {
@@ -1568,7 +1559,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Endemph {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Noemphchars => {
@@ -1633,14 +1624,14 @@ impl<'a> RuleParser<'a> {
                 fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Begcomp {
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Endcomp => {
                 fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Endcomp {
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
 
@@ -1656,7 +1647,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Hyphen {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
 
@@ -1669,7 +1660,7 @@ impl<'a> RuleParser<'a> {
                 fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Compbrl {
                     chars: self.chars()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Comp6 => {
@@ -1695,15 +1686,14 @@ impl<'a> RuleParser<'a> {
             Opcode::Always => Rule::Always {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                directions,
-                nocross,
+                constraints,
             },
             Opcode::Repeated => {
                 fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Repeated {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Repword => {
@@ -1737,7 +1727,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Word {
                     chars: self.chars()?,
                     dots: self.dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Syllable => {
@@ -1759,7 +1749,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Lowword {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Contraction => {
@@ -1771,50 +1761,42 @@ impl<'a> RuleParser<'a> {
             Opcode::Sufword => Rule::Sufword {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                directions,
-                nocross,
+                constraints,
             },
             Opcode::Prfword => Rule::Prfword {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                directions,
-                nocross,
+                constraints,
             },
             Opcode::Begword => Rule::Begword {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                directions,
-                nocross,
+                constraints,
             },
             Opcode::Begmidword => Rule::Begmidword {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                directions,
-                nocross,
+                constraints,
             },
             Opcode::Midword => Rule::Midword {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                directions,
-                nocross,
+                constraints,
             },
             Opcode::Midendword => Rule::Midendword {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                directions,
-                nocross,
+                constraints,
             },
             Opcode::Endword => Rule::Endword {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                directions,
-                nocross,
+                constraints,
             },
             Opcode::Partword => Rule::Partword {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                directions,
-                nocross,
+                constraints,
             },
             Opcode::Exactdots => {
                 fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
@@ -1825,32 +1807,32 @@ impl<'a> RuleParser<'a> {
             Opcode::Prepunc => Rule::Prepunc {
                 chars: self.chars()?,
                 dots: self.explicit_dots()?,
-                directions,
+                constraints,
             },
             Opcode::Postpunc => Rule::Postpunc {
                 chars: self.chars()?,
                 dots: self.explicit_dots()?,
-                directions,
+                constraints,
             },
             Opcode::Begnum => Rule::Begnum {
                 chars: self.chars()?,
                 dots: self.explicit_dots()?,
-                directions,
+                constraints,
             },
             Opcode::Midnum => Rule::Midnum {
                 chars: self.chars()?,
                 dots: self.explicit_dots()?,
-                directions,
+                constraints,
             },
             Opcode::Endnum => Rule::Endnum {
                 chars: self.chars()?,
                 dots: self.dots()?,
-                directions,
+                constraints,
             },
             Opcode::Joinnum => Rule::Joinnum {
                 chars: self.chars()?,
                 dots: self.explicit_dots()?,
-                directions,
+                constraints,
             },
 
             Opcode::Attribute => {
@@ -1891,7 +1873,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Context {
                     test: self.multipass_test()?,
                     action: self.multipass_action()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Pass2 => {
@@ -1899,7 +1881,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Pass2 {
                     test: self.multipass_test()?,
                     action: self.multipass_action()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Pass3 => {
@@ -1907,7 +1889,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Pass3 {
                     test: self.multipass_test()?,
                     action: self.multipass_action()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Pass4 => {
@@ -1915,7 +1897,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Pass4 {
                     test: self.multipass_test()?,
                     action: self.multipass_action()?,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Correct => {
@@ -1923,7 +1905,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Correct {
                     test: self.multipass_test()?,
                     action: self.multipass_action()?,
-                    directions,
+                    constraints,
                 }
             }
 
@@ -1935,7 +1917,7 @@ impl<'a> RuleParser<'a> {
                     post: self.match_post()?,
                     dots: self.dots()?,
                     matches,
-                    directions,
+                    constraints,
                 }
             }
             Opcode::Literal => {
