@@ -845,36 +845,27 @@ impl<'a> RuleParser<'a> {
         }
     }
 
-    fn nofor(&mut self) -> Option<Constraint> {
-        match self.tokens.next_if_eq(&"nofor") {
-            Some(_) => Some(Constraint::Nofor),
-            _ => None,
-        }
+    fn nofor(&mut self) -> bool {
+        self.tokens.next_if_eq(&"nofor").is_some()
     }
 
-    fn noback(&mut self) -> Option<Constraint> {
-        match self.tokens.next_if_eq(&"noback") {
-            Some(_) => Some(Constraint::Noback),
-            _ => None,
-        }
+    fn noback(&mut self) -> bool {
+        self.tokens.next_if_eq(&"noback").is_some()
     }
 
-    fn nocross(&mut self) -> Option<Constraint> {
-        match self.tokens.next_if_eq(&"nocross") {
-            Some(_) => Some(Constraint::Nocross),
-            _ => None,
-        }
+    fn nocross(&mut self) -> bool {
+        self.tokens.next_if_eq(&"nocross").is_some()
     }
 
     fn constraints(&mut self) -> Constraints {
         let mut constraints = Constraints::EMPTY;
-        if let Some(c) = self.nofor() {
-            constraints.insert(c);
-        } else if let Some(c) = self.noback() {
-            constraints.insert(c);
+        if self.nofor() {
+            constraints.insert(Constraint::Nofor);
+        } else if self.noback() {
+            constraints.insert(Constraint::Noback);
         }
-        if let Some(c) = self.nocross() {
-            constraints.insert(c);
+        if self.nocross() {
+            constraints.insert(Constraint::Nocross);
         }
         constraints
     }
@@ -2015,26 +2006,24 @@ mod tests {
     #[test]
     fn nocross_test() {
         assert_eq!(
-            Some(Constraint::Nocross),
+            true,
             RuleParser::new(&"nocross").nocross()
         );
         assert_eq!(
-            Some(Constraint::Nocross),
+            true,
             RuleParser::new(&"nocross nofor").nocross()
         );
-        assert_eq!(None, RuleParser::new(&"nofor nocross").nocross());
-        assert_eq!(None, RuleParser::new(&"nofor").nocross());
+        assert_eq!(false, RuleParser::new(&"nofor nocross").nocross());
+        assert_eq!(false, RuleParser::new(&"nofor").nocross());
     }
 
     #[test]
     fn nofor_test() {
-        assert_eq!(Some(Constraint::Nofor), RuleParser::new(&" nofor ").nofor());
-        assert_eq!(
-            Some(Constraint::Nofor),
-            RuleParser::new(&"nofor nocross").nofor()
+        assert_eq!(true, RuleParser::new(&" nofor ").nofor());
+        assert_eq!(true, RuleParser::new(&"nofor nocross").nofor()
         );
-        assert_eq!(None, RuleParser::new(&"nocross nofor").nofor());
-        assert_eq!(None, RuleParser::new(&"").nofor());
+        assert_eq!(false, RuleParser::new(&"nocross nofor").nofor());
+        assert_eq!(false, RuleParser::new(&"").nofor());
     }
 
     #[test]
@@ -2047,8 +2036,6 @@ mod tests {
             enum_set!(Constraint::Nofor | Constraint::Nocross),
             RuleParser::new(&"nofor nocross").constraints()
         );
-        assert_eq!(None, RuleParser::new(&"nocross nofor").nofor());
-        assert_eq!(None, RuleParser::new(&"").nofor());
     }
 
     #[test]
