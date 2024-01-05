@@ -824,7 +824,7 @@ fn fail_if_invalid_constraints(
     actual: Constraints,
     opcode: Opcode,
 ) -> Result<(), ParseError> {
-    if !actual.difference(expected).is_empty() {
+    if !actual.is_subset(expected) {
         Err(ParseError::InvalidConstraints {
             constraints: actual.difference(expected),
             opcode,
