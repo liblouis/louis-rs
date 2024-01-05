@@ -748,13 +748,13 @@ impl Rule {
             | Rule::Pass4 { constraints, .. }
             | Rule::Correct { constraints, .. }
             | Rule::Match { constraints, .. } => {
-		let mut dirs = Directions::all();
+                let mut dirs = Directions::all();
                 if constraints.contains(Constraint::Nofor) {
                     dirs.remove(Direction::Forward);
                 } else if constraints.contains(Constraint::Noback) {
                     dirs.remove(Direction::Backward);
                 }
-		dirs
+                dirs
             }
             _ => Directions::ALL,
         }
@@ -2005,14 +2005,8 @@ mod tests {
 
     #[test]
     fn nocross_test() {
-        assert_eq!(
-            true,
-            RuleParser::new(&"nocross").nocross()
-        );
-        assert_eq!(
-            true,
-            RuleParser::new(&"nocross nofor").nocross()
-        );
+        assert_eq!(true, RuleParser::new(&"nocross").nocross());
+        assert_eq!(true, RuleParser::new(&"nocross nofor").nocross());
         assert_eq!(false, RuleParser::new(&"nofor nocross").nocross());
         assert_eq!(false, RuleParser::new(&"nofor").nocross());
     }
@@ -2020,8 +2014,7 @@ mod tests {
     #[test]
     fn nofor_test() {
         assert_eq!(true, RuleParser::new(&" nofor ").nofor());
-        assert_eq!(true, RuleParser::new(&"nofor nocross").nofor()
-        );
+        assert_eq!(true, RuleParser::new(&"nofor nocross").nofor());
         assert_eq!(false, RuleParser::new(&"nocross nofor").nofor());
         assert_eq!(false, RuleParser::new(&"").nofor());
     }
