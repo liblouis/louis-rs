@@ -46,7 +46,7 @@ impl TranslationTable {
 
         let rules: Vec<Rule> = rules
             .into_iter()
-            .filter(|r| r.directions().contains(direction))
+            .filter(|r| r.is_direction(direction))
             .collect();
 
         for rule in rules {

@@ -41,21 +41,6 @@ pub enum Direction {
     Backward,
 }
 
-type Directions = EnumSet<Direction>;
-
-// impl From<Constraints> for Directions {
-//     fn from(value: Constraints) -> Self {
-//         let mut dirs = Directions::empty();
-// 	if !value.contains(Constraint::Nofor) {
-// 	    dirs.insert(Direction::Forward)
-// 	}
-// 	if !value.contains(Constraint::Noback) {
-// 	    dirs.insert(Direction::Backward)
-// 	}
-// 	dirs
-//     }
-// }
-
 #[derive(PartialEq, Debug)]
 pub enum WithClass {
     Before { class: String },
@@ -700,7 +685,7 @@ pub enum Rule {
 }
 
 impl Rule {
-    pub fn directions(&self) -> Directions {
+    pub fn is_direction(&self, direction: Direction) -> bool {
         match self {
             Rule::Display { constraints, .. }
             | Rule::Multind { constraints, .. }
@@ -748,15 +733,13 @@ impl Rule {
             | Rule::Pass4 { constraints, .. }
             | Rule::Correct { constraints, .. }
             | Rule::Match { constraints, .. } => {
-                let mut dirs = Directions::all();
-                if constraints.contains(Constraint::Nofor) {
-                    dirs.remove(Direction::Forward);
-                } else if constraints.contains(Constraint::Noback) {
-                    dirs.remove(Direction::Backward);
+                if direction == Direction::Forward {
+                    !constraints.contains(Constraint::Nofor)
+                } else {
+                    !constraints.contains(Constraint::Noback)
                 }
-                dirs
             }
-            _ => Directions::ALL,
+            _ => true,
         }
     }
 }
