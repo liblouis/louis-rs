@@ -57,12 +57,12 @@ enum TestMode {
     HyphenateBraille,
 }
 
-#[derive(Debug, Default)]
-struct Table {
-    language: String,
-    grade: u8,
-    system: String,
-    path: PathBuf,
+#[derive(Debug, Clone)]
+enum Table {
+    Simple(PathBuf),
+    Query(TableQuery),
+    List(Vec<PathBuf>),
+    Inline(String),
 }
 
 type TableQuery = HashMap<String, String>;
@@ -181,12 +181,12 @@ impl<'a> YAMLParser<'a> {
         Ok(query)
     }
 
-    fn table_list(&mut self) -> Result<Vec<String>, ParseError> {
+    fn table_list(&mut self) -> Result<Vec<PathBuf>, ParseError> {
         self.sequence_start()?;
         let mut tables = Vec::new();
         while let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
             let table = self.scalar()?;
-            tables.push(table);
+            tables.push(table.into());
         }
         self.sequence_end()?;
         Ok(tables)
@@ -198,18 +198,18 @@ impl<'a> YAMLParser<'a> {
     }
 
     fn table(&mut self) -> Result<Table, ParseError> {
-        let mut table: Table = Default::default();
-        match self.events.peek() {
+        let table = match self.events.peek() {
             Some(Ok(Event::MappingStart { .. })) => {
-                self.table_query()?;
+                let query = self.table_query()?;
+                if query.contains_key("__assert-match") {
+                    Table::Simple(query.get("__assert-match").unwrap().into())
+                } else {
+                    Table::Query(query)
+                }
             }
-            Some(Ok(Event::SequenceStart { .. })) => {
-                self.table_list()?;
-            }
-            _ => {
-                self.table_inline()?;
-            }
-        }
+            Some(Ok(Event::SequenceStart { .. })) => Table::List(self.table_list()?),
+            _ => Table::Inline(self.table_inline()?),
+        };
         Ok(table)
     }
 
