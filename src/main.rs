@@ -1,3 +1,4 @@
+use std::fs::File;
 use std::io;
 use std::io::BufRead;
 use std::io::Write;
@@ -18,6 +19,9 @@ use crate::parser::Direction;
 use crate::translator::TranslationTable;
 
 mod translator;
+mod yaml;
+
+use yaml::YAMLParser;
 
 #[derive(Debug, Subcommand)]
 enum Commands {
@@ -36,6 +40,11 @@ enum Commands {
         input: Option<String>,
         #[arg(value_enum, short, long, default_value_t=Direction::Forward)]
         direction: Direction,
+    },
+    /// Test braille translations from a given <YAML> file
+    Check {
+        /// YAML document that specifies the tests
+        yaml: PathBuf,
     },
 }
 
@@ -148,6 +157,25 @@ fn main() {
                         print_errors(errors);
                     }
                 }
+            }
+        },
+        Commands::Check { yaml } => match File::open(yaml) {
+            Ok(file) => match YAMLParser::new(file) {
+                Ok(mut parser) => match parser.yaml() {
+                    Ok(test_suites) => {
+                        println!("{:?}", test_suites);
+                    }
+                    Err(e) => {
+                        eprintln!("Could not parse yaml: {:}", e);
+                        std::process::exit(1);
+                    }
+                },
+                Err(e) => {
+                    eprintln!("Could not create parser {:?}", e)
+                }
+            },
+            Err(e) => {
+                eprintln!("Could not open yaml {:?}", e)
             }
         },
     }
