@@ -47,7 +47,7 @@ pub enum ParseError {
     InvalidToken(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum TestMode {
     Forward,
     Backward,
@@ -69,7 +69,7 @@ type TableQuery = HashMap<String, String>;
 
 #[derive(Debug)]
 pub struct TestSuite {
-    display_table: PathBuf,
+    display_table: Option<PathBuf>,
     table: Table,
     mode: TestMode,
     tests: Vec<Test>,
@@ -88,7 +88,7 @@ pub enum TranslationMode {
 
 type Typeform = HashMap<String, String>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum CursorPosition {
     Single(u16),
     Tuple(u16, u16),
@@ -96,14 +96,14 @@ enum CursorPosition {
 
 type Directions = EnumSet<Direction>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum ExpectedFailure {
     Simple(bool),
     Reason(String),
     Direction(Directions),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Test {
     input: String,
     expected: String,
@@ -474,10 +474,9 @@ impl<'a> YAMLParser<'a> {
 
     pub fn yaml(&mut self) -> Result<Vec<TestSuite>, ParseError> {
         let mut test_suites: Vec<TestSuite> = Vec::new();
-        let mut display_table = Default::default();
-        let mut table: Table = Default::default();
+        let mut current_display_table = None;
+        let mut current_tables = Vec::new();
         let mut test_mode: TestMode = TestMode::Forward;
-        let mut tests: Vec<Test> = Vec::new();
 
         self.stream_start()?;
         self.document_start()?;
@@ -486,28 +485,32 @@ impl<'a> YAMLParser<'a> {
             let value = self.scalar()?;
             match &*value {
                 "display" => {
-                    display_table = self.display_table()?;
+                    current_display_table = Some(self.display_table()?);
                 }
                 "table" => {
-                    table = self.table()?;
+                    current_tables.push(self.table()?);
                 }
                 "flags" => {
                     test_mode = self.flags()?;
                 }
                 "tests" => {
-                    tests = self.tests()?;
+                    let tests = self.tests()?;
+                    for table in current_tables.clone() {
+                        let suite = TestSuite {
+                            display_table: current_display_table.clone(),
+                            table: table,
+                            mode: test_mode.clone(),
+                            tests: tests.clone(),
+                        };
+                        test_suites.push(suite);
+                    }
+                    current_tables.clear();
                 }
                 _ => {
                     return Err(ParseError::InvalidToken(value));
                 }
             }
         }
-        test_suites.push(TestSuite {
-            display_table,
-            table,
-            mode: test_mode,
-            tests,
-        });
         self.mapping_end()?;
         self.document_end()?;
         self.stream_end()?;
