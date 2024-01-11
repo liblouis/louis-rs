@@ -130,6 +130,13 @@ fn parse_line(line: String) {
     }
 }
 
+fn percentage(n: usize, total: usize) -> String {
+    let n = n as f32;
+    let total = total as f32;
+    let result = (n * 100.0) / total;
+    return format!("{:.0}%", result);
+}
+
 fn main() {
     let args = Cli::parse();
 
@@ -163,32 +170,37 @@ fn main() {
             Ok(file) => match YAMLParser::new(file) {
                 Ok(mut parser) => match parser.yaml() {
                     Ok(test_results) => {
+                        let total = test_results.len();
+                        let successes = test_results.iter().filter(|r| r.is_success()).count();
+                        let failures = test_results.iter().filter(|r| r.is_failure()).count();
+                        let expected_failures = test_results
+                            .iter()
+                            .filter(|r| r.is_expected_failure())
+                            .count();
+                        let unexpected_successes = test_results
+                            .iter()
+                            .filter(|r| r.is_unexpected_success())
+                            .count();
                         for res in &test_results {
                             println!("{:?}", res);
                         }
                         println!("================================================================================");
-                        println!("{} tests run:", test_results.len());
+                        println!("{} tests run:", total);
                         println!(
-                            "{} successes",
-                            test_results.iter().filter(|r| r.is_success()).count()
+                            "{} successes [{}]",
+                            successes,
+                            percentage(successes, total)
+                        );
+                        println!("{} failures [{}]", failures, percentage(failures, total));
+                        println!(
+                            "{} expected failures [{}]",
+                            expected_failures,
+                            percentage(expected_failures, total)
                         );
                         println!(
-                            "{} failures",
-                            test_results.iter().filter(|r| r.is_failure()).count()
-                        );
-                        println!(
-                            "{} expected failures",
-                            test_results
-                                .iter()
-                                .filter(|r| r.is_expected_failure())
-                                .count()
-                        );
-                        println!(
-                            "{} unexpected successes",
-                            test_results
-                                .iter()
-                                .filter(|r| r.is_unexpected_success())
-                                .count()
+                            "{} unexpected successes [{}]",
+                            unexpected_successes,
+                            percentage(unexpected_successes, total)
                         );
                     }
                     Err(e) => {
