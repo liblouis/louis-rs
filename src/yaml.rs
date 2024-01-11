@@ -200,7 +200,7 @@ enum ExpectedFailure {
 impl ExpectedFailure {
     fn is_failure(&self, direction: Direction) -> bool {
         match &self {
-            Self::Simple(v) => !v,
+            Self::Simple(v) => *v,
             Self::Reason(_) => true,
             Self::Direction(d) => d.contains(direction),
         }
