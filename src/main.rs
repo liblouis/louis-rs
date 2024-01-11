@@ -162,8 +162,34 @@ fn main() {
         Commands::Check { yaml } => match File::open(yaml) {
             Ok(file) => match YAMLParser::new(file) {
                 Ok(mut parser) => match parser.yaml() {
-                    Ok(test_suites) => {
-                        println!("{:?}", test_suites);
+                    Ok(test_results) => {
+                        for res in &test_results {
+                            println!("{:?}", res);
+                        }
+                        println!("================================================================================");
+                        println!("{} tests run:", test_results.len());
+                        println!(
+                            "{} successes",
+                            test_results.iter().filter(|r| r.is_success()).count()
+                        );
+                        println!(
+                            "{} failures",
+                            test_results.iter().filter(|r| r.is_failure()).count()
+                        );
+                        println!(
+                            "{} expected failures",
+                            test_results
+                                .iter()
+                                .filter(|r| r.is_expected_failure())
+                                .count()
+                        );
+                        println!(
+                            "{} unexpected successes",
+                            test_results
+                                .iter()
+                                .filter(|r| r.is_unexpected_success())
+                                .count()
+                        );
                     }
                     Err(e) => {
                         eprintln!("Could not parse yaml: {:}", e);
