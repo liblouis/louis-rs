@@ -201,7 +201,7 @@ fn main() {
                         );
                     }
                     Err(e) => {
-                        eprintln!("Could not parse yaml: {:}", e);
+                        eprintln!("Could not parse yaml or errors while testing: {:?}", e);
                         std::process::exit(1);
                     }
                 },

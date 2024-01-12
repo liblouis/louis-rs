@@ -5,8 +5,8 @@ use libyaml::{Encoding, Event, Parser, ParserIter};
 
 use crate::parser::Direction;
 use crate::test::{
-    CursorPosition, Directions, ExpectedFailure, Table, TableQuery, Test, TestMode, TestResult,
-    TestSuite, TranslationMode, Typeform,
+    CursorPosition, Directions, ExpectedFailure, Table, TableQuery, Test, TestError, TestMode,
+    TestResult, TestSuite, TranslationMode, Typeform,
 };
 
 type YAMLEventError = Option<Result<Event, libyaml::ParserError>>;
@@ -45,6 +45,8 @@ pub enum ParseError {
     InvalidXFail,
     #[error("Invalid token {0:?}")]
     InvalidToken(String),
+    #[error("Error while running tests")]
+    TestError(#[from] TestError),
 }
 
 pub struct YAMLParser<'a> {
@@ -431,7 +433,7 @@ impl<'a> YAMLParser<'a> {
                             mode: &test_mode,
                             tests: &tests,
                         };
-                        results.extend(suite.check());
+                        results.extend(suite.check()?);
                     }
                     current_tables.clear();
                 }

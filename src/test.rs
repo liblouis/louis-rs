@@ -4,9 +4,25 @@ use enumset::{EnumSet, EnumSetType};
 use search_path::SearchPath;
 
 use crate::{
-    parser::{self, Direction},
+    parser::{self, Direction, TableError},
     translator::TranslationTable,
 };
+
+#[derive(thiserror::Error, Debug)]
+pub enum TestError {
+    #[error("Not implemented (yet)")]
+    NotImplemented,
+    #[error("Errors in table {0:?}")]
+    TableErrors(Vec<TableError>),
+    #[error("Table {0:?} not found")]
+    TableNotFound(PathBuf),
+}
+
+impl From<Vec<TableError>> for TestError {
+    fn from(errors: Vec<TableError>) -> Self {
+        Self::TableErrors(errors)
+    }
+}
 
 #[derive(Debug)]
 pub enum TestMode {
@@ -34,8 +50,6 @@ pub enum TestResult {
     UnexpectedSuccess {
         input: String,
     },
-    Error,
-    NotImplemented,
 }
 
 impl TestResult {
@@ -60,30 +74,23 @@ struct TestMatrix<'a> {
 }
 
 impl<'a> TestMatrix<'a> {
-    fn check(&self) -> Vec<TestResult> {
+    fn check(&self) -> Result<Vec<TestResult>, TestError> {
         let search_path = &SearchPath::new_or("LOUIS_TABLE_PATH", ".");
         let mut results = Vec::new();
         for path in &self.paths {
-            if let Some(path) = search_path.find_file(path) {
-                for direction in self.directions {
-                    if let Ok(rules) = parser::table(path.as_path()) {
-                        if let Ok(rules) = parser::expand_includes(search_path, rules) {
-                            let table = TranslationTable::compile(rules, *direction);
-                            for test in self.tests {
-                                results.push(test.check(&table, *direction));
-                            }
-                        } else {
-                            results.push(TestResult::Error);
-                        }
-                    } else {
-                        results.push(TestResult::Error);
-                    }
+            let path = search_path
+                .find_file(path)
+                .ok_or(TestError::TableNotFound(path.into()))?;
+            for direction in self.directions {
+                let rules = parser::table(path.as_path())?;
+                let rules = parser::expand_includes(search_path, rules)?;
+                let table = TranslationTable::compile(rules, *direction);
+                for test in self.tests {
+                    results.push(test.check(&table, *direction));
                 }
-            } else {
-                results.push(TestResult::Error);
             }
         }
-        results
+        Ok(results)
     }
 }
 
@@ -96,7 +103,7 @@ pub struct TestSuite<'a> {
 }
 
 impl<'a> TestSuite<'a> {
-    pub fn check(&self) -> Vec<TestResult> {
+    pub fn check(&self) -> Result<Vec<TestResult>, TestError> {
         let directions = match self.mode {
             TestMode::Forward => vec![Direction::Forward],
             TestMode::Backward => vec![Direction::Backward],
@@ -105,14 +112,14 @@ impl<'a> TestSuite<'a> {
         };
         let paths = match &self.table {
             Table::Simple(path) => vec![path],
-            _ => return vec![TestResult::NotImplemented],
+            _ => return Err(TestError::NotImplemented),
         };
         let matrix = TestMatrix {
             paths,
             directions: &directions,
             tests: self.tests,
         };
-        matrix.check()
+        Ok(matrix.check()?)
     }
 }
 
