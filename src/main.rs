@@ -20,6 +20,7 @@ use crate::translator::TranslationTable;
 
 mod translator;
 mod yaml;
+mod test;
 
 use yaml::YAMLParser;
 
