@@ -97,7 +97,8 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
 
 * License
 
-Copyright (C) 2023 Swiss Library for the Blind, Visually Impaired and Print Disabled
+Copyright (C) 2023-2024 Swiss Library for the Blind, Visually Impaired
+and Print Disabled
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
