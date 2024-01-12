@@ -1948,6 +1948,19 @@ pub fn table(file: &Path) -> Result<Vec<Rule>, Vec<TableError>> {
     }
 }
 
+pub fn table_expanded(file: &Path) -> Result<Vec<Rule>, Vec<TableError>> {
+    let search_path = &SearchPath::new_or("LOUIS_TABLE_PATH", ".");
+    let path = search_path.find_file(file);
+    match path {
+	Some(path) => {
+	    let rules = table(path.as_path())?;
+	    let rules = expand_includes(search_path, rules)?;
+	    Ok(rules)
+	}
+	_ => Err(vec![TableError::TableNotFound(file.into())])
+    }
+}
+
 fn expand_include(search_path: &SearchPath, rule: Rule) -> Result<Vec<Rule>, Vec<TableError>> {
     if let Rule::Include { ref file } = rule {
         let path = Path::new(file);
@@ -1957,8 +1970,8 @@ fn expand_include(search_path: &SearchPath, rule: Rule) -> Result<Vec<Rule>, Vec
         let path = search_path
             .find_file(path)
             .ok_or(vec![TableError::TableNotFound(path.into())])?;
-        let rules = table(&path)?;
-        Ok(expand_includes(search_path, rules)?)
+        let rules = table_expanded(&path)?;
+        Ok(rules)
     } else {
         Ok(vec![rule])
     }

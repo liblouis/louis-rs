@@ -1,7 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use enumset::{EnumSet, EnumSetType};
-use search_path::SearchPath;
 
 use crate::{
     parser::{self, Direction, TableError},
@@ -75,15 +74,10 @@ struct TestMatrix<'a> {
 
 impl<'a> TestMatrix<'a> {
     fn check(&self) -> Result<Vec<TestResult>, TestError> {
-        let search_path = &SearchPath::new_or("LOUIS_TABLE_PATH", ".");
         let mut results = Vec::new();
         for path in &self.paths {
-            let path = search_path
-                .find_file(path)
-                .ok_or(TestError::TableNotFound(path.into()))?;
             for direction in self.directions {
-                let rules = parser::table(path.as_path())?;
-                let rules = parser::expand_includes(search_path, rules)?;
+                let rules = parser::table_expanded(path.as_path())?;
                 let table = TranslationTable::compile(rules, *direction);
                 for test in self.tests {
                     results.push(test.check(&table, *direction));
@@ -119,7 +113,7 @@ impl<'a> TestSuite<'a> {
             directions: &directions,
             tests: self.tests,
         };
-        Ok(matrix.check()?)
+        matrix.check()
     }
 }
 

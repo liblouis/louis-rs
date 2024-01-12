@@ -9,11 +9,8 @@ use std::process::exit;
 use clap::{Parser, Subcommand};
 
 mod parser;
-use parser::expand_includes;
-use parser::Rule;
 use parser::RuleParser;
 use parser::TableError;
-use search_path::SearchPath;
 
 use crate::parser::Direction;
 use crate::translator::TranslationTable;
@@ -69,15 +66,8 @@ fn print_errors(errors: Vec<TableError>) {
     }
 }
 
-fn parse_file(file: &Path) -> Result<Vec<Rule>, Vec<TableError>> {
-    let search_path = &SearchPath::new_or("LOUIS_TABLE_PATH", ".");
-    let rules = parser::table(file)?;
-    let rules = expand_includes(search_path, rules)?;
-    Ok(rules)
-}
-
 fn parse(file: &Path) {
-    match parse_file(file) {
+    match parser::table_expanded(file) {
         Ok(rules) => {
             for rule in rules {
                 println!("{:?}", rule);
