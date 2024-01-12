@@ -17,12 +17,6 @@ pub struct TranslationMapping<'a> {
     output: &'a str,
 }
 
-impl<'a> TranslationMapping<'a> {
-    fn new(input: &'a str, output: &'a str) -> TranslationMapping<'a> {
-        TranslationMapping { input, output }
-    }
-}
-
 impl<'a> From<&'a Translation> for TranslationMapping<'a> {
     fn from(translation: &'a Translation) -> Self {
         Self {

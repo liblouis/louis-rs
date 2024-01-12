@@ -37,10 +37,6 @@ pub enum ParseError {
     InvalidTestMode,
     #[error("invalid number")]
     InvalidNumber(#[from] ParseIntError),
-    #[error("Event {0:?} not expected")]
-    UnexpectedEvent(Event),
-    #[error("Invalid table attribute {0:?}")]
-    InvalidTableAttribute(String),
     #[error("Encoding {0:?} not supported")]
     InvalidEncoding(Encoding),
     #[error("Invalid translation mode {0:?}")]
@@ -482,14 +478,13 @@ impl<'a> YAMLParser<'a> {
 
     fn test(&mut self) -> Result<Test, ParseError> {
         self.sequence_start()?;
-        let mut description = None;
         let mut input = self.scalar()?;
         let mut expected = self.scalar()?;
         // the YAML format is way too flexible: You can have two
         // scalars in which case those are input and expected. But you
         // can also have 3 scalars so that (description, input, expected)
         if let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
-            description = Some(input);
+            let _description = Some(input);
             input = expected;
             expected = self.scalar()?;
         }
