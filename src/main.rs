@@ -18,9 +18,9 @@ use search_path::SearchPath;
 use crate::parser::Direction;
 use crate::translator::TranslationTable;
 
+mod test;
 mod translator;
 mod yaml;
-mod test;
 
 use yaml::YAMLParser;
 
@@ -135,7 +135,7 @@ fn percentage(n: usize, total: usize) -> String {
     let n = n as f32;
     let total = total as f32;
     let result = (n * 100.0) / total;
-    return format!("{:.0}%", result);
+    format!("{:.0}%", result)
 }
 
 fn main() {
@@ -187,11 +187,7 @@ fn main() {
                         }
                         println!("================================================================================");
                         println!("{} tests run:", total);
-                        println!(
-                            "{} successes [{}]",
-                            successes,
-                            percentage(successes, total)
-                        );
+                        println!("{} successes [{}]", successes, percentage(successes, total));
                         println!("{} failures [{}]", failures, percentage(failures, total));
                         println!(
                             "{} expected failures [{}]",
