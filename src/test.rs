@@ -90,10 +90,10 @@ impl<'a> TestMatrix<'a> {
 
 #[derive(Debug)]
 pub struct TestSuite<'a> {
-    pub display_table: &'a Option<PathBuf>,
-    pub table: &'a Table,
-    pub mode: &'a TestMode,
-    pub tests: &'a Vec<Test>,
+    display_table: &'a Option<PathBuf>,
+    table: &'a Table,
+    mode: &'a TestMode,
+    tests: &'a Vec<Test>,
 }
 
 impl<'a> TestSuite<'a> {
@@ -114,6 +114,20 @@ impl<'a> TestSuite<'a> {
             tests: self.tests,
         };
         matrix.check()
+    }
+
+    pub fn new(
+        display_table: &'a Option<PathBuf>,
+        table: &'a Table,
+        mode: &'a TestMode,
+        tests: &'a Vec<Test>,
+    ) -> Self {
+        TestSuite {
+            display_table,
+            table,
+            mode,
+            tests,
+        }
     }
 }
 
@@ -167,16 +181,16 @@ impl ExpectedFailure {
 
 #[derive(Debug)]
 pub struct Test {
-    pub input: String,
-    pub expected: String,
-    pub xfail: ExpectedFailure,
-    pub typeform: Typeform,
-    pub input_pos: Vec<u16>,
-    pub output_pos: Vec<u16>,
-    pub cursor_pos: Option<CursorPosition>,
-    pub modes: EnumSet<TranslationMode>,
-    pub max_output_length: Option<u16>,
-    pub real_input_length: Option<u16>,
+    input: String,
+    expected: String,
+    xfail: ExpectedFailure,
+    typeform: Typeform,
+    input_pos: Vec<u16>,
+    output_pos: Vec<u16>,
+    cursor_pos: Option<CursorPosition>,
+    modes: EnumSet<TranslationMode>,
+    max_output_length: Option<u16>,
+    real_input_length: Option<u16>,
 }
 
 impl Test {
@@ -202,6 +216,32 @@ impl Test {
                 expected: self.expected.to_string(),
                 actual: translated,
             }
+        }
+    }
+
+    pub fn new(
+        input: String,
+        expected: String,
+        xfail: ExpectedFailure,
+        typeform: HashMap<String, String>,
+        input_pos: Vec<u16>,
+        output_pos: Vec<u16>,
+        cursor_pos: Option<CursorPosition>,
+        modes: EnumSet<TranslationMode>,
+        max_output_length: Option<u16>,
+        real_input_length: Option<u16>,
+    ) -> Self {
+        Test {
+            input,
+            expected,
+            xfail,
+            typeform,
+            input_pos,
+            output_pos,
+            cursor_pos,
+            modes,
+            max_output_length,
+            real_input_length,
         }
     }
 }

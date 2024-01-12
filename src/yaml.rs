@@ -343,7 +343,7 @@ impl<'a> YAMLParser<'a> {
             self.mapping_end()?;
         };
         self.sequence_end()?;
-        Ok(Test {
+        Ok(Test::new(
             input,
             expected,
             xfail,
@@ -354,7 +354,7 @@ impl<'a> YAMLParser<'a> {
             modes,
             max_output_length,
             real_input_length,
-        })
+        ))
     }
 
     fn tests(&mut self) -> Result<Vec<Test>, ParseError> {
@@ -427,12 +427,8 @@ impl<'a> YAMLParser<'a> {
                 "tests" => {
                     let tests = self.tests()?;
                     for table in &current_tables {
-                        let suite = TestSuite {
-                            display_table: &current_display_table,
-                            table,
-                            mode: &test_mode,
-                            tests: &tests,
-                        };
+                        let suite =
+                            TestSuite::new(&current_display_table, table, &test_mode, &tests);
                         results.extend(suite.check()?);
                     }
                     current_tables.clear();

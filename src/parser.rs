@@ -1952,12 +1952,12 @@ pub fn table_expanded(file: &Path) -> Result<Vec<Rule>, Vec<TableError>> {
     let search_path = &SearchPath::new_or("LOUIS_TABLE_PATH", ".");
     let path = search_path.find_file(file);
     match path {
-	Some(path) => {
-	    let rules = table(path.as_path())?;
-	    let rules = expand_includes(search_path, rules)?;
-	    Ok(rules)
-	}
-	_ => Err(vec![TableError::TableNotFound(file.into())])
+        Some(path) => {
+            let rules = table(path.as_path())?;
+            let rules = expand_includes(search_path, rules)?;
+            Ok(rules)
+        }
+        _ => Err(vec![TableError::TableNotFound(file.into())]),
     }
 }
 
