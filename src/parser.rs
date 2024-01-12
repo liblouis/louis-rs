@@ -1915,10 +1915,10 @@ pub enum TableError {
     },
     #[error("Cannot read table")]
     TableNotReadable(#[from] io::Error),
-    #[error("Cannot find table {path:?}")]
-    TableNotFound { path: PathBuf },
-    #[error("Table format not supported {path:?}")]
-    FormatNotSupported { path: PathBuf },
+    #[error("Cannot find table {0:?}")]
+    TableNotFound(PathBuf),
+    #[error("Table format not supported {0:?}")]
+    FormatNotSupported(PathBuf),
 }
 
 pub fn table(file: &Path) -> Result<Vec<Rule>, Vec<TableError>> {
@@ -1952,11 +1952,11 @@ fn expand_include(search_path: &SearchPath, rule: Rule) -> Result<Vec<Rule>, Vec
     if let Rule::Include { ref file } = rule {
         let path = Path::new(file);
         if path.extension().and_then(OsStr::to_str) == Some("dic") {
-            return Err(vec![TableError::FormatNotSupported { path: path.into() }]);
+            return Err(vec![TableError::FormatNotSupported(path.into())]);
         }
         let path = search_path
             .find_file(path)
-            .ok_or(vec![TableError::TableNotFound { path: path.into() }])?;
+            .ok_or(vec![TableError::TableNotFound(path.into())])?;
         let rules = table(&path)?;
         Ok(expand_includes(search_path, rules)?)
     } else {
