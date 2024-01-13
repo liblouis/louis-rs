@@ -167,13 +167,14 @@ impl<'a> YAMLParser<'a> {
         Ok(mode)
     }
 
-    fn xfail_value(&mut self) -> Result<bool, ParseError> {
+    fn xfail_value(&mut self) -> Result<ExpectedFailure, ParseError> {
         let value = self.scalar()?;
-        if value == "off" || value == "false" {
-            Ok(false)
-        } else {
-            Ok(true)
-        }
+        let value = match &*value {
+            "off" | "false" => ExpectedFailure::Simple(false),
+            "on" | "true" => ExpectedFailure::Simple(true),
+            reason => ExpectedFailure::Reason(reason.to_string()),
+        };
+        Ok(value)
     }
 
     fn xfail_mapping_value(&mut self) -> Result<Directions, ParseError> {
@@ -183,16 +184,18 @@ impl<'a> YAMLParser<'a> {
             let direction = self.scalar()?;
             let value = self.xfail_value()?;
             match &*direction {
-                "forward" => {
-                    if value {
+                "forward" => match value {
+                    ExpectedFailure::Simple(true) | ExpectedFailure::Reason(_) => {
                         directions.insert(Direction::Forward);
-                    };
-                }
-                "backward" => {
-                    if value {
-                        directions.insert(Direction::Forward);
-                    };
-                }
+                    }
+                    _ => (),
+                },
+                "backward" => match value {
+                    ExpectedFailure::Simple(true) | ExpectedFailure::Reason(_) => {
+                        directions.insert(Direction::Backward);
+                    }
+                    _ => (),
+                },
                 _ => {
                     return Err(ParseError::InvalidXFail);
                 }
@@ -207,7 +210,7 @@ impl<'a> YAMLParser<'a> {
             Some(Ok(Event::MappingStart { .. })) => {
                 Ok(ExpectedFailure::Direction(self.xfail_mapping_value()?))
             }
-            Some(Ok(Event::Scalar { .. })) => Ok(ExpectedFailure::Simple(self.xfail_value()?)),
+            Some(Ok(Event::Scalar { .. })) => self.xfail_value(),
             _ => Err(ParseError::InvalidXFail),
         }
     }
