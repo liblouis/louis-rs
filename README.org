@@ -83,9 +83,15 @@ which is a port of the [[https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93N
 a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][Parsing expression grammar]] from [[https://github.com/liblouis/louis-parser][louis-parser]].
 
 * Todo
-- [ ] (Emphasis and Caps) Indication 
+- [ ] (Emphasis and Caps) Indication
+  - presumably this could be done independently of translation, i.e.
+    find indication locations and put them in the typeform array
+    before even translating.
 - [ ] The correct, multipass and match opcodes
 - [ ] Word boundaries so we could support beg- and endword.
+  - the [[https://docs.rs/unicode-segmentation/latest/unicode_segmentation/][unicode_segmentation]] crate would probably help. It has
+    functions like [[https://docs.rs/unicode-segmentation/latest/unicode_segmentation/trait.UnicodeSegmentation.html#tymethod.split_word_bound_indices][split_word_bound_indices]], that give you word bounds
+    based on the Unicode standard.
 - [ ] Handle implicit braille definitions, i.e. '='
 - [ ] Typeforms
 - [ ] Cursor handling
