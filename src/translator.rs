@@ -140,6 +140,8 @@ impl TranslationTable {
             } else {
                 let replacement = match self.undefined {
                     Some(ref r) => &r.to,
+		    // FIXME: convert the next char to escape chars
+		    // instead of using a constant replacement
                     None => default_replacement,
                 };
                 let next_char = current.chars().next().unwrap();
