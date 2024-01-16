@@ -165,8 +165,13 @@ pub struct DisplayTable {
 }
 
 impl DisplayTable {
-    pub fn compile(rules: Vec<Rule>) -> DisplayTable {
+    pub fn compile(rules: Vec<Rule>, direction: Direction) -> DisplayTable {
         let mut mapping = HashMap::new();
+        let rules: Vec<Rule> = rules
+            .into_iter()
+            .filter(|r| r.is_direction(direction))
+            .collect();
+
         for rule in rules {
             if let Rule::Display {
                 character, dots, ..
