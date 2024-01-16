@@ -5,7 +5,7 @@ use libyaml::{Encoding, Event, Parser, ParserIter};
 
 use crate::parser::Direction;
 use crate::test::{
-    CursorPosition, Directions, DisplayTable, ExpectedFailure, Table, TableQuery, Test, TestError,
+    CursorPosition, Directions, Display, ExpectedFailure, Table, TableQuery, Test, TestError,
     TestMode, TestResult, TestSuite, TranslationMode, Typeform,
 };
 
@@ -96,15 +96,15 @@ impl<'a> YAMLParser<'a> {
         }
     }
 
-    fn display_table(&mut self) -> Result<DisplayTable, ParseError> {
+    fn display_table(&mut self) -> Result<Display, ParseError> {
         let value = self.scalar()?;
         let table = if value.contains(',') {
             let tables = value.split(',').map(|s| s.into()).collect();
-            DisplayTable::List(tables)
+            Display::List(tables)
         } else if value.contains('\n') {
-            DisplayTable::Inline(value)
+            Display::Inline(value)
         } else {
-            DisplayTable::Simple(value.into())
+            Display::Simple(value.into())
         };
         Ok(table)
     }

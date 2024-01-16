@@ -90,7 +90,7 @@ impl<'a> TestMatrix<'a> {
 
 #[derive(Debug)]
 pub struct TestSuite<'a> {
-    display_table: &'a Option<DisplayTable>,
+    display_table: &'a Option<Display>,
     table: &'a Table,
     mode: &'a TestMode,
     tests: &'a Vec<Test>,
@@ -117,7 +117,7 @@ impl<'a> TestSuite<'a> {
     }
 
     pub fn new(
-        display_table: &'a Option<DisplayTable>,
+        display_table: &'a Option<Display>,
         table: &'a Table,
         mode: &'a TestMode,
         tests: &'a Vec<Test>,
@@ -140,7 +140,7 @@ pub enum Table {
 }
 
 #[derive(Debug)]
-pub enum DisplayTable {
+pub enum Display {
     Simple(PathBuf),
     List(Vec<PathBuf>),
     Inline(String),
