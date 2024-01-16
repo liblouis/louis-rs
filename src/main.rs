@@ -39,10 +39,14 @@ enum Commands {
         #[arg(value_enum, short, long, default_value_t=Direction::Forward)]
         direction: Direction,
     },
-    /// Test braille translations from a given <YAML> file
+    /// Test braille translations from given <YAML> file(s)
     Check {
-        /// YAML document that specifies the tests
-        yaml: PathBuf,
+	/// Only show a summary of the test results
+	#[arg(short, long)]
+	brief: bool,
+        /// YAML document(s) that specify the tests
+	#[arg(required = true)]
+        yaml_files: Vec<PathBuf>,
     },
 }
 
@@ -128,6 +132,64 @@ fn percentage(n: usize, total: usize) -> String {
     format!("{:.0}%", result)
 }
 
+fn print_check_row(label: &str, occurences: usize, total: usize) {
+    println!(
+        "{} {} [{}]",
+        occurences,
+        label,
+        percentage(occurences, total)
+    );
+}
+
+fn check_yaml(files: Vec<PathBuf>, brief: bool) {
+    let mut total = 0;
+    let mut successes = 0;
+    let mut failures = 0;
+    let mut expected_failures = 0;
+    let mut unexpected_successes = 0;
+    for file in files {
+	match File::open(file) {
+            Ok(file) => match YAMLParser::new(file) {
+		Ok(mut parser) => match parser.yaml() {
+                    Ok(test_results) => {
+			total += test_results.len();
+			successes += test_results.iter().filter(|r| r.is_success()).count();
+			failures += test_results.iter().filter(|r| r.is_failure()).count();
+			expected_failures += test_results
+                            .iter()
+                            .filter(|r| r.is_expected_failure())
+                            .count();
+			unexpected_successes += test_results
+                            .iter()
+                            .filter(|r| r.is_unexpected_success())
+                            .count();
+			if !brief {
+			    for res in test_results.iter().filter(|r| !r.is_success()) {
+				println!("{:?}", res);
+			    }
+			}
+                    }
+                    Err(e) => {
+			eprintln!("Could not parse yaml or errors while testing: {:?}", e);
+                    }
+		},
+		Err(e) => {
+                    eprintln!("Could not create parser {:?}", e)
+		}
+            },
+            Err(e) => {
+		eprintln!("Could not open yaml {:?}", e)
+            }
+	}
+    }
+    println!("================================================================================");
+    println!("{} tests run:", total);
+    print_check_row("successes", successes, total);
+    print_check_row("failures", failures, total);
+    print_check_row("expected failures", expected_failures, total);
+    print_check_row("unexpected successes", unexpected_successes, total);
+}
+
 fn main() {
     let args = Cli::parse();
 
@@ -157,51 +219,6 @@ fn main() {
                 }
             }
         },
-        Commands::Check { yaml } => match File::open(yaml) {
-            Ok(file) => match YAMLParser::new(file) {
-                Ok(mut parser) => match parser.yaml() {
-                    Ok(test_results) => {
-                        let total = test_results.len();
-                        let successes = test_results.iter().filter(|r| r.is_success()).count();
-                        let failures = test_results.iter().filter(|r| r.is_failure()).count();
-                        let expected_failures = test_results
-                            .iter()
-                            .filter(|r| r.is_expected_failure())
-                            .count();
-                        let unexpected_successes = test_results
-                            .iter()
-                            .filter(|r| r.is_unexpected_success())
-                            .count();
-                        for res in &test_results {
-                            println!("{:?}", res);
-                        }
-                        println!("================================================================================");
-                        println!("{} tests run:", total);
-                        println!("{} successes [{}]", successes, percentage(successes, total));
-                        println!("{} failures [{}]", failures, percentage(failures, total));
-                        println!(
-                            "{} expected failures [{}]",
-                            expected_failures,
-                            percentage(expected_failures, total)
-                        );
-                        println!(
-                            "{} unexpected successes [{}]",
-                            unexpected_successes,
-                            percentage(unexpected_successes, total)
-                        );
-                    }
-                    Err(e) => {
-                        eprintln!("Could not parse yaml or errors while testing: {:?}", e);
-                        std::process::exit(1);
-                    }
-                },
-                Err(e) => {
-                    eprintln!("Could not create parser {:?}", e)
-                }
-            },
-            Err(e) => {
-                eprintln!("Could not open yaml {:?}", e)
-            }
-        },
+        Commands::Check { yaml_files, brief } => check_yaml(yaml_files, brief),
     }
 }

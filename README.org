@@ -45,21 +45,14 @@ Run a YAML test. Because support for display tables is currently
 missing many of them fail:
 
 #+BEGIN_SRC shell
-  $ LOUIS_TABLE_PATH=~/src/liblouis/tables cargo run -- check ~/src/liblouis/tests/braille-specs/de-comp6.yaml
-  Failure { input: "www.xyz.ch", expected: "www.xyz.ch", actual: "⠺⠺⠺⠄⠭⠽⠵⠄⠉⠓" }
-  Failure { input: "www.e-text.ch", expected: "www.e-text.ch", actual: "⠺⠺⠺⠄⠑⠤⠞⠑⠭⠞⠄⠉⠓" }
-  Failure { input: "meier_alex@ubs.com", expected: "meier\"_alex\"`ubs.com", actual: "⠍⠑⠊⠑⠗⠈⠸⠁⠇⠑⠭⠈⠜⠥⠃⠎⠄⠉⠕⠍" }
-  Failure { input: "http://www.google-test.ch/test?=:;+%#$", expected: "http://www.google-test.ch/test?=:;+%#$$", actual: "⠓⠞⠞⠏⠒⠲⠲⠺⠺⠺⠄⠛⠕⠕⠛⠇⠑⠤⠞⠑⠎⠞⠄⠉⠓⠲⠞⠑⠎⠞⠢⠶⠒⠆⠖⠿⠼⠨⠨" }
-  Failure { input: "peter34@gmx.net", expected: "peter34\"`gmx.net", actual: "⠏⠑⠞⠑⠗⠩⠹⠈⠜⠛⠍⠭⠄⠝⠑⠞" }
-  Failure { input: "@peter34", expected: "\"`peter34", actual: "⠈⠜⠏⠑⠞⠑⠗⠩⠹" }
-  Failure { input: "C:/ordner/inhalt_version_1", expected: "\"c:/ordner/inhalt\"_version\"_1", actual: "⠈⠉⠒⠲⠕⠗⠙⠝⠑⠗⠲⠊⠝⠓⠁⠇⠞⠈⠸⠧⠑⠗⠎⠊⠕⠝⠈⠸⠡" }
-  Failure { input: "for(i=0;i<=12; i++ { blabla }", expected: "for(i=0;i<=12; i++ { blabla }", actual: "⠋⠕⠗⠦⠊⠶⠬⠆⠊⠰⠶⠡⠣⠆⠀⠊⠖⠖⠀⠷⠀⠃⠇⠁⠃⠇⠁⠀⠾" }
+  $ LOUIS_TABLE_PATH=~/src/liblouis/tables cargo run -- check --brief ~/src/liblouis/tests/braille-specs/*.yaml ~/src/liblouis/tests/yaml/*.yaml
+  [...]
   ================================================================================
-  8 tests run:
-  0 successes [0%]
-  8 failures [100%]
-  0 expected failures [0%]
-  0 unexpected successes [0%]
+  644690 tests run:
+  333129 successes [52%]
+  275202 failures [43%]
+  23921 expected failures [4%]
+  12438 unexpected successes [2%]
 #+END_SRC
 
 * Prerequisites
