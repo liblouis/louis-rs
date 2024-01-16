@@ -5,8 +5,8 @@ use libyaml::{Encoding, Event, Parser, ParserIter};
 
 use crate::parser::Direction;
 use crate::test::{
-    CursorPosition, Directions, ExpectedFailure, Table, TableQuery, Test, TestError, TestMode,
-    TestResult, TestSuite, TranslationMode, Typeform, DisplayTable,
+    CursorPosition, Directions, DisplayTable, ExpectedFailure, Table, TableQuery, Test, TestError,
+    TestMode, TestResult, TestSuite, TranslationMode, Typeform,
 };
 
 type YAMLEventError = Option<Result<Event, libyaml::ParserError>>;
@@ -98,14 +98,14 @@ impl<'a> YAMLParser<'a> {
 
     fn display_table(&mut self) -> Result<DisplayTable, ParseError> {
         let value = self.scalar()?;
-	let table = if value.contains(',') {
-	    let tables = value.split(',').map(|s| s.into()).collect();
-	    DisplayTable::List(tables)
-	} else if value.contains('\n') {
-	    DisplayTable::Inline(value)
-	} else {
-	    DisplayTable::Simple(value.into())
-	};
+        let table = if value.contains(',') {
+            let tables = value.split(',').map(|s| s.into()).collect();
+            DisplayTable::List(tables)
+        } else if value.contains('\n') {
+            DisplayTable::Inline(value)
+        } else {
+            DisplayTable::Simple(value.into())
+        };
         Ok(table)
     }
 
