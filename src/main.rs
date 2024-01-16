@@ -41,11 +41,11 @@ enum Commands {
     },
     /// Test braille translations from given <YAML> file(s)
     Check {
-	/// Only show a summary of the test results
-	#[arg(short, long)]
-	brief: bool,
+        /// Only show a summary of the test results
+        #[arg(short, long)]
+        brief: bool,
         /// YAML document(s) that specify the tests
-	#[arg(required = true)]
+        #[arg(required = true)]
         yaml_files: Vec<PathBuf>,
     },
 }
@@ -148,39 +148,39 @@ fn check_yaml(files: Vec<PathBuf>, brief: bool) {
     let mut expected_failures = 0;
     let mut unexpected_successes = 0;
     for file in files {
-	match File::open(file) {
+        match File::open(file) {
             Ok(file) => match YAMLParser::new(file) {
-		Ok(mut parser) => match parser.yaml() {
+                Ok(mut parser) => match parser.yaml() {
                     Ok(test_results) => {
-			total += test_results.len();
-			successes += test_results.iter().filter(|r| r.is_success()).count();
-			failures += test_results.iter().filter(|r| r.is_failure()).count();
-			expected_failures += test_results
+                        total += test_results.len();
+                        successes += test_results.iter().filter(|r| r.is_success()).count();
+                        failures += test_results.iter().filter(|r| r.is_failure()).count();
+                        expected_failures += test_results
                             .iter()
                             .filter(|r| r.is_expected_failure())
                             .count();
-			unexpected_successes += test_results
+                        unexpected_successes += test_results
                             .iter()
                             .filter(|r| r.is_unexpected_success())
                             .count();
-			if !brief {
-			    for res in test_results.iter().filter(|r| !r.is_success()) {
-				println!("{:?}", res);
-			    }
-			}
+                        if !brief {
+                            for res in test_results.iter().filter(|r| !r.is_success()) {
+                                println!("{:?}", res);
+                            }
+                        }
                     }
                     Err(e) => {
-			eprintln!("Could not parse yaml or errors while testing: {:?}", e);
+                        eprintln!("Could not parse yaml or errors while testing: {:?}", e);
                     }
-		},
-		Err(e) => {
+                },
+                Err(e) => {
                     eprintln!("Could not create parser {:?}", e)
-		}
+                }
             },
             Err(e) => {
-		eprintln!("Could not open yaml {:?}", e)
+                eprintln!("Could not open yaml {:?}", e)
             }
-	}
+        }
     }
     println!("================================================================================");
     println!("{} tests run:", total);
