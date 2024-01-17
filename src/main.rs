@@ -142,14 +142,14 @@ fn print_check_row(label: &str, occurences: usize, total: usize) {
     );
 }
 
-fn check_yaml(files: Vec<PathBuf>, brief: bool) {
+fn check_yaml(paths: Vec<PathBuf>, brief: bool) {
     let mut total = 0;
     let mut successes = 0;
     let mut failures = 0;
     let mut expected_failures = 0;
     let mut unexpected_successes = 0;
-    for file in files {
-        match File::open(file) {
+    for path in paths {
+        match File::open(&path) {
             Ok(file) => match YAMLParser::new(file) {
                 Ok(mut parser) => match parser.yaml() {
                     Ok(test_results) => {
@@ -171,7 +171,7 @@ fn check_yaml(files: Vec<PathBuf>, brief: bool) {
                         }
                     }
                     Err(e) => {
-                        eprintln!("Could not parse yaml or errors while testing: {:?}", e);
+                        eprintln!("Errors while testing: {:?} {:?}", path, e);
                     }
                 },
                 Err(e) => {
