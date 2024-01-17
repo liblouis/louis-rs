@@ -41,8 +41,7 @@ Test the parser:
   Letter { character: 'e', dots: Explicit([{Dot2, Dot1, Dot3}, {Dot1}]), constraints: EnumSet(Nofor) }
 #+END_SRC
 
-Run a YAML test. Because support for display tables is currently
-missing many of them fail:
+Run all YAML tests:
 
 #+BEGIN_SRC shell
   $ LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis cargo run -- check --brief ~/src/liblouis/tests/braille-specs/*.yaml ~/src/liblouis/tests/yaml/*.yaml 2> /dev/null
