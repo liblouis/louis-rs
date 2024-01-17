@@ -36,6 +36,7 @@ enum Commands {
         /// String to translate. If no input is specified, a REPL is
         /// opened and each line you enter is translated.
         input: Option<String>,
+	/// Direction of translation
         #[arg(value_enum, short, long, default_value_t=Direction::Forward)]
         direction: Direction,
     },
@@ -171,15 +172,15 @@ fn check_yaml(paths: Vec<PathBuf>, brief: bool) {
                         }
                     }
                     Err(e) => {
-                        eprintln!("Errors while testing: {:?} {:?}", path, e);
+                        eprintln!("Errors while testing: {:?} ({})", path, e);
                     }
                 },
                 Err(e) => {
-                    eprintln!("Could not create parser {:?}", e)
+                    eprintln!("Could not create parser {:?} ({:?})", path, e)
                 }
             },
             Err(e) => {
-                eprintln!("Could not open yaml {:?}", e)
+                eprintln!("Could not open yaml file {:?} ({})", path, e)
             }
         }
     }
