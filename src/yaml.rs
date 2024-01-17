@@ -134,11 +134,6 @@ impl<'a> YAMLParser<'a> {
         Ok(tables)
     }
 
-    fn table_inline(&mut self) -> Result<String, ParseError> {
-        let table = self.scalar()?;
-        Ok(table)
-    }
-
     fn table(&mut self) -> Result<Table, ParseError> {
         let table = match self.events.peek() {
             Some(Ok(Event::MappingStart { .. })) => {
@@ -150,10 +145,11 @@ impl<'a> YAMLParser<'a> {
                 }
             }
             Some(Ok(Event::SequenceStart { .. })) => Table::List(self.table_list()?),
-            Some(Ok(Event::Scalar { value, .. })) => {
+            Some(Ok(Event::Scalar { .. })) => {
+		let value = self.scalar()?;
                 // if the scalar contains newlines we assume it is an inline table
                 if value.contains('\n') {
-                    Table::Inline(self.table_inline()?)
+                    Table::Inline(value)
                 } else {
                     Table::Simple(value.into())
                 }
