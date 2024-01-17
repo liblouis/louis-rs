@@ -93,6 +93,10 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
 - [ ] Add an API so that the functionality can be used as a library
 - [ ] Table resolution based on metadata
 - [ ] Display tables
+  - When testing the YAML files the display tables are used.
+  - However normal translation has currently no way to specify a
+    display table
+- [ ] Handle undefined chracters similarly to liblouis
 
 * License
 
