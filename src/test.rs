@@ -80,8 +80,18 @@ impl<'a> TestMatrix<'a> {
             for direction in self.directions {
                 let display_rules = match self.display {
                     Some(Display::Simple(path)) => parser::table_expanded(path.as_path())?,
+                    Some(Display::Inline(text)) => {
+                        let rules = parser::table(text, None)?;
+                        parser::expand_includes(rules)?
+                    }
+                    Some(Display::List(paths)) => {
+                        let mut rules = Vec::new();
+                        for path in paths {
+                            rules.extend(parser::table_expanded(path)?);
+                        }
+                        rules
+                    }
                     None => vec![],
-                    _ => return Err(TestError::NotImplemented),
                 };
                 let display_table = DisplayTable::compile(display_rules, *direction);
                 let rules = parser::table_expanded(path.as_path())?;
