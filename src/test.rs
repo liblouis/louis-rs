@@ -68,7 +68,7 @@ impl TestResult {
 
 struct TestMatrix<'a> {
     display: &'a Option<Display>,
-    paths: Vec<&'a PathBuf>,
+    tables: &'a Vec<Table>,
     directions: &'a Vec<Direction>,
     tests: &'a Vec<Test>,
 }
@@ -76,25 +76,39 @@ struct TestMatrix<'a> {
 impl<'a> TestMatrix<'a> {
     fn check(&self) -> Result<Vec<TestResult>, TestError> {
         let mut results = Vec::new();
-        for path in &self.paths {
-            for direction in self.directions {
-                let display_rules = match self.display {
-                    Some(Display::Simple(path)) => parser::table_expanded(path.as_path())?,
-                    Some(Display::Inline(text)) => {
-                        let rules = parser::table(text, None)?;
-                        parser::expand_includes(rules)?
+        for direction in self.directions {
+            let display_rules = match self.display {
+                Some(Display::Simple(path)) => parser::table_expanded(path.as_path())?,
+                Some(Display::Inline(text)) => {
+                    let rules = parser::table(text, None)?;
+                    parser::expand_includes(rules)?
+                }
+                Some(Display::List(paths)) => {
+                    let mut rules = Vec::new();
+                    for path in paths {
+                        rules.extend(parser::table_expanded(path)?);
                     }
-                    Some(Display::List(paths)) => {
+                    rules
+                }
+                None => vec![],
+            };
+            let display_table = DisplayTable::compile(display_rules, *direction);
+            for table in self.tables {
+                let rules = match table {
+                    Table::Simple(path) => parser::table_expanded(path.as_path())?,
+                    Table::List(paths) => {
                         let mut rules = Vec::new();
                         for path in paths {
                             rules.extend(parser::table_expanded(path)?);
                         }
                         rules
                     }
-                    None => vec![],
+                    Table::Inline(text) => {
+                        let rules = parser::table(text, None)?;
+                        parser::expand_includes(rules)?
+                    }
+                    Table::Query(..) => return Err(TestError::NotImplemented),
                 };
-                let display_table = DisplayTable::compile(display_rules, *direction);
-                let rules = parser::table_expanded(path.as_path())?;
                 let table = TranslationTable::compile(rules, *direction);
                 for test in self.tests {
                     results.push(test.check(&table, &display_table, *direction));
@@ -108,7 +122,7 @@ impl<'a> TestMatrix<'a> {
 #[derive(Debug)]
 pub struct TestSuite<'a> {
     display: &'a Option<Display>,
-    table: &'a Table,
+    tables: &'a Vec<Table>,
     mode: &'a TestMode,
     tests: &'a Vec<Test>,
 }
@@ -121,13 +135,9 @@ impl<'a> TestSuite<'a> {
             TestMode::BothDirections => vec![Direction::Forward, Direction::Backward],
             _ => vec![],
         };
-        let paths = match &self.table {
-            Table::Simple(path) => vec![path],
-            _ => return Err(TestError::NotImplemented),
-        };
         let matrix = TestMatrix {
             display: self.display,
-            paths,
+            tables: self.tables,
             directions: &directions,
             tests: self.tests,
         };
@@ -136,13 +146,13 @@ impl<'a> TestSuite<'a> {
 
     pub fn new(
         display: &'a Option<Display>,
-        table: &'a Table,
+        tables: &'a Vec<Table>,
         mode: &'a TestMode,
         tests: &'a Vec<Test>,
     ) -> Self {
         TestSuite {
             display,
-            table,
+            tables,
             mode,
             tests,
         }

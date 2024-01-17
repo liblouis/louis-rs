@@ -449,11 +449,9 @@ impl<'a> YAMLParser<'a> {
                 }
                 "tests" => {
                     let tests = self.tests()?;
-                    for table in &current_tables {
-                        let suite =
-                            TestSuite::new(&current_display_table, table, &test_mode, &tests);
-                        results.extend(suite.check()?);
-                    }
+                    let suite =
+                        TestSuite::new(&current_display_table, &current_tables, &test_mode, &tests);
+                    results.extend(suite.check()?);
                     current_tables.clear();
                 }
                 _ => {
