@@ -45,14 +45,13 @@ Run a YAML test. Because support for display tables is currently
 missing many of them fail:
 
 #+BEGIN_SRC shell
-  $ LOUIS_TABLE_PATH=~/src/liblouis/tables cargo run -- check --brief ~/src/liblouis/tests/braille-specs/*.yaml ~/src/liblouis/tests/yaml/*.yaml
-  [...]
+  $ LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis cargo run -- check --brief ~/src/liblouis/tests/braille-specs/*.yaml ~/src/liblouis/tests/yaml/*.yaml 2> /dev/null
   ================================================================================
-  644690 tests run:
-  333129 successes [52%]
-  275202 failures [43%]
-  23921 expected failures [4%]
-  12438 unexpected successes [2%]
+  648317 tests run:
+  333007 successes [51%]
+  277307 failures [43%]
+  25560 expected failures [4%]
+  12443 unexpected successes [2%]
 #+END_SRC
 
 * Prerequisites
