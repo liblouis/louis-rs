@@ -4,7 +4,7 @@ use enumset::{EnumSet, EnumSetType};
 
 use crate::{
     parser::{self, Direction, TableError},
-    translator::TranslationTable,
+    translator::{DisplayTable, TranslationTable},
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -67,6 +67,7 @@ impl TestResult {
 }
 
 struct TestMatrix<'a> {
+    display: &'a Option<Display>,
     paths: Vec<&'a PathBuf>,
     directions: &'a Vec<Direction>,
     tests: &'a Vec<Test>,
@@ -77,10 +78,16 @@ impl<'a> TestMatrix<'a> {
         let mut results = Vec::new();
         for path in &self.paths {
             for direction in self.directions {
+                let display_rules = match self.display {
+                    Some(Display::Simple(path)) => parser::table_expanded(path.as_path())?,
+                    None => vec![],
+                    _ => return Err(TestError::NotImplemented),
+                };
+                let display_table = DisplayTable::compile(display_rules, *direction);
                 let rules = parser::table_expanded(path.as_path())?;
                 let table = TranslationTable::compile(rules, *direction);
                 for test in self.tests {
-                    results.push(test.check(&table, *direction));
+                    results.push(test.check(&table, &display_table, *direction));
                 }
             }
         }
@@ -90,7 +97,7 @@ impl<'a> TestMatrix<'a> {
 
 #[derive(Debug)]
 pub struct TestSuite<'a> {
-    display_table: &'a Option<Display>,
+    display: &'a Option<Display>,
     table: &'a Table,
     mode: &'a TestMode,
     tests: &'a Vec<Test>,
@@ -109,6 +116,7 @@ impl<'a> TestSuite<'a> {
             _ => return Err(TestError::NotImplemented),
         };
         let matrix = TestMatrix {
+            display: self.display,
             paths,
             directions: &directions,
             tests: self.tests,
@@ -117,13 +125,13 @@ impl<'a> TestSuite<'a> {
     }
 
     pub fn new(
-        display_table: &'a Option<Display>,
+        display: &'a Option<Display>,
         table: &'a Table,
         mode: &'a TestMode,
         tests: &'a Vec<Test>,
     ) -> Self {
         TestSuite {
-            display_table,
+            display,
             table,
             mode,
             tests,
@@ -201,9 +209,15 @@ pub struct Test {
 }
 
 impl Test {
-    fn check(&self, table: &TranslationTable, direction: Direction) -> TestResult {
+    fn check(
+        &self,
+        table: &TranslationTable,
+        display_table: &DisplayTable,
+        direction: Direction,
+    ) -> TestResult {
         let translated = table.translate(&self.input);
-        if translated == self.expected {
+        let displayed = display_table.translate(&translated);
+        if displayed == self.expected {
             if !self.xfail.is_failure(direction) {
                 TestResult::Success
             } else {
