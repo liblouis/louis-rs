@@ -41,6 +41,18 @@ Test the parser:
   Letter { character: 'e', dots: Explicit([{Dot2, Dot1, Dot3}, {Dot1}]), constraints: EnumSet(Nofor) }
 #+END_SRC
 
+Run the tests in a YAML file:
+
+#+begin_src shell
+  $ LOUIS_TABLE_PATH=~/src/liblouis/tables cargo run -- check ~/src/liblouis/tests/braille-specs/de-de-comp8.yaml 2> /dev/null
+  ================================================================================
+  8 tests run:
+  8 successes [100%]
+  0 failures [0%]
+  0 expected failures [0%]
+  0 unexpected successes [0%]
+#+end_src
+
 Run all YAML tests:
 
 #+BEGIN_SRC shell
