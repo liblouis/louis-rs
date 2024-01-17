@@ -43,6 +43,8 @@ pub enum ParseError {
     InvalidMode(String),
     #[error("Invalid xfail value")]
     InvalidXFail,
+    #[error("Invalid table value")]
+    InvalidTableValue,
     #[error("Invalid token {0:?}")]
     InvalidToken(String),
     #[error("Error while running tests")]
@@ -148,7 +150,17 @@ impl<'a> YAMLParser<'a> {
                 }
             }
             Some(Ok(Event::SequenceStart { .. })) => Table::List(self.table_list()?),
-            _ => Table::Inline(self.table_inline()?),
+            Some(Ok(Event::Scalar { value, .. })) => {
+                // if the scalar contains newlines we assume it is an inline table
+                if value.contains('\n') {
+                    Table::Inline(self.table_inline()?)
+                } else {
+                    Table::Simple(value.into())
+                }
+            }
+            _ => {
+                return Err(ParseError::InvalidTableValue);
+            }
         };
         Ok(table)
     }
