@@ -62,9 +62,10 @@ struct Cli {
 fn print_errors(errors: Vec<TableError>) {
     for error in errors {
         match error {
-            TableError::ParseError { file, line, error } => {
-                eprintln!("{}:{}: {}", file, line, error)
-            }
+            TableError::ParseError { path, line, error } => match path {
+                Some(path) => eprintln!("{}:{}: {}", path.display(), line, error),
+                None => eprintln!("{}: {}", line, error),
+            },
             _ => eprintln!("{}", error),
         }
     }
@@ -84,7 +85,7 @@ fn parse(file: &Path) {
 }
 
 fn translate(table: &Path, direction: Direction, input: &str) {
-    let rules = parser::table(table);
+    let rules = parser::table_file(table);
     match rules {
         Ok(rules) => {
             let table = TranslationTable::compile(rules, direction);
@@ -205,7 +206,7 @@ fn main() {
         } => match input {
             Some(input) => translate(&table, direction, &input),
             None => {
-                let rules = parser::table(&table);
+                let rules = parser::table_file(&table);
                 match rules {
                     Ok(rules) => {
                         let table = TranslationTable::compile(rules, direction);
