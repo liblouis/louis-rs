@@ -72,8 +72,6 @@ pub enum ParseError {
     DotsTupleExpected,
     #[error("invalid unicode literal {found:?}")]
     InvalidUnicodeLiteral { found: Option<String> },
-    #[error("invalid digit")]
-    InvalidDigit,
     #[error("invalid number")]
     InvalidNumber(#[from] ParseIntError),
     #[error("invalid escape sequence")]

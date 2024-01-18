@@ -13,8 +13,6 @@ pub enum TestError {
     NotImplemented,
     #[error("Errors in table {0:?}")]
     TableErrors(Vec<TableError>),
-    #[error("Table {0:?} not found")]
-    TableNotFound(PathBuf),
 }
 
 impl From<Vec<TableError>> for TestError {
