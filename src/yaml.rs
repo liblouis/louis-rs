@@ -47,7 +47,7 @@ pub enum ParseError {
     InvalidTableValue,
     #[error("Invalid token {0:?}")]
     InvalidToken(String),
-    #[error("Error while running tests")]
+    #[error(transparent)]
     TestError(#[from] TestError),
 }
 
