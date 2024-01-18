@@ -6,7 +6,7 @@ This is the reduced-to-the-max re-write of liblouis in Rust.
 Many if not most of the CVEs of liblouis are rooted in the manual
 memory management in the C version of liblouis.
 
-Moving to Rust is of tremendeous help not only for the solid memory
+Moving to Rust is of tremendous help not only for the solid memory
 management to avoid buffer overflow problems, but also to bring joy
 back into liblouis maintenance.
 
@@ -16,6 +16,16 @@ using only character and most translation opcodes basically works.
 
 The original YAML test suite is supported and can be used to test the
 re-implementation.
+
+* Relation to liblouis
+
+louis-rs is *not* a direct port of the liblouis C code to Rust. It
+uses the same tables and the same YAML tests but other than that it is
+a complete rewrite. It uses different data structures and does the
+translation using a different algorithm.
+
+The goal is to be as compatible as possible with liblouis, when it
+makes sense.
 
 * Usage
 
@@ -106,7 +116,7 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
   - When testing the YAML files the display tables are used.
   - However normal translation has currently no way to specify a
     display table
-- [ ] Handle undefined chracters similarly to liblouis
+- [ ] Handle undefined characters similarly to liblouis
 
 * License
 
