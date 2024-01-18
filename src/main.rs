@@ -172,7 +172,7 @@ fn check_yaml(paths: Vec<PathBuf>, brief: bool) {
                         }
                     }
                     Err(e) => {
-                        eprintln!("Errors while testing: {:?} ({})", path, e);
+                        eprintln!("{}: {}", path.display(), e);
                     }
                 },
                 Err(e) => {
