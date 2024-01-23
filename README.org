@@ -100,6 +100,8 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
   - presumably this could be done independently of translation, i.e.
     find indication locations and put them in the typeform array
     before even translating.
+- [X] Add support for virtual dots
+  - Virtual dots are supported and are converted to Unicode Supplementary Private Use Area-A
 - [ ] The correct, multipass and match opcodes
 - [ ] Word boundaries so we could support beg- and endword.
   - the [[https://docs.rs/unicode-segmentation/latest/unicode_segmentation/][unicode_segmentation]] crate would probably help. It has
