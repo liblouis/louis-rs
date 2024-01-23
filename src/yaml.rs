@@ -6,7 +6,7 @@ use libyaml::{Encoding, Event, Parser, ParserIter};
 use crate::parser::Direction;
 use crate::test::{
     CursorPosition, Directions, Display, ExpectedFailure, Table, TableQuery, Test, TestError,
-    TestMode, TestResult, TestMatrix, TranslationMode, Typeform,
+    TestMatrix, TestMode, TestResult, TranslationMode, Typeform,
 };
 
 type YAMLEventError = Option<Result<Event, libyaml::ParserError>>;
@@ -146,7 +146,7 @@ impl<'a> YAMLParser<'a> {
             }
             Some(Ok(Event::SequenceStart { .. })) => Table::List(self.table_list()?),
             Some(Ok(Event::Scalar { .. })) => {
-		let value = self.scalar()?;
+                let value = self.scalar()?;
                 // if the scalar contains newlines we assume it is an inline table
                 if value.contains('\n') {
                     Table::Inline(value)
@@ -445,8 +445,12 @@ impl<'a> YAMLParser<'a> {
                 }
                 "tests" => {
                     let tests = self.tests()?;
-                    let suite =
-                        TestMatrix::new(&current_display_table, &current_tables, &test_mode, &tests);
+                    let suite = TestMatrix::new(
+                        &current_display_table,
+                        &current_tables,
+                        &test_mode,
+                        &tests,
+                    );
                     results.extend(suite.check()?);
                     current_tables.clear();
                 }

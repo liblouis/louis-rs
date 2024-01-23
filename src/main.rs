@@ -36,7 +36,7 @@ enum Commands {
         /// String to translate. If no input is specified, a REPL is
         /// opened and each line you enter is translated.
         input: Option<String>,
-	/// Direction of translation
+        /// Direction of translation
         #[arg(value_enum, short, long, default_value_t=Direction::Forward)]
         direction: Direction,
     },

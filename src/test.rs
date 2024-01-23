@@ -87,7 +87,7 @@ impl<'a> TestMatrix<'a> {
         TestMatrix {
             display,
             tables,
-	    directions,
+            directions,
             tests,
         }
     }
