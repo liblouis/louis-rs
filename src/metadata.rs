@@ -19,23 +19,19 @@ type Query = Vec<(String, String)>;
 
 type Index = HashMap<(String, String), HashSet<PathBuf>>;
 
-fn intersect_many(candidates: Vec<&HashSet<PathBuf>>) -> HashSet<PathBuf> {
-    match candidates.len() {
-        0 => HashSet::new(),
-        1 => candidates[0].clone(),
-        _ => {
-            let (first, rest) = candidates.split_first().unwrap();
-            *first & &intersect_many(rest.to_vec())
-        }
+pub fn find(index: &Index, query: Query) -> HashSet<&PathBuf> {
+    let candidates: Vec<_> = query.into_iter().map(|(k, v)| index.get(&(k, v))).collect();
+    // if any of the queries was not found in the index then the whole query is empty
+    if candidates.iter().any(|c| c.is_none()) {
+        HashSet::new()
+    } else {
+        let candidates: Vec<_> = candidates.iter().flatten().collect();
+        // get the intersection of all sets
+        candidates[0]
+            .iter()
+            .filter(|c| candidates[1..].iter().all(|s| s.contains(*c)))
+            .collect()
     }
-}
-
-pub fn find(index: &Index, query: Query) -> HashSet<PathBuf> {
-    let candidates: Vec<&HashSet<PathBuf>> = query
-        .into_iter()
-        .filter_map(|(k, v)| index.get(&(k, v)))
-        .collect();
-    intersect_many(candidates)
 }
 
 pub fn index() -> Result<Index, MetaDataError> {
