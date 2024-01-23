@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use enumset::{enum_set, EnumSet, EnumSetType};
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum ParseError {
@@ -6,7 +6,7 @@ pub enum ParseError {
     InvalidBraille { character: Option<char> },
 }
 
-#[derive(Hash, PartialEq, Eq, Debug)]
+#[derive(EnumSetType, Debug)]
 pub enum BrailleDot {
     Dot0,
     Dot1,
@@ -26,7 +26,7 @@ pub enum BrailleDot {
     DotF,
 }
 
-pub type BrailleChar = HashSet<BrailleDot>;
+pub type BrailleChar = EnumSet<BrailleDot>;
 pub type BrailleChars = Vec<BrailleChar>;
 
 pub fn is_braille_dot(c: char) -> bool {
@@ -91,18 +91,17 @@ fn dot_to_hex(dot: &BrailleDot) -> u32 {
 }
 
 fn has_virtual_dots(char: &BrailleChar) -> bool {
-    let virtual_dots = HashSet::from([
-        BrailleDot::Dot9,
-        BrailleDot::DotA,
-        BrailleDot::DotB,
-        BrailleDot::DotC,
-        BrailleDot::DotD,
-        BrailleDot::DotE,
-        BrailleDot::DotF,
-    ]);
+    let virtual_dots = enum_set!(
+	BrailleDot::Dot9 |
+	BrailleDot::DotA |
+	BrailleDot::DotB |
+	BrailleDot::DotC |
+        BrailleDot::DotD |
+        BrailleDot::DotE |
+        BrailleDot::DotF |
+    );
     !virtual_dots
-        .intersection(char)
-        .collect::<HashSet<_>>()
+        .intersection(*char)
         .is_empty()
 }
 
@@ -119,7 +118,7 @@ fn dot_to_unicode(dot: &BrailleChar) -> char {
     };
     let unicode = dot
         .iter()
-        .map(dot_to_hex)
+        .map(|dot| dot_to_hex(&dot))
         .fold(unicode_plane, |acc, x| acc | x);
     char::from_u32(unicode).unwrap()
 }
@@ -137,17 +136,17 @@ mod tests {
     fn chars_to_dots_test() {
         assert_eq!(
             chars_to_dots("123"),
-            Ok(HashSet::from([
-                BrailleDot::Dot1,
-                BrailleDot::Dot2,
+            Ok(enum_set!(
+                BrailleDot::Dot1 |
+                BrailleDot::Dot2 |
                 BrailleDot::Dot3
-            ]))
+            ))
         );
         assert_eq!(
             chars_to_dots("1a"),
-            Ok(HashSet::from([BrailleDot::Dot1, BrailleDot::DotA,]))
+            Ok(enum_set!(BrailleDot::Dot1 | BrailleDot::DotA))
         );
-        assert_eq!(chars_to_dots("a"), Ok(HashSet::from([BrailleDot::DotA,])));
+        assert_eq!(chars_to_dots("a"), Ok(enum_set!(BrailleDot::DotA)));
         assert_eq!(
             chars_to_dots("z"),
             Err(ParseError::InvalidBraille {
@@ -161,8 +160,8 @@ mod tests {
         assert_eq!(
             braille_chars("1-1"),
             Ok(vec![
-                HashSet::from([BrailleDot::Dot1]),
-                HashSet::from([BrailleDot::Dot1])
+                enum_set!(BrailleDot::Dot1),
+                enum_set!(BrailleDot::Dot1)
             ])
         );
         assert_eq!(
@@ -186,11 +185,11 @@ mod tests {
     #[test]
     fn dots_to_unicode_test() {
         assert_eq!(
-            dots_to_unicode(&vec![HashSet::from([BrailleDot::Dot1, BrailleDot::Dot8])]),
+            dots_to_unicode(&vec![enum_set!(BrailleDot::Dot1 | BrailleDot::Dot8)]),
             "⢁".to_string()
         );
         assert_eq!(
-            dots_to_unicode(&vec![HashSet::from([BrailleDot::Dot1, BrailleDot::Dot9])]),
+            dots_to_unicode(&vec![enum_set!(BrailleDot::Dot1 | BrailleDot::Dot9)]),
             "\u{f0101}".to_string()
         );
     }

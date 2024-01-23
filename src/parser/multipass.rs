@@ -379,6 +379,8 @@ impl<'a> TestParser<'a> {
 
 #[cfg(test)]
 mod tests {
+    use enumset::enum_set;
+
     use super::braille::BrailleDot;
     use super::*;
 
@@ -397,11 +399,11 @@ mod tests {
         assert_eq!(
             TestParser::new("@123").dots(),
             Ok(TestInstruction::Dots {
-                dots: vec![HashSet::from([
-                    BrailleDot::Dot1,
-                    BrailleDot::Dot2,
+                dots: vec![enum_set!(
+                    BrailleDot::Dot1 |
+                    BrailleDot::Dot2 |
                     BrailleDot::Dot3
-                ])]
+                )]
             })
         );
         assert_eq!(
@@ -420,8 +422,8 @@ mod tests {
             TestParser::new("@1-2").dots(),
             Ok(TestInstruction::Dots {
                 dots: vec![
-                    HashSet::from([BrailleDot::Dot1]),
-                    HashSet::from([BrailleDot::Dot2])
+                    enum_set!(BrailleDot::Dot1),
+                    enum_set!(BrailleDot::Dot2)
                 ]
             })
         );
