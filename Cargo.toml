@@ -10,12 +10,8 @@ name = "louis"
 path = "src/main.rs"
 
 [dependencies]
-nom = "7"
-nom-unicode = "^0.3"
-enumset = "1.0.6"
-clap = { version = "4.0", features = ["derive"] }
 thiserror = "1.0"
 search_path = "0.1.4"
-
-serde = { version = "1.0.171", features = ["derive"] }
-serde_yaml = "0.9.22"
+clap = { version = "4.4.11", features = ["derive"] }
+enumset = "1.1.3"
+libyaml = "0.2.0"

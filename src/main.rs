@@ -1,33 +1,53 @@
+use std::fs::File;
+use std::io;
+use std::io::BufRead;
+use std::io::Write;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::exit;
+
 use clap::{Parser, Subcommand};
-use liblouis::{
-    check::{TestResult, TestSuite},
-    compile, debug, translate,
-    translator::Direction,
-};
-use std::{fs::File, io::BufReader, path::PathBuf};
+
+mod parser;
+use parser::RuleParser;
+use parser::TableError;
+
+use crate::parser::Direction;
+use crate::translator::TranslationTable;
+
+mod test;
+mod translator;
+mod yaml;
+
+use yaml::YAMLParser;
 
 #[derive(Debug, Subcommand)]
 enum Commands {
-    /// translate <INPUT> to or from braille using <TABLE>
-    #[command(arg_required_else_help = true)]
+    /// Parse and print debug information about the given table <TABLE>
+    Parse {
+        /// Braille table to parse. If no table is specified, a REPL
+        /// is opened and each line you enter is parsed.
+        table: Option<PathBuf>,
+    },
+    /// translate <INPUT> to braille using <TABLE>
     Translate {
         /// Braille table to use for the translation
         table: PathBuf,
-        /// String to translate
-        input: String,
-        #[arg(long,short,value_enum,default_value_t=Direction::Forward)]
+        /// String to translate. If no input is specified, a REPL is
+        /// opened and each line you enter is translated.
+        input: Option<String>,
+	/// Direction of translation
+        #[arg(value_enum, short, long, default_value_t=Direction::Forward)]
         direction: Direction,
     },
-    /// Run the tests defined in the <YAML_TEST_FILE>. Return 0 if all
-    /// tests pass or 1 if any of the tests fail.
-    CheckYaml {
-        /// YAML file listing all the tests
-        yaml: PathBuf,
-    },
-    /// print debug information about the given table <TABLE>
-    Debug {
-        /// Braille table to debug
-        table: PathBuf,
+    /// Test braille translations from given <YAML> file(s)
+    Check {
+        /// Only show a summary of the test results
+        #[arg(short, long)]
+        brief: bool,
+        /// YAML document(s) that specify the tests
+        #[arg(required = true)]
+        yaml_files: Vec<PathBuf>,
     },
 }
 
@@ -40,58 +60,167 @@ struct Cli {
     command: Commands,
 }
 
+fn print_errors(errors: Vec<TableError>) {
+    for error in errors {
+        match error {
+            TableError::ParseError { path, line, error } => match path {
+                Some(path) => eprintln!("{}:{}: {}", path.display(), line, error),
+                None => eprintln!("{}: {}", line, error),
+            },
+            _ => eprintln!("{}", error),
+        }
+    }
+}
+
+fn parse(file: &Path) {
+    match parser::table_expanded(file) {
+        Ok(rules) => {
+            for rule in rules {
+                println!("{:?}", rule);
+            }
+        }
+        Err(errors) => {
+            print_errors(errors);
+        }
+    }
+}
+
+fn translate(table: &Path, direction: Direction, input: &str) {
+    let rules = parser::table_file(table);
+    match rules {
+        Ok(rules) => {
+            let table = TranslationTable::compile(rules, direction);
+            println!("{}", table.translate(input));
+        }
+        Err(errors) => {
+            print_errors(errors);
+        }
+    }
+}
+
+// we pass a closure to the repl function so that we can use it for
+// both the parsing repl and the translation repl. In the case of the
+// parsing repl it is an empty closure but the translation repl closes
+// over the TranslationTable.
+fn repl(handler: Box<dyn Fn(String)>) {
+    print!("> ");
+    io::stdout().flush().unwrap();
+
+    let stdin = io::stdin();
+    for line in stdin.lock().lines() {
+        match line {
+            Ok(line) => handler(line),
+            _ => exit(0),
+        }
+        print!("> ");
+        io::stdout().flush().unwrap();
+    }
+}
+
+fn parse_line(line: String) {
+    if !line.starts_with('#') && !line.is_empty() {
+        let rule = RuleParser::new(&line).rule();
+        match rule {
+            Ok(rule) => println!("{:?}", rule),
+            Err(e) => eprintln!("{:?}", e),
+        }
+    }
+}
+
+fn percentage(n: usize, total: usize) -> String {
+    let n = n as f32;
+    let total = total as f32;
+    let result = (n * 100.0) / total;
+    format!("{:.0}%", result)
+}
+
+fn print_check_row(label: &str, occurences: usize, total: usize) {
+    println!(
+        "{} {} [{}]",
+        occurences,
+        label,
+        percentage(occurences, total)
+    );
+}
+
+fn check_yaml(paths: Vec<PathBuf>, brief: bool) {
+    let mut total = 0;
+    let mut successes = 0;
+    let mut failures = 0;
+    let mut expected_failures = 0;
+    let mut unexpected_successes = 0;
+    for path in paths {
+        match File::open(&path) {
+            Ok(file) => match YAMLParser::new(file) {
+                Ok(mut parser) => match parser.yaml() {
+                    Ok(test_results) => {
+                        total += test_results.len();
+                        successes += test_results.iter().filter(|r| r.is_success()).count();
+                        failures += test_results.iter().filter(|r| r.is_failure()).count();
+                        expected_failures += test_results
+                            .iter()
+                            .filter(|r| r.is_expected_failure())
+                            .count();
+                        unexpected_successes += test_results
+                            .iter()
+                            .filter(|r| r.is_unexpected_success())
+                            .count();
+                        if !brief {
+                            for res in test_results.iter().filter(|r| !r.is_success()) {
+                                println!("{:?}", res);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("{}: {}", path.display(), e);
+                    }
+                },
+                Err(e) => {
+                    eprintln!("Could not create parser {:?} ({:?})", path, e)
+                }
+            },
+            Err(e) => {
+                eprintln!("Could not open yaml file {:?} ({})", path, e)
+            }
+        }
+    }
+    println!("================================================================================");
+    println!("{} tests run:", total);
+    print_check_row("successes", successes, total);
+    print_check_row("failures", failures, total);
+    print_check_row("expected failures", expected_failures, total);
+    print_check_row("unexpected successes", unexpected_successes, total);
+}
+
 fn main() {
     let args = Cli::parse();
 
     match args.command {
+        Commands::Parse { table } => match table {
+            Some(table) => parse(table.as_path()),
+            None => repl(Box::new(parse_line)),
+        },
         Commands::Translate {
             table,
             input,
             direction,
-        } => {
-            println!(
-                "{:?} translating {} using table {:?}",
-                direction, input, table
-            );
-            let table = compile(&table).expect("Cannot compile table");
-            println!("Braille: {}", translate(&table, &input));
-        }
-        Commands::CheckYaml { yaml } => {
-            println!("Testing with {:?}", yaml);
-            let input = File::open(yaml).expect("could not read to file");
-            let buffered = BufReader::new(input);
-            let test_suite: TestSuite =
-                serde_yaml::from_reader(buffered).expect("Cannot parse yaml");
-
-            let results = test_suite.check();
-            println!(
-                "Pass: {}",
-                results
-                    .iter()
-                    .filter(|r| **r == TestResult::Success)
-                    .count()
-            );
-            println!(
-                "Fail: {}",
-                results.iter().filter(|r| r.is_failure()).count()
-            );
-            for r in results {
-                match r {
-                    TestResult::Success => (),
-                    _ => println!("{:?}", r),
-                }
-            }
-        }
-        Commands::Debug { table } => {
-            println!("debugging table {:?}", table);
-            match debug(table) {
-                Ok(rules) => {
-                    for rule in rules {
-                        println!("{:?}", rule);
+        } => match input {
+            Some(input) => translate(&table, direction, &input),
+            None => {
+                let rules = parser::table_file(&table);
+                match rules {
+                    Ok(rules) => {
+                        let table = TranslationTable::compile(rules, direction);
+                        repl(Box::new(move |input| {
+                            println!("{}", table.translate(&input))
+                        }));
+                    }
+                    Err(errors) => {
+                        print_errors(errors);
                     }
                 }
-                Err(error) => println!("{:?}", error),
             }
-        }
+        },
+        Commands::Check { yaml_files, brief } => check_yaml(yaml_files, brief),
     }
 }

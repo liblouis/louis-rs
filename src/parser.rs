@@ -1,271 +1,45 @@
-//! Parse liblouis translation tables
-
-// see https://codeandbitters.com/lets-build-a-parser/ for a lot of
-// inspiration
-
-use std::collections::HashSet;
-use std::fs;
-use std::path::PathBuf;
-
-use nom::branch::alt;
-use nom::bytes::complete::is_a;
-use nom::bytes::complete::is_not;
-use nom::bytes::complete::tag;
-use nom::character::complete::alpha1;
-use nom::character::complete::digit1;
-use nom::character::complete::hex_digit1;
-use nom::character::complete::line_ending;
-use nom::character::complete::none_of;
-use nom::character::complete::not_line_ending;
-use nom::character::complete::one_of;
-use nom::character::complete::space0;
-use nom::character::complete::space1;
-use nom::combinator::all_consuming;
-use nom::combinator::map;
-use nom::combinator::opt;
-use nom::combinator::success;
-use nom::combinator::value;
-use nom::error::ErrorKind;
-use nom::error::ParseError;
-use nom::multi::many0;
-use nom::multi::many1;
-use nom::multi::separated_list1;
-use nom::sequence::delimited;
-use nom::sequence::tuple;
+use std::{
+    collections::HashSet,
+    ffi::OsStr,
+    fs::read_to_string,
+    io,
+    iter::Peekable,
+    num::ParseIntError,
+    path::{Path, PathBuf},
+    str::{Chars, SplitWhitespace},
+};
 
 use enumset::enum_set;
-use enumset::EnumSet;
-use enumset::EnumSetType;
+use enumset::{EnumSet, EnumSetType};
 
-use nom::IResult;
-//use nom_unicode::complete::alpha1 as unicode_alpha1;
-use nom_unicode::complete::digit1 as unicode_digit1;
 use search_path::SearchPath;
-#[derive(PartialEq, Debug)]
-pub enum Line {
-    Empty,
-    Comment { comment: String },
-    Rule { rule: Rule, comment: String },
-}
 
-impl Line {
-    pub fn as_rule(self) -> Option<Rule> {
-        match self {
-            Line::Rule { rule, .. } => Some(rule),
-            _ => None,
-        }
-    }
-}
+use self::{
+    braille::{braille_chars, chars_to_dots, BrailleChars},
+    multipass::Test,
+};
 
-#[rustfmt::skip]
-#[derive(PartialEq, Debug)]
-pub enum Rule {
-    Include { filename: String },
-    Undefined { dots: BrailleChars },
-    Display { ch: char, dots: BrailleChars, prefixes: Prefixes },
+pub use braille::dots_to_unicode;
 
-    // Character-Definition Opcodes
-    Space { ch: char, dots: BrailleChars, prefixes: Prefixes},
-    Multind { dots: BrailleChars, opcodes: Vec<String>, prefixes: Prefixes },
-    Punctuation { ch: char, dots: BrailleChars, prefixes: Prefixes},
-    Digit { ch: char, dots: BrailleChars },
-    Letter { ch: char, dots: BrailleCharsOrImplicit, prefixes: Prefixes },
-    Lowercase { ch: char, dots: BrailleChars, prefixes: Prefixes },
-    Uppercase { ch: char, dots: BrailleChars, prefixes: Prefixes },
-    Litdigit { ch: char, dots: BrailleChars },
-    Sign { ch: char, dots: BrailleChars, prefixes: Prefixes },
-    Math { ch: char, dots: BrailleChars, prefixes: Prefixes },
-    Grouping { name: String, chars: String, dots: Vec<BrailleChars> },
-    Base { attribute: String, derived: char, base: char },
-    Attribute { name: String, chars: String },
-
-    // Braille Indicator Opcodes
-    Modeletter { attribute: String, dots: BrailleChars, prefixes: Prefixes},
-    Capsletter { dots: BrailleChars, prefixes: Prefixes},
-    Begmodeword { attribute: String, dots: BrailleChars, prefixes: Prefixes},
-    Begcapsword { dots: BrailleChars, prefixes: Prefixes},
-    Endmodeword { attribute: BrailleChars, prefixes: Prefixes},
-    Endcapsword { dots: BrailleChars, prefixes: Prefixes},
-    Capsmodechars { chars: String},
-    Begmode { attribute: String, dots: BrailleChars},
-    Begcaps { dots: BrailleChars},
-    Endmode { attribute: String, dots: BrailleChars},
-    Endcaps { dots: BrailleChars },
-    Letsign { dots: BrailleChars },
-    Noletsign { chars: String },
-    Noletsignbefore { chars: String },
-    Noletsignafter { chars: String },
-    Nocontractsign { dots: BrailleChars },
-    Numsign { dots: BrailleChars },
-    Nonumsign { dots: BrailleChars },
-    Numericnocontchars { chars: String },
-    Numericmodechars { chars: String },
-    Midendnumericmodechars { chars: String },
-    Begcapsphrase { dots: BrailleChars},
-    Endcapsphrase { dots: BrailleChars, position: Position},
-    Lencapsphrase { length: u8},
-    Begmodephrase { name: String, dots: BrailleChars},
-    Endmodephrase { name: String, dots: BrailleChars, position: Position},
-    Lenmodephrase { name: String, length: u8},
-
-    // Standing Alone Sequences
-    Seqdelimiter { chars: String },
-    Seqbeforechars { chars: String },
-    Seqafterchars { chars: String },
-    Seqafterpattern { pattern: String },
-    Seqafterexpression { expression: String },
-
-    // Emphasis Opcodes
-    Class { name: String, chars: String },
-    Emphclass { name: String },
-    Begemph { name: String, dots: BrailleChars, prefixes: Prefixes },
-    Endemph { name: String, dots: BrailleChars, prefixes: Prefixes },
-    Noemphchars { name: String, chars: String},
-    Emphletter { name: String, dots: BrailleChars },
-    Begemphword { name: String,  dots: BrailleChars },
-    Endemphword { name: String, dots: BrailleChars },
-    Emphmodechars { name: String, chars: String },
-    Begemphphrase { name: String, dots: BrailleChars },
-    Endemphphrase { name: String, dots: BrailleChars, position: Position },
-    Lenemphphrase { name: String, length: u8 },
-
-    // Computer braille
-    Begcomp { dots: BrailleChars, prefixes: Prefixes},
-    Endcomp { dots: BrailleChars, prefixes: Prefixes},
-
-    // Special Symbol Opcodes
-    Decpoint { chars: String, dots: BrailleChars},
-    Hyphen { chars: String, dots: BrailleChars, prefixes: Prefixes},
-
-    // Special Processing Opcodes
-    Capsnocont,
-
-    // Translation Opcodes
-    Compbrl { chars: String, prefixes: Prefixes},
-    Comp6 { chars: String, dots: BrailleCharsOrImplicit},
-    Nocont {chars: String},
-    Replace {chars: String, replacement: Option<String> },
-    Always {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Repeated {chars: String, dots: BrailleChars, prefixes: Prefixes},
-    Repword  {chars: String, dots: BrailleChars},
-    Rependword  {chars: String, dots: BrailleChars, other: BrailleChars},
-    Largesign  {chars: String, dots: BrailleChars},
-    Word  {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Syllable { word: String, dots: BrailleCharsOrImplicit },
-    Joinword { word: String, dots: BrailleChars },
-    Lowword  {chars: String, dots: BrailleChars, prefixes: Prefixes},
-    Contraction  {chars: String},
-    Sufword  {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Prfword  {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Begword  {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Begmidword  {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Midword  {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Midendword  {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Endword  {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Partword {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses},
-    Prepunc {chars: String, dots: BrailleChars, prefixes: Prefixes},
-    Postpunc {chars: String, dots: BrailleChars, prefixes: Prefixes},
-    Begnum {chars: String, dots: BrailleChars, prefixes: Prefixes},
-    Midnum {chars: String, dots: BrailleChars, prefixes: Prefixes},
-    Endnum {chars: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes},
-    Joinnum {chars: String, dots: BrailleChars, prefixes: Prefixes},
-
-    // Swap Opcodes
-    Swapcd {name: String, chars: String, dots: Vec<BrailleChars> },
-    Swapdd {name: String, dots: Vec<BrailleChars>, dotpattern: Vec<BrailleChars>},
-    Swapcc {name: String, chars: String, replacement: String},
-
-    // Context Opcodes
-    Context {test: MultiPassTest, action: String, prefixes: Prefixes},
-    Pass2 {test: MultiPassTest, action: String, prefixes: Prefixes},
-    Pass3 {test: MultiPassTest, action: String, prefixes: Prefixes},
-    Pass4 {test: MultiPassTest, action: String, prefixes: Prefixes},
-
-    // Correct Opcode
-    Correct {test: MultiPassTest, action: String, prefixes: Prefixes},
-
-    // Match Opcode
-    Match { pre: String, chars: String, post: String, dots: BrailleCharsOrImplicit, prefixes: Prefixes, classes: WithClasses, positions: WithMatches},
-
-    // deprecated opcodes
-    Literal {chars: String, }
-}
-
-impl Rule {
-    fn prefixes(&self) -> Option<Prefixes> {
-        match self {
-            Rule::Display { prefixes, .. }
-            | Rule::Space { prefixes, .. }
-            | Rule::Multind { prefixes, .. }
-            | Rule::Punctuation { prefixes, .. }
-            | Rule::Letter { prefixes, .. }
-            | Rule::Lowercase { prefixes, .. }
-            | Rule::Uppercase { prefixes, .. }
-            | Rule::Sign { prefixes, .. }
-            | Rule::Math { prefixes, .. }
-            | Rule::Modeletter { prefixes, .. }
-            | Rule::Capsletter { prefixes, .. }
-            | Rule::Begmodeword { prefixes, .. }
-            | Rule::Begcapsword { prefixes, .. }
-            | Rule::Endmodeword { prefixes, .. }
-            | Rule::Endcapsword { prefixes, .. }
-            | Rule::Begemph { prefixes, .. }
-            | Rule::Endemph { prefixes, .. }
-            | Rule::Begcomp { prefixes, .. }
-            | Rule::Endcomp { prefixes, .. }
-            | Rule::Hyphen { prefixes, .. }
-            | Rule::Compbrl { prefixes, .. }
-            | Rule::Always { prefixes, .. }
-            | Rule::Repeated { prefixes, .. }
-            | Rule::Word { prefixes, .. }
-            | Rule::Lowword { prefixes, .. }
-            | Rule::Sufword { prefixes, .. }
-            | Rule::Prfword { prefixes, .. }
-            | Rule::Begword { prefixes, .. }
-            | Rule::Begmidword { prefixes, .. }
-            | Rule::Midword { prefixes, .. }
-            | Rule::Midendword { prefixes, .. }
-            | Rule::Endword { prefixes, .. }
-            | Rule::Partword { prefixes, .. }
-            | Rule::Prepunc { prefixes, .. }
-            | Rule::Postpunc { prefixes, .. }
-            | Rule::Begnum { prefixes, .. }
-            | Rule::Midnum { prefixes, .. }
-            | Rule::Endnum { prefixes, .. }
-            | Rule::Joinnum { prefixes, .. }
-            | Rule::Context { prefixes, .. }
-            | Rule::Pass2 { prefixes, .. }
-            | Rule::Pass3 { prefixes, .. }
-            | Rule::Pass4 { prefixes, .. }
-            | Rule::Correct { prefixes, .. }
-            | Rule::Match { prefixes, .. } => Some(*prefixes),
-            _ => None,
-        }
-    }
-
-    pub fn is_forward(&self) -> bool {
-        match self.prefixes() {
-            Some(prefixes) => !prefixes.contains(Prefix::Nofor),
-            None => true,
-        }
-    }
-
-    pub fn is_backward(&self) -> bool {
-        match self.prefixes() {
-            Some(prefixes) => !prefixes.contains(Prefix::Noback),
-            None => true,
-        }
-    }
-}
+mod braille;
+mod multipass;
 
 #[derive(EnumSetType, Debug)]
-pub enum Prefix {
-    Noback,
+pub enum Constraint {
     Nofor,
+    Noback,
     Nocross,
 }
 
-pub type Prefixes = EnumSet<Prefix>;
+type Constraints = EnumSet<Constraint>;
+
+const DIRECTIONS: Constraints = enum_set!(Constraint::Nofor | Constraint::Noback);
+
+#[derive(EnumSetType, Debug, clap::ValueEnum)]
+pub enum Direction {
+    Forward,
+    Backward,
+}
 
 #[derive(PartialEq, Debug)]
 pub enum WithClass {
@@ -275,3087 +49,2121 @@ pub enum WithClass {
 
 type WithClasses = Vec<WithClass>;
 
-#[derive(EnumSetType, Debug)]
+#[derive(Hash, PartialEq, Eq, Debug)]
 pub enum WithMatch {
     Before,
     After,
 }
 
-type WithMatches = EnumSet<WithMatch>;
+type WithMatches = HashSet<WithMatch>;
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(thiserror::Error, Debug, PartialEq)]
+pub enum ParseError {
+    #[error("Expected {expected:?}, got {found:?}")]
+    TokenExpected {
+        expected: String,
+        found: Option<String>,
+    },
+    #[error("Invalid braille")]
+    InvalidBraille(#[from] braille::ParseError),
+    #[error("Braille expected")]
+    DotsExpected,
+    #[error("Comma separated tuple of Braille expected")]
+    DotsTupleExpected,
+    #[error("invalid unicode literal {found:?}")]
+    InvalidUnicodeLiteral { found: Option<String> },
+    #[error("invalid number")]
+    InvalidNumber(#[from] ParseIntError),
+    #[error("invalid escape sequence")]
+    InvalidEscape,
+    #[error("Names can only contain a-z and A-Z, got {name:?}")]
+    InvalidName { name: String },
+    #[error("Constraints '{constraints:?}' not allowed for opcode {opcode:?}.")]
+    InvalidConstraints {
+        constraints: Constraints,
+        opcode: Opcode,
+    },
+    #[error("Expected classname, got {found:?}")]
+    ClassNameExpected { found: Option<String> },
+    #[error("Opcode expected, got {found:?}")]
+    OpcodeExpected { found: Option<String> },
+    #[error("Name expected")]
+    NameExpected,
+    #[error("Characters expected")]
+    CharsExpected,
+    #[error("Filename expected")]
+    FilenameExpected,
+    #[error("Number expected, got {found:?}")]
+    NumberExpected { found: Option<String> },
+    #[error("Multipass test expected")]
+    MultipassTestExpected,
+    #[error("Multipass action expected")]
+    MultipassActionExpected,
+    #[error("Invalid multipass test: {0}")]
+    InvalidMultipassTest(#[from] multipass::ParseError),
+    #[error("Match pre-pattern expected")]
+    MatchPreExpected,
+    #[error("Match post-pattern expected")]
+    MatchPostExpected,
+    #[error("Expected a single char, got {found:?}")]
+    SingleCharExpected { found: Option<String> },
+}
+
+#[derive(PartialEq, Debug)]
+pub enum Opcode {
+    Include,
+    Undefined,
+    Display,
+    Multind,
+
+    // Character-Definition Opcodes
+    Space,
+    Punctuation,
+    Digit,
+    Grouping,
+    Letter,
+    Base,
+    Lowercase,
+    Uppercase,
+    Litdigit,
+    Sign,
+    Math,
+
+    // Braille Indicator Opcodes
+    Modeletter,
+    Capsletter,
+    Begmodeword,
+    Begcapsword,
+    Endcapsword,
+    Capsmodechars,
+    Begcaps,
+    Endcaps,
+    Begcapsphrase,
+    Endcapsphrase,
+    Lencapsphrase,
+    Letsign,
+    Noletsign,
+    Noletsignbefore,
+    Noletsignafter,
+    Nocontractsign,
+    Numsign,
+    Nonumsign,
+    Numericnocontchars,
+    Numericmodechars,
+    Midendnumericmodechars,
+
+    Begmodephrase,
+    Endmodephrase,
+    Lenmodephrase,
+
+    // Opcodes for Standing Alone Sequences
+    Seqdelimiter,
+    Seqbeforechars,
+    Seqafterchars,
+    Seqafterpattern,
+    Seqafterexpression,
+
+    // Emphasis Opcodes
+    Class,
+    Emphclass,
+    Begemph,
+    Endemph,
+    Noemphchars,
+    Emphletter,
+    Begemphword,
+    Endemphword,
+    Emphmodechars,
+    Begemphphrase,
+    Endemphphrase,
+    Lenemphphrase,
+
+    // Special Symbol Opcodes
+    Decpoint,
+    Hyphen,
+
+    // Special Processing Opcodes
+    Capsnocont,
+
+    // Translation Opcodes
+    Compbrl,
+    Comp6,
+    Nocont,
+    Replace,
+    Always,
+    Repeated,
+    Repword,
+    Rependword,
+    Largesign,
+    Word,
+    Syllable,
+    Joinword,
+    Lowword,
+    Contraction,
+    Sufword,
+    Prfword,
+    Begword,
+    Begmidword,
+    Midword,
+    Midendword,
+    Endword,
+    Partword,
+    Exactdots,
+    Prepunc,
+    Postpunc,
+    Begnum,
+    Midnum,
+    Endnum,
+    Joinnum,
+
+    // Computer braille
+    Begcomp,
+    Endcomp,
+
+    // Character-Class Opcodes
+    Attribute,
+
+    // Swap Opcodes
+    Swapcd,
+    Swapdd,
+    Swapcc,
+
+    // Context and Multipass Opcodes
+    Context,
+    Pass2,
+    Pass3,
+    Pass4,
+
+    // The correct Opcode
+    Correct,
+
+    // The match Opcode
+    Match,
+    Literal,
+}
+
+#[derive(PartialEq, Debug)]
+pub enum Rule {
+    Include {
+        file: String,
+    },
+    Undefined {
+        dots: BrailleChars,
+    },
+    Display {
+        character: char,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Multind {
+        dots: BrailleChars,
+        names: Vec<String>,
+        constraints: Constraints,
+    },
+
+    Space {
+        character: char,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Punctuation {
+        character: char,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Digit {
+        character: char,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Grouping {
+        name: String,
+        chars: String,
+        dots: BrailleChars,
+    },
+    Letter {
+        character: char,
+        dots: Braille,
+        constraints: Constraints,
+    },
+    Base {
+        name: String,
+        from: char,
+        to: char,
+    },
+    Lowercase {
+        character: char,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Uppercase {
+        character: char,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Litdigit {
+        character: char,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Sign {
+        character: char,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Math {
+        character: char,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+
+    Modeletter {
+        name: String,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Capsletter {
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Begmodeword {
+        name: String,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Begcapsword {
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Endcapsword {
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Capsmodechars {
+        chars: String,
+    },
+    Begcaps {
+        dots: BrailleChars,
+    },
+    Endcaps {
+        dots: BrailleChars,
+    },
+    Begcapsphrase {
+        dots: BrailleChars,
+    },
+    Endcapsphrase {
+        dots: BrailleChars,
+        position: Position,
+    },
+    Lencapsphrase {
+        number: i32,
+    },
+    Letsign {
+        dots: BrailleChars,
+    },
+    Noletsign {
+        chars: String,
+    },
+    Noletsignbefore {
+        chars: String,
+    },
+    Noletsignafter {
+        chars: String,
+    },
+    Nocontractsign {
+        dots: BrailleChars,
+    },
+    Numsign {
+        dots: BrailleChars,
+    },
+    Nonumsign {
+        dots: BrailleChars,
+    },
+    Numericnocontchars {
+        chars: String,
+    },
+    Numericmodechars {
+        chars: String,
+    },
+    Midendnumericmodechars {
+        chars: String,
+    },
+
+    Begmodephrase {
+        name: String,
+        dots: BrailleChars,
+    },
+    Endmodephrase {
+        name: String,
+        dots: BrailleChars,
+        position: Position,
+    },
+    Lenmodephrase {
+        name: String,
+        number: i32,
+    },
+
+    Seqdelimiter {
+        chars: String,
+    },
+    Seqbeforechars {
+        chars: String,
+    },
+    Seqafterchars {
+        chars: String,
+    },
+    Seqafterpattern {
+        chars: String,
+    },
+    Seqafterexpression {
+        chars: String,
+    },
+
+    Class {
+        name: String,
+        chars: String,
+    },
+    Emphclass {
+        name: String,
+    },
+    Begemph {
+        name: String,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Endemph {
+        name: String,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Noemphchars {
+        name: String,
+        chars: String,
+    },
+    Emphletter {
+        name: String,
+        dots: BrailleChars,
+    },
+    Begemphword {
+        name: String,
+        dots: BrailleChars,
+    },
+    Endemphword {
+        name: String,
+        dots: BrailleChars,
+    },
+    Emphmodechars {
+        name: String,
+        chars: String,
+    },
+    Begemphphrase {
+        name: String,
+        dots: BrailleChars,
+    },
+    Endemphphrase {
+        name: String,
+        dots: BrailleChars,
+        position: Position,
+    },
+    Lenemphphrase {
+        name: String,
+        number: i32,
+    },
+
+    Begcomp {
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Endcomp {
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+
+    Decpoint {
+        chars: String,
+        dots: BrailleChars,
+    },
+    Hyphen {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+
+    Capsnocont {},
+
+    Compbrl {
+        chars: String,
+        constraints: Constraints,
+    },
+    Comp6 {
+        chars: String,
+        dots: Braille,
+    },
+    Nocont {
+        chars: String,
+    },
+    Replace {
+        chars: String,
+        replacement: Option<String>,
+    },
+    Always {
+        chars: String,
+        dots: Braille,
+        constraints: Constraints,
+    },
+    Repeated {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Repword {
+        chars: String,
+        dots: BrailleChars,
+    },
+    Rependword {
+        chars: String,
+        dots: BrailleChars,
+        other: BrailleChars,
+    },
+    Largesign {
+        chars: String,
+        dots: BrailleChars,
+    },
+    Word {
+        chars: String,
+        dots: Braille,
+        constraints: Constraints,
+    },
+    Syllable {
+        chars: String,
+        dots: Braille,
+    },
+    Joinword {
+        chars: String,
+        dots: BrailleChars,
+    },
+    Lowword {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Contraction {
+        chars: String,
+    },
+    Sufword {
+        chars: String,
+        dots: Braille,
+        constraints: Constraints,
+    },
+    Prfword {
+        chars: String,
+        dots: Braille,
+        constraints: Constraints,
+    },
+    Begword {
+        chars: String,
+        dots: Braille,
+        constraints: Constraints,
+    },
+    Begmidword {
+        chars: String,
+        dots: Braille,
+        constraints: Constraints,
+    },
+    Midword {
+        chars: String,
+        dots: Braille,
+        constraints: Constraints,
+    },
+    Midendword {
+        chars: String,
+        dots: Braille,
+        constraints: Constraints,
+    },
+    Endword {
+        chars: String,
+        dots: Braille,
+        constraints: Constraints,
+    },
+    Partword {
+        chars: String,
+        dots: Braille,
+        constraints: Constraints,
+    },
+    Exactdots {
+        chars: String,
+    },
+    Prepunc {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Postpunc {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Begnum {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Midnum {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+    Endnum {
+        chars: String,
+        dots: Braille,
+        constraints: Constraints,
+    },
+    Joinnum {
+        chars: String,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
+
+    Swapcd {
+        name: String,
+        chars: String,
+        dots: Vec<BrailleChars>,
+    },
+    Swapdd {
+        name: String,
+        dots: Vec<BrailleChars>,
+        replacement: Vec<BrailleChars>,
+    },
+    Swapcc {
+        name: String,
+        chars: String,
+        replacement: String,
+    },
+
+    Attribute {
+        name: String,
+        chars: String,
+    },
+    Context {
+        test: multipass::Test,
+        action: String,
+        constraints: Constraints,
+    },
+    Pass2 {
+        test: multipass::Test,
+        action: String,
+        constraints: Constraints,
+    },
+    Pass3 {
+        test: multipass::Test,
+        action: String,
+        constraints: Constraints,
+    },
+    Pass4 {
+        test: multipass::Test,
+        action: String,
+        constraints: Constraints,
+    },
+    Correct {
+        test: multipass::Test,
+        action: String,
+        constraints: Constraints,
+    },
+
+    Match {
+        pre: String,
+        chars: String,
+        post: String,
+        dots: Braille,
+        constraints: Constraints,
+        matches: Option<WithMatches>,
+    },
+    Literal {
+        chars: String,
+    },
+}
+
+impl Rule {
+    pub fn is_direction(&self, direction: Direction) -> bool {
+        match self {
+            Rule::Display { constraints, .. }
+            | Rule::Multind { constraints, .. }
+            | Rule::Space { constraints, .. }
+            | Rule::Punctuation { constraints, .. }
+            | Rule::Digit { constraints, .. }
+            | Rule::Letter { constraints, .. }
+            | Rule::Lowercase { constraints, .. }
+            | Rule::Uppercase { constraints, .. }
+            | Rule::Litdigit { constraints, .. }
+            | Rule::Sign { constraints, .. }
+            | Rule::Math { constraints, .. }
+            | Rule::Modeletter { constraints, .. }
+            | Rule::Capsletter { constraints, .. }
+            | Rule::Begmodeword { constraints, .. }
+            | Rule::Begcapsword { constraints, .. }
+            | Rule::Endcapsword { constraints, .. }
+            | Rule::Begemph { constraints, .. }
+            | Rule::Endemph { constraints, .. }
+            | Rule::Begcomp { constraints, .. }
+            | Rule::Endcomp { constraints, .. }
+            | Rule::Hyphen { constraints, .. }
+            | Rule::Compbrl { constraints, .. }
+            | Rule::Always { constraints, .. }
+            | Rule::Repeated { constraints, .. }
+            | Rule::Word { constraints, .. }
+            | Rule::Lowword { constraints, .. }
+            | Rule::Sufword { constraints, .. }
+            | Rule::Prfword { constraints, .. }
+            | Rule::Begword { constraints, .. }
+            | Rule::Begmidword { constraints, .. }
+            | Rule::Midword { constraints, .. }
+            | Rule::Midendword { constraints, .. }
+            | Rule::Endword { constraints, .. }
+            | Rule::Partword { constraints, .. }
+            | Rule::Prepunc { constraints, .. }
+            | Rule::Postpunc { constraints, .. }
+            | Rule::Begnum { constraints, .. }
+            | Rule::Midnum { constraints, .. }
+            | Rule::Endnum { constraints, .. }
+            | Rule::Joinnum { constraints, .. }
+            | Rule::Context { constraints, .. }
+            | Rule::Pass2 { constraints, .. }
+            | Rule::Pass3 { constraints, .. }
+            | Rule::Pass4 { constraints, .. }
+            | Rule::Correct { constraints, .. }
+            | Rule::Match { constraints, .. } => {
+                if direction == Direction::Forward {
+                    !constraints.contains(Constraint::Nofor)
+                } else {
+                    !constraints.contains(Constraint::Noback)
+                }
+            }
+            _ => true,
+        }
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub enum Braille {
+    Implicit,
+    Explicit(BrailleChars),
+}
+
+#[derive(PartialEq, Debug)]
 pub enum Position {
     Before,
     After,
 }
 
-#[derive(EnumSetType, Debug)]
-pub enum BrailleDot {
-    DOT0,
-    DOT1,
-    DOT2,
-    DOT3,
-    DOT4,
-    DOT5,
-    DOT6,
-    DOT7,
-    DOT8,
-    DOT9,
-    DOTA,
-    DOTB,
-    DOTC,
-    DOTD,
-    DOTE,
-    DOTF,
-}
+fn unescape_unicode(chars: &mut Chars, len: u8) -> Result<char, ParseError> {
+    let mut s = String::new();
 
-pub type BrailleChar = EnumSet<BrailleDot>;
-pub type BrailleChars = Vec<BrailleChar>;
-
-#[derive(PartialEq, Debug, Clone)]
-pub enum BrailleCharsOrImplicit {
-    Implicit,
-    Explicit(BrailleChars),
-}
-
-fn dot_to_hex(dot: BrailleDot) -> u32 {
-    match dot {
-        BrailleDot::DOT0 => 0x0000,
-        BrailleDot::DOT1 => 0x0001,
-        BrailleDot::DOT2 => 0x0002,
-        BrailleDot::DOT3 => 0x0004,
-        BrailleDot::DOT4 => 0x0008,
-        BrailleDot::DOT5 => 0x0010,
-        BrailleDot::DOT6 => 0x0020,
-        BrailleDot::DOT7 => 0x0040,
-        BrailleDot::DOT8 => 0x0080,
-        BrailleDot::DOT9 => 0x0100,
-        BrailleDot::DOTA => 0x0200,
-        BrailleDot::DOTB => 0x0400,
-        BrailleDot::DOTC => 0x0800,
-        BrailleDot::DOTD => 0x1000,
-        BrailleDot::DOTE => 0x2000,
-        BrailleDot::DOTF => 0x4000,
+    for _ in 0..len {
+        match chars.next() {
+            Some(c) => s.push(c),
+            _ => return Err(ParseError::InvalidUnicodeLiteral { found: None }),
+        }
     }
+
+    if let Ok(n) = u32::from_str_radix(&s, 16) {
+        if let Some(c) = char::from_u32(n) {
+            return Ok(c);
+        }
+    }
+    Err(ParseError::InvalidUnicodeLiteral { found: Some(s) })
 }
 
-fn has_virtual_dots(char: BrailleChar) -> bool {
-    let virtual_dots = BrailleDot::DOT9 | BrailleDot::DOTA | BrailleDot::DOTB | BrailleDot::DOTC | BrailleDot::DOTD | BrailleDot::DOTE | BrailleDot::DOTF;
-    !virtual_dots.intersection(char).is_empty()
+fn unescape(s: &str) -> Result<String, ParseError> {
+    let mut iter = s.chars();
+    let mut new = String::new();
+
+    while let Some(c) = iter.next() {
+        if c != '\\' {
+            new.push(c);
+            continue;
+        }
+
+        match iter.next() {
+            Some('f') => new.push('\u{000C}'),
+            Some('n') => new.push('\n'),
+            Some('r') => new.push('\r'),
+            Some('t') => new.push('\t'),
+            Some('s') => new.push(' '),
+            Some('v') => new.push('\u{000B}'),
+            Some('e') => new.push('\u{001B}'),
+            Some('\\') => new.push('\\'),
+            Some('x') => new.push(unescape_unicode(&mut iter, 4)?),
+            Some('y') => new.push(unescape_unicode(&mut iter, 5)?),
+            _ => return Err(ParseError::InvalidEscape),
+        };
+    }
+    Ok(new)
 }
 
-pub fn drop_virtual_dots(c: char) -> char {
-    let unicode = c as u32;
-    // FIXME: the Unicode Supplementary Private Use Area-A covers 65,534 code points. Is
-    // that enough for the 8 dots and the 7 virtual dots?
-    if unicode > 0xF0000 && unicode <= 0xFFFFD {
-        // Unicode Supplementary Private Use Area-A
-        char::from_u32((unicode & 0xFF) + 0x2800).unwrap()
+/// Return an error if actual contains more constraints than expected
+fn fail_if_invalid_constraints(
+    expected: Constraints,
+    actual: Constraints,
+    opcode: Opcode,
+) -> Result<(), ParseError> {
+    if !actual.is_subset(expected) {
+        Err(ParseError::InvalidConstraints {
+            constraints: actual.difference(expected),
+            opcode,
+        })
     } else {
-        c
+        Ok(())
     }
 }
 
-// FIXME: the following two functions should be defined as associated
-// functions, i.e. inside an impl block for BrailleChar or as an
-// implementation of the From trait. Both solutions would probably
-// require the newtype pattern as we do not own these types, see
-// https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#using-the-newtype-pattern-to-implement-external-traits-on-external-types
-fn dot_to_unicode(dot: BrailleChar) -> char {
-    let unicode_plane = if has_virtual_dots(dot) {
-        0xF0000 // Unicode Supplementary Private Use Area-A
-    } else {
-        0x2800 // braille patterns
-    };
-    let unicode = dot
-        .iter()
-        .map(|d| dot_to_hex(d))
-        .fold(unicode_plane, |acc, x| acc | x);
-    char::from_u32(unicode).unwrap()
+pub struct RuleParser<'a> {
+    tokens: Peekable<SplitWhitespace<'a>>,
 }
 
-/// Map `BrailleChars` to a string containing unicode braille
-pub fn dots_to_unicode(dots: BrailleChars) -> String {
-    dots.into_iter().map(|d| dot_to_unicode(d)).collect()
-}
-
-#[derive(thiserror::Error, Debug, PartialEq)]
-pub enum LouisParseError {
-    #[error("invalid braille")]
-    InvalidBraille,
-    #[error("invalid unicode literal")]
-    InvalidUnicodeLiteral,
-    #[error("invalid digit")]
-    InvalidDigit,
-    #[error("invalid prefix")]
-    InvalidPrefix,
-    #[error("invalid match prefix")]
-    InvalidMatchPrefix,
-    #[error("invalid escape sequence")]
-    InvalidEscape,
-    #[error("unknown parser error")]
-    Unparseable,
-}
-
-impl<I> ParseError<I> for LouisParseError {
-    fn from_error_kind(_input: I, _kind: ErrorKind) -> Self {
-        LouisParseError::Unparseable
+impl<'a> RuleParser<'a> {
+    pub fn new(source: &'a str) -> Self {
+        Self {
+            tokens: source.split_whitespace().peekable(),
+        }
     }
 
-    fn append(_: I, _: ErrorKind, other: Self) -> Self {
-        other
+    fn nofor(&mut self) -> bool {
+        self.tokens.next_if_eq(&"nofor").is_some()
     }
-}
 
-fn char_to_dot(char: char) -> Result<BrailleDot, LouisParseError> {
-    match char {
-        '0' => Ok(BrailleDot::DOT0),
-        '1' => Ok(BrailleDot::DOT1),
-        '2' => Ok(BrailleDot::DOT2),
-        '3' => Ok(BrailleDot::DOT3),
-        '4' => Ok(BrailleDot::DOT4),
-        '5' => Ok(BrailleDot::DOT5),
-        '6' => Ok(BrailleDot::DOT6),
-        '7' => Ok(BrailleDot::DOT7),
-        '8' => Ok(BrailleDot::DOT8),
-        '9' => Ok(BrailleDot::DOT9),
-        'a' => Ok(BrailleDot::DOTA),
-        'b' => Ok(BrailleDot::DOTB),
-        'c' => Ok(BrailleDot::DOTC),
-        'd' => Ok(BrailleDot::DOTD),
-        'e' => Ok(BrailleDot::DOTE),
-        'f' => Ok(BrailleDot::DOTF),
-        _ => Err(LouisParseError::InvalidBraille {}),
+    fn noback(&mut self) -> bool {
+        self.tokens.next_if_eq(&"noback").is_some()
     }
-}
 
-fn chars_to_dots(chars: &str) -> Result<BrailleChar, LouisParseError> {
-    chars.chars().map(|c| char_to_dot(c)).collect()
-}
-
-fn chars(input: &str) -> IResult<&str, &str, LouisParseError> {
-    is_not(" \t\r\n")(input)
-    //unicode_alpha1(input)
-}
-
-fn unicode_literal(input: &str) -> IResult<&str, char, LouisParseError> {
-    let (rest, raw_num) = hex_digit1(input)?;
-
-    match u32::from_str_radix(raw_num, 16) {
-        Ok(num) => match char::from_u32(num) {
-            Some(c) => Ok((rest, c)),
-            None => Err(nom::Err::Failure(LouisParseError::InvalidUnicodeLiteral)),
-        },
-        Err(_) => Err(nom::Err::Failure(LouisParseError::InvalidUnicodeLiteral)),
+    fn nocross(&mut self) -> bool {
+        self.tokens.next_if_eq(&"nocross").is_some()
     }
-}
 
-fn escape_sequence(input: &str) -> IResult<&str, char, LouisParseError> {
-    alt((
-        value('\\', tag(r"\\")),
-        value('\x0C', tag(r"\f")),
-        value('\n', tag(r"\n")),
-        value('\r', tag(r"\r")),
-        value(' ', tag(r"\s")),
-        value('\t', tag(r"\t")),
-        value('\x0B', tag(r"\v")),
-        value('\x1B', tag(r"\e")),
-    ))(input)
-}
+    fn constraints(&mut self) -> Constraints {
+        let mut constraints = Constraints::EMPTY;
+        if self.nofor() {
+            constraints.insert(Constraint::Nofor);
+        } else if self.noback() {
+            constraints.insert(Constraint::Noback);
+        }
+        if self.nocross() {
+            constraints.insert(Constraint::Nocross);
+        }
+        constraints
+    }
 
-fn escaped_char(i: &str) -> IResult<&str, char, LouisParseError> {
-    let (input, (_, c)) = tuple((tag("\\x"), unicode_literal))(i)?;
-    Ok((input, c))
-}
-
-fn single_char(input: &str) -> IResult<&str, char, LouisParseError> {
-    alt((escape_sequence, escaped_char, none_of(" \t\r\n")))(input)
-}
-
-fn filename(input: &str) -> IResult<&str, &str, LouisParseError> {
-    is_a("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.")(input)
-}
-
-fn braillechars_or_implicit(input: &str) -> IResult<&str, BrailleCharsOrImplicit, LouisParseError> {
-    alt((
-        value(BrailleCharsOrImplicit::Implicit, tag("=")),
-        map(dots, |dots| BrailleCharsOrImplicit::Explicit(dots)),
-    ))(input)
-}
-
-fn dots(i: &str) -> IResult<&str, BrailleChars, LouisParseError> {
-    let result = separated_list1(tag("-"), hex_digit1::<&str, nom::error::Error<&str>>)(i);
-    match result {
-        Ok((rest, dots)) => {
-            let braille_chars: Result<Vec<BrailleChar>, _> =
-                dots.iter().map(|chars| chars_to_dots(chars)).collect();
-            match braille_chars {
-                Ok(chars) => Ok((rest, chars)),
-                Err(_) => Err(nom::Err::Error(LouisParseError::InvalidBraille)),
+    fn with_class(&mut self) -> Result<Option<WithClass>, ParseError> {
+        if self.tokens.next_if_eq(&"before").is_some() {
+            match self.tokens.next() {
+                Some(class) => {
+                    return Ok(Some(WithClass::Before {
+                        class: class.into(),
+                    }))
+                }
+                None => return Err(ParseError::ClassNameExpected { found: None }),
             }
         }
-        Err(_) => Err(nom::Err::Error(LouisParseError::InvalidBraille)),
+        if self.tokens.next_if_eq(&"after").is_some() {
+            match self.tokens.next() {
+                Some(class) => {
+                    return Ok(Some(WithClass::After {
+                        class: class.into(),
+                    }))
+                }
+                None => return Err(ParseError::ClassNameExpected { found: None }),
+            }
+        }
+        Ok(None)
+    }
+
+    fn with_classes(&mut self) -> Result<Option<WithClasses>, ParseError> {
+        let mut classes = WithClasses::new();
+        while self.tokens.peek() == Some(&"before") || self.tokens.peek() == Some(&"after") {
+            if let Some(class) = self.with_class()? {
+                classes.push(class);
+            }
+        }
+        Ok(Some(classes))
+    }
+
+    fn with_matches(&mut self) -> Option<WithMatches> {
+        let mut matches = WithMatches::new();
+        // TODO: make sure "empmatchbefore empmatchbefore" is not allowed
+        while self.tokens.peek() == Some(&"empmatchbefore")
+            || self.tokens.peek() == Some(&"empmatchafter")
+        {
+            if self.tokens.next_if_eq(&"empmatchbefore").is_some() {
+                matches.insert(WithMatch::Before);
+            }
+            if self.tokens.next_if_eq(&"empmatchafter").is_some() {
+                matches.insert(WithMatch::After);
+            }
+        }
+        if !matches.is_empty() {
+            Some(matches)
+        } else {
+            None
+        }
+    }
+
+    fn opcode(&mut self) -> Result<Opcode, ParseError> {
+        if let Some(token) = self.tokens.next() {
+            match token {
+                "include" => Ok(Opcode::Include),
+                "undefined" => Ok(Opcode::Undefined),
+                "display" => Ok(Opcode::Display),
+                "multind" => Ok(Opcode::Multind),
+                "space" => Ok(Opcode::Space),
+                "punctuation" => Ok(Opcode::Punctuation),
+                "digit" => Ok(Opcode::Digit),
+                "grouping" => Ok(Opcode::Grouping),
+                "letter" => Ok(Opcode::Letter),
+                "base" => Ok(Opcode::Base),
+                "lowercase" => Ok(Opcode::Lowercase),
+                "uppercase" => Ok(Opcode::Uppercase),
+                "litdigit" => Ok(Opcode::Litdigit),
+                "sign" => Ok(Opcode::Sign),
+                "math" => Ok(Opcode::Math),
+
+                // Braille Indicator Opcodes
+                "modeletter" => Ok(Opcode::Modeletter),
+                "capsletter" => Ok(Opcode::Capsletter),
+                "begmodeword" => Ok(Opcode::Begmodeword),
+                "begcapsword" => Ok(Opcode::Begcapsword),
+                "endcapsword" => Ok(Opcode::Endcapsword),
+                "capsmodechars" => Ok(Opcode::Capsmodechars),
+                "begcaps" => Ok(Opcode::Begcaps),
+                "endcaps" => Ok(Opcode::Endcaps),
+                "begcapsphrase" => Ok(Opcode::Begcapsphrase),
+                "endcapsphrase" => Ok(Opcode::Endcapsphrase),
+                "lencapsphrase" => Ok(Opcode::Lencapsphrase),
+                "letsign" => Ok(Opcode::Letsign),
+                "noletsign" => Ok(Opcode::Noletsign),
+                "noletsignbefore" => Ok(Opcode::Noletsignbefore),
+                "noletsignafter" => Ok(Opcode::Noletsignafter),
+                "nocontractsign" => Ok(Opcode::Nocontractsign),
+                "numsign" => Ok(Opcode::Numsign),
+                "nonumsign" => Ok(Opcode::Nonumsign),
+                "numericnocontchars" => Ok(Opcode::Numericnocontchars),
+                "numericmodechars" => Ok(Opcode::Numericmodechars),
+                "midendnumericmodechars" => Ok(Opcode::Midendnumericmodechars),
+
+                "begmodephrase" => Ok(Opcode::Begmodephrase),
+                "endmodephrase" => Ok(Opcode::Endmodephrase),
+                "lenmodephrase" => Ok(Opcode::Lenmodephrase),
+
+                // Opcodes for Standing Alone Sequences
+                "seqdelimiter" => Ok(Opcode::Seqdelimiter),
+                "seqbeforechars" => Ok(Opcode::Seqbeforechars),
+                "seqafterchars" => Ok(Opcode::Seqafterchars),
+                "seqafterpattern" => Ok(Opcode::Seqafterpattern),
+                "seqafterexpression" => Ok(Opcode::Seqafterexpression),
+
+                // Emphasis Opcodes
+                "class" => Ok(Opcode::Class),
+                "emphclass" => Ok(Opcode::Emphclass),
+                "begemph" => Ok(Opcode::Begemph),
+                "endemph" => Ok(Opcode::Endemph),
+                "noemphchars" => Ok(Opcode::Noemphchars),
+                "emphletter" => Ok(Opcode::Emphletter),
+                "begemphword" => Ok(Opcode::Begemphword),
+                "endemphword" => Ok(Opcode::Endemphword),
+                "emphmodechars" => Ok(Opcode::Emphmodechars),
+                "begemphphrase" => Ok(Opcode::Begemphphrase),
+                "endemphphrase" => Ok(Opcode::Endemphphrase),
+                "lenemphphrase" => Ok(Opcode::Lenemphphrase),
+
+                // Special Symbol Opcodes
+                "decpoint" => Ok(Opcode::Decpoint),
+                "hyphen" => Ok(Opcode::Hyphen),
+
+                // Special Processing Opcodes
+                "capsnocont" => Ok(Opcode::Capsnocont),
+
+                // Translation Opcodes
+                "compbrl" => Ok(Opcode::Compbrl),
+                "comp6" => Ok(Opcode::Comp6),
+                "nocont" => Ok(Opcode::Nocont),
+                "replace" => Ok(Opcode::Replace),
+                "always" => Ok(Opcode::Always),
+                "repeated" => Ok(Opcode::Repeated),
+                "repword" => Ok(Opcode::Repword),
+                "rependword" => Ok(Opcode::Rependword),
+                "largesign" => Ok(Opcode::Largesign),
+                "word" => Ok(Opcode::Word),
+                "syllable" => Ok(Opcode::Syllable),
+                "joinword" => Ok(Opcode::Joinword),
+                "lowword" => Ok(Opcode::Lowword),
+                "contraction" => Ok(Opcode::Contraction),
+                "sufword" => Ok(Opcode::Sufword),
+                "prfword" => Ok(Opcode::Prfword),
+                "begword" => Ok(Opcode::Begword),
+                "begmidword" => Ok(Opcode::Begmidword),
+                "midword" => Ok(Opcode::Midword),
+                "midendword" => Ok(Opcode::Midendword),
+                "endword" => Ok(Opcode::Endword),
+                "partword" => Ok(Opcode::Partword),
+                "exactdots" => Ok(Opcode::Exactdots),
+                "prepunc" => Ok(Opcode::Prepunc),
+                "postpunc" => Ok(Opcode::Postpunc),
+                "begnum" => Ok(Opcode::Begnum),
+                "midnum" => Ok(Opcode::Midnum),
+                "endnum" => Ok(Opcode::Endnum),
+                "joinnum" => Ok(Opcode::Joinnum),
+
+                // Computer braille
+                "begcomp" => Ok(Opcode::Begcomp),
+                "endcomp" => Ok(Opcode::Endcomp),
+
+                // Character-Class Opcodes
+                "attribute" => Ok(Opcode::Attribute),
+
+                // Swap Opcodes
+                "swapcd" => Ok(Opcode::Swapcd),
+                "swapdd" => Ok(Opcode::Swapdd),
+                "swapcc" => Ok(Opcode::Swapcc),
+
+                // Context and Multipass Opcodes
+                "context" => Ok(Opcode::Context),
+                "pass2" => Ok(Opcode::Pass2),
+                "pass3" => Ok(Opcode::Pass3),
+                "pass4" => Ok(Opcode::Pass4),
+
+                // The correct Opcode
+                "correct" => Ok(Opcode::Correct),
+
+                // The match Opcode
+                "match" => Ok(Opcode::Match),
+                "literal" => Ok(Opcode::Literal),
+                unknown => Err(ParseError::OpcodeExpected {
+                    found: Some(unknown.into()),
+                }),
+            }
+        } else {
+            Err(ParseError::OpcodeExpected { found: None })
+        }
+    }
+
+    fn name(&mut self) -> Result<String, ParseError> {
+        let name = self
+            .tokens
+            .next()
+            .ok_or(ParseError::NameExpected)
+            .map(|s| s.to_string())?;
+        if name.chars().all(|c| c.is_ascii_alphanumeric()) {
+            Ok(name)
+        } else {
+            Err(ParseError::InvalidName { name })
+        }
+    }
+
+    fn many_names(&mut self) -> Result<Vec<String>, ParseError> {
+        let mut names: Vec<String> = Vec::new();
+        while let Some(name) = self.tokens.next() {
+            names.push(name.into());
+        }
+        if names.len() > 1 {
+            Ok(names)
+        } else {
+            Err(ParseError::TokenExpected {
+                expected: "At least one name expected".into(),
+                found: None,
+            })
+        }
+    }
+
+    fn one_char(&mut self) -> Result<char, ParseError> {
+        let s = self
+            .tokens
+            .next()
+            .ok_or(ParseError::SingleCharExpected { found: None })?;
+        let s = unescape(s)?;
+        if s.chars().count() == 1 {
+            Ok(s.chars().next().unwrap())
+        } else {
+            Err(ParseError::SingleCharExpected { found: Some(s) })
+        }
+    }
+
+    fn number(&mut self) -> Result<i32, ParseError> {
+        let s = self
+            .tokens
+            .next()
+            .ok_or(ParseError::NumberExpected { found: None })?;
+        let number = s.parse::<i32>()?;
+        Ok(number)
+    }
+
+    fn chars(&mut self) -> Result<String, ParseError> {
+        let s = self.tokens.next().ok_or(ParseError::CharsExpected)?;
+        unescape(s)
+    }
+
+    fn maybe_chars(&mut self) -> Option<String> {
+        self.tokens.next().map(|s| s.to_string())
+    }
+
+    fn filename(&mut self) -> Result<String, ParseError> {
+        self.tokens
+            .next()
+            .ok_or(ParseError::FilenameExpected)
+            .map(|s| s.to_string())
+    }
+
+    fn position(&mut self) -> Result<Position, ParseError> {
+        if self.tokens.next_if_eq(&"before").is_some() {
+            return Ok(Position::Before);
+        }
+        if self.tokens.next_if_eq(&"after").is_some() {
+            return Ok(Position::After);
+        }
+        Err(ParseError::TokenExpected {
+            expected: "Before/After".into(),
+            found: self.tokens.peek().map(|&s| s.into()),
+        })
+    }
+
+    fn dots(&mut self) -> Result<Braille, ParseError> {
+        let token = self.tokens.next().ok_or(ParseError::DotsExpected)?;
+        if token == "=" {
+            Ok(Braille::Implicit)
+        } else {
+            Ok(Braille::Explicit(braille_chars(token)?))
+        }
+    }
+
+    fn explicit_dots(&mut self) -> Result<BrailleChars, ParseError> {
+        self.tokens
+            .next()
+            .ok_or(ParseError::DotsExpected)?
+            .split('-')
+            .map(chars_to_dots)
+            // FIXME: it feels really weird that we manually have to
+            // map braille::ParseError to ParseError. I thought the
+            // thisError crate implements the from trait between the
+            // two?
+            .map(|r| r.map_err(ParseError::InvalidBraille))
+            .collect()
+    }
+
+    fn many_dots(&mut self) -> Result<Vec<BrailleChars>, ParseError> {
+        self.tokens
+            .next()
+            .ok_or(ParseError::DotsExpected)?
+            .split(',')
+            .map(|chars| {
+                chars
+                    .split('-')
+                    .map(chars_to_dots)
+                    // FIXME: it feels really weird that we manually have to
+                    // map braille::ParseError to ParseError.
+                    .map(|r| r.map_err(ParseError::InvalidBraille))
+                    .collect()
+            })
+            .collect()
+    }
+
+    fn multipass_test(&mut self) -> Result<Test, ParseError> {
+        self.tokens
+            .next()
+            .ok_or(ParseError::MultipassTestExpected)
+            .map(|s| s.to_string())
+            .map(|s| {
+                multipass::TestParser::new(&s)
+                    .tests()
+                    .map_err(ParseError::InvalidMultipassTest)
+            })?
+    }
+
+    fn multipass_action(&mut self) -> Result<String, ParseError> {
+        self.tokens
+            .next()
+            .ok_or(ParseError::MultipassActionExpected)
+            .map(|s| s.to_string())
+    }
+
+    fn match_pre(&mut self) -> Result<String, ParseError> {
+        self.tokens
+            .next()
+            .ok_or(ParseError::MatchPreExpected)
+            .map(|s| s.to_string())
+    }
+
+    fn match_post(&mut self) -> Result<String, ParseError> {
+        self.tokens
+            .next()
+            .ok_or(ParseError::MatchPostExpected)
+            .map(|s| s.to_string())
+    }
+
+    pub fn rule(&mut self) -> Result<Rule, ParseError> {
+        let constraints = self.constraints();
+        let _classes = self.with_classes();
+        let matches = self.with_matches();
+        let opcode = self.opcode()?;
+        let rule = match opcode {
+            Opcode::Include => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Include {
+                    file: self.filename()?,
+                }
+            }
+            Opcode::Undefined => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Undefined {
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Display => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Display {
+                    character: self.one_char()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Multind => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Multind {
+                    dots: self.explicit_dots()?,
+                    names: self.many_names()?,
+                    constraints,
+                }
+            }
+            Opcode::Space => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Space {
+                    character: self.one_char()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Punctuation => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Punctuation {
+                    character: self.one_char()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Digit => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Digit {
+                    character: self.one_char()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Grouping => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Grouping {
+                    name: self.name()?,
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Letter => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Letter {
+                    character: self.one_char()?,
+                    dots: self.dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Base => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Base {
+                    name: self.name()?,
+                    from: self.one_char()?,
+                    to: self.one_char()?,
+                }
+            }
+            Opcode::Lowercase => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Lowercase {
+                    character: self.one_char()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Uppercase => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Uppercase {
+                    character: self.one_char()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Litdigit => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Litdigit {
+                    character: self.one_char()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Sign => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Sign {
+                    character: self.one_char()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Math => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Math {
+                    character: self.one_char()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+
+            Opcode::Modeletter => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Modeletter {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Capsletter => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Capsletter {
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Begmodeword => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Begmodeword {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Begcapsword => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Begcapsword {
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Endcapsword => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Endcapsword {
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Capsmodechars => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Capsmodechars {
+                    chars: self.chars()?,
+                }
+            }
+            Opcode::Begcaps => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Begcaps {
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Endcaps => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Endcaps {
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Begcapsphrase => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Begcapsphrase {
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Endcapsphrase => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Endcapsphrase {
+                    position: self.position()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Lencapsphrase => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Lencapsphrase {
+                    number: self.number()?,
+                }
+            }
+            Opcode::Letsign => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Letsign {
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Noletsign => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Noletsign {
+                    chars: self.chars()?,
+                }
+            }
+            Opcode::Noletsignbefore => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Noletsignbefore {
+                    chars: self.chars()?,
+                }
+            }
+            Opcode::Noletsignafter => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Noletsignafter {
+                    chars: self.chars()?,
+                }
+            }
+            Opcode::Nocontractsign => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Nocontractsign {
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Numsign => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Numsign {
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Nonumsign => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Nonumsign {
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Numericnocontchars => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Numericnocontchars {
+                    chars: self.chars()?,
+                }
+            }
+            Opcode::Numericmodechars => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Numericmodechars {
+                    chars: self.chars()?,
+                }
+            }
+            Opcode::Midendnumericmodechars => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Midendnumericmodechars {
+                    chars: self.chars()?,
+                }
+            }
+
+            Opcode::Begmodephrase => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Begmodephrase {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Endmodephrase => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Endmodephrase {
+                    name: self.name()?,
+                    position: self.position()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Lenmodephrase => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Lenmodephrase {
+                    name: self.name()?,
+                    number: self.number()?,
+                }
+            }
+
+            Opcode::Seqdelimiter => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Seqdelimiter {
+                    chars: self.chars()?,
+                }
+            }
+            Opcode::Seqbeforechars => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Seqbeforechars {
+                    chars: self.chars()?,
+                }
+            }
+            Opcode::Seqafterchars => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Seqafterchars {
+                    chars: self.chars()?,
+                }
+            }
+            Opcode::Seqafterpattern => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Seqafterpattern {
+                    chars: self.chars()?,
+                }
+            }
+            Opcode::Seqafterexpression => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Seqafterexpression {
+                    chars: self.chars()?,
+                }
+            }
+
+            Opcode::Class => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Class {
+                    name: self.name()?,
+                    chars: self.chars()?,
+                }
+            }
+            Opcode::Emphclass => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Emphclass { name: self.name()? }
+            }
+            Opcode::Begemph => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Begemph {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Endemph => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Endemph {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Noemphchars => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Noemphchars {
+                    name: self.name()?,
+                    chars: self.chars()?,
+                }
+            }
+            Opcode::Emphletter => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Emphletter {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Begemphword => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Begemphword {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Endemphword => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Endemphword {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Emphmodechars => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Emphmodechars {
+                    name: self.name()?,
+                    chars: self.chars()?,
+                }
+            }
+            Opcode::Begemphphrase => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Begemphphrase {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Endemphphrase => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Endemphphrase {
+                    name: self.name()?,
+                    position: self.position()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Lenemphphrase => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Lenemphphrase {
+                    name: self.name()?,
+                    number: self.number()?,
+                }
+            }
+
+            Opcode::Begcomp => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Begcomp {
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Endcomp => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Endcomp {
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+
+            Opcode::Decpoint => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Decpoint {
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Hyphen => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Hyphen {
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+
+            Opcode::Capsnocont => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Capsnocont {}
+            }
+
+            Opcode::Compbrl => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Compbrl {
+                    chars: self.chars()?,
+                    constraints,
+                }
+            }
+            Opcode::Comp6 => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Comp6 {
+                    chars: self.chars()?,
+                    dots: self.dots()?,
+                }
+            }
+            Opcode::Nocont => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Nocont {
+                    chars: self.chars()?,
+                }
+            }
+            Opcode::Replace => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Replace {
+                    chars: self.chars()?,
+                    replacement: self.maybe_chars(),
+                }
+            }
+            Opcode::Always => Rule::Always {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Repeated => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Repeated {
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Repword => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Repword {
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Rependword => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                let chars = self.chars()?;
+                let many_dots = self.many_dots()?;
+                if many_dots.len() != 2 {
+                    return Err(ParseError::DotsTupleExpected);
+                }
+                let mut iterator = many_dots.into_iter();
+                let dots = iterator.next().unwrap();
+                let other = iterator.next().unwrap();
+                Rule::Rependword { chars, dots, other }
+            }
+            Opcode::Largesign => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Largesign {
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Word => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Word {
+                    chars: self.chars()?,
+                    dots: self.dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Syllable => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Syllable {
+                    chars: self.chars()?,
+                    dots: self.dots()?,
+                }
+            }
+            Opcode::Joinword => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Joinword {
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Lowword => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Lowword {
+                    chars: self.chars()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
+            Opcode::Contraction => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Contraction {
+                    chars: self.chars()?,
+                }
+            }
+            Opcode::Sufword => Rule::Sufword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Prfword => Rule::Prfword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Begword => Rule::Begword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Begmidword => Rule::Begmidword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Midword => Rule::Midword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Midendword => Rule::Midendword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Endword => Rule::Endword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Partword => Rule::Partword {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Exactdots => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Exactdots {
+                    chars: self.chars()?,
+                }
+            }
+            Opcode::Prepunc => Rule::Prepunc {
+                chars: self.chars()?,
+                dots: self.explicit_dots()?,
+                constraints,
+            },
+            Opcode::Postpunc => Rule::Postpunc {
+                chars: self.chars()?,
+                dots: self.explicit_dots()?,
+                constraints,
+            },
+            Opcode::Begnum => Rule::Begnum {
+                chars: self.chars()?,
+                dots: self.explicit_dots()?,
+                constraints,
+            },
+            Opcode::Midnum => Rule::Midnum {
+                chars: self.chars()?,
+                dots: self.explicit_dots()?,
+                constraints,
+            },
+            Opcode::Endnum => Rule::Endnum {
+                chars: self.chars()?,
+                dots: self.dots()?,
+                constraints,
+            },
+            Opcode::Joinnum => Rule::Joinnum {
+                chars: self.chars()?,
+                dots: self.explicit_dots()?,
+                constraints,
+            },
+
+            Opcode::Attribute => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Attribute {
+                    name: self.name()?,
+                    chars: self.chars()?,
+                }
+            }
+
+            Opcode::Swapcd => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Swapcd {
+                    name: self.name()?,
+                    chars: self.chars()?,
+                    dots: self.many_dots()?,
+                }
+            }
+            Opcode::Swapdd => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Swapdd {
+                    name: self.name()?,
+                    dots: self.many_dots()?,
+                    replacement: self.many_dots()?,
+                }
+            }
+            Opcode::Swapcc => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Swapcc {
+                    name: self.name()?,
+                    chars: self.chars()?,
+                    replacement: self.chars()?,
+                }
+            }
+
+            Opcode::Context => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Context {
+                    test: self.multipass_test()?,
+                    action: self.multipass_action()?,
+                    constraints,
+                }
+            }
+            Opcode::Pass2 => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Pass2 {
+                    test: self.multipass_test()?,
+                    action: self.multipass_action()?,
+                    constraints,
+                }
+            }
+            Opcode::Pass3 => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Pass3 {
+                    test: self.multipass_test()?,
+                    action: self.multipass_action()?,
+                    constraints,
+                }
+            }
+            Opcode::Pass4 => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Pass4 {
+                    test: self.multipass_test()?,
+                    action: self.multipass_action()?,
+                    constraints,
+                }
+            }
+            Opcode::Correct => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Correct {
+                    test: self.multipass_test()?,
+                    action: self.multipass_action()?,
+                    constraints,
+                }
+            }
+
+            Opcode::Match => {
+                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                Rule::Match {
+                    pre: self.match_pre()?,
+                    chars: self.chars()?,
+                    post: self.match_post()?,
+                    dots: self.dots()?,
+                    matches,
+                    constraints,
+                }
+            }
+            Opcode::Literal => {
+                fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
+                Rule::Literal {
+                    chars: self.chars()?,
+                }
+            }
+        };
+        Ok(rule)
     }
 }
 
-fn single_unicode_digit(input: &str) -> IResult<&str, char, LouisParseError> {
-    alt((escaped_char, one_unicode_digit))(input)
-}
-
-fn one_unicode_digit(input: &str) -> IResult<&str, char, LouisParseError> {
-    let result = unicode_digit1::<&str, nom::error::Error<&str>>(input);
-    match result {
-        Ok((rest, digits)) => match digits.chars().count() {
-            1 => Ok((rest, digits.chars().nth(0).unwrap())),
-            _ => Err(nom::Err::Error(LouisParseError::InvalidDigit)),
-        },
-        Err(_) => Err(nom::Err::Error(LouisParseError::InvalidDigit)),
-    }
-}
-
-fn number(input: &str) -> IResult<&str, u8, LouisParseError> {
-    let (rest, raw_num) = digit1(input)?;
-    match raw_num.parse::<u8>() {
-        Ok(num) => Ok((rest, num)),
-        Err(_) => Err(nom::Err::Failure(LouisParseError::InvalidUnicodeLiteral)),
-    }
-}
-
-fn before_or_after(input: &str) -> IResult<&str, Position, LouisParseError> {
-    alt((
-        value(Position::Before, tag("before")),
-        value(Position::After, tag("after")),
-    ))(input)
-}
-
-fn prefixes(i: &str) -> IResult<&str, Prefixes, LouisParseError> {
-    alt((
-        value(
-            Prefix::Noback | Prefix::Nocross,
-            tuple((tag("noback"), space1, tag("nocross"), space1)),
-        ),
-        value(
-            Prefix::Nofor | Prefix::Nocross,
-            tuple((tag("nofor"), space1, tag("nocross"), space1)),
-        ),
-        value(enum_set!(Prefix::Nofor), tuple((tag("nofor"), space1))),
-        value(enum_set!(Prefix::Noback), tuple((tag("noback"), space1))),
-        value(enum_set!(Prefix::Nocross), tuple((tag("nocross"), space1))),
-        success::<_, _, LouisParseError>(Prefixes::empty()),
-    ))(i)
-}
-
-fn include(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, filename)) = tuple((tag("include"), space1, filename))(i)?;
-    Ok((
-        input,
-        Rule::Include {
-            filename: filename.to_string(),
-        },
-    ))
-}
-
-fn undefined(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, dots)) = tuple((tag("undefined"), space1, dots))(i)?;
-    Ok((input, Rule::Undefined { dots }))
-}
-
-fn display(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, char, _, dots)) =
-        tuple((prefixes, tag("display"), space1, single_char, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Display {
-            ch: char,
-            dots,
-            prefixes,
-        },
-    ))
-}
-
-fn space(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, ch, _, dots)) =
-        tuple((prefixes, tag("space"), space1, single_char, space1, dots))(i)?;
-    Ok((input, Rule::Space { ch, dots, prefixes }))
-}
-
-fn multind(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, dots, _, opcodes)) = tuple((
-        prefixes,
-        tag("multind"),
-        space1,
-        dots,
-        space1,
-        separated_list1(space1, chars),
-    ))(i)?;
-    // FIXME: Make sure the opcodes are valid
-    Ok((
-        input,
-        Rule::Multind {
-            dots,
-            opcodes: opcodes.iter().map(|s| s.to_string()).collect(),
-            prefixes,
-        },
-    ))
-}
-
-fn punctuation(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, ch, _, dots)) = tuple((
-        prefixes,
-        tag("punctuation"),
-        space1,
-        single_char,
-        space1,
-        dots,
-    ))(i)?;
-    Ok((input, Rule::Punctuation { ch, dots, prefixes }))
-}
-
-fn digit(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, ch, _, dots)) = tuple((tag("digit"), space1, single_char, space1, dots))(i)?;
-    Ok((input, Rule::Digit { ch, dots }))
-}
-
-fn letter(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, ch, _, dots)) = tuple((
-        prefixes,
-        tag("letter"),
-        space1,
-        single_char,
-        space1,
-        braillechars_or_implicit,
-    ))(i)?;
-    Ok((input, Rule::Letter { ch, dots, prefixes }))
-}
-
-fn lowercase(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, ch, _, dots)) = tuple((
-        prefixes,
-        tag("lowercase"),
-        space1,
-        single_char,
-        space1,
-        dots,
-    ))(i)?;
-    Ok((input, Rule::Lowercase { ch, dots, prefixes }))
-}
-
-fn uppercase(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, ch, _, dots)) = tuple((
-        prefixes,
-        tag("uppercase"),
-        space1,
-        single_char,
-        space1,
-        dots,
-    ))(i)?;
-    Ok((input, Rule::Uppercase { ch, dots, prefixes }))
-}
-
-fn litdigit(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, ch, _, dots)) =
-        tuple((tag("litdigit"), space1, single_unicode_digit, space1, dots))(i)?;
-    Ok((input, Rule::Litdigit { ch, dots }))
-}
-
-fn sign(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, ch, _, dots)) =
-        tuple((prefixes, tag("sign"), space1, single_char, space1, dots))(i)?;
-    Ok((input, Rule::Sign { ch, dots, prefixes }))
-}
-
-fn math(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, ch, _, dots)) =
-        tuple((prefixes, tag("math"), space1, single_char, space1, dots))(i)?;
-    Ok((input, Rule::Math { ch, dots, prefixes }))
-}
-
-fn grouping(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name, _, chars, _, dots)) = tuple((
-        tag("grouping"),
-        space1,
-        alpha1,
-        space1,
-        alpha1,
-        space1,
-        separated_list1(tag(","), dots),
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Grouping {
-            name: name.to_string(),
-            chars: chars.to_string(),
-            dots,
-        },
-    ))
-}
-
-fn base(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, attribute, _, derived, _, base)) = tuple((
-        tag("base"),
-        space1,
-        alpha1,
-        space1,
-        single_char,
-        space1,
-        single_char,
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Base {
-            attribute: attribute.to_string(),
-            derived,
-            base,
-        },
-    ))
-}
-
-fn attribute_name(input: &str) -> IResult<&str, String, LouisParseError> {
-    alt((
-        map(one_of("01234567"), |c| c.to_string()),
-        map(alpha1, |s: &str| s.to_string()),
-    ))(input)
-}
-
-fn attribute(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name, _, chars)) =
-        tuple((tag("attribute"), space1, attribute_name, space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Attribute {
-            name,
-            chars: chars.to_string(),
-        },
-    ))
-}
-
-fn modeletter(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, chars, _, dots)) =
-        tuple((prefixes, tag("modeletter"), space1, alpha1, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Modeletter {
-            attribute: chars.to_string(),
-            dots,
-            prefixes,
-        },
-    ))
-}
-
-fn capsletter(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, dots)) = tuple((prefixes, tag("capsletter"), space1, dots))(i)?;
-    Ok((input, Rule::Capsletter { dots, prefixes }))
-}
-
-fn begmodeword(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, chars, _, dots)) =
-        tuple((prefixes, tag("begmodeword"), space1, alpha1, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Begmodeword {
-            attribute: chars.to_string(),
-            dots,
-            prefixes,
-        },
-    ))
-}
-
-fn begcapsword(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, dots)) = tuple((prefixes, tag("begcapsword"), space1, dots))(i)?;
-    Ok((input, Rule::Begcapsword { dots, prefixes }))
-}
-
-fn endcapsword(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, dots)) = tuple((prefixes, tag("endcapsword"), space1, dots))(i)?;
-    Ok((input, Rule::Endcapsword { dots, prefixes }))
-}
-
-fn capsmodechars(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars)) = tuple((tag("capsmodechars"), space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Capsmodechars {
-            chars: chars.to_string(),
-        },
-    ))
-}
-
-fn begcaps(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, dots)) = tuple((tag("begcaps"), space1, dots))(i)?;
-    Ok((input, Rule::Begcaps { dots }))
-}
-
-fn endcaps(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, dots)) = tuple((tag("endcaps"), space1, dots))(i)?;
-    Ok((input, Rule::Endcaps { dots }))
-}
-
-fn letsign(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, dots)) = tuple((tag("letsign"), space1, dots))(i)?;
-    Ok((input, Rule::Letsign { dots }))
-}
-
-fn noletsign(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars)) = tuple((tag("noletsign"), space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Noletsign {
-            chars: chars.to_string(),
-        },
-    ))
-}
-
-fn noletsignbefore(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars)) = tuple((tag("noletsignbefore"), space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Noletsignbefore {
-            chars: chars.to_string(),
-        },
-    ))
-}
-
-fn noletsignafter(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars)) = tuple((tag("noletsignafter"), space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Noletsignafter {
-            chars: chars.to_string(),
-        },
-    ))
-}
-
-fn nocontractsign(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, dots)) = tuple((tag("nocontractsign"), space1, dots))(i)?;
-    Ok((input, Rule::Nocontractsign { dots }))
-}
-
-fn numsign(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, dots)) = tuple((tag("numsign"), space1, dots))(i)?;
-    Ok((input, Rule::Numsign { dots }))
-}
-
-fn nonumsign(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, dots)) = tuple((tag("nonumsign"), space1, dots))(i)?;
-    Ok((input, Rule::Nonumsign { dots }))
-}
-
-fn numericnocontchars(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars)) = tuple((tag("numericnocontchars"), space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Numericnocontchars {
-            chars: chars.to_string(),
-        },
-    ))
-}
-
-fn numericmodechars(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars)) = tuple((tag("numericmodechars"), space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Numericmodechars {
-            chars: chars.to_string(),
-        },
-    ))
-}
-
-fn midendnumericmodechars(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars)) = tuple((tag("midendnumericmodechars"), space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Midendnumericmodechars {
-            chars: chars.to_string(),
-        },
-    ))
-}
-
-fn begcapsphrase(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, dots)) = tuple((tag("begcapsphrase"), space1, dots))(i)?;
-    Ok((input, Rule::Begcapsphrase { dots }))
-}
-
-fn endcapsphrase(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, position, _, dots)) =
-        tuple((tag("endcapsphrase"), space1, before_or_after, space1, dots))(i)?;
-    Ok((input, Rule::Endcapsphrase { dots, position }))
-}
-
-fn lencapsphrase(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, length)) = tuple((tag("lencapsphrase"), space1, number))(i)?;
-    Ok((input, Rule::Lencapsphrase { length }))
-}
-
-fn begmodephrase(input: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name, _, dots)) =
-        tuple((tag("begmodephrase"), space1, alpha1, space1, dots))(input)?;
-    Ok((
-        input,
-        Rule::Begmodephrase {
-            name: name.to_string(),
-            dots,
-        },
-    ))
-}
-
-fn endmodephrase(input: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name, _, position, _, dots)) = tuple((
-        tag("endmodephrase"),
-        space1,
-        alpha1,
-        space1,
-        before_or_after,
-        space1,
-        dots,
-    ))(input)?;
-    Ok((
-        input,
-        Rule::Endmodephrase {
-            name: name.to_string(),
-            position,
-            dots,
-        },
-    ))
-}
-
-fn lenmodephrase(input: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name, _, length)) =
-        tuple((tag("lenmodephrase"), space1, alpha1, space1, number))(input)?;
-    Ok((
-        input,
-        Rule::Lenmodephrase {
-            name: name.to_string(),
-            length,
-        },
-    ))
-}
-
-fn seqdelimiter(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars)) = tuple((tag("seqdelimiter"), space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Seqdelimiter {
-            chars: chars.to_string(),
-        },
-    ))
-}
-
-fn seqbeforechars(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars)) = tuple((tag("seqbeforechars"), space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Seqbeforechars {
-            chars: chars.to_string(),
-        },
-    ))
-}
-
-fn seqafterchars(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars)) = tuple((tag("seqafterchars"), space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Seqafterchars {
-            chars: chars.to_string(),
-        },
-    ))
-}
-
-fn seqafterpattern(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars)) = tuple((tag("seqafterpattern"), space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Seqafterpattern {
-            pattern: chars.to_string(),
-        },
-    ))
-}
-
-fn seqafterexpression(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, expression)) = tuple((tag("seqafterexpression"), space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Seqafterexpression {
-            expression: expression.to_string(),
-        },
-    ))
-}
-
-fn class(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name, _, chars)) = tuple((tag("class"), space1, chars, space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Class {
-            name: name.to_string(),
-            chars: chars.to_string(),
-        },
-    ))
-}
-
-fn emphclass(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name)) = tuple((tag("emphclass"), space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Emphclass {
-            name: name.to_string(),
-        },
-    ))
-}
-
-fn begemph(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, name, _, dots)) =
-        tuple((prefixes, tag("begemph"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Begemph {
-            name: name.to_string(),
-            dots,
-            prefixes,
-        },
-    ))
-}
-
-fn endemph(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, name, _, dots)) =
-        tuple((prefixes, tag("endemph"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Endemph {
-            name: name.to_string(),
-            dots,
-            prefixes,
-        },
-    ))
-}
-
-fn noemphchars(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name, _, chars)) =
-        tuple((tag("noemphchars"), space1, chars, space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Noemphchars {
-            name: name.to_string(),
-            chars: chars.to_string(),
-        },
-    ))
-}
-
-fn emphletter(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name, _, dots)) =
-        tuple((tag("emphletter"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Emphletter {
-            name: name.to_string(),
-            dots,
-        },
-    ))
-}
-
-fn begemphword(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name, _, dots)) =
-        tuple((tag("begemphword"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Begemphword {
-            name: name.to_string(),
-            dots,
-        },
-    ))
-}
-
-fn endemphword(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name, _, dots)) =
-        tuple((tag("endemphword"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Endemphword {
-            name: name.to_string(),
-            dots,
-        },
-    ))
-}
-
-fn emphmodechars(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name, _, chars)) =
-        tuple((tag("emphmodechars"), space1, chars, space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Emphmodechars {
-            name: name.to_string(),
-            chars: chars.to_string(),
-        },
-    ))
-}
-
-fn begemphphrase(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name, _, dots)) =
-        tuple((tag("begemphphrase"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Begemphphrase {
-            name: name.to_string(),
-            dots,
-        },
-    ))
-}
-
-fn endemphphrase(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name, _, position, _, dots)) = tuple((
-        tag("endemphphrase"),
-        space1,
-        chars,
-        space1,
-        before_or_after,
-        space1,
-        dots,
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Endemphphrase {
-            name: name.to_string(),
-            dots,
-            position,
-        },
-    ))
-}
-
-fn lenemphphrase(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name, _, length)) =
-        tuple((tag("lenemphphrase"), space1, chars, space1, number))(i)?;
-    Ok((
-        input,
-        Rule::Lenemphphrase {
-            name: name.to_string(),
-            length,
-        },
-    ))
-}
-
-fn begcomp(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, dots)) = tuple((prefixes, tag("begcomp"), space1, dots))(i)?;
-    Ok((input, Rule::Begcomp { dots, prefixes }))
-}
-
-fn endcomp(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, dots)) = tuple((prefixes, tag("endcomp"), space1, dots))(i)?;
-    Ok((input, Rule::Endcomp { dots, prefixes }))
-}
-
-fn decpoint(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("decpoint"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Decpoint {
-            chars: chars.to_string(),
-            dots,
-        },
-    ))
-}
-
-fn hyphen(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, chars, _, dots)) =
-        tuple((prefixes, tag("hyphen"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Hyphen {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-        },
-    ))
-}
-
-fn capsnocont(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, _) = tag("capsnocont")(i)?;
-    Ok((input, Rule::Capsnocont))
-}
-
-fn compbrl(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, chars)) = tuple((prefixes, tag("compbrl"), space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Compbrl {
-            chars: chars.to_string(),
-            prefixes,
-        },
-    ))
-}
-
-fn comp6(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars, _, dots)) = tuple((
-        tag("comp6"),
-        space1,
-        chars,
-        space1,
-        braillechars_or_implicit,
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Comp6 {
-            chars: chars.to_string(),
-            dots,
-        },
-    ))
-}
-
-fn nocont(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars)) = tuple((tag("nocont"), space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Nocont {
-            chars: chars.to_string(),
-        },
-    ))
-}
-
-fn replace(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars, replacement)) =
-        tuple((tag("replace"), space1, chars, opt(tuple((space1, chars)))))(i)?;
-    let replacement = replacement.map(|(_, replacement)| replacement.to_string());
-    Ok((
-        input,
-        Rule::Replace {
-            chars: chars.to_string(),
-            replacement,
-        },
-    ))
-}
-
-fn always(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
-        prefixes,
-        with_classes,
-        tag("always"),
-        space1,
-        chars,
-        space1,
-        braillechars_or_implicit,
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Always {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-            classes,
-        },
-    ))
-}
-
-fn repeated(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, chars, _, dots)) =
-        tuple((prefixes, tag("repeated"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Repeated {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-        },
-    ))
-}
-
-fn repword(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars, _, dots)) = tuple((tag("repword"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Repword {
-            chars: chars.to_string(),
-            dots,
-        },
-    ))
-}
-
-fn rependword(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars, _, dots, _, other)) = tuple((
-        tag("rependword"),
-        space1,
-        chars,
-        space1,
-        dots,
-        tag(","),
-        dots,
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Rependword {
-            chars: chars.to_string(),
-            dots,
-            other,
-        },
-    ))
-}
-
-fn largesign(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars, _, dots)) =
-        tuple((tag("largesign"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Largesign {
-            chars: chars.to_string(),
-            dots,
-        },
-    ))
-}
-
-fn word(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
-        prefixes,
-        with_classes,
-        tag("word"),
-        space1,
-        chars,
-        space1,
-        braillechars_or_implicit,
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Word {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-            classes,
-        },
-    ))
-}
-
-fn syllable(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, word, _, dots)) = tuple((
-        tag("syllable"),
-        space1,
-        chars,
-        space1,
-        braillechars_or_implicit,
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Syllable {
-            word: word.to_string(),
-            dots,
-        },
-    ))
-}
-
-fn joinword(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, word, _, dots)) = tuple((tag("joinword"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Joinword {
-            word: word.to_string(),
-            dots,
-        },
-    ))
-}
-
-fn lowword(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, chars, _, dots)) =
-        tuple((prefixes, tag("lowword"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Lowword {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-        },
-    ))
-}
-
-fn contraction(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars)) = tuple((tag("contraction"), space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Contraction {
-            chars: chars.to_string(),
-        },
-    ))
-}
-
-fn sufword(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
-        prefixes,
-        with_classes,
-        tag("sufword"),
-        space1,
-        chars,
-        space1,
-        braillechars_or_implicit,
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Sufword {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-            classes,
-        },
-    ))
-}
-
-fn prfword(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
-        prefixes,
-        with_classes,
-        tag("prfword"),
-        space1,
-        chars,
-        space1,
-        braillechars_or_implicit,
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Prfword {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-            classes,
-        },
-    ))
-}
-
-fn begword(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
-        prefixes,
-        with_classes,
-        tag("begword"),
-        space1,
-        chars,
-        space1,
-        braillechars_or_implicit,
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Begword {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-            classes,
-        },
-    ))
-}
-
-fn begmidword(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
-        prefixes,
-        with_classes,
-        tag("begmidword"),
-        space1,
-        chars,
-        space1,
-        braillechars_or_implicit,
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Begmidword {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-            classes,
-        },
-    ))
-}
-
-fn midword(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
-        prefixes,
-        with_classes,
-        tag("midword"),
-        space1,
-        chars,
-        space1,
-        braillechars_or_implicit,
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Midword {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-            classes,
-        },
-    ))
-}
-
-fn midendword(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
-        prefixes,
-        with_classes,
-        tag("midendword"),
-        space1,
-        chars,
-        space1,
-        braillechars_or_implicit,
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Midendword {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-            classes,
-        },
-    ))
-}
-
-fn endword(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
-        prefixes,
-        with_classes,
-        tag("endword"),
-        space1,
-        chars,
-        space1,
-        braillechars_or_implicit,
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Endword {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-            classes,
-        },
-    ))
-}
-
-fn partword(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, classes, _, _, chars, _, dots)) = tuple((
-        prefixes,
-        with_classes,
-        tag("partword"),
-        space1,
-        chars,
-        space1,
-        braillechars_or_implicit,
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Partword {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-            classes,
-        },
-    ))
-}
-
-fn prepunc(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, chars, _, dots)) =
-        tuple((prefixes, tag("prepunc"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Prepunc {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-        },
-    ))
-}
-
-fn postpunc(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, chars, _, dots)) =
-        tuple((prefixes, tag("postpunc"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Postpunc {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-        },
-    ))
-}
-
-fn begnum(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, chars, _, dots)) =
-        tuple((prefixes, tag("begnum"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Begnum {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-        },
-    ))
-}
-
-fn midnum(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, chars, _, dots)) =
-        tuple((prefixes, tag("midnum"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Midnum {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-        },
-    ))
-}
-
-fn endnum(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, chars, _, dots)) = tuple((
-        prefixes,
-        tag("endnum"),
-        space1,
-        chars,
-        space1,
-        braillechars_or_implicit,
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Endnum {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-        },
-    ))
-}
-
-fn joinnum(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, chars, _, dots)) =
-        tuple((prefixes, tag("joinnum"), space1, chars, space1, dots))(i)?;
-    Ok((
-        input,
-        Rule::Joinnum {
-            chars: chars.to_string(),
-            dots,
-            prefixes,
-        },
-    ))
-}
-
-fn swapcd(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name, _, chars, _, dots)) = tuple((
-        tag("swapcd"),
-        space1,
-        alpha1,
-        space1,
-        chars,
-        space1,
-        separated_list1(tag(","), dots),
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Swapcd {
-            name: name.to_string(),
-            chars: chars.to_string(),
-            dots,
-        },
-    ))
-}
-
-fn swapdd(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name, _, dots, _, dotpattern)) = tuple((
-        tag("swapdd"),
-        space1,
-        alpha1,
-        space1,
-        separated_list1(tag(","), dots),
-        space1,
-        separated_list1(tag(","), dots),
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Swapdd {
-            name: name.to_string(),
-            dots,
-            dotpattern,
-        },
-    ))
-}
-
-fn swapcc(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, name, _, chars, _, replacement)) =
-        tuple((tag("swapcc"), space1, alpha1, space1, chars, space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Swapcc {
-            name: name.to_string(),
-            chars: chars.to_string(),
-            replacement: replacement.to_string(),
-        },
-    ))
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum MultiPassTestInstruction {
-    Beginning,
-    End,
-    Lookback { len: u8 },
-    VariableTest { var: u8, val: u8, op: RelationalOperator },
-    String { s: String },
-    Dots { dots: BrailleChars },
-    Attributes { attrs: HashSet<MultiPassAttribute>, min_chars: u8, max_chars: u8 },
-    SwapOrAttribute { name: String, min_chars: u8, max_chars: u8 },
-    Negate { instr: Box<MultiPassTestInstruction> },
-    Replace { instr: Vec<MultiPassTestInstruction> },
-}
-
-type MultiPassTest = Vec<MultiPassTestInstruction>;
-
-fn multipass_test(input: &str) -> IResult<&str, MultiPassTest, LouisParseError> {
-    many1(multipass_test_instruction)(input)
-}
-
-fn multipass_test_instruction (input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
-    alt((multipass_test_beginning, 
-        multipass_test_end,
-        multipass_test_lookback,
-        multipass_test_variable,
-        multipass_test_string,
-        multipass_test_dots,
-        multipass_test_attributes,
-        multipass_test_swap,
-        multipass_test_negate,
-        multipass_test_replace,
-    ))(input)
-}
-
-fn multipass_test_beginning(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
-    let (input, _) = tag("`")(input)?;
-    Ok((input, MultiPassTestInstruction::Beginning))
-}
-
-fn multipass_test_end(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
-    let (input, _) = tag("~")(input)?;
-    Ok((input, MultiPassTestInstruction::End))
-}
-
-fn multipass_test_lookback(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
-    let (input, (_, num)) = tuple((tag("_"), opt(number)))(input)?; // FIXME: number > 0
-    match num {
-        Some(n) => Ok((input, MultiPassTestInstruction::Lookback { len: n })),
-        None => Ok((input, MultiPassTestInstruction::Lookback { len: 1 })),
-    }
-}
-
-fn multipass_test_variable(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
-    let (input, (_, n1, op, n2)) = tuple((tag("#"), number, multipass_relational_operator, number))(input)?;
-    Ok((input, MultiPassTestInstruction::VariableTest { var: n1, val: n2, op: op }))
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RelationalOperator {
-    EQ,
-    GT,
-    LT,
-    GTEQ,
-    LTEQ,
-}
-
-fn multipass_relational_operator(input: &str) -> IResult<&str, RelationalOperator, LouisParseError> {
-    alt((
-        value(RelationalOperator::EQ,   tag("=")),
-        value(RelationalOperator::GTEQ, tag(">=")),
-        value(RelationalOperator::GT,   tag(">")),
-        value(RelationalOperator::LTEQ, tag("<=")),
-        value(RelationalOperator::LT,   tag("<")),
-    ))(input)
-}
-
-fn multipass_test_string(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
-    let (input, s) = delimited(tag("\""), is_not("\""), tag("\""))(input)?;
-    Ok((input, MultiPassTestInstruction::String { s: s.to_string() }))
-}
-
-fn multipass_test_dots(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
-    let (input, (_, dots)) = tuple((tag("@"), dots))(input)?;
-    Ok((input, MultiPassTestInstruction::Dots { dots: dots }))
-}
-
-fn multipass_test_attributes(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
-    let (input, (_, attrs, range)) = tuple((tag("$"), multipass_attributes, opt(multipass_repeat)))(input)?;
-    match range {
-        Some((min, max)) => Ok((input, MultiPassTestInstruction::Attributes { attrs, min_chars: min, max_chars: max })),
-        None => Ok((input, MultiPassTestInstruction::Attributes { attrs, min_chars: 1, max_chars: 1 })),
-    }
-}
-
-fn multipass_repeat(input: &str) -> IResult<&str, (u8, u8), LouisParseError> {
-    alt((
-        multipass_repeat_any,
-        multipass_repeat_range,
-        multipass_repeat_fixed,
-    ))(input)
-}
-
-fn multipass_repeat_any(input: &str) -> IResult<&str, (u8, u8), LouisParseError> {
-    let (input, _) = tag(".")(input)?;
-    Ok((input, (1, 0)))
-}
-
-fn multipass_repeat_fixed(input: &str) -> IResult<&str, (u8, u8), LouisParseError> {
-    let (input, d) = number(input)?; // FIXME: d > 0
-    Ok((input, (d, d)))
-}
-
-fn multipass_repeat_range(input: &str) -> IResult<&str, (u8, u8), LouisParseError> {
-    let (input, (d1, _, d2)) = tuple((number, tag("-"), number))(input)?; // FIXME: d1 > 0 and d2 >= d1
-    Ok((input, (d1, d2)))
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum MultiPassAttribute {
-    Digit,
-    Litdigit,
-    Letter,
-    Sign,
-    Space,
-    Math,
-    Punctuation,
-    Uppercase,
-    Lowercase,
-    Class1,
-    Class2,
-    Class3,
-    Class4,
-    Any,
-}
-
-fn multipass_attributes(input: &str) -> IResult<&str, HashSet<MultiPassAttribute>, LouisParseError> {
-    let (input, attrs) = many1(multipass_attribute)(input)?;
-    let attrs = attrs.into_iter().collect();
-    Ok((input, attrs))
-}
-
-fn multipass_attribute(input: &str) -> IResult<&str, MultiPassAttribute, LouisParseError> {
-    alt((
-        value(MultiPassAttribute::Any,         tag("a")),
-        value(MultiPassAttribute::Digit,       tag("d")),
-        value(MultiPassAttribute::Litdigit,    tag("D")),
-        value(MultiPassAttribute::Letter,      tag("l")),
-        value(MultiPassAttribute::Punctuation, tag("p")),
-        value(MultiPassAttribute::Sign,        tag("S")),
-        value(MultiPassAttribute::Space,       tag("s")),
-        value(MultiPassAttribute::Uppercase,   tag("U")),
-        value(MultiPassAttribute::Lowercase,   tag("u")),
-        value(MultiPassAttribute::Math,        tag("m")),
-        value(MultiPassAttribute::Class1,      tag("w")),
-        value(MultiPassAttribute::Class2,      tag("x")),
-        value(MultiPassAttribute::Class3,      tag("y")),
-        value(MultiPassAttribute::Class4,      tag("z")),
-    ))(input)
-}
-
-fn multipass_test_swap(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
-    let (input, (_, s, range)) = tuple((tag("%"), alpha1, opt(multipass_repeat)))(input)?;
-    match range {
-        Some((min, max)) => Ok((input, MultiPassTestInstruction::SwapOrAttribute { name: s.to_string(), min_chars: min, max_chars: max })),
-        None => Ok((input, MultiPassTestInstruction::SwapOrAttribute { name: s.to_string(), min_chars: 1, max_chars: 1 }))
-    }
-}
-
-fn multipass_test_negate(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
-    let (input, (_, following)) = tuple((tag("!"), multipass_test_instruction))(input)?;
-    Ok((input, MultiPassTestInstruction::Negate { instr: Box::new(following) }))
-}
-
-fn multipass_test_replace(input: &str) -> IResult<&str, MultiPassTestInstruction, LouisParseError> {
-    let (input, inner) = delimited(tag("["), multipass_test, tag("]"))(input)?; // FIXME: opt(multipass_test)
-    Ok((input, MultiPassTestInstruction::Replace { instr: inner }))
-}
-
-fn context(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, test, _, action)) =
-        tuple((prefixes, tag("context"), space1, multipass_test, space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Context {
-            test: test,
-            action: action.to_string(),
-            prefixes,
-        },
-    ))
-}
-
-fn pass2(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, test, _, action)) =
-        tuple((prefixes, tag("pass2"), space1, multipass_test, space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Pass2 {
-            test: test,
-            action: action.to_string(),
-            prefixes,
-        },
-    ))
-}
-
-fn pass3(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, test, _, action)) =
-        tuple((prefixes, tag("pass3"), space1, multipass_test, space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Pass3 {
-            test: test,
-            action: action.to_string(),
-            prefixes,
-        },
-    ))
-}
-
-fn pass4(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, _, _, test, _, action)) =
-        tuple((prefixes, tag("pass4"), space1, multipass_test, space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Pass4 {
-            test: test,
-            action: action.to_string(),
-            prefixes,
-        },
-    ))
-}
-
-fn correct(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    // FIXME: make sure the prefixes are mandatory here
-    let (input, (prefixes, _, _, test, _, action)) =
-        tuple((prefixes, tag("correct"), space1, multipass_test, space1, chars))(i)?;
-    Ok((
-        input,
-        Rule::Correct {
-            test: test,
-            action: action.to_string(),
-            prefixes,
-        },
-    ))
-}
-
-fn match_opcode(i: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (prefixes, classes, positions, _, _, pre, _, chars, _, post, _, dots)) = tuple((
-        prefixes,
-        with_classes,
-        with_matches,
-        tag("match"),
-        space1,
-        chars,
-        space1,
-        chars,
-        space1,
-        chars,
-        space1,
-        braillechars_or_implicit,
-    ))(i)?;
-    Ok((
-        input,
-        Rule::Match {
-            pre: pre.to_string(),
-            chars: chars.to_string(),
-            post: post.to_string(),
-            dots,
-            classes,
-            positions,
-            prefixes,
-        },
-    ))
-}
-
-fn literal(input: &str) -> IResult<&str, Rule, LouisParseError> {
-    let (input, (_, _, chars)) = tuple((tag("literal"), space1, chars))(input)?;
-    Ok((
-        input,
-        Rule::Literal {
-            chars: chars.to_string(),
-        },
-    ))
-}
-
-fn with_class_before(input: &str) -> IResult<&str, WithClass, LouisParseError> {
-    let (input, (_, _, class, _)) = tuple((tag("before"), space1, alpha1, space1))(input)?;
-    Ok((
-        input,
-        WithClass::Before {
-            class: class.to_string(),
-        },
-    ))
-}
-
-fn with_class_after(input: &str) -> IResult<&str, WithClass, LouisParseError> {
-    let (input, (_, _, class, _)) = tuple((tag("after"), space1, alpha1, space1))(input)?;
-    Ok((
-        input,
-        WithClass::After {
-            class: class.to_string(),
-        },
-    ))
-}
-
-fn with_classes(input: &str) -> IResult<&str, Vec<WithClass>, LouisParseError> {
-    many0(alt((with_class_before, with_class_after)))(input)
-}
-
-fn with_matches(input: &str) -> IResult<&str, WithMatches, LouisParseError> {
-    alt((
-        value(
-            WithMatch::Before | WithMatch::After,
-            tuple((tag("empmatchbefore"), space1, tag("empmatchafter"), space1)),
-        ),
-        value(
-            WithMatch::After | WithMatch::Before,
-            tuple((tag("empmatchafter"), space1, tag("empmatchbefore"), space1)),
-        ),
-        value(
-            enum_set!(WithMatch::Before),
-            tuple((tag("empmatchbefore"), space1)),
-        ),
-        value(
-            enum_set!(WithMatch::After),
-            tuple((tag("empmatchafter"), space1)),
-        ),
-        success::<_, _, LouisParseError>(WithMatches::empty()),
-    ))(input)
-}
-
-fn end_comment(i: &str) -> IResult<&str, &str, LouisParseError> {
-    let (input, (_, _, comment)) = tuple((space1, opt(tag("#")), not_line_ending))(i)?;
-    Ok((input, comment))
-}
-
-fn rule_line(i: &str) -> IResult<&str, Line, LouisParseError> {
-    let (input, (rule, comment, _)) = tuple((
-        // for some reason alt only allows for 21 choices. As a
-        // workaround we need to nest the alt calls, see
-        // https://github.com/rust-bakery/nom/issues/1144#issuecomment-629774957
-        alt((
-            alt((
-                include,
-                undefined,
-                display,
-                space,
-                multind,
-                punctuation,
-                digit,
-                letter,
-                lowercase,
-                uppercase,
-                litdigit,
-                sign,
-                math,
-                grouping,
-                base,
-                attribute,
-            )),
-            alt((
-                modeletter,
-                capsletter,
-                begmodeword,
-                begcapsword,
-                endcapsword,
-                capsmodechars,
-                begcaps,
-                endcaps,
-                letsign,
-                noletsign,
-                noletsignbefore,
-                noletsignafter,
-                nocontractsign,
-                numsign,
-                nonumsign,
-                numericnocontchars,
-                numericmodechars,
-                midendnumericmodechars,
-                begcapsphrase,
-                endcapsphrase,
-                lencapsphrase,
-            )),
-            alt((
-                begmodephrase,
-                endmodephrase,
-                lenmodephrase,
-                seqdelimiter,
-                seqbeforechars,
-                seqafterchars,
-                seqafterpattern,
-                seqafterexpression,
-            )),
-            alt((
-                class,
-                emphclass,
-                begemph,
-                endemph,
-                noemphchars,
-                emphletter,
-                begemphword,
-                endemphword,
-                emphmodechars,
-                begemphphrase,
-                endemphphrase,
-                lenemphphrase,
-                begcomp,
-                endcomp,
-            )),
-            alt((
-                decpoint,
-                hyphen,
-                capsnocont,
-                compbrl,
-                comp6,
-                nocont,
-                replace,
-                always,
-                repeated,
-                repword,
-                rependword,
-                largesign,
-                word,
-                syllable,
-                joinword,
-                lowword,
-                contraction,
-                sufword,
-                prfword,
-            )),
-            alt((
-                begword,
-                begmidword,
-                midword,
-                midendword,
-                endword,
-                partword,
-                prepunc,
-                postpunc,
-                begnum,
-                midnum,
-                endnum,
-                joinnum,
-                swapcd,
-                swapdd,
-                swapcc,
-                context,
-                pass2,
-                pass3,
-                pass4,
-                correct,
-                match_opcode,
-            )),
-            alt((literal,)),
-        )),
-        alt((end_comment, space0)),
-        line_ending,
-    ))(i)?;
-    Ok((
-        input,
-        Line::Rule {
-            rule,
-            comment: comment.to_string(),
-        },
-    ))
-}
-
-fn comment_line(i: &str) -> IResult<&str, Line, LouisParseError> {
-    let (input, (_, comment, _)) = tuple((tag("#"), not_line_ending, line_ending))(i)?;
-    Ok((
-        input,
-        Line::Comment {
-            comment: comment.to_string(),
-        },
-    ))
-}
-
-fn empty_line(i: &str) -> IResult<&str, Line, LouisParseError> {
-    let (input, (_, _)) = tuple((space0, line_ending))(i)?;
-    Ok((input, Line::Empty))
-}
-
-fn line(i: &str) -> IResult<&str, Line, LouisParseError> {
-    let (input, rule) = alt((rule_line, comment_line, empty_line))(i)?;
-    Ok((input, rule))
-}
-
-pub fn table(input: &str) -> Result<Vec<Line>, LouisParseError> {
-    let (_, lines) = all_consuming(many0(line))(input).map_err(|nom_err| match nom_err {
-        nom::Err::Incomplete(_) => unreachable!(),
-        nom::Err::Error(e) => e,
-        nom::Err::Failure(e) => e,
-    })?;
-    Ok(lines)
-}
-
-fn expand_include(search_path: &SearchPath, rule: Rule) -> Vec<Rule> {
-    if let Rule::Include { filename } = rule {
-        // FIXME: how do we upstream io and parsing errors?
-        let path = search_path.find_file(&PathBuf::from(filename)).unwrap();
-        let included = fs::read_to_string(path).unwrap();
-        let lines = table(&included).unwrap();
-        let rules = lines
-            .into_iter()
-            .filter_map(|line| line.as_rule())
-            .collect();
-        expand_includes(search_path, rules)
+#[derive(thiserror::Error, Debug)]
+pub enum TableError {
+    #[error("Parse error {error:?} on line {line:?}")]
+    ParseError {
+        path: Option<PathBuf>,
+        line: usize,
+        error: ParseError,
+    },
+    #[error("Cannot read table")]
+    TableNotReadable(#[from] io::Error),
+    #[error("Cannot find table {0:?}")]
+    TableNotFound(PathBuf),
+    #[error("Table format not supported {0:?}")]
+    FormatNotSupported(PathBuf),
+}
+
+pub fn table(table: &str, path: Option<PathBuf>) -> Result<Vec<Rule>, Vec<TableError>> {
+    let (rules, errors): (Vec<_>, Vec<_>) = table
+        .lines()
+        .enumerate()
+        // drop comments and empty lines
+        .filter(|(_, line)| !line.trim().starts_with('#') && !line.trim().is_empty())
+        .map(|(line_no, line)| {
+            // parse the line
+            RuleParser::new(line)
+                .rule()
+                .map_err(|e| TableError::ParseError {
+                    path: path.clone(),
+                    line: line_no,
+                    error: e,
+                })
+        })
+        .partition(Result::is_ok);
+    let rules: Vec<_> = rules.into_iter().map(Result::unwrap).collect();
+    let errors: Vec<_> = errors.into_iter().map(Result::unwrap_err).collect();
+    if errors.is_empty() {
+        Ok(rules)
     } else {
-        vec![rule]
+        Err(errors)
     }
 }
 
-pub fn expand_includes(search_path: &SearchPath, rules: Vec<Rule>) -> Vec<Rule> {
-    rules
+pub fn table_file(path: &Path) -> Result<Vec<Rule>, Vec<TableError>> {
+    let text = read_to_string(path).map_err(|e| vec![TableError::TableNotReadable(e)])?;
+    table(&text, Some(path.into()))
+}
+
+pub fn table_expanded(file: &Path) -> Result<Vec<Rule>, Vec<TableError>> {
+    let search_path = &SearchPath::new_or("LOUIS_TABLE_PATH", ".");
+    let path = search_path.find_file(file);
+    match path {
+        Some(path) => {
+            let rules = table_file(path.as_path())?;
+            let rules = expand_includes(rules)?;
+            Ok(rules)
+        }
+        _ => Err(vec![TableError::TableNotFound(file.into())]),
+    }
+}
+
+fn expand_include(rule: Rule) -> Result<Vec<Rule>, Vec<TableError>> {
+    let search_path = &SearchPath::new_or("LOUIS_TABLE_PATH", ".");
+    if let Rule::Include { ref file } = rule {
+        let path = Path::new(file);
+        if path.extension().and_then(OsStr::to_str) == Some("dic") {
+            return Err(vec![TableError::FormatNotSupported(path.into())]);
+        }
+        let path = search_path
+            .find_file(path)
+            .ok_or(vec![TableError::TableNotFound(path.into())])?;
+        let rules = table_expanded(&path)?;
+        Ok(rules)
+    } else {
+        Ok(vec![rule])
+    }
+}
+
+pub fn expand_includes(rules: Vec<Rule>) -> Result<Vec<Rule>, Vec<TableError>> {
+    let (rules, errors): (Vec<_>, Vec<_>) = rules
         .into_iter()
-        .flat_map(|rule| expand_include(search_path, rule))
-        .collect()
+        .map(expand_include)
+        .partition(Result::is_ok);
+    let rules: Vec<_> = rules.into_iter().flat_map(Result::unwrap).collect();
+    let errors: Vec<_> = errors.into_iter().flat_map(Result::unwrap_err).collect();
+    if errors.is_empty() {
+        Ok(rules)
+    } else {
+        Err(errors)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nom::Err;
+    use enumset::enum_set;
 
     #[test]
-    fn dot_to_unicode_test() {
+    fn nocross_test() {
+        assert_eq!(true, RuleParser::new(&"nocross").nocross());
+        assert_eq!(true, RuleParser::new(&"nocross nofor").nocross());
+        assert_eq!(false, RuleParser::new(&"nofor nocross").nocross());
+        assert_eq!(false, RuleParser::new(&"nofor").nocross());
+    }
+
+    #[test]
+    fn nofor_test() {
+        assert_eq!(true, RuleParser::new(&" nofor ").nofor());
+        assert_eq!(true, RuleParser::new(&"nofor nocross").nofor());
+        assert_eq!(false, RuleParser::new(&"nocross nofor").nofor());
+        assert_eq!(false, RuleParser::new(&"").nofor());
+    }
+
+    #[test]
+    fn constraints_test() {
         assert_eq!(
-            dot_to_unicode(enum_set!(BrailleDot::DOT1 | BrailleDot::DOT8)),
-            '⢁'
+            enum_set!(Constraint::Nofor),
+            RuleParser::new(&" nofor ").constraints()
         );
         assert_eq!(
-            dot_to_unicode(enum_set!(BrailleDot::DOT1 | BrailleDot::DOT9)),
-            '\u{f0101}'
+            enum_set!(Constraint::Nofor | Constraint::Nocross),
+            RuleParser::new(&"nofor nocross").constraints()
         );
     }
 
     #[test]
-    fn drop_virtual_dots_test() {
+    fn fail_if_invalid_constraints_test() {
         assert_eq!(
-            drop_virtual_dots(dot_to_unicode(enum_set!(
-                BrailleDot::DOT1 | BrailleDot::DOT8
-            ))),
-            '⢁'
+            Ok(()),
+            fail_if_invalid_constraints(Constraints::empty(), Constraints::empty(), Opcode::Space)
         );
         assert_eq!(
-            drop_virtual_dots(dot_to_unicode(enum_set!(
-                BrailleDot::DOT1 | BrailleDot::DOT9
-            ))),
-            '⠁'
-        );
-    }
-
-    #[test]
-    fn dots_to_unicode_test() {
-        assert_eq!(
-            dots_to_unicode(vec![
-                enum_set!(BrailleDot::DOT1),
-                enum_set!(BrailleDot::DOT8)
-            ]),
-            "⠁⢀".to_string()
+            Err(ParseError::InvalidConstraints {
+                constraints: enum_set!(Constraint::Nofor),
+                opcode: Opcode::Space
+            }),
+            fail_if_invalid_constraints(
+                Constraints::empty(),
+                enum_set!(Constraint::Nofor),
+                Opcode::Space
+            )
         );
         assert_eq!(
-            dots_to_unicode(vec![
-                enum_set!(BrailleDot::DOT1),
-                enum_set!(BrailleDot::DOT9)
-            ]),
-            "⠁\u{f0100}".to_string()
-        );
-    }
-
-    #[test]
-    fn char_to_dot_test() {
-        assert_eq!(char_to_dot('8'), Ok(BrailleDot::DOT8));
-        assert_eq!(char_to_dot('F'), Err(LouisParseError::InvalidBraille));
-        assert_eq!(char_to_dot('z'), Err(LouisParseError::InvalidBraille));
-    }
-
-    #[test]
-    fn unicode_literal_test() {
-        assert_eq!(unicode_literal("00AD"), Ok(("", '­')));
-    }
-
-    #[test]
-    fn escaped_char_test() {
-        assert_eq!(escaped_char("\\x00AD"), Ok(("", '­')));
-        assert_eq!(escaped_char("\\x04D8"), Ok(("", 'Ә')));
-    }
-
-    #[test]
-    fn one_unicode_digit_test() {
-        assert_eq!(one_unicode_digit("1"), Ok(("", '1')));
-        assert_eq!(
-            one_unicode_digit("12"),
-            Err(Err::Error(LouisParseError::InvalidDigit))
+            Err(ParseError::InvalidConstraints {
+                constraints: enum_set!(Constraint::Nofor | Constraint::Nocross),
+                opcode: Opcode::Space
+            }),
+            fail_if_invalid_constraints(
+                Constraints::empty(),
+                enum_set!(Constraint::Nofor | Constraint::Nocross),
+                Opcode::Space
+            )
         );
         assert_eq!(
-            one_unicode_digit("b"),
-            Err(Err::Error(LouisParseError::InvalidDigit))
-        );
-        assert_eq!(one_unicode_digit("1b"), Ok(("b", '1')));
-        assert_eq!(
-            one_unicode_digit(""),
-            Err(Err::Error(LouisParseError::InvalidDigit))
-        );
-        assert_eq!(one_unicode_digit("໑"), Ok(("", '໑')));
-    }
-
-    #[test]
-    fn single_char_test() {
-        assert_eq!(single_char("a"), Ok(("", 'a')));
-        assert_eq!(single_char("b"), Ok(("", 'b')));
-        assert_eq!(single_char("\\x00AD"), Ok(("", '­')));
-    }
-
-    #[test]
-    fn chars_test() {
-        assert_eq!(chars("foo"), Ok(("", "foo")));
-        assert_eq!(chars("foo bar"), Ok((" bar", "foo")));
-        // FIXME: I guess that should parse as a single unicode char
-        assert_eq!(chars(r"\x04D8"), Ok(("", r"\x04D8")));
-    }
-
-    #[test]
-    fn foward_test() {
-        assert_eq!(Rule::Capsnocont {}.is_forward(), true);
-        assert_eq!(
-            Rule::Compbrl {
-                chars: "foo".to_string(),
-                prefixes: Prefixes::empty()
-            }
-            .is_forward(),
-            true
-        );
-        assert_eq!(
-            Rule::Compbrl {
-                chars: "foo".to_string(),
-                prefixes: enum_set!(Prefix::Nofor)
-            }
-            .is_forward(),
-            false
-        );
-        assert_eq!(
-            Rule::Compbrl {
-                chars: "foo".to_string(),
-                prefixes: enum_set!(Prefix::Noback)
-            }
-            .is_forward(),
-            true
+            Err(ParseError::InvalidConstraints {
+                constraints: enum_set!(Constraint::Nocross),
+                opcode: Opcode::Space
+            }),
+            fail_if_invalid_constraints(
+                enum_set!(Constraint::Nofor | Constraint::Noback),
+                enum_set!(Constraint::Nofor | Constraint::Nocross),
+                Opcode::Space
+            )
         );
     }
 
     #[test]
-    fn backward_test() {
-        assert_eq!(Rule::Capsnocont {}.is_backward(), true);
+    fn withclass_test() {
         assert_eq!(
-            Rule::Compbrl {
-                chars: "foo".to_string(),
-                prefixes: Prefixes::empty()
-            }
-            .is_backward(),
-            true
+            Ok(Some(WithClass::Before {
+                class: "foo".into()
+            })),
+            RuleParser::new(&"before foo ").with_class()
         );
         assert_eq!(
-            Rule::Compbrl {
-                chars: "foo".to_string(),
-                prefixes: enum_set!(Prefix::Nofor)
-            }
-            .is_backward(),
-            true
+            Ok(Some(WithClass::After {
+                class: "foo".into()
+            })),
+            RuleParser::new(&" after foo ").with_class()
         );
         assert_eq!(
-            Rule::Compbrl {
-                chars: "foo".to_string(),
-                prefixes: enum_set!(Prefix::Noback)
-            }
-            .is_backward(),
-            false
+            Err(ParseError::ClassNameExpected { found: None }),
+            RuleParser::new(&" after ").with_class()
         );
     }
 
     #[test]
-    fn dots_test() {
+    fn withclasses_test() {
         assert_eq!(
-            dots("123"),
-            Ok((
-                "",
-                vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
-            ))
+            Ok(Some(vec![
+                WithClass::Before {
+                    class: "foo".into()
+                },
+                WithClass::After {
+                    class: "bar".into()
+                },
+            ])),
+            RuleParser::new(&"before foo after bar").with_classes()
         );
+
         assert_eq!(
-            dots("1f"),
-            Ok(("", vec![BrailleDot::DOT1 | BrailleDot::DOTF]))
+            Err(ParseError::ClassNameExpected { found: None }),
+            RuleParser::new(&"before foo after").with_classes()
         );
-        assert_eq!(
-            dots("123-1f"),
-            Ok((
-                "",
-                vec![
-                    BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3,
-                    BrailleDot::DOT1 | BrailleDot::DOTF
-                ]
-            ))
-        );
-        assert_eq!(
-            dots("123-1f-78"),
-            Ok((
-                "",
-                vec![
-                    BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3,
-                    BrailleDot::DOT1 | BrailleDot::DOTF,
-                    BrailleDot::DOT7 | BrailleDot::DOT8,
-                ]
-            ))
-        );
-        assert_eq!(dots("huhu"), Err(Err::Error(LouisParseError::InvalidBraille)));
     }
 
     #[test]
-    fn braillechars_or_implicit_test() {
+    fn opcode_test() {
+        assert_eq!(Ok(Opcode::Include), RuleParser::new(&"include").opcode());
         assert_eq!(
-            braillechars_or_implicit("123"),
-            Ok((
-                "",
-                BrailleCharsOrImplicit::Explicit(vec![
-                    BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3
-                ])
-            ))
+            Ok(Opcode::Always),
+            RuleParser::new(&"always foo after").opcode()
         );
-        assert_eq!(
-            braillechars_or_implicit("="),
-            Ok(("", BrailleCharsOrImplicit::Implicit))
-        );
-        assert_eq!(dots("m"), Err(Err::Error(LouisParseError::InvalidBraille)));
-    }
 
-    #[test]
-    fn with_classes_test() {
         assert_eq!(
-            with_classes("before italics "),
-            Ok((
-                "",
-                vec![WithClass::Before {
-                    class: "italics".to_string()
-                }]
-            ))
+            Err(ParseError::OpcodeExpected {
+                found: Some("h".into())
+            }),
+            RuleParser::new(&"h").opcode()
         );
         assert_eq!(
-            with_classes("before italics after foo "),
-            Ok((
-                "",
-                vec![
-                    WithClass::Before {
-                        class: "italics".to_string()
-                    },
-                    WithClass::After {
-                        class: "foo".to_string()
-                    }
-                ]
-            ))
+            Err(ParseError::OpcodeExpected {
+                found: Some("hello".into())
+            }),
+            RuleParser::new(&"hello world").opcode()
         );
-        assert_eq!(with_classes(""), Ok(("", vec![])));
     }
 
     #[test]
     fn with_matches_test() {
         assert_eq!(
-            with_matches("empmatchbefore empmatchafter "),
-            Ok(("", enum_set![WithMatch::Before | WithMatch::After]))
+            Some(HashSet::from([WithMatch::After])),
+            RuleParser::new(&"empmatchafter match").with_matches()
         );
         assert_eq!(
-            with_matches("empmatchafter empmatchbefore "),
-            Ok(("", enum_set![WithMatch::Before | WithMatch::After]))
+            Some(HashSet::from([WithMatch::Before])),
+            RuleParser::new(&"empmatchbefore match").with_matches()
         );
+        assert_eq!(None, RuleParser::new(&"match").with_matches());
         assert_eq!(
-            with_matches("empmatchbefore "),
-            Ok(("", enum_set![WithMatch::Before]))
-        );
-        assert_eq!(
-            with_matches("empmatchafter "),
-            Ok(("", enum_set![WithMatch::After]))
-        );
-        assert_eq!(with_matches(""), Ok(("", enum_set![])));
-    }
-
-    #[test]
-    fn include_test() {
-        assert_eq!(
-            include("include filename.tbl"),
-            Ok((
-                "",
-                Rule::Include {
-                    filename: "filename.tbl".to_string()
-                }
-            ))
+            Some(HashSet::from([WithMatch::After, WithMatch::Before])),
+            RuleParser::new(&"empmatchbefore empmatchafter match").with_matches()
         );
     }
 
     #[test]
-    fn undefined_test() {
+    fn rule_test() {
         assert_eq!(
-            undefined("undefined 12"),
-            Ok((
-                "",
-                Rule::Undefined {
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2]
-                }
-            ))
+            Ok(Rule::Include {
+                file: "foo.ctb".into()
+            }),
+            RuleParser::new(&"include foo.ctb").rule()
         );
-    }
-
-    #[test]
-    fn display_test() {
         assert_eq!(
-            display("display h 122"),
-            Ok((
-                "",
-                Rule::Display {
-                    ch: 'h',
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
-                    prefixes: Prefixes::empty()
-                }
-            ))
+            Err(ParseError::FilenameExpected),
+            RuleParser::new(&"include").rule()
         );
-    }
-
-    #[test]
-    fn space_test() {
         assert_eq!(
-            space("space . 0"),
-            Ok((
-                "",
-                Rule::Space {
-                    ch: '.',
-                    dots: vec![enum_set!(BrailleDot::DOT0)],
-                    prefixes: Prefixes::empty()
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn punctuation_test() {
-        assert_eq!(
-            punctuation("punctuation . 46"),
-            Ok((
-                "",
-                Rule::Punctuation {
-                    ch: '.',
-                    dots: vec![BrailleDot::DOT4 | BrailleDot::DOT6],
-                    prefixes: Prefixes::empty()
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn multipass_test_test() {
-        assert_eq!(
-            multipass_test("\"abc\""),
-            Ok((
-                "",
-                vec![MultiPassTestInstruction::String { s: "abc".to_string() }]
-            ))
-        );
-    }
-
-    #[test]
-    fn multipass_test_instruction_test() {
-        assert_eq!(
-            multipass_test_instruction("`"),
-            Ok((
-                "",
-                MultiPassTestInstruction::Beginning
-            ))
-        );
-    }
-
-    #[test]
-    fn multipass_test_beginning_test() {
-        assert_eq!(
-            multipass_test_beginning("`"),
-            Ok((
-                "",
-                MultiPassTestInstruction::Beginning)
-            )
-        );
-    }
-
-    #[test]
-    fn multipass_test_end_test() {
-        assert_eq!(
-            multipass_test_end("~"),
-            Ok((
-                "",
-                MultiPassTestInstruction::End)
-            )
-        );
-    }
-
-    #[test]
-    fn multipass_test_lookback_test() {
-        assert_eq!(
-            multipass_test_lookback("_"),
-            Ok((
-                "",
-                MultiPassTestInstruction::Lookback { len: 1 })
-            )
-        );
-        assert_eq!(
-            multipass_test_lookback("_2"),
-            Ok((
-                "",
-                MultiPassTestInstruction::Lookback { len: 2 })
-            )
-        );
-    }
-
-    #[test]
-    fn multipass_test_variable_test() {
-        assert_eq!(
-            multipass_test_variable("#1=5"),
-            Ok((
-                "",
-                MultiPassTestInstruction::VariableTest { var: 1, val: 5, op: RelationalOperator::EQ }
-            ))
-        );
-        assert_eq!(
-            multipass_test_variable("#1<5"),
-            Ok((
-                "",
-                MultiPassTestInstruction::VariableTest { var: 1, val: 5, op: RelationalOperator::LT })
-            )
-        );
-        assert_eq!(
-            multipass_test_variable("#1>5"),
-            Ok((
-                "",
-                MultiPassTestInstruction::VariableTest { var: 1, val: 5, op: RelationalOperator::GT })
-            )
-        );
-        assert_eq!(
-            multipass_test_variable("#1<=5"),
-            Ok((
-                "",
-                MultiPassTestInstruction::VariableTest { var: 1, val: 5, op: RelationalOperator::LTEQ })
-            )
-        );
-        assert_eq!(
-            multipass_test_variable("#1>=5"),
-            Ok((
-                "",
-                MultiPassTestInstruction::VariableTest { var: 1, val: 5, op: RelationalOperator::GTEQ })
-            )
-        );
-    }
-
-    #[test]
-    fn multipass_test_string_test() {
-        assert_eq!(
-            multipass_test_string("\"abc\""),
-            Ok((
-                "",
-                MultiPassTestInstruction::String { s: "abc".to_string() })
-            )
-        );
-    }
-
-    #[test]
-    fn multipass_test_dots_test() {
-        assert_eq!(
-            multipass_test_dots("@123"),
-            Ok((
-                "",
-                MultiPassTestInstruction::Dots { dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]})
-            )
-        );
-    }
-
-    #[test]
-    fn multipass_test_attributes_test() {
-        assert_eq!(
-            multipass_test_attributes("$sd"),
-            Ok((
-                "",
-                MultiPassTestInstruction::Attributes { attrs: HashSet::from([MultiPassAttribute::Space, MultiPassAttribute::Digit]), min_chars: 1, max_chars: 1 })
-            )
-        );
-        assert_eq!(
-            multipass_test_attributes("$a."),
-            Ok((
-                "",
-                MultiPassTestInstruction::Attributes { attrs: HashSet::from([MultiPassAttribute::Any]), min_chars: 1, max_chars: 0 })
-            )
-        );
-        assert_eq!(
-            multipass_test_attributes("$p2"),
-            Ok((
-                "",
-                MultiPassTestInstruction::Attributes { attrs: HashSet::from([MultiPassAttribute::Punctuation]), min_chars: 2, max_chars: 2 })
-            )
-        );
-        assert_eq!(
-            multipass_test_attributes("$l1-5"),
-            Ok((
-                "",
-                MultiPassTestInstruction::Attributes { attrs: HashSet::from([MultiPassAttribute::Letter]), min_chars: 1, max_chars: 5 })
-            )
-        );
-    }
-
-    #[test]
-    fn multipass_test_swap_test() {
-        assert_eq!(
-            multipass_test_swap("%foo"),
-            Ok((
-                "",
-                MultiPassTestInstruction::SwapOrAttribute { name: "foo".to_string(), min_chars: 1, max_chars: 1 })
-            )
-        );
-        assert_eq!(
-            multipass_test_swap("%foo."),
-            Ok((
-                "",
-                MultiPassTestInstruction::SwapOrAttribute { name: "foo".to_string(), min_chars: 1, max_chars: 0 })
-            )
-        );
-        assert_eq!(
-            multipass_test_swap("%foo2"),
-            Ok((
-                "",
-                MultiPassTestInstruction::SwapOrAttribute { name: "foo".to_string(), min_chars: 2, max_chars: 2 })
-            )
-        );
-        assert_eq!(
-            multipass_test_swap("%foo1-5"),
-            Ok((
-                "",
-                MultiPassTestInstruction::SwapOrAttribute { name: "foo".to_string(), min_chars: 1, max_chars: 5 })
-            )
-        );
-    }
-
-    #[test]
-    fn multipass_test_negate_test() {
-        assert_eq!(
-            multipass_test_negate("!\"abc\""),
-            Ok((
-                "",
-                MultiPassTestInstruction::Negate { instr: Box::new(MultiPassTestInstruction::String { s: "abc".to_string() })}
-            ))
-        );
-    }
-
-    #[test]
-    fn multipass_test_replace_test() {
-        assert_eq!(
-            multipass_test_replace("[$a]"),
-            Ok((
-                "",
-                MultiPassTestInstruction::Replace {
-                    instr: vec![
-                        MultiPassTestInstruction::Attributes {
-                            attrs: HashSet::from([MultiPassAttribute::Any]), min_chars: 1, max_chars: 1
-                        }
-                    ]
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn digit_test() {
-        assert_eq!(
-            digit("digit 1 278"),
-            Ok((
-                "",
-                Rule::Digit {
-                    ch: '1',
-                    dots: vec![BrailleDot::DOT2 | BrailleDot::DOT7 | BrailleDot::DOT8]
-                }
-            ))
-        );
-        assert_eq!(
-            digit("digit ۲ 1278"),
-            Ok((
-                "",
-                Rule::Digit {
-                    ch: '۲',
-                    dots: vec![
-                        BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT7 | BrailleDot::DOT8
-                    ]
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn litdigit_test() {
-        assert_eq!(
-            litdigit("litdigit 0 245"),
-            Ok((
-                "",
-                Rule::Litdigit {
-                    ch: '0',
-                    dots: vec![BrailleDot::DOT2 | BrailleDot::DOT4 | BrailleDot::DOT5]
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn grouping_test() {
-        assert_eq!(
-            grouping("grouping mfrac ab 3e,4e"),
-            Ok((
-                "",
-                Rule::Grouping {
-                    name: "mfrac".to_string(),
-                    chars: "ab".to_string(),
-                    dots: vec![
-                        vec![BrailleDot::DOT3 | BrailleDot::DOTE],
-                        vec![BrailleDot::DOT4 | BrailleDot::DOTE]
-                    ]
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn modeletter_test() {
-        assert_eq!(
-            modeletter("modeletter uppercase 6"),
-            Ok((
-                "",
-                Rule::Modeletter {
-                    attribute: "uppercase".to_string(),
-                    dots: vec![enum_set!(BrailleDot::DOT6)],
-                    prefixes: Prefixes::empty()
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn capsletter_test() {
-        assert_eq!(
-            capsletter("capsletter 6"),
-            Ok((
-                "",
-                Rule::Capsletter {
-                    dots: vec![enum_set!(BrailleDot::DOT6)],
-                    prefixes: Prefixes::empty()
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn begmodeword_test() {
-        assert_eq!(
-            begmodeword("begmodeword uppercase 6"),
-            Ok((
-                "",
-                Rule::Begmodeword {
-                    attribute: "uppercase".to_string(),
-                    dots: vec![enum_set!(BrailleDot::DOT6)],
-                    prefixes: Prefixes::empty()
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn begcapsword_test() {
-        assert_eq!(
-            begcapsword("begcapsword 6-6"),
-            Ok((
-                "",
-                Rule::Begcapsword {
-                    dots: vec![enum_set!(BrailleDot::DOT6), enum_set!(BrailleDot::DOT6)],
-                    prefixes: Prefixes::empty()
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn endcapsword_test() {
-        assert_eq!(
-            endcapsword("endcapsword 6-3"),
-            Ok((
-                "",
-                Rule::Endcapsword {
-                    dots: vec![enum_set!(BrailleDot::DOT6), enum_set!(BrailleDot::DOT3)],
-                    prefixes: Prefixes::empty()
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn capsmodechars_test() {
-        assert_eq!(
-            capsmodechars("capsmodechars -/"),
-            Ok((
-                "",
-                Rule::Capsmodechars {
-                    chars: "-/".to_string()
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn begcaps_test() {
-        assert_eq!(
-            begcaps("begcaps 6-6-6"),
-            Ok((
-                "",
-                Rule::Begcaps {
-                    dots: vec![
-                        enum_set!(BrailleDot::DOT6),
-                        enum_set!(BrailleDot::DOT6),
-                        enum_set!(BrailleDot::DOT6)
-                    ]
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn endcaps_test() {
-        assert_eq!(
-            endcaps("endcaps 6-3"),
-            Ok((
-                "",
-                Rule::Endcaps {
-                    dots: vec![enum_set!(BrailleDot::DOT6), enum_set!(BrailleDot::DOT3)]
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn begcapsphrase_test() {
-        assert_eq!(
-            begcapsphrase("begcapsphrase 45-45"),
-            Ok((
-                "",
-                Rule::Begcapsphrase {
-                    dots: vec![
-                        enum_set!(BrailleDot::DOT4 | BrailleDot::DOT5),
-                        enum_set!(BrailleDot::DOT4 | BrailleDot::DOT5)
-                    ]
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn endcapsphrase_test() {
-        assert_eq!(
-            endcapsphrase("endcapsphrase before 45"),
-            Ok((
-                "",
-                Rule::Endcapsphrase {
-                    dots: vec![BrailleDot::DOT4 | BrailleDot::DOT5],
-                    position: Position::Before
-                }
-            ))
-        );
-        assert_eq!(
-            endcapsphrase("endcapsphrase after 45"),
-            Ok((
-                "",
-                Rule::Endcapsphrase {
-                    dots: vec![BrailleDot::DOT4 | BrailleDot::DOT5],
-                    position: Position::After
-                }
-            ))
-        );
-        assert_eq!(
-            endcapsphrase("endcapsphrase foo 45"),
-            Err(Err::Error(LouisParseError::Unparseable))
-        );
-    }
-
-    #[test]
-    fn lencapsphrase_test() {
-        assert_eq!(
-            lencapsphrase("lencapsphrase 4"),
-            Ok(("", Rule::Lencapsphrase { length: 4 }))
-        );
-    }
-
-    #[test]
-    fn prefixes_test() {
-        assert_eq!(
-            display("nocross display h 122"),
-            Ok((
-                "",
-                Rule::Display {
-                    ch: 'h',
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
-                    prefixes: enum_set!(Prefix::Nocross)
-                }
-            ))
-        );
-        assert_eq!(
-            display("noback nocross display h 122"),
-            Ok((
-                "",
-                Rule::Display {
-                    ch: 'h',
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2],
-                    prefixes: Prefix::Noback | Prefix::Nocross
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn largesign_test() {
-        assert_eq!(
-            largesign("largesign überall 123"),
-            Ok((
-                "",
-                Rule::Largesign {
-                    chars: "überall".to_string(),
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
-                }
-            ))
-        );
-        assert_eq!(
-            largesign("largesign அஇ 123"),
-            Ok((
-                "",
-                Rule::Largesign {
-                    chars: "அஇ".to_string(),
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn joinword_test() {
-        assert_eq!(
-            joinword("joinword haha 123"),
-            Ok((
-                "",
-                Rule::Joinword {
-                    word: "haha".to_string(),
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
-                }
-            ))
-        );
-        assert_eq!(
-            joinword("joinword அஇ 123"),
-            Ok((
-                "",
-                Rule::Joinword {
-                    word: "அஇ".to_string(),
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn uppercase_test() {
-        assert_eq!(
-            uppercase("uppercase f 123"),
-            Ok((
-                "",
-                Rule::Uppercase {
-                    ch: 'f',
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
-                    prefixes: Prefixes::empty()
-                }
-            ))
-        );
-        assert_eq!(
-            uppercase("uppercase அ 123"),
-            Ok((
-                "",
-                Rule::Uppercase {
-                    ch: 'அ',
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
-                    prefixes: Prefixes::empty()
-                }
-            ))
-        );
-        assert_eq!(
-            uppercase("uppercase \\x04D8 34579"),
-            Ok((
-                "",
-                Rule::Uppercase {
-                    ch: 'Ә',
-                    dots: vec![
-                        BrailleDot::DOT3
-                            | BrailleDot::DOT4
-                            | BrailleDot::DOT5
-                            | BrailleDot::DOT7
-                            | BrailleDot::DOT9
-                    ],
-                    prefixes: Prefixes::empty()
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn lowercase_test() {
-        assert_eq!(
-            lowercase("lowercase f 123"),
-            Ok((
-                "",
-                Rule::Lowercase {
-                    ch: 'f',
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
-                    prefixes: Prefixes::empty()
-                }
-            ))
-        );
-        assert_eq!(
-            lowercase("lowercase அ 123"),
-            Ok((
-                "",
-                Rule::Lowercase {
-                    ch: 'அ',
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
-                    prefixes: Prefixes::empty()
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn multind_test() {
-        assert_eq!(
-            multind("multind 123 lowercase uppercase"),
-            Ok((
-                "",
-                Rule::Multind {
-                    dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
-                    opcodes: vec!["lowercase".to_string(), "uppercase".to_string()],
-                    prefixes: Prefixes::empty()
-                }
-            ))
-        );
-        // FIXME: test multind with an end comment
-        // FIXME: test multind with invalid opcodes
-    }
-
-    #[test]
-    fn always_test() {
-        assert_eq!(
-            always("always world 123"),
-            Ok((
-                "",
-                Rule::Always {
-                    chars: "world".to_string(),
-                    dots: BrailleCharsOrImplicit::Explicit(vec![
-                        BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3
-                    ]),
-                    prefixes: Prefixes::empty(),
-                    classes: vec![]
-                }
-            ))
-        );
-        assert_eq!(
-            always("before number always world 123"),
-            Ok((
-                "",
-                Rule::Always {
-                    chars: "world".to_string(),
-                    dots: BrailleCharsOrImplicit::Explicit(vec![
-                        BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3
-                    ]),
-                    prefixes: Prefixes::empty(),
-                    classes: vec![WithClass::Before {
-                        class: "number".to_string()
-                    }]
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn match_test() {
-        assert_eq!(
-            match_opcode("match ab xyz cd 1346-13456"),
-            Ok((
-                "",
-                Rule::Match {
-                    pre: "ab".to_string(),
-                    chars: "xyz".to_string(),
-                    post: "cd".to_string(),
-                    positions: WithMatches::empty(),
-                    classes: vec![],
-                    dots: BrailleCharsOrImplicit::Explicit(vec![
-                        BrailleDot::DOT1 | BrailleDot::DOT3 | BrailleDot::DOT4 | BrailleDot::DOT6,
-                        BrailleDot::DOT1
-                            | BrailleDot::DOT3
-                            | BrailleDot::DOT4
-                            | BrailleDot::DOT5
-                            | BrailleDot::DOT6
-                    ]),
-                    prefixes: Prefixes::empty()
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn rule_line_test() {
-        assert_eq!(
-            rule_line("joinword haha 123\n"),
-            Ok((
-                "",
-                Line::Rule {
-                    rule: Rule::Joinword {
-                        word: "haha".to_string(),
-                        dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
-                    },
-                    comment: "".to_string()
-                }
-            ))
-        );
-        assert_eq!(
-            rule_line("largesign அஇ 123\n"),
-            Ok((
-                "",
-                Line::Rule {
-                    rule: Rule::Largesign {
-                        chars: "அஇ".to_string(),
-                        dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
-                    },
-                    comment: "".to_string()
-                }
-            ))
-        );
-        assert_eq!(
-            rule_line("syllable haha 123\n"),
-            Ok((
-                "",
-                Line::Rule {
-                    rule: Rule::Syllable {
-                        word: "haha".to_string(),
-                        dots: BrailleCharsOrImplicit::Explicit(vec![
-                            BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3
-                        ])
-                    },
-                    comment: "".to_string()
-                }
-            ))
-        );
-        assert_eq!(
-            rule_line("base uppercase A a\n"),
-            Ok((
-                "",
-                Line::Rule {
-                    rule: Rule::Base {
-                        attribute: "uppercase".to_string(),
-                        derived: 'A',
-                        base: 'a'
-                    },
-                    comment: "".to_string()
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn empty_line_test() {
-        assert_eq!(empty_line("       \n"), Ok(("", Line::Empty)));
-        assert_eq!(empty_line("\n"), Ok(("", Line::Empty)));
-    }
-
-    #[test]
-    fn comment_line_test() {
-        assert_eq!(
-            comment_line("# haha 1234    \n"),
-            Ok((
-                "",
-                Line::Comment {
-                    comment: " haha 1234    ".to_string()
-                }
-            ))
-        );
-        assert_eq!(
-            comment_line("# haha 1234    "),
-            Err(Err::Error(LouisParseError::Unparseable))
-        );
-    }
-
-    #[test]
-    fn end_comment_test() {
-        // assert_eq!(
-        //     end_comment("an end comment\n"),
-        //     Err(Err::Error(Error::new("an end comment\n", ErrorKind::Space))));
-        // assert_eq!(end_comment(" an end comment\n"), Ok(("\n", "an end comment")));
-        assert_eq!(
-            rule_line("joinword haha 123 # comment \n"),
-            Ok((
-                "",
-                Line::Rule {
-                    rule: Rule::Joinword {
-                        word: "haha".to_string(),
-                        dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
-                    },
-                    comment: " comment ".to_string()
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn table_test() {
-        assert_eq!(
-            table(concat!(
-                "       \n",
-                "joinword haha 123\n",
-                "syllable haha 123-1f\n"
-            )),
-            Ok(vec![
-                Line::Empty,
-                Line::Rule {
-                    rule: Rule::Joinword {
-                        word: "haha".to_string(),
-                        dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
-                    },
-                    comment: "".to_string()
-                },
-                Line::Rule {
-                    rule: Rule::Syllable {
-                        word: "haha".to_string(),
-                        dots: BrailleCharsOrImplicit::Explicit(vec![
-                            BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3,
-                            BrailleDot::DOT1 | BrailleDot::DOTF
-                        ])
-                    },
-                    comment: "".to_string()
-                }
-            ])
-        );
-        assert_eq!(
-            table(concat!(
-                "       \n",
-                "# just testing\n",
-                "nocross multind 123 always syllable\n",
-                "joinword haha 123\n",
-                "syllable haha =\n"
-            )),
-            Ok(vec![
-                Line::Empty,
-                Line::Comment {
-                    comment: " just testing".to_string()
-                },
-                Line::Rule {
-                    rule: Rule::Multind {
-                        opcodes: vec!["always".to_string(), "syllable".to_string()],
-                        dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3],
-                        prefixes: enum_set!(Prefix::Nocross)
-                    },
-                    comment: "".to_string()
-                },
-                Line::Rule {
-                    rule: Rule::Joinword {
-                        word: "haha".to_string(),
-                        dots: vec![BrailleDot::DOT1 | BrailleDot::DOT2 | BrailleDot::DOT3]
-                    },
-                    comment: "".to_string()
-                },
-                Line::Rule {
-                    rule: Rule::Syllable {
-                        word: "haha".to_string(),
-                        dots: BrailleCharsOrImplicit::Implicit
-                    },
-                    comment: "".to_string()
-                }
-            ])
+            Err(ParseError::OpcodeExpected {
+                found: Some("Include".into())
+            }),
+            RuleParser::new(&"Include foo.ctb").rule()
         );
     }
 }
