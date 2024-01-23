@@ -15,6 +15,7 @@ use parser::TableError;
 use crate::parser::Direction;
 use crate::translator::TranslationTable;
 
+mod metadata;
 mod test;
 mod translator;
 mod yaml;
@@ -48,6 +49,9 @@ enum Commands {
         /// YAML document(s) that specify the tests
         #[arg(required = true)]
         yaml_files: Vec<PathBuf>,
+    },
+    Query {
+        query: String,
     },
 }
 
@@ -222,5 +226,20 @@ fn main() {
             }
         },
         Commands::Check { yaml_files, brief } => check_yaml(yaml_files, brief),
+        Commands::Query { query } => match metadata::index() {
+            Ok(index) => {
+                let query = query
+                    .split(',')
+                    .map(|s| {
+                        let parts: Vec<_> = s.split('=').collect();
+                        (parts[0].to_string(), parts[1].to_string())
+                    })
+                    .collect();
+                println!("{:?}", metadata::find(&index, query));
+            }
+            Err(e) => {
+                eprint!("Could not index all tables: {:?}", e)
+            }
+        },
     }
 }

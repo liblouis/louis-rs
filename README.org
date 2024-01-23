@@ -75,6 +75,13 @@ Run all YAML tests:
   12443 unexpected successes [2%]
 #+END_SRC
 
+Test the table query functionality:
+
+#+BEGIN_SRC shell
+  $ LOUIS_TABLE_PATH=~/src/liblouis/tables cargo run -- query language=de,contraction=full
+  {"[...]/liblouis/tables/de-g2-detailed.ctb", "[...]/liblouis/tables/de-g2.ctb"}
+#+END_SRC
+
 * Prerequisites
 
 - You need the [[https://www.rust-lang.org/][Rust tool chain]].
