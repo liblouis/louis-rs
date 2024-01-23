@@ -50,7 +50,10 @@ enum Commands {
         #[arg(required = true)]
         yaml_files: Vec<PathBuf>,
     },
+    /// Find braille tables based on a metadata query. The tables are
+    /// searched in the the search path `LOUIS_TABLE_PATH`
     Query {
+        /// Metadata search query <key=value,...>
         query: String,
     },
 }
