@@ -6,7 +6,7 @@ use libyaml::{Encoding, Event, Parser, ParserIter};
 use crate::parser::Direction;
 use crate::test::{
     CursorPosition, Directions, Display, ExpectedFailure, Table, TableQuery, Test, TestError,
-    TestMode, TestResult, TestSuite, TranslationMode, Typeform,
+    TestMode, TestResult, TestMatrix, TranslationMode, Typeform,
 };
 
 type YAMLEventError = Option<Result<Event, libyaml::ParserError>>;
@@ -446,7 +446,7 @@ impl<'a> YAMLParser<'a> {
                 "tests" => {
                     let tests = self.tests()?;
                     let suite =
-                        TestSuite::new(&current_display_table, &current_tables, &test_mode, &tests);
+                        TestMatrix::new(&current_display_table, &current_tables, &test_mode, &tests);
                     results.extend(suite.check()?);
                     current_tables.clear();
                 }

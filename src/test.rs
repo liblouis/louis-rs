@@ -64,17 +64,37 @@ impl TestResult {
     }
 }
 
-struct TestMatrix<'a> {
+pub struct TestMatrix<'a> {
     display: &'a Option<Display>,
     tables: &'a Vec<Table>,
-    directions: &'a Vec<Direction>,
+    directions: Vec<Direction>,
     tests: &'a Vec<Test>,
 }
 
 impl<'a> TestMatrix<'a> {
-    fn check(&self) -> Result<Vec<TestResult>, TestError> {
+    pub fn new(
+        display: &'a Option<Display>,
+        tables: &'a Vec<Table>,
+        mode: &'a TestMode,
+        tests: &'a Vec<Test>,
+    ) -> Self {
+        let directions = match mode {
+            TestMode::Forward => vec![Direction::Forward],
+            TestMode::Backward => vec![Direction::Backward],
+            TestMode::BothDirections => vec![Direction::Forward, Direction::Backward],
+            _ => vec![],
+        };
+        TestMatrix {
+            display,
+            tables,
+	    directions,
+            tests,
+        }
+    }
+
+    pub fn check(&self) -> Result<Vec<TestResult>, TestError> {
         let mut results = Vec::new();
-        for direction in self.directions {
+        for direction in &self.directions {
             let display_rules = match self.display {
                 Some(Display::Simple(path)) => parser::table_expanded(path.as_path())?,
                 Some(Display::Inline(text)) => {
@@ -114,46 +134,6 @@ impl<'a> TestMatrix<'a> {
             }
         }
         Ok(results)
-    }
-}
-
-#[derive(Debug)]
-pub struct TestSuite<'a> {
-    display: &'a Option<Display>,
-    tables: &'a Vec<Table>,
-    mode: &'a TestMode,
-    tests: &'a Vec<Test>,
-}
-
-impl<'a> TestSuite<'a> {
-    pub fn check(&self) -> Result<Vec<TestResult>, TestError> {
-        let directions = match self.mode {
-            TestMode::Forward => vec![Direction::Forward],
-            TestMode::Backward => vec![Direction::Backward],
-            TestMode::BothDirections => vec![Direction::Forward, Direction::Backward],
-            _ => vec![],
-        };
-        let matrix = TestMatrix {
-            display: self.display,
-            tables: self.tables,
-            directions: &directions,
-            tests: self.tests,
-        };
-        matrix.check()
-    }
-
-    pub fn new(
-        display: &'a Option<Display>,
-        tables: &'a Vec<Table>,
-        mode: &'a TestMode,
-        tests: &'a Vec<Test>,
-    ) -> Self {
-        TestSuite {
-            display,
-            tables,
-            mode,
-            tests,
-        }
     }
 }
 
