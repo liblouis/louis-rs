@@ -29,20 +29,6 @@ pub enum BrailleDot {
 pub type BrailleChar = HashSet<BrailleDot>;
 pub type BrailleChars = Vec<BrailleChar>;
 
-// fn has_virtual_dots(char: &BrailleChar) -> bool {
-//     let virtual_dots = HashSet::from([
-// 	BrailleDot::DOT9,
-// 	BrailleDot::DOTA,
-// 	BrailleDot::DOTB,
-// 	BrailleDot::DOTC,
-// 	BrailleDot::DOTD,
-// 	BrailleDot::DOTE,
-// 	BrailleDot::DOTF]);
-//     !virtual_dots.intersection(char)
-// 	.collect::<HashSet<_>>()
-// 	.is_empty()
-// }
-
 pub fn is_braille_dot(c: char) -> bool {
     matches!(c, '0'..='9' | 'a'..='f')
 }
