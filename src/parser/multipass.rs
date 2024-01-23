@@ -400,9 +400,7 @@ mod tests {
             TestParser::new("@123").dots(),
             Ok(TestInstruction::Dots {
                 dots: vec![enum_set!(
-                    BrailleDot::Dot1 |
-                    BrailleDot::Dot2 |
-                    BrailleDot::Dot3
+                    BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot3
                 )]
             })
         );
@@ -421,10 +419,7 @@ mod tests {
         assert_eq!(
             TestParser::new("@1-2").dots(),
             Ok(TestInstruction::Dots {
-                dots: vec![
-                    enum_set!(BrailleDot::Dot1),
-                    enum_set!(BrailleDot::Dot2)
-                ]
+                dots: vec![enum_set!(BrailleDot::Dot1), enum_set!(BrailleDot::Dot2)]
             })
         );
     }

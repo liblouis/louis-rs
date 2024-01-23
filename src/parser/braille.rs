@@ -100,9 +100,7 @@ fn has_virtual_dots(char: &BrailleChar) -> bool {
         BrailleDot::DotE |
         BrailleDot::DotF |
     );
-    !virtual_dots
-        .intersection(*char)
-        .is_empty()
+    !virtual_dots.intersection(*char).is_empty()
 }
 
 // FIXME: the following two functions should be defined as associated
@@ -137,9 +135,7 @@ mod tests {
         assert_eq!(
             chars_to_dots("123"),
             Ok(enum_set!(
-                BrailleDot::Dot1 |
-                BrailleDot::Dot2 |
-                BrailleDot::Dot3
+                BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot3
             ))
         );
         assert_eq!(
