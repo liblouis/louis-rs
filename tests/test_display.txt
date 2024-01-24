@@ -1,2 +1,0 @@
-display \x0020 0
-display a 1
