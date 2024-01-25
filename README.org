@@ -120,6 +120,8 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
 - [ ] Hyphenation
   - will probably be delegated to the [[https://docs.rs/hyphenation/latest/hyphenation/][hyphenation crate]]
 - [ ] Add an API so that the functionality can be used as a library
+  - end expose it as a C ABI so that it can be used from other
+    languages (see also [[https://github.com/mozilla/cbindgen][cbindgen]])
 - [ ] Table resolution based on metadata
 - [ ] Display tables
   - When testing the YAML files the display tables are used.
