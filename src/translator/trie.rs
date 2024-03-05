@@ -2,6 +2,14 @@ use std::collections::HashMap;
 
 use super::Translation;
 
+enum Transition {
+    Character(char),
+    WordStart,
+    WordEnd,
+    NumberStart,
+    NumberEnd
+}
+
 #[derive(Default, Debug)]
 struct TrieNode {
     translation: Option<Translation>,
