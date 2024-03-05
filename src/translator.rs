@@ -5,6 +5,7 @@ use trie::Trie;
 use crate::parser::{dots_to_unicode, Braille, Direction, Rule};
 
 mod trie;
+mod boundaries;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Translation {
