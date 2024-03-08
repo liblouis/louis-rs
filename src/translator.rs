@@ -4,8 +4,8 @@ use trie::Trie;
 
 use crate::parser::{dots_to_unicode, Braille, Direction, Rule};
 
-mod trie;
 mod boundaries;
+mod trie;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Translation {
@@ -104,12 +104,42 @@ impl TranslationTable {
                     dots: Braille::Explicit(dots),
                     ..
                 }
+                | Rule::Sufword {
+                    chars,
+                    dots: Braille::Explicit(dots),
+                    ..
+                }
+                | Rule::Prfword {
+                    chars,
+                    dots: Braille::Explicit(dots),
+                    ..
+                }
                 | Rule::Begword {
                     chars,
                     dots: Braille::Explicit(dots),
                     ..
                 }
+                | Rule::Begmidword {
+                    chars,
+                    dots: Braille::Explicit(dots),
+                    ..
+                }
+                | Rule::Midword {
+                    chars,
+                    dots: Braille::Explicit(dots),
+                    ..
+                }
+                | Rule::Midendword {
+                    chars,
+                    dots: Braille::Explicit(dots),
+                    ..
+                }
                 | Rule::Endword {
+                    chars,
+                    dots: Braille::Explicit(dots),
+                    ..
+                }
+                | Rule::Partword {
                     chars,
                     dots: Braille::Explicit(dots),
                     ..

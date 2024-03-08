@@ -68,11 +68,11 @@ Run all YAML tests:
 #+BEGIN_SRC shell
   $ LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis cargo run -- check --brief ~/src/liblouis/tests/braille-specs/*.yaml ~/src/liblouis/tests/yaml/*.yaml 2> /dev/null
   ================================================================================
-  648317 tests run:
-  333007 successes [51%]
-  277307 failures [43%]
-  25560 expected failures [4%]
-  12443 unexpected successes [2%]
+  654045 tests run:
+  410433 successes [63%]
+  231425 failures [35%]
+  11824 expected failures [2%]
+  363 unexpected successes [0%]
 #+END_SRC
 
 Test the table query functionality:
