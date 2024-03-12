@@ -1,0 +1,348 @@
+#+options: todo:t
+#+title: Architecture Decision Records
+#+date: <2024-03-08 Fr>
+#+author: Christian Egli
+#+email: christian.egli@sbs.ch
+#+language: en
+
+#+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
+
+* DRAFT Handle word boundaries
+- Deciders :: CE
+- Date :: [2024-03-08 Fr]
+
+We need a way to handle word boundaries, as some rules only apply at
+specific boundaries. Currently the trie does not account for any
+boundaries.
+
+** Context and Problem Statement
+
+When given an input we have to look for a matching translation rule.
+This is in some ways similar the process inside a regex engine.
+However in our case mostly have consuming transitions between the
+nodes. Only at the beginning and at the end of a match we can have
+non-consuming word-boundary matches. This simplifies the process quite
+a bit as in most cases we do not have to search through multiple
+branches.
+
+*** Summary of word-boundary opcodes
+:PROPERTIES:
+:COLUMNS: %14ITEM(Opcode) %WORDSTART(WordStart) %WORDEND(WordEnd) %PUNCSTART(PuncStart) %PUNCEND(PuncEnd) %NUMSTART(NumStart) %NUMEND(NumEnd) %CONSTRAINT(Constraint)
+:WORDSTART_ALL: YES NO -
+:WORDEND_ALL: YES NO -
+:PUNCSTART_ALL: YES NO -
+:PUNCEND_ALL: YES NO -
+:NUMSTART_ALL: YES NO -
+:NUMEND_ALL: YES NO -
+:END:
+
+#+BEGIN: columnview :hlines 1 :id local :skip-empty-rows t :match "/-TODO"
+| Opcode          | WordStart | WordEnd | PuncStart | PuncEnd | NumStart | NumEnd | Constraint                                             |
+|-----------------+-----------+---------+-----------+---------+----------+--------+--------------------------------------------------------|
+| Word            | YES       | YES     |           |         |          |        | Surrounded by whitespace and/or punctuation            |
+| Joinword        | YES       | YES     |           |         |          |        | Followed by whitespace and a letter                    |
+| Lowword         | YES       | YES     | NO        | NO      |          |        | Surrounded by whitespace                               |
+| Compbrl         | YES       | YES     |           |         |          |        | Surrounded by whitespace                               |
+| Nocont          | YES       | YES     |           |         |          |        | Surrounded by whitespace                               |
+| Begword         | YES       | NO      |           |         |          |        |                                                        |
+| Sufword         | YES       | -       |           |         |          |        |                                                        |
+| Midword         | NO        | NO      |           |         |          |        |                                                        |
+| Partword        | NO        | NO      |           |         |          |        | Proceeded or followed by a letter                      |
+| Midendword      | NO        | -       |           |         |          |        |                                                        |
+| Prfword         | -         | YES     |           |         |          |        |                                                        |
+| Endword         | -         | YES     |           |         |          |        |                                                        |
+| Begmidword      | -         | NO      |           |         |          |        |                                                        |
+| Replace         | -         | -       |           |         |          |        |                                                        |
+| Always          | -         | -       |           |         |          |        |                                                        |
+| Repeated        | -         | -       |           |         |          |        |                                                        |
+| Largesign       | -         | -       |           |         |          |        |                                                        |
+| Syllable        | -         | -       |           |         |          |        |                                                        |
+| Contraction     | -         | -       |           |         |          |        |                                                        |
+| Prepunc         | (YES)     | (YES)   | YES       |         |          |        | Part of punctuation at the beginning of a word         |
+| Postpunc        | (YES)     | (YES)   |           | YES     |          |        | Part of punctuation at the end of a word               |
+| Begnum          |           |         |           |         | YES      | -      | At the beginning of a number                           |
+| Midnum          |           |         |           |         | NO       | NO     | In the middle of a number                              |
+| Endnum          |           |         |           |         | -        | YES    | At the end of a number                                 |
+| Joinnum         | -         | -       |           |         | -        | -      | If whitespace and a number follows omit the whitespace |
+| TODO Rependword |           | YES     |           |         |          |        |                                                        |
+#+END:
+
+**** Word
+:PROPERTIES:
+:WORDSTART: YES
+:WORDEND:  YES
+:CONSTRAINT: Surrounded by whitespace and/or punctuation
+:END:
+**** Joinword
+:PROPERTIES:
+:WORDSTART: YES
+:WORDEND:  YES
+:CONSTRAINT: Followed by whitespace and a letter
+:END:
+**** Lowword
+:PROPERTIES:
+:WORDSTART: YES
+:WORDEND:  YES
+:CONSTRAINT: Surrounded by whitespace
+:PUNCSTART: NO
+:PUNCEND:  NO
+:END:
+**** Compbrl
+:PROPERTIES:
+:WORDSTART: YES
+:WORDEND:  YES
+:CONSTRAINT: Surrounded by whitespace
+:END:
+**** Nocont
+:PROPERTIES:
+:WORDSTART: YES
+:WORDEND:  YES
+:CONSTRAINT: Surrounded by whitespace
+:END:
+**** Begword
+:PROPERTIES:
+:WORDSTART: YES
+:WORDEND:  NO
+:END:
+**** Sufword
+:PROPERTIES:
+:WORDSTART: YES
+:WORDEND:  -
+:END:
+**** Midword
+:PROPERTIES:
+:WORDSTART: NO
+:WORDEND:  NO
+:END:
+**** Partword
+:PROPERTIES:
+:WORDSTART: NO
+:WORDEND:  NO
+:CONSTRAINT: Proceeded or followed by a letter
+:END:
+**** Midendword
+:PROPERTIES:
+:WORDSTART: NO
+:WORDEND:  -
+:END:
+**** Prfword
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  YES
+:END:
+**** Endword
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  YES
+:END:
+**** Begmidword
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  NO
+:END:
+**** Replace
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  -
+:END:
+**** Always
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  -
+:END:
+**** Repeated
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  -
+:END:
+**** Largesign
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  -
+:END:
+**** Syllable
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  -
+:END:
+**** Contraction
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  -
+:END:
+**** Prepunc
+:PROPERTIES:
+:WORDSTART: (YES)
+:WORDEND:  (YES)
+:PUNCSTART: YES
+:CONSTRAINT: Part of punctuation at the beginning of a word
+:END:
+**** Postpunc
+:PROPERTIES:
+:WORDSTART: (YES)
+:WORDEND:  (YES)
+:PUNCEND:  YES
+:CONSTRAINT: Part of punctuation at the end of a word
+:END:
+**** Begnum
+:PROPERTIES:
+:NUMSTART: YES
+:NUMEND:   -
+:CONSTRAINT: At the beginning of a number
+:END:
+**** Midnum
+:PROPERTIES:
+:NUMSTART: NO
+:NUMEND:   NO
+:CONSTRAINT: In the middle of a number
+:END:
+**** Endnum
+:PROPERTIES:
+:NUMSTART: -
+:NUMEND:   YES
+:CONSTRAINT: At the end of a number
+:END:
+**** Joinnum
+:PROPERTIES:
+:NUMSTART: -
+:NUMEND:   -
+:WORDSTART: -
+:WORDEND:  -
+:CONSTRAINT: If whitespace and a number follows omit the whitespace
+:END:
+**** TODO Repword
+**** TODO Rependword
+:PROPERTIES:
+:WORDEND:  YES
+:END:
+**** TODO Exactdots
+seems like a corner case for utdml
+**** TODO Context
+**** TODO Pass2
+**** TODO Pass3
+**** TODO Pass4
+**** TODO Correct
+**** TODO Match
+**** TODO Literal
+
+** Decision Drivers
+
+- start with the simplest solution
+- move as much processing from the translation to the compilation
+  stage
+
+** Considered Options
+
+- Handle different contexts with separate tries :: Leave the trie code
+  as is and handle the context using multiple tries with wrapper code
+- Enhance trie with transitions :: Add transitions to the trie that
+  map to non-consuming word boundaries
+- Filter the candidates found in the trie :: Leave the trie as is and
+  just filter the returned candidates.
+
+** Decision Outcome
+
+Chosen option: "TBD", because ...
+
+** Positive Consequences
+
+- 
+
+** Negative Consequences
+
+- 
+
+** Pros and Cons of the Options
+
+***  Handle different contexts with separate tries
+
+***  Enhance trie with transitions
+
+- Good :: unifies the search for candidates
+- Bad :: makes the trie more complicated
+
+***  Filter the candidates found in the trie
+
+- Good :: No change needed in the trie
+- Bad :: Processing during translation
+
+** Links
+
+* COMMENT [short title of solved problem and solution]                     :Template:
+# - Status :: [proposed | rejected | accepted | deprecated | ... |
+#   superseded by [[file:0005-example.md][ADR-0005]]]
+- Deciders :: [list everyone involved in the decision]
+- Date :: [YYYY-MM-DD when the decision was last updated]
+
+Technical Story: [description | ticket/issue URL]
+
+** Context and Problem Statement
+
+[Describe the context and problem statement, e.g., in free form using
+two to three sentences. You may want to articulate the problem in form
+of a question.]
+
+** Decision Drivers
+
+- [driver 1, e.g., a force, facing concern, ...]
+- [driver 2, e.g., a force, facing concern, ...]
+- ...
+
+** Considered Options
+
+- [option 1]
+- [option 2]
+- [option 3]
+- ...
+
+** Decision Outcome
+
+Chosen option: "[option 1]", because [justification. e.g., only option,
+which meets k.o. criterion decision driver | which resolves force force
+| ... | comes out best (see below)].
+
+*** Positive Consequences
+
+- [e.g., improvement of quality attribute satisfaction, follow-up
+  decisions required, ...]
+- ...
+
+*** Negative Consequences
+
+- [e.g., compromising quality attribute, follow-up decisions required,
+  ...]
+- ...
+
+** Pros and Cons of the Options
+
+*** [option 1]
+
+[example | description | pointer to more information | ...]
+
+- Good, because [argument a]
+- Good, because [argument b]
+- Bad, because [argument c]
+- ...
+
+*** [option 2]
+
+[example | description | pointer to more information | ...]
+
+- Good, because [argument a]
+- Good, because [argument b]
+- Bad, because [argument c]
+- ...
+
+*** [option 3]
+
+[example | description | pointer to more information | ...]
+
+- Good, because [argument a]
+- Good, because [argument b]
+- Bad, because [argument c]
+- ...
+
+** Links
+
+- [Link type] [Link to ADR]
+- ...
