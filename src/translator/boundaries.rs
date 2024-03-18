@@ -1,32 +1,32 @@
 fn word_start(prev: Option<char>, current: Option<char>) -> bool {
     match (prev, current) {
-	(None, Some(c)) if c.is_alphabetic() => true,
-	(Some(p), Some(c)) if c.is_alphabetic() => !p.is_alphabetic(),
-	(_, _) => false
+        (None, Some(c)) if c.is_alphabetic() => true,
+        (Some(p), Some(c)) if c.is_alphabetic() => !p.is_alphabetic(),
+        (_, _) => false,
     }
 }
 
 fn word_end(prev: Option<char>, current: Option<char>) -> bool {
     match (prev, current) {
-	(Some(c), None) => c.is_alphabetic(),
-	(Some(p), Some(c)) if p.is_alphabetic() => !c.is_alphabetic(),
-	(_, _) => false
+        (Some(c), None) => c.is_alphabetic(),
+        (Some(p), Some(c)) if p.is_alphabetic() => !c.is_alphabetic(),
+        (_, _) => false,
     }
 }
 
 fn number_start(prev: Option<char>, current: Option<char>) -> bool {
     match (prev, current) {
-	(None, Some(c)) => c.is_numeric(),
-	(Some(p), Some(c)) if c.is_numeric() => !p.is_numeric(),
-	(_, _) => false
+        (None, Some(c)) => c.is_numeric(),
+        (Some(p), Some(c)) if c.is_numeric() => !p.is_numeric(),
+        (_, _) => false,
     }
 }
 
 fn number_end(prev: Option<char>, current: Option<char>) -> bool {
     match (prev, current) {
-	(Some(c), None) => c.is_numeric(),
-	(Some(c1), Some(c2)) => c1.is_numeric() && !c2.is_numeric(),
-	(_, _) => false
+        (Some(c), None) => c.is_numeric(),
+        (Some(c1), Some(c2)) => c1.is_numeric() && !c2.is_numeric(),
+        (_, _) => false,
     }
 }
 
@@ -82,5 +82,4 @@ mod tests {
         assert_eq!(false, number_end(Some(';'), Some('.')));
         assert_eq!(false, number_end(Some(' '), Some('c')));
     }
-
 }
