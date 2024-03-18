@@ -1,19 +1,31 @@
+use enumset::{EnumSet, EnumSetType};
 use std::collections::HashMap;
 
 use super::Translation;
 
+#[derive(Debug, PartialEq, Eq, Hash)]
 enum Transition {
     Character(char),
     WordStart,
     WordEnd,
     NumberStart,
-    NumberEnd
+    NumberEnd,
 }
+
+#[derive(Debug, EnumSetType)]
+enum Boundary {
+    WordStart,
+    WordEnd,
+    NumberStart,
+    NumberEnd,
+}
+
+type Boundaries = EnumSet<Boundary>;
 
 #[derive(Default, Debug)]
 struct TrieNode {
     translation: Option<Translation>,
-    children: HashMap<char, TrieNode>,
+    transitions: HashMap<Transition, TrieNode>,
 }
 
 #[derive(Default, Debug)]
@@ -32,8 +44,43 @@ impl Trie {
         let mut current_node = &mut self.root;
 
         for c in word.chars() {
-            current_node = current_node.children.entry(c).or_default();
+            current_node = current_node
+                .transitions
+                .entry(Transition::Character(c))
+                .or_default();
         }
+        current_node.translation = Some(translation);
+    }
+
+    pub fn insert_with_boundary(
+        &mut self,
+        word: &str,
+        translation: Translation,
+        boundaries: Boundaries,
+    ) {
+        let mut current_node = &mut self.root;
+
+        if boundaries.contains(Boundary::WordStart) {
+            current_node = current_node
+                .transitions
+                .entry(Transition::WordStart)
+                .or_default();
+        }
+
+        for c in word.chars() {
+            current_node = current_node
+                .transitions
+                .entry(Transition::Character(c))
+                .or_default();
+        }
+
+        if boundaries.contains(Boundary::WordEnd) {
+            current_node = current_node
+                .transitions
+                .entry(Transition::WordEnd)
+                .or_default();
+        }
+
         current_node.translation = Some(translation);
     }
 
@@ -42,7 +89,7 @@ impl Trie {
         let mut matching_rules = Vec::new();
 
         for c in word.chars() {
-            match current_node.children.get(&c) {
+            match current_node.transitions.get(&Transition::Character(c)) {
                 Some(node) => {
                     current_node = node;
                     if let Some(ref translation) = node.translation {
