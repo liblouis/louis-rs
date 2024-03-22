@@ -1,4 +1,3 @@
-use enumset::{EnumSet, EnumSetType};
 use std::collections::HashMap;
 
 use super::Translation;
@@ -12,15 +11,11 @@ enum Transition {
     NumberEnd,
 }
 
-#[derive(Debug, EnumSetType)]
+#[derive(Debug)]
 enum Boundary {
-    WordStart,
-    WordEnd,
-    NumberStart,
-    NumberEnd,
+    Word,
+    Number,
 }
-
-type Boundaries = EnumSet<Boundary>;
 
 #[derive(Default, Debug)]
 struct TrieNode {
@@ -56,15 +51,19 @@ impl Trie {
         &mut self,
         word: &str,
         translation: Translation,
-        boundaries: Boundaries,
+        start_boundary: Option<Boundary>,
+        end_boundary: Option<Boundary>,
     ) {
         let mut current_node = &mut self.root;
 
-        if boundaries.contains(Boundary::WordStart) {
-            current_node = current_node
-                .transitions
-                .entry(Transition::WordStart)
-                .or_default();
+        let start_transition = match start_boundary {
+            Some(Boundary::Word) => Some(Transition::WordStart),
+            Some(Boundary::Number) => Some(Transition::NumberStart),
+            None => None,
+        };
+
+        if let Some(transition) = start_transition {
+            current_node = current_node.transitions.entry(transition).or_default();
         }
 
         for c in word.chars() {
@@ -74,11 +73,14 @@ impl Trie {
                 .or_default();
         }
 
-        if boundaries.contains(Boundary::WordEnd) {
-            current_node = current_node
-                .transitions
-                .entry(Transition::WordEnd)
-                .or_default();
+        let end_transition = match end_boundary {
+            Some(Boundary::Word) => Some(Transition::WordEnd),
+            Some(Boundary::Number) => Some(Transition::NumberEnd),
+            None => None,
+        };
+
+        if let Some(transition) = end_transition {
+            current_node = current_node.transitions.entry(transition).or_default();
         }
 
         current_node.translation = Some(translation);
