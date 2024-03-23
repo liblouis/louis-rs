@@ -3,18 +3,16 @@ use std::collections::HashMap;
 use super::Translation;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-enum Transition {
-    Character(char),
-    WordStart,
-    WordEnd,
-    NumberStart,
-    NumberEnd,
-}
-
-#[derive(Debug)]
-enum Boundary {
+pub enum Boundary {
     Word,
     Number,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+enum Transition {
+    Character(char),
+    Start(Boundary),
+    End(Boundary),
 }
 
 #[derive(Default, Debug)]
@@ -51,19 +49,16 @@ impl Trie {
         &mut self,
         word: &str,
         translation: Translation,
-        start_boundary: Option<Boundary>,
-        end_boundary: Option<Boundary>,
+        before: Option<Boundary>,
+        after: Option<Boundary>,
     ) {
         let mut current_node = &mut self.root;
 
-        let start_transition = match start_boundary {
-            Some(Boundary::Word) => Some(Transition::WordStart),
-            Some(Boundary::Number) => Some(Transition::NumberStart),
-            None => None,
-        };
-
-        if let Some(transition) = start_transition {
-            current_node = current_node.transitions.entry(transition).or_default();
+        if let Some(boundary) = before {
+            current_node = current_node
+                .transitions
+                .entry(Transition::Start(boundary))
+                .or_default();
         }
 
         for c in word.chars() {
@@ -73,14 +68,11 @@ impl Trie {
                 .or_default();
         }
 
-        let end_transition = match end_boundary {
-            Some(Boundary::Word) => Some(Transition::WordEnd),
-            Some(Boundary::Number) => Some(Transition::NumberEnd),
-            None => None,
-        };
-
-        if let Some(transition) = end_transition {
-            current_node = current_node.transitions.entry(transition).or_default();
+        if let Some(boundary) = after {
+            current_node = current_node
+                .transitions
+                .entry(Transition::End(boundary))
+                .or_default();
         }
 
         current_node.translation = Some(translation);
