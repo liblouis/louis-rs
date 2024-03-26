@@ -259,14 +259,15 @@ mod tests {
     fn find_translations_with_negative_boundary_after_test() {
         let mut trie = Trie::new();
         let empty = Vec::<&Translation>::new();
-        let a = Translation {
-            from: "a".into(),
-            to: "A".into(),
+        let foo = Translation {
+            from: "foo".into(),
+            to: "FOO".into(),
         };
-        trie.insert("a", a.clone(), Boundary::Word, Boundary::NotWord);
-        assert_eq!(trie.find_translations("a", None), empty);
-        assert_eq!(trie.find_translations("aha", None), vec![&a]);
-        assert_eq!(trie.find_translations("a.", None), empty);
+        trie.insert("foo", foo.clone(), Boundary::Word, Boundary::NotWord);
+        assert_eq!(trie.find_translations("foo", None), empty);
+        assert_eq!(trie.find_translations("foo ", None), empty);
+        assert_eq!(trie.find_translations("foobar", None), vec![&foo]);
+        assert_eq!(trie.find_translations("foo.", None), empty);
     }
 
     #[test]
