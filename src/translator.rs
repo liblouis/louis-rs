@@ -4,6 +4,8 @@ use trie::Trie;
 
 use crate::parser::{dots_to_unicode, Braille, Direction, Rule};
 
+use self::trie::Boundary;
+
 mod boundaries;
 mod trie;
 
@@ -99,22 +101,12 @@ impl TranslationTable {
                     dots: Braille::Explicit(dots),
                     ..
                 }
-                | Rule::Word {
-                    chars,
-                    dots: Braille::Explicit(dots),
-                    ..
-                }
                 | Rule::Sufword {
                     chars,
                     dots: Braille::Explicit(dots),
                     ..
                 }
                 | Rule::Prfword {
-                    chars,
-                    dots: Braille::Explicit(dots),
-                    ..
-                }
-                | Rule::Begword {
                     chars,
                     dots: Braille::Explicit(dots),
                     ..
@@ -134,11 +126,6 @@ impl TranslationTable {
                     dots: Braille::Explicit(dots),
                     ..
                 }
-                | Rule::Endword {
-                    chars,
-                    dots: Braille::Explicit(dots),
-                    ..
-                }
                 | Rule::Partword {
                     chars,
                     dots: Braille::Explicit(dots),
@@ -149,6 +136,45 @@ impl TranslationTable {
                         from: chars.to_string(),
                         to: dots_to_unicode(&dots),
                     },
+                ),
+                Rule::Word {
+                    chars,
+                    dots: Braille::Explicit(dots),
+                    ..
+                } => trie.insert_with_boundary(
+                    &chars,
+                    Translation {
+                        from: chars.to_string(),
+                        to: dots_to_unicode(&dots),
+                    },
+                    Some(Boundary::Word),
+                    Some(Boundary::Word),
+                ),
+                Rule::Begword {
+                    chars,
+                    dots: Braille::Explicit(dots),
+                    ..
+                } => trie.insert_with_boundary(
+                    &chars,
+                    Translation {
+                        from: chars.to_string(),
+                        to: dots_to_unicode(&dots),
+                    },
+                    Some(Boundary::Word),
+                    None,
+                ),
+                Rule::Endword {
+                    chars,
+                    dots: Braille::Explicit(dots),
+                    ..
+                } => trie.insert_with_boundary(
+                    &chars,
+                    Translation {
+                        from: chars.to_string(),
+                        to: dots_to_unicode(&dots),
+                    },
+                    None,
+                    Some(Boundary::Word),
                 ),
                 _ => (),
             }
