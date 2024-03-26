@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::translator::boundaries::{word_start, word_end};
+use crate::translator::boundaries::{word_end, word_start};
 
 use super::Translation;
 
@@ -84,26 +84,30 @@ impl Trie {
         &'a self,
         word: &str,
         node: &'a TrieNode,
-    ) -> Vec<&Translation> {
+        length: u32,
+    ) -> Vec<(u32, &Translation)> {
         let mut current_node = node;
         let mut matching_rules = Vec::new();
         let mut prev: Option<char> = None;
         let mut chars = word.chars();
+        let mut length = length;
 
         while let Some(c) = chars.next() {
             if let Some(node) = current_node.transitions.get(&Transition::Character(c)) {
                 current_node = node;
+                length += 1;
                 if let Some(ref translation) = node.translation {
-                    matching_rules.push(translation)
+                    matching_rules.push((length, translation))
                 }
             } else if let Some(node) = current_node
                 .transitions
                 .get(&Transition::End(Boundary::Word))
             {
                 current_node = node;
+                length += 1;
                 if word_end(prev, Some(c)) {
                     if let Some(ref translation) = node.translation {
-                        matching_rules.push(translation)
+                        matching_rules.push((length, translation))
                     }
                 }
             } else {
@@ -116,47 +120,15 @@ impl Trie {
             .transitions
             .get(&Transition::End(Boundary::Word))
         {
+            length += 1;
             if word_end(prev, chars.next()) {
                 if let Some(ref translation) = node.translation {
-                    matching_rules.push(translation)
+                    matching_rules.push((length, translation))
                 }
             }
         }
         matching_rules
     }
-
-    fn merge_translations<'a>(&self, xs: Vec<&'a Translation>, ys: Vec<&'a Translation>) -> Vec<&'a Translation> {
-	let mut x_it = xs.iter().peekable();
-	let mut y_it = ys.iter().peekable();
-	let mut out = Vec::new();
-
-	loop {
-            match (x_it.peek(), y_it.peek()) {
-		(None, None) => {
-                    return out;
-		},
-		(Some(_), None) => {
-                    while let Some(&x) = x_it.next() {
-			out.push(x);
-                    }
-		},
-		(None, Some(_)) => {
-                    while let Some(&y) = y_it.next() {
-			out.push(y);
-                }
-            },
-		(Some(x), Some(y)) => {
-		    let v = if x.from.len() > y.from.len() {
-			y_it.next().unwrap()
-		    } else {
-			x_it.next().unwrap()
-		    };
-		    out.push(v);
-		},
-            }
-	}
-    }
-
 
     pub fn find_translations(&self, word: &str, before: Option<char>) -> Vec<&Translation> {
         let mut matching_rules = Vec::new();
@@ -167,15 +139,16 @@ impl Trie {
             .get(&Transition::Start(Boundary::Word))
         {
             if word_start(before, word.chars().next()) {
-                matching_rules = self.find_translations_from_node(word, node);
+                matching_rules = self.find_translations_from_node(word, node, 1);
             }
         }
 
-	// there may be some candidates from the boundary rule. Those
-	// have to be merged with the candidates from rules without
-	// boundaries. Both lists are ordered by length of match.
-	// Merge them accordingly
-	self.merge_translations(matching_rules, self.find_translations_from_node(word, &self.root))
+        matching_rules.extend(self.find_translations_from_node(word, &self.root, 0));
+        matching_rules.sort_by_key(|(length, _translation)| *length);
+        matching_rules
+            .iter()
+            .map(|(_, translation)| *translation)
+            .collect()
     }
 }
 
