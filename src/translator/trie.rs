@@ -112,6 +112,17 @@ impl Trie {
                         matching_rules.push((length, translation))
                     }
                 }
+            } else if let Some(node) = current_node
+                .transitions
+                .get(&Transition::End(Boundary::NotWord))
+            {
+                current_node = node;
+                length += 1;
+                if !word_end(prev, Some(c)) {
+                    if let Some(ref translation) = node.translation {
+                        matching_rules.push((length, translation))
+                    }
+                }
             } else {
                 prev = Some(c);
                 break;
@@ -128,6 +139,16 @@ impl Trie {
                     matching_rules.push((length, translation))
                 }
             }
+        } else if let Some(node) = current_node
+            .transitions
+            .get(&Transition::End(Boundary::NotWord))
+        {
+            length += 1;
+            if !word_end(prev, chars.next()) {
+                if let Some(ref translation) = node.translation {
+                    matching_rules.push((length, translation))
+                }
+            }
         }
         matching_rules
     }
@@ -140,6 +161,14 @@ impl Trie {
                 .root
                 .transitions
                 .get(&Transition::Start(Boundary::Word))
+            {
+                matching_rules = self.find_translations_from_node(word, node, 1);
+            }
+        } else {
+            if let Some(node) = self
+                .root
+                .transitions
+                .get(&Transition::Start(Boundary::NotWord))
             {
                 matching_rules = self.find_translations_from_node(word, node, 1);
             }
@@ -224,5 +253,50 @@ mod tests {
         trie.insert("a", a.clone(), Boundary::Word, Boundary::Word);
         assert_eq!(trie.find_translations("a", None), vec![&a]);
         assert_eq!(trie.find_translations("aha", None), empty);
+    }
+
+    #[test]
+    fn find_translations_with_negative_boundary_after_test() {
+        let mut trie = Trie::new();
+        let empty = Vec::<&Translation>::new();
+        let a = Translation {
+            from: "a".into(),
+            to: "A".into(),
+        };
+        trie.insert("a", a.clone(), Boundary::Word, Boundary::NotWord);
+        assert_eq!(trie.find_translations("a", None), empty);
+        assert_eq!(trie.find_translations("aha", None), vec![&a]);
+        assert_eq!(trie.find_translations("a.", None), empty);
+    }
+
+    #[test]
+    fn find_translations_with_negative_boundary_before_test() {
+        let mut trie = Trie::new();
+        let empty = Vec::<&Translation>::new();
+        let foo = Translation {
+            from: "foo".into(),
+            to: "FOO".into(),
+        };
+        trie.insert("foo", foo.clone(), Boundary::NotWord, Boundary::None);
+        assert_eq!(trie.find_translations("foo", None), empty);
+        assert_eq!(trie.find_translations("foo", Some(' ')), empty);
+        assert_eq!(trie.find_translations("foo", Some('.')), empty);
+        assert_eq!(trie.find_translations("foo", Some('c')), vec![&foo]);
+    }
+
+    #[test]
+    fn find_translations_with_negative_boundaries_test() {
+        let mut trie = Trie::new();
+        let empty = Vec::<&Translation>::new();
+        let foo = Translation {
+            from: "foo".into(),
+            to: "FOO".into(),
+        };
+        trie.insert("foo", foo.clone(), Boundary::NotWord, Boundary::NotWord);
+        assert_eq!(trie.find_translations("foo", None), empty);
+        assert_eq!(trie.find_translations("foo", Some(' ')), empty);
+        assert_eq!(trie.find_translations("foo", Some('.')), empty);
+        assert_eq!(trie.find_translations("foo", Some('c')), empty);
+        assert_eq!(trie.find_translations("foobar", Some('c')), vec![&foo]);
     }
 }
