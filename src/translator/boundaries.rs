@@ -36,50 +36,51 @@ mod tests {
 
     #[test]
     fn word_start_test() {
-        assert_eq!(true, word_start(Some(' '), Some('c')));
-        assert_eq!(true, word_start(None, Some('c')));
-        assert_eq!(false, word_start(Some('x'), Some('c')));
-        assert_eq!(false, word_start(Some('c'), None));
-        assert_eq!(false, word_start(None, None));
-        assert_eq!(false, word_start(Some(' '), Some(' ')));
-        assert_eq!(false, word_start(Some(';'), Some('.')));
-        assert_eq!(false, word_start(Some('c'), Some(' ')));
+        assert!(word_start(Some(' '), Some('c')));
+        assert!(word_start(None, Some('c')));
+        assert!(!word_start(Some('x'), Some('c')));
+        assert!(!word_start(Some('c'), None));
+        assert!(!word_start(None, None));
+        assert!(!word_start(Some(' '), Some(' ')));
+        assert!(!word_start(Some(';'), Some('.')));
+        assert!(!word_start(Some('c'), Some(' ')));
     }
 
     #[test]
     fn word_end_test() {
-        assert_eq!(true, word_end(Some('c'), Some(' ')));
-        assert_eq!(true, word_end(Some('c'), None));
-        assert_eq!(false, word_end(Some('x'), Some('c')));
-        assert_eq!(false, word_end(None, Some('c')));
-        assert_eq!(false, word_end(None, None));
-        assert_eq!(false, word_end(Some(' '), Some(' ')));
-        assert_eq!(false, word_end(Some(';'), Some('.')));
-        assert_eq!(false, word_end(Some(' '), Some('c')));
+        assert!(word_end(Some('c'), Some(' ')));
+        assert!(word_end(Some('c'), None));
+        assert!(word_end(Some('c'), Some('.')));
+        assert!(!word_end(Some('x'), Some('c')));
+        assert!(!word_end(None, Some('c')));
+        assert!(!word_end(None, None));
+        assert!(!word_end(Some(' '), Some(' ')));
+        assert!(!word_end(Some(';'), Some('.')));
+        assert!(!word_end(Some(' '), Some('c')));
     }
 
     #[test]
     fn number_start_test() {
-        assert_eq!(true, number_start(Some(' '), Some('1')));
-        assert_eq!(true, number_start(None, Some('1')));
-        assert_eq!(true, number_start(Some('x'), Some('1')));
-        assert_eq!(true, number_start(Some(','), Some('1')));
-        assert_eq!(false, number_start(Some('c'), None));
-        assert_eq!(false, number_start(None, None));
-        assert_eq!(false, number_start(Some(' '), Some(' ')));
-        assert_eq!(false, number_start(Some(';'), Some('.')));
-        assert_eq!(false, number_start(Some('1'), Some(' ')));
+        assert!(number_start(Some(' '), Some('1')));
+        assert!(number_start(None, Some('1')));
+        assert!(number_start(Some('x'), Some('1')));
+        assert!(number_start(Some(','), Some('1')));
+        assert!(!number_start(Some('c'), None));
+        assert!(!number_start(None, None));
+        assert!(!number_start(Some(' '), Some(' ')));
+        assert!(!number_start(Some(';'), Some('.')));
+        assert!(!number_start(Some('1'), Some(' ')));
     }
 
     #[test]
     fn number_end_test() {
-        assert_eq!(true, number_end(Some('1'), Some(' ')));
-        assert_eq!(true, number_end(Some('1'), None));
-        assert_eq!(true, number_end(Some('1'), Some('c')));
-        assert_eq!(false, number_end(None, Some('c')));
-        assert_eq!(false, number_end(None, None));
-        assert_eq!(false, number_end(Some(' '), Some(' ')));
-        assert_eq!(false, number_end(Some(';'), Some('.')));
-        assert_eq!(false, number_end(Some(' '), Some('c')));
+        assert!(number_end(Some('1'), Some(' ')));
+        assert!(number_end(Some('1'), None));
+        assert!(number_end(Some('1'), Some('c')));
+        assert!(!number_end(None, Some('c')));
+        assert!(!number_end(None, None));
+        assert!(!number_end(Some(' '), Some(' ')));
+        assert!(!number_end(Some(';'), Some('.')));
+        assert!(!number_end(Some(' '), Some('c')));
     }
 }
