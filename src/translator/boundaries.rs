@@ -1,4 +1,4 @@
-fn word_start(prev: Option<char>, current: Option<char>) -> bool {
+pub fn word_start(prev: Option<char>, current: Option<char>) -> bool {
     match (prev, current) {
         (None, Some(c)) if c.is_alphabetic() => true,
         (Some(p), Some(c)) if c.is_alphabetic() => !p.is_alphabetic(),
@@ -6,7 +6,7 @@ fn word_start(prev: Option<char>, current: Option<char>) -> bool {
     }
 }
 
-fn word_end(prev: Option<char>, current: Option<char>) -> bool {
+pub fn word_end(prev: Option<char>, current: Option<char>) -> bool {
     match (prev, current) {
         (Some(c), None) => c.is_alphabetic(),
         (Some(p), Some(c)) if p.is_alphabetic() => !c.is_alphabetic(),

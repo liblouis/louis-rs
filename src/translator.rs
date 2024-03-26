@@ -164,11 +164,14 @@ impl TranslationTable {
         let mut translations: Vec<TranslationMapping> = Vec::new();
         let mut current = input;
         let default_replacement = "?";
+        let mut prev: Option<char> = None;
+
         while !current.is_empty() {
-            let candidates = self.trie.find_translations(current);
+            let candidates = self.trie.find_translations(current, prev);
             if let Some(t) = candidates.last() {
                 let mapping = TranslationMapping::from(*t);
                 current = current.strip_prefix(mapping.input).unwrap();
+                prev = mapping.input.chars().last();
                 translations.push(mapping);
             } else {
                 let replacement = match self.undefined {
@@ -177,6 +180,7 @@ impl TranslationTable {
                     // instead of using a constant replacement
                     None => default_replacement,
                 };
+                prev = current.chars().next();
                 let next_char = current.chars().next().unwrap();
                 let mapping = TranslationMapping {
                     input: &current[..next_char.len_utf8()],
