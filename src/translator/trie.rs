@@ -133,12 +133,12 @@ impl Trie {
     pub fn find_translations(&self, word: &str, before: Option<char>) -> Vec<&Translation> {
         let mut matching_rules = Vec::new();
 
-        if let Some(node) = self
-            .root
-            .transitions
-            .get(&Transition::Start(Boundary::Word))
-        {
-            if word_start(before, word.chars().next()) {
+        if word_start(before, word.chars().next()) {
+            if let Some(node) = self
+		.root
+		.transitions
+		.get(&Transition::Start(Boundary::Word))
+            {
                 matching_rules = self.find_translations_from_node(word, node, 1);
             }
         }
