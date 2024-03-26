@@ -7,7 +7,9 @@ use super::Translation;
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum Boundary {
     Word,
+    NotWord,
     Number,
+    None,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -35,31 +37,31 @@ impl Trie {
         }
     }
 
-    pub fn insert(&mut self, word: &str, translation: Translation) {
-        let mut current_node = &mut self.root;
+    // pub fn insert(&mut self, word: &str, translation: Translation) {
+    //     let mut current_node = &mut self.root;
 
-        for c in word.chars() {
-            current_node = current_node
-                .transitions
-                .entry(Transition::Character(c))
-                .or_default();
-        }
-        current_node.translation = Some(translation);
-    }
+    //     for c in word.chars() {
+    //         current_node = current_node
+    //             .transitions
+    //             .entry(Transition::Character(c))
+    //             .or_default();
+    //     }
+    //     current_node.translation = Some(translation);
+    // }
 
-    pub fn insert_with_boundary(
+    pub fn insert(
         &mut self,
         word: &str,
         translation: Translation,
-        before: Option<Boundary>,
-        after: Option<Boundary>,
+        before: Boundary,
+        after: Boundary,
     ) {
         let mut current_node = &mut self.root;
 
-        if let Some(boundary) = before {
+        if before != Boundary::None {
             current_node = current_node
                 .transitions
-                .entry(Transition::Start(boundary))
+                .entry(Transition::Start(before))
                 .or_default();
         }
 
@@ -70,10 +72,10 @@ impl Trie {
                 .or_default();
         }
 
-        if let Some(boundary) = after {
+        if after != Boundary::None {
             current_node = current_node
                 .transitions
-                .entry(Transition::End(boundary))
+                .entry(Transition::End(after))
                 .or_default();
         }
 
@@ -135,9 +137,9 @@ impl Trie {
 
         if word_start(before, word.chars().next()) {
             if let Some(node) = self
-		.root
-		.transitions
-		.get(&Transition::Start(Boundary::Word))
+                .root
+                .transitions
+                .get(&Transition::Start(Boundary::Word))
             {
                 matching_rules = self.find_translations_from_node(word, node, 1);
             }
@@ -189,11 +191,11 @@ mod tests {
             from: "foobar".into(),
             to: "FOOBAR".into(),
         };
-        trie.insert("a", a.clone());
-        trie.insert("f", f.clone());
-        trie.insert("fo", fo.clone());
-        trie.insert("foo", foo.clone());
-        trie.insert("foobar", foobar.clone());
+        trie.insert("a", a.clone(), Boundary::None, Boundary::None);
+        trie.insert("f", f.clone(), Boundary::None, Boundary::None);
+        trie.insert("fo", fo.clone(), Boundary::None, Boundary::None);
+        trie.insert("foo", foo.clone(), Boundary::None, Boundary::None);
+        trie.insert("foobar", foobar.clone(), Boundary::None, Boundary::None);
         assert_eq!(trie.find_translations("a", None), vec![&a]);
         assert_eq!(trie.find_translations("f", None), vec![&f]);
         assert_eq!(trie.find_translations("fo", None), vec![&f, &fo]);
@@ -219,7 +221,7 @@ mod tests {
             from: "a".into(),
             to: "A".into(),
         };
-        trie.insert_with_boundary("a", a.clone(), Some(Boundary::Word), Some(Boundary::Word));
+        trie.insert("a", a.clone(), Boundary::Word, Boundary::Word);
         assert_eq!(trie.find_translations("a", None), vec![&a]);
         assert_eq!(trie.find_translations("aha", None), empty);
     }

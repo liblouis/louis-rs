@@ -90,6 +90,8 @@ impl TranslationTable {
                         from: character.to_string(),
                         to: dots_to_unicode(&dots),
                     },
+                    Boundary::None,
+                    Boundary::None,
                 ),
                 Rule::Comp6 {
                     chars,
@@ -136,45 +138,47 @@ impl TranslationTable {
                         from: chars.to_string(),
                         to: dots_to_unicode(&dots),
                     },
+                    Boundary::None,
+                    Boundary::None,
                 ),
                 Rule::Word {
                     chars,
                     dots: Braille::Explicit(dots),
                     ..
-                } => trie.insert_with_boundary(
+                } => trie.insert(
                     &chars,
                     Translation {
                         from: chars.to_string(),
                         to: dots_to_unicode(&dots),
                     },
-                    Some(Boundary::Word),
-                    Some(Boundary::Word),
+                    Boundary::Word,
+                    Boundary::Word,
                 ),
                 Rule::Begword {
                     chars,
                     dots: Braille::Explicit(dots),
                     ..
-                } => trie.insert_with_boundary(
+                } => trie.insert(
                     &chars,
                     Translation {
                         from: chars.to_string(),
                         to: dots_to_unicode(&dots),
                     },
-                    Some(Boundary::Word),
-                    None,
+                    Boundary::Word,
+                    Boundary::None,
                 ),
                 Rule::Endword {
                     chars,
                     dots: Braille::Explicit(dots),
                     ..
-                } => trie.insert_with_boundary(
+                } => trie.insert(
                     &chars,
                     Translation {
                         from: chars.to_string(),
                         to: dots_to_unicode(&dots),
                     },
-                    None,
-                    Some(Boundary::Word),
+                    Boundary::None,
+                    Boundary::Word,
                 ),
                 _ => (),
             }
