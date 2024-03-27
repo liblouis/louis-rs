@@ -55,18 +55,6 @@ impl Trie {
         }
     }
 
-    // pub fn insert(&mut self, word: &str, translation: Translation) {
-    //     let mut current_node = &mut self.root;
-
-    //     for c in word.chars() {
-    //         current_node = current_node
-    //             .transitions
-    //             .entry(Transition::Character(c))
-    //             .or_default();
-    //     }
-    //     current_node.translation = Some(translation);
-    // }
-
     pub fn insert(
         &mut self,
         word: &str,
