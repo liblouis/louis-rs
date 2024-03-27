@@ -168,10 +168,10 @@ impl TranslationTable {
                         from: chars.to_string(),
                         to: dots_to_unicode(&dots),
                     },
-                    // Boundary::NotWord, FIXME:
-                    // Boundary::NotWord, FIXME:
-                    Boundary::None,
-                    Boundary::None,
+                    Boundary::NotWord, // FIXME:
+                    Boundary::NotWord, // FIXME:
+                                       // Boundary::None,
+                                       // Boundary::None,
                 ),
 		Rule::Midendword {
                     chars,
@@ -317,5 +317,46 @@ mod tests {
         assert_eq!(table.translate("foobar"), "⠇⠸");
         assert_eq!(table.translate("  "), "⠀⠀");
         assert_eq!(table.translate("🐂"), "?");
+    }
+
+    #[test]
+    fn midword_test() {
+        let rules = vec![
+            RuleParser::new("lowercase a 1").rule().unwrap(),
+            RuleParser::new("lowercase b 2").rule().unwrap(),
+            RuleParser::new("lowercase f 3").rule().unwrap(),
+            RuleParser::new("lowercase o 4").rule().unwrap(),
+            RuleParser::new("lowercase r 5").rule().unwrap(),
+            RuleParser::new("always foo 14").rule().unwrap(),
+            RuleParser::new("midword bar 15").rule().unwrap(),
+            RuleParser::new("space \\s 0").rule().unwrap(),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward);
+        assert_eq!(table.translate("bar"), "⠂⠁⠐"); // should not contract
+        assert_eq!(table.translate("foobar"), "⠉⠂⠁⠐"); // only foo should be contracted
+        assert_eq!(table.translate("foobarfoo"), "⠉⠑⠉"); // foo and bar should be  contracted
+        assert_eq!(table.translate("foobar foo"), "⠉⠂⠁⠐⠀⠉"); // only foo should be  contracted
+        assert_eq!(table.translate("foo bar foo"), "⠉⠀⠂⠁⠐⠀⠉"); // only foo should be  contracted
+    }
+
+    #[test]
+    fn midword_with_precedence_test() {
+        let rules = vec![
+            RuleParser::new("lowercase a 1").rule().unwrap(),
+            RuleParser::new("lowercase b 2").rule().unwrap(),
+            RuleParser::new("lowercase f 3").rule().unwrap(),
+            RuleParser::new("lowercase o 4").rule().unwrap(),
+            RuleParser::new("lowercase r 5").rule().unwrap(),
+            RuleParser::new("always foo 14").rule().unwrap(),
+            RuleParser::new("always bar 24").rule().unwrap(),
+            RuleParser::new("midword bar 26").rule().unwrap(),
+            RuleParser::new("space \\s 0").rule().unwrap(),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward);
+        assert_eq!(table.translate("bar"), "⠊"); // bar should contract with 24
+        assert_eq!(table.translate("foobar"), "⠉⠊"); // bar should contract with 24
+        assert_eq!(table.translate("foobarfoo"), "⠉⠢⠉"); // bar should contract with 26
+        assert_eq!(table.translate("foobar foo"), "⠉⠊⠀⠉"); // bar should contract with 24
+        assert_eq!(table.translate("foo bar foo"), "⠉⠀⠊⠀⠉"); // bar should contract with 24
     }
 }
