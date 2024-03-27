@@ -173,7 +173,7 @@ impl TranslationTable {
                                        // Boundary::None,
                                        // Boundary::None,
                 ),
-		Rule::Midendword {
+                Rule::Midendword {
                     chars,
                     dots: Braille::Explicit(dots),
                     ..
@@ -215,7 +215,7 @@ impl TranslationTable {
                         to: dots_to_unicode(&dots),
                     },
                     Boundary::None,
-		    // Boundary::NotWord, FIXME:
+                    // Boundary::NotWord, FIXME:
                     Boundary::None,
                 ),
                 _ => (),
