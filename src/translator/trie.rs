@@ -25,6 +25,24 @@ struct TrieNode {
     transitions: HashMap<Transition, TrieNode>,
 }
 
+impl TrieNode {
+    fn char_transition(&self, c: char) -> Option<&TrieNode> {
+        self.transitions.get(&Transition::Character(c))
+    }
+    fn word_start_transition(&self) -> Option<&TrieNode> {
+        self.transitions.get(&Transition::Start(Boundary::Word))
+    }
+    fn not_word_start_transition(&self) -> Option<&TrieNode> {
+        self.transitions.get(&Transition::Start(Boundary::NotWord))
+    }
+    fn word_end_transition(&self) -> Option<&TrieNode> {
+        self.transitions.get(&Transition::End(Boundary::Word))
+    }
+    fn not_word_end_transition(&self) -> Option<&TrieNode> {
+        self.transitions.get(&Transition::End(Boundary::NotWord))
+    }
+}
+
 #[derive(Default, Debug)]
 pub struct Trie {
     root: TrieNode,
@@ -95,16 +113,13 @@ impl Trie {
         let mut length = length;
 
         while let Some(c) = chars.next() {
-            if let Some(node) = current_node.transitions.get(&Transition::Character(c)) {
+            if let Some(node) = current_node.char_transition(c) {
                 current_node = node;
                 length += 1;
                 if let Some(ref translation) = node.translation {
                     matching_rules.push((length, translation))
                 }
-            } else if let Some(node) = current_node
-                .transitions
-                .get(&Transition::End(Boundary::Word))
-            {
+            } else if let Some(node) = current_node.word_end_transition() {
                 current_node = node;
                 length += 1;
                 if word_end(prev, Some(c)) {
@@ -112,10 +127,7 @@ impl Trie {
                         matching_rules.push((length, translation))
                     }
                 }
-            } else if let Some(node) = current_node
-                .transitions
-                .get(&Transition::End(Boundary::NotWord))
-            {
+            } else if let Some(node) = current_node.not_word_end_transition() {
                 current_node = node;
                 length += 1;
                 if !word_end(prev, Some(c)) {
@@ -129,20 +141,14 @@ impl Trie {
             }
             prev = Some(c);
         }
-        if let Some(node) = current_node
-            .transitions
-            .get(&Transition::End(Boundary::Word))
-        {
+        if let Some(node) = current_node.word_end_transition() {
             length += 1;
             if word_end(prev, chars.next()) {
                 if let Some(ref translation) = node.translation {
                     matching_rules.push((length, translation))
                 }
             }
-        } else if let Some(node) = current_node
-            .transitions
-            .get(&Transition::End(Boundary::NotWord))
-        {
+        } else if let Some(node) = current_node.not_word_end_transition() {
             length += 1;
             if !word_end(prev, chars.next()) {
                 if let Some(ref translation) = node.translation {
@@ -157,19 +163,11 @@ impl Trie {
         let mut matching_rules = Vec::new();
 
         if word_start(before, word.chars().next()) {
-            if let Some(node) = self
-                .root
-                .transitions
-                .get(&Transition::Start(Boundary::Word))
-            {
+            if let Some(node) = self.root.word_start_transition() {
                 matching_rules = self.find_translations_from_node(word, node, 1);
             }
         } else {
-            if let Some(node) = self
-                .root
-                .transitions
-                .get(&Transition::Start(Boundary::NotWord))
-            {
+            if let Some(node) = self.root.not_word_start_transition() {
                 matching_rules = self.find_translations_from_node(word, node, 1);
             }
         }
