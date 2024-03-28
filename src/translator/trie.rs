@@ -90,14 +90,14 @@ impl Trie {
 
     fn find_translations_from_node<'a>(
         &'a self,
-        word: &str,
+        input: &str,
         node: &'a TrieNode,
         length: u32,
     ) -> Vec<(u32, &Translation)> {
         let mut current_node = node;
         let mut matching_rules = Vec::new();
         let mut prev: Option<char> = None;
-        let mut chars = word.chars();
+        let mut chars = input.chars();
         let mut length = length;
 
         while let Some(c) = chars.next() {
@@ -147,20 +147,20 @@ impl Trie {
         matching_rules
     }
 
-    pub fn find_translations(&self, word: &str, before: Option<char>) -> Vec<&Translation> {
+    pub fn find_translations(&self, input: &str, before: Option<char>) -> Vec<&Translation> {
         let mut matching_rules = Vec::new();
 
-        if word_start(before, word.chars().next()) {
+        if word_start(before, input.chars().next()) {
             if let Some(node) = self.root.word_start_transition() {
-                matching_rules = self.find_translations_from_node(word, node, 1);
+                matching_rules = self.find_translations_from_node(input, node, 1);
             }
         } else {
             if let Some(node) = self.root.not_word_start_transition() {
-                matching_rules = self.find_translations_from_node(word, node, 1);
+                matching_rules = self.find_translations_from_node(input, node, 1);
             }
         }
 
-        matching_rules.extend(self.find_translations_from_node(word, &self.root, 0));
+        matching_rules.extend(self.find_translations_from_node(input, &self.root, 0));
         matching_rules.sort_by_key(|(length, _translation)| *length);
         matching_rules
             .iter()
