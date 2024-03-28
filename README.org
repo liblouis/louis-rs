@@ -69,7 +69,7 @@ Run the tests in a YAML file:
 Run all YAML tests:
 
 #+BEGIN_SRC shell
-  $ LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis ./target/release/louis check --brief ~/src/liblouis/tests/braille-specs/*.yaml ~/src/liblouis/tests/yaml/*.yaml 2> /dev/null
+  $ LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis ./target/release/louis check --summary ~/src/liblouis/tests/braille-specs/*.yaml ~/src/liblouis/tests/yaml/*.yaml 2> /dev/null
   ================================================================================
   654045 tests run:
   458154 successes [70%]

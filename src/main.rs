@@ -45,7 +45,10 @@ enum Commands {
     Check {
         /// Only show a summary of the test results
         #[arg(short, long)]
-        brief: bool,
+        summary: bool,
+        /// Instead of printing all the failures only list the YAML files where a test failed
+        #[arg(short, long)]
+        list: bool,
         /// YAML document(s) that specify the tests
         #[arg(required = true)]
         yaml_files: Vec<PathBuf>,
@@ -150,7 +153,7 @@ fn print_check_row(label: &str, occurences: usize, total: usize) {
     );
 }
 
-fn check_yaml(paths: Vec<PathBuf>, brief: bool) {
+fn check_yaml(paths: Vec<PathBuf>, summary: bool, list: bool) {
     let mut total = 0;
     let mut successes = 0;
     let mut failures = 0;
@@ -172,7 +175,9 @@ fn check_yaml(paths: Vec<PathBuf>, brief: bool) {
                             .iter()
                             .filter(|r| r.is_unexpected_success())
                             .count();
-                        if !brief {
+                        if list && (test_results.iter().filter(|r| !r.is_success()).count() > 0) {
+                            println!("Failures in {:?}", path);
+                        } else if !summary {
                             for res in test_results.iter().filter(|r| !r.is_success()) {
                                 println!("{:?}", res);
                             }
@@ -191,12 +196,14 @@ fn check_yaml(paths: Vec<PathBuf>, brief: bool) {
             }
         }
     }
-    println!("================================================================================");
-    println!("{} tests run:", total);
-    print_check_row("successes", successes, total);
-    print_check_row("failures", failures, total);
-    print_check_row("expected failures", expected_failures, total);
-    print_check_row("unexpected successes", unexpected_successes, total);
+    if summary {
+	println!("================================================================================");
+	println!("{} tests run:", total);
+	print_check_row("successes", successes, total);
+	print_check_row("failures", failures, total);
+	print_check_row("expected failures", expected_failures, total);
+	print_check_row("unexpected successes", unexpected_successes, total);
+    }
 }
 
 fn main() {
@@ -228,7 +235,11 @@ fn main() {
                 }
             }
         },
-        Commands::Check { yaml_files, brief } => check_yaml(yaml_files, brief),
+        Commands::Check {
+            yaml_files,
+            summary,
+            list,
+        } => check_yaml(yaml_files, summary, list),
         Commands::Query { query } => match metadata::index() {
             Ok(index) => {
                 let query = query
