@@ -197,12 +197,14 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool, list: bool) {
         }
     }
     if summary {
-	println!("================================================================================");
-	println!("{} tests run:", total);
-	print_check_row("successes", successes, total);
-	print_check_row("failures", failures, total);
-	print_check_row("expected failures", expected_failures, total);
-	print_check_row("unexpected successes", unexpected_successes, total);
+        println!(
+            "================================================================================"
+        );
+        println!("{} tests run:", total);
+        print_check_row("successes", successes, total);
+        print_check_row("failures", failures, total);
+        print_check_row("expected failures", expected_failures, total);
+        print_check_row("unexpected successes", unexpected_successes, total);
     }
 }
 
