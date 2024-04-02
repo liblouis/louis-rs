@@ -57,10 +57,10 @@ impl Trie {
 
     pub fn insert(&mut self, from: String, to: String, before: Boundary, after: Boundary) {
         let mut current_node = &mut self.root;
-	let mut length = from.chars().count();
+        let mut length = from.chars().count();
 
         if before != Boundary::None {
-	    length += 1;
+            length += 1;
             current_node = current_node
                 .transitions
                 .entry(Transition::Start(before))
@@ -75,7 +75,7 @@ impl Trie {
         }
 
         if after != Boundary::None {
-	    length += 1;
+            length += 1;
             current_node = current_node
                 .transitions
                 .entry(Transition::End(after))
@@ -176,27 +176,27 @@ mod tests {
         let a = Translation {
             from: "a".into(),
             to: "A".into(),
-	    length: 1,
+            length: 1,
         };
         let f = Translation {
             from: "f".into(),
             to: "F".into(),
-	    length: 1,
+            length: 1,
         };
         let fo = Translation {
             from: "fo".into(),
             to: "FO".into(),
-	    length: 2,
+            length: 2,
         };
         let foo = Translation {
             from: "foo".into(),
             to: "FOO".into(),
-	    length: 3,
+            length: 3,
         };
         let foobar = Translation {
             from: "foobar".into(),
             to: "FOOBAR".into(),
-	    length: 6,
+            length: 6,
         };
         trie.insert("a".into(), "A".into(), Boundary::None, Boundary::None);
         trie.insert("f".into(), "F".into(), Boundary::None, Boundary::None);
@@ -232,7 +232,7 @@ mod tests {
         let a = Translation {
             from: "a".into(),
             to: "A".into(),
-	    length: 3,
+            length: 3,
         };
         trie.insert("a".into(), "A".into(), Boundary::Word, Boundary::Word);
         assert_eq!(trie.find_translations("a", None), vec![&a]);
@@ -246,7 +246,7 @@ mod tests {
         let foo = Translation {
             from: "foo".into(),
             to: "FOO".into(),
-	    length: 5,
+            length: 5,
         };
         trie.insert(
             "foo".into(),
@@ -267,7 +267,7 @@ mod tests {
         let foo = Translation {
             from: "foo".into(),
             to: "FOO".into(),
-	    length: 4,
+            length: 4,
         };
         trie.insert(
             "foo".into(),
@@ -288,7 +288,7 @@ mod tests {
         let foo = Translation {
             from: "foo".into(),
             to: "FOO".into(),
-	    length: 5,
+            length: 5,
         };
         trie.insert(
             "foo".into(),

@@ -55,7 +55,7 @@ impl TranslationTable {
                     undefined = Some(Translation {
                         from: "".into(),
                         to: dots_to_unicode(&dots),
-			length: 0,
+                        length: 0,
                     });
                 }
                 Rule::Space {
@@ -262,6 +262,7 @@ impl DisplayTable {
             dots_to_char: mapping,
         }
     }
+
     /// Map the `input` to the output using the display rules in the
     /// `DisplayTable`.
     ///
