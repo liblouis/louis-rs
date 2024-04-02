@@ -57,8 +57,10 @@ impl Trie {
 
     pub fn insert(&mut self, from: String, to: String, before: Boundary, after: Boundary) {
         let mut current_node = &mut self.root;
+	let mut length = from.chars().count();
 
         if before != Boundary::None {
+	    length += 1;
             current_node = current_node
                 .transitions
                 .entry(Transition::Start(before))
@@ -73,48 +75,44 @@ impl Trie {
         }
 
         if after != Boundary::None {
+	    length += 1;
             current_node = current_node
                 .transitions
                 .entry(Transition::End(after))
                 .or_default();
         }
 
-        current_node.translation = Some(Translation { from, to });
+        current_node.translation = Some(Translation { from, to, length });
     }
 
     fn find_translations_from_node<'a>(
         &'a self,
         input: &str,
         node: &'a TrieNode,
-        length: u32,
-    ) -> Vec<(u32, &Translation)> {
+    ) -> Vec<&Translation> {
         let mut current_node = node;
         let mut matching_rules = Vec::new();
         let mut prev: Option<char> = None;
         let mut chars = input.chars();
-        let mut length = length;
 
         while let Some(c) = chars.next() {
             if let Some(node) = current_node.char_transition(c) {
                 current_node = node;
-                length += 1;
                 if let Some(ref translation) = node.translation {
-                    matching_rules.push((length, translation))
+                    matching_rules.push(translation)
                 }
             } else if let Some(node) = current_node.word_end_transition() {
                 current_node = node;
-                length += 1;
                 if word_end(prev, Some(c)) {
                     if let Some(ref translation) = node.translation {
-                        matching_rules.push((length, translation))
+                        matching_rules.push(translation)
                     }
                 }
             } else if let Some(node) = current_node.not_word_end_transition() {
                 current_node = node;
-                length += 1;
                 if !word_end(prev, Some(c)) {
                     if let Some(ref translation) = node.translation {
-                        matching_rules.push((length, translation))
+                        matching_rules.push(translation)
                     }
                 }
             } else {
@@ -124,17 +122,15 @@ impl Trie {
             prev = Some(c);
         }
         if let Some(node) = current_node.word_end_transition() {
-            length += 1;
             if word_end(prev, chars.next()) {
                 if let Some(ref translation) = node.translation {
-                    matching_rules.push((length, translation))
+                    matching_rules.push(translation)
                 }
             }
         } else if let Some(node) = current_node.not_word_end_transition() {
-            length += 1;
             if !word_end(prev, chars.next()) {
                 if let Some(ref translation) = node.translation {
-                    matching_rules.push((length, translation))
+                    matching_rules.push(translation)
                 }
             }
         }
@@ -146,20 +142,17 @@ impl Trie {
 
         if word_start(before, input.chars().next()) {
             if let Some(node) = self.root.word_start_transition() {
-                matching_rules = self.find_translations_from_node(input, node, 1);
+                matching_rules = self.find_translations_from_node(input, node);
             }
         } else {
             if let Some(node) = self.root.not_word_start_transition() {
-                matching_rules = self.find_translations_from_node(input, node, 1);
+                matching_rules = self.find_translations_from_node(input, node);
             }
         }
 
-        matching_rules.extend(self.find_translations_from_node(input, &self.root, 0));
-        matching_rules.sort_by_key(|(length, _translation)| *length);
+        matching_rules.extend(self.find_translations_from_node(input, &self.root));
+        matching_rules.sort_by_key(|translation| translation.length);
         matching_rules
-            .iter()
-            .map(|(_, translation)| *translation)
-            .collect()
     }
 }
 
@@ -183,22 +176,27 @@ mod tests {
         let a = Translation {
             from: "a".into(),
             to: "A".into(),
+	    length: 1,
         };
         let f = Translation {
             from: "f".into(),
             to: "F".into(),
+	    length: 1,
         };
         let fo = Translation {
             from: "fo".into(),
             to: "FO".into(),
+	    length: 2,
         };
         let foo = Translation {
             from: "foo".into(),
             to: "FOO".into(),
+	    length: 3,
         };
         let foobar = Translation {
             from: "foobar".into(),
             to: "FOOBAR".into(),
+	    length: 6,
         };
         trie.insert("a".into(), "A".into(), Boundary::None, Boundary::None);
         trie.insert("f".into(), "F".into(), Boundary::None, Boundary::None);
@@ -234,6 +232,7 @@ mod tests {
         let a = Translation {
             from: "a".into(),
             to: "A".into(),
+	    length: 3,
         };
         trie.insert("a".into(), "A".into(), Boundary::Word, Boundary::Word);
         assert_eq!(trie.find_translations("a", None), vec![&a]);
@@ -247,6 +246,7 @@ mod tests {
         let foo = Translation {
             from: "foo".into(),
             to: "FOO".into(),
+	    length: 5,
         };
         trie.insert(
             "foo".into(),
@@ -267,6 +267,7 @@ mod tests {
         let foo = Translation {
             from: "foo".into(),
             to: "FOO".into(),
+	    length: 4,
         };
         trie.insert(
             "foo".into(),
@@ -287,6 +288,7 @@ mod tests {
         let foo = Translation {
             from: "foo".into(),
             to: "FOO".into(),
+	    length: 5,
         };
         trie.insert(
             "foo".into(),

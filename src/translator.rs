@@ -13,6 +13,7 @@ mod trie;
 pub struct Translation {
     from: String,
     to: String,
+    length: usize,
 }
 
 /// Mapping of an input char to the translated output
@@ -54,6 +55,7 @@ impl TranslationTable {
                     undefined = Some(Translation {
                         from: "".into(),
                         to: dots_to_unicode(&dots),
+			length: 0,
                     });
                 }
                 Rule::Space {
