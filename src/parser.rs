@@ -2166,4 +2166,17 @@ mod tests {
             RuleParser::new(&"Include foo.ctb").rule()
         );
     }
+
+    #[test]
+    fn display_test() {
+        use self::braille::BrailleDot;
+        assert_eq!(
+            Ok(Rule::Display {
+                character: 'a',
+                dots: vec![enum_set!(BrailleDot::Dot1)],
+                constraints: Constraints::empty()
+            }),
+            RuleParser::new(&"display a 1").rule()
+        );
+    }
 }

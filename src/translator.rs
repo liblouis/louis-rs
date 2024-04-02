@@ -335,4 +335,34 @@ mod tests {
         assert_eq!(table.translate("foobar foo"), "⠉⠊⠀⠉"); // bar should contract with 24
         assert_eq!(table.translate("foo bar foo"), "⠉⠀⠊⠀⠉"); // bar should contract with 24
     }
+
+    #[test]
+    fn display_table_test() {
+        let display_rules = vec![
+            RuleParser::new("display a 1").rule().unwrap(),
+            RuleParser::new("display \\s 0").rule().unwrap(),
+        ];
+        let display_table = DisplayTable::compile(display_rules, Direction::Forward);
+        assert_eq!(display_table.translate("⠁"), "a");
+        assert_eq!(display_table.translate("⠀"), " ");
+        assert_eq!(display_table.translate(""), "");
+        assert_eq!(display_table.translate("x"), "x"); // unknown chars are translated to themselves
+    }
+
+    #[test]
+    fn translate_with_display_test() {
+        let display_rules = vec![
+            RuleParser::new("display A 1").rule().unwrap(),
+            RuleParser::new("display \\s 0").rule().unwrap(),
+        ];
+        let rules = vec![
+            RuleParser::new("letter a 1").rule().unwrap(),
+            RuleParser::new("space \\s 0").rule().unwrap(),
+        ];
+        let display_table = DisplayTable::compile(display_rules, Direction::Forward);
+        let table = TranslationTable::compile(rules, Direction::Forward);
+        assert_eq!(display_table.translate(&table.translate("a")), "A");
+        assert_eq!(display_table.translate(&table.translate(" ")), " ");
+        assert_eq!(display_table.translate(&table.translate("a a")), "A A");
+    }
 }
