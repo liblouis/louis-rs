@@ -82,7 +82,15 @@ impl Trie {
                 .or_default();
         }
 
-        current_node.translation = Some(Translation { from, to, length });
+        if cfg!(feature = "backwards_compatibility") {
+            // first rule wins
+            if current_node.translation.is_none() {
+                current_node.translation = Some(Translation { from, to, length });
+            }
+        } else {
+            // last rule wins
+            current_node.translation = Some(Translation { from, to, length });
+        }
     }
 
     fn find_translations_from_node<'a>(
