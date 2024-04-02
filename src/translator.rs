@@ -9,7 +9,7 @@ use self::trie::Boundary;
 mod boundaries;
 mod trie;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub struct Translation {
     from: String,
     to: String,
