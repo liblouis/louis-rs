@@ -55,13 +55,7 @@ impl Trie {
         }
     }
 
-    pub fn insert(
-        &mut self,
-        word: &str,
-        translation: Translation,
-        before: Boundary,
-        after: Boundary,
-    ) {
+    pub fn insert(&mut self, from: String, to: String, before: Boundary, after: Boundary) {
         let mut current_node = &mut self.root;
 
         if before != Boundary::None {
@@ -71,7 +65,7 @@ impl Trie {
                 .or_default();
         }
 
-        for c in word.chars() {
+        for c in from.chars() {
             current_node = current_node
                 .transitions
                 .entry(Transition::Character(c))
@@ -85,7 +79,7 @@ impl Trie {
                 .or_default();
         }
 
-        current_node.translation = Some(translation);
+        current_node.translation = Some(Translation { from, to });
     }
 
     fn find_translations_from_node<'a>(
@@ -206,11 +200,16 @@ mod tests {
             from: "foobar".into(),
             to: "FOOBAR".into(),
         };
-        trie.insert("a", a.clone(), Boundary::None, Boundary::None);
-        trie.insert("f", f.clone(), Boundary::None, Boundary::None);
-        trie.insert("fo", fo.clone(), Boundary::None, Boundary::None);
-        trie.insert("foo", foo.clone(), Boundary::None, Boundary::None);
-        trie.insert("foobar", foobar.clone(), Boundary::None, Boundary::None);
+        trie.insert("a".into(), "A".into(), Boundary::None, Boundary::None);
+        trie.insert("f".into(), "F".into(), Boundary::None, Boundary::None);
+        trie.insert("fo".into(), "FO".into(), Boundary::None, Boundary::None);
+        trie.insert("foo".into(), "FOO".into(), Boundary::None, Boundary::None);
+        trie.insert(
+            "foobar".into(),
+            "FOOBAR".into(),
+            Boundary::None,
+            Boundary::None,
+        );
         assert_eq!(trie.find_translations("a", None), vec![&a]);
         assert_eq!(trie.find_translations("f", None), vec![&f]);
         assert_eq!(trie.find_translations("fo", None), vec![&f, &fo]);
@@ -236,7 +235,7 @@ mod tests {
             from: "a".into(),
             to: "A".into(),
         };
-        trie.insert("a", a.clone(), Boundary::Word, Boundary::Word);
+        trie.insert("a".into(), "A".into(), Boundary::Word, Boundary::Word);
         assert_eq!(trie.find_translations("a", None), vec![&a]);
         assert_eq!(trie.find_translations("aha", None), empty);
     }
@@ -249,7 +248,12 @@ mod tests {
             from: "foo".into(),
             to: "FOO".into(),
         };
-        trie.insert("foo", foo.clone(), Boundary::Word, Boundary::NotWord);
+        trie.insert(
+            "foo".into(),
+            "FOO".into(),
+            Boundary::Word,
+            Boundary::NotWord,
+        );
         assert_eq!(trie.find_translations("foo", None), empty);
         assert_eq!(trie.find_translations("foo ", None), empty);
         assert_eq!(trie.find_translations("foobar", None), vec![&foo]);
@@ -264,7 +268,12 @@ mod tests {
             from: "foo".into(),
             to: "FOO".into(),
         };
-        trie.insert("foo", foo.clone(), Boundary::NotWord, Boundary::None);
+        trie.insert(
+            "foo".into(),
+            "FOO".into(),
+            Boundary::NotWord,
+            Boundary::None,
+        );
         assert_eq!(trie.find_translations("foo", None), empty);
         assert_eq!(trie.find_translations("foo", Some(' ')), empty);
         assert_eq!(trie.find_translations("foo", Some('.')), empty);
@@ -279,7 +288,12 @@ mod tests {
             from: "foo".into(),
             to: "FOO".into(),
         };
-        trie.insert("foo", foo.clone(), Boundary::NotWord, Boundary::NotWord);
+        trie.insert(
+            "foo".into(),
+            "FOO".into(),
+            Boundary::NotWord,
+            Boundary::NotWord,
+        );
         assert_eq!(trie.find_translations("foo", None), empty);
         assert_eq!(trie.find_translations("foo", Some(' ')), empty);
         assert_eq!(trie.find_translations("foo", Some('.')), empty);

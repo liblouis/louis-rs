@@ -85,11 +85,8 @@ impl TranslationTable {
                 | Rule::Math {
                     character, dots, ..
                 } => trie.insert(
-                    &character.to_string(),
-                    Translation {
-                        from: character.to_string(),
-                        to: dots_to_unicode(&dots),
-                    },
+                    character.to_string(),
+                    dots_to_unicode(&dots),
                     Boundary::None,
                     Boundary::None,
                 ),
@@ -103,11 +100,8 @@ impl TranslationTable {
                     dots: Braille::Explicit(dots),
                     ..
                 } => trie.insert(
-                    &chars,
-                    Translation {
-                        from: chars.to_string(),
-                        to: dots_to_unicode(&dots),
-                    },
+                    chars.to_string(),
+                    dots_to_unicode(&dots),
                     Boundary::None,
                     Boundary::None,
                 ),
@@ -118,11 +112,8 @@ impl TranslationTable {
                 }
                 | Rule::Joinword { chars, dots, .. }
                 | Rule::Lowword { chars, dots, .. } => trie.insert(
-                    &chars,
-                    Translation {
-                        from: chars.to_string(),
-                        to: dots_to_unicode(&dots),
-                    },
+                    chars.to_string(),
+                    dots_to_unicode(&dots),
                     Boundary::Word,
                     Boundary::Word,
                 ),
@@ -131,11 +122,8 @@ impl TranslationTable {
                     dots: Braille::Explicit(dots),
                     ..
                 } => trie.insert(
-                    &chars,
-                    Translation {
-                        from: chars.to_string(),
-                        to: dots_to_unicode(&dots),
-                    },
+                    chars.to_string(),
+                    dots_to_unicode(&dots),
                     Boundary::Word,
                     // Boundary::NotWord, FIXME:
                     Boundary::None,
@@ -145,11 +133,8 @@ impl TranslationTable {
                     dots: Braille::Explicit(dots),
                     ..
                 } => trie.insert(
-                    &chars,
-                    Translation {
-                        from: chars.to_string(),
-                        to: dots_to_unicode(&dots),
-                    },
+                    chars.to_string(),
+                    dots_to_unicode(&dots),
                     Boundary::Word,
                     Boundary::None,
                 ),
@@ -163,11 +148,8 @@ impl TranslationTable {
                     dots: Braille::Explicit(dots),
                     ..
                 } => trie.insert(
-                    &chars,
-                    Translation {
-                        from: chars.to_string(),
-                        to: dots_to_unicode(&dots),
-                    },
+                    chars.to_string(),
+                    dots_to_unicode(&dots),
                     Boundary::NotWord, // FIXME:
                     Boundary::NotWord, // FIXME:
                                        // Boundary::None,
@@ -178,11 +160,8 @@ impl TranslationTable {
                     dots: Braille::Explicit(dots),
                     ..
                 } => trie.insert(
-                    &chars,
-                    Translation {
-                        from: chars.to_string(),
-                        to: dots_to_unicode(&dots),
-                    },
+                    chars.to_string(),
+                    dots_to_unicode(&dots),
                     Boundary::NotWord,
                     Boundary::None,
                 ),
@@ -196,11 +175,8 @@ impl TranslationTable {
                     dots: Braille::Explicit(dots),
                     ..
                 } => trie.insert(
-                    &chars,
-                    Translation {
-                        from: chars.to_string(),
-                        to: dots_to_unicode(&dots),
-                    },
+                    chars.to_string(),
+                    dots_to_unicode(&dots),
                     Boundary::None,
                     Boundary::Word,
                 ),
@@ -209,11 +185,8 @@ impl TranslationTable {
                     dots: Braille::Explicit(dots),
                     ..
                 } => trie.insert(
-                    &chars,
-                    Translation {
-                        from: chars.to_string(),
-                        to: dots_to_unicode(&dots),
-                    },
+                    chars.to_string(),
+                    dots_to_unicode(&dots),
                     Boundary::None,
                     // Boundary::NotWord, FIXME:
                     Boundary::None,
