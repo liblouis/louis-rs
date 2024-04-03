@@ -141,7 +141,7 @@ fn percentage(n: usize, total: usize) -> String {
     let n = n as f32;
     let total = total as f32;
     let result = (n * 100.0) / total;
-    format!("{:.0}%", result)
+    format!("{:.1}%", result)
 }
 
 fn print_check_row(label: &str, occurences: usize, total: usize) {
