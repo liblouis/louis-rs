@@ -20,6 +20,7 @@ use self::{
 };
 
 pub use braille::dots_to_unicode;
+pub use braille::fallback;
 
 mod braille;
 mod multipass;

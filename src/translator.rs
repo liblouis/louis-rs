@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use trie::Trie;
 
-use crate::parser::{dots_to_unicode, Braille, Direction, Rule};
+use crate::parser::{dots_to_unicode, fallback, Braille, Direction, Rule};
 
 use self::trie::Boundary;
 
@@ -20,14 +20,14 @@ pub struct Translation {
 #[derive(Debug, PartialEq)]
 pub struct TranslationMapping<'a> {
     input: &'a str,
-    output: &'a str,
+    output: String,
 }
 
 impl<'a> From<&'a Translation> for TranslationMapping<'a> {
     fn from(translation: &'a Translation) -> Self {
         Self {
             input: &translation.from,
-            output: &translation.to,
+            output: translation.to.clone(),
         }
     }
 }
@@ -206,7 +206,6 @@ impl TranslationTable {
     pub fn translate(&self, input: &str) -> String {
         let mut translations: Vec<TranslationMapping> = Vec::new();
         let mut current = input;
-        let default_replacement = "?";
         let mut prev: Option<char> = None;
 
         while !current.is_empty() {
@@ -217,14 +216,14 @@ impl TranslationTable {
                 prev = mapping.input.chars().last();
                 translations.push(mapping);
             } else {
-                let replacement = match self.undefined {
-                    Some(ref r) => &r.to,
-                    // FIXME: convert the next char to escape chars
-                    // instead of using a constant replacement
-                    None => default_replacement,
-                };
                 prev = current.chars().next();
                 let next_char = current.chars().next().unwrap();
+                let replacement = match self.undefined {
+                    Some(ref r) => r.to.clone(),
+                    // FIXME: convert the next char to escape chars
+                    // instead of using a constant replacement
+                    None => self.handle_undefined_char(next_char),
+                };
                 let mapping = TranslationMapping {
                     input: &current[..next_char.len_utf8()],
                     output: replacement,
@@ -233,7 +232,26 @@ impl TranslationTable {
                 translations.push(mapping);
             }
         }
-        translations.iter().map(|t| t.output).collect()
+        translations.into_iter().map(|t| t.output).collect()
+    }
+
+    /// Return a mapping for character `ch` if there is one in the table
+    fn character_definition(&self, ch: char) -> Option<char> {
+        let candidates = self.trie.find_translations(&ch.to_string(), None);
+        match candidates.last() {
+            Some(translation) => translation.to.chars().next(),
+            None => None,
+        }
+    }
+
+    fn handle_undefined_char(&self, ch: char) -> String {
+        ch.escape_unicode()
+            .to_string()
+            .replace(r"\u", r"\x") // replace \u by \x
+            .replace(['{', '}'], "") // drop the curly braces
+            .chars()
+            .map(|c| self.character_definition(c).unwrap_or_else(|| fallback(c)))
+            .collect()
     }
 }
 
@@ -301,7 +319,7 @@ mod tests {
         let table = TranslationTable::compile(rules, Direction::Forward);
         assert_eq!(table.translate("foobar"), "⠇⠸");
         assert_eq!(table.translate("  "), "⠀⠀");
-        assert_eq!(table.translate("🐂"), "?");
+        assert_eq!(table.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
     }
 
     #[test]

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use enumset::{enum_set, EnumSet, EnumSetType};
 
 #[derive(thiserror::Error, Debug, PartialEq)]
@@ -127,6 +129,47 @@ fn dot_to_unicode(dot: &BrailleChar) -> char {
 /// Map `BrailleChars` to a string containing unicode braille
 pub fn dots_to_unicode(dots: &BrailleChars) -> String {
     dots.iter().map(dot_to_unicode).collect()
+}
+
+/// Map char to dots according to North American Braille Computer Code (NABCC)
+///
+/// A fallback mapping for character to braille in case the table does
+/// not provide a mapping. This is used as a last resort when printing
+/// unicode escapes for undefined characters when the table does not
+/// define the character mappings that are needed.
+pub fn fallback(ch: char) -> char {
+    let north_american_braille_computer_code: HashMap<char, BrailleChar> = HashMap::from([
+        ('0', BrailleDot::Dot3 | BrailleDot::Dot5 | BrailleDot::Dot6),
+        ('1', enum_set!(BrailleDot::Dot2)),
+        ('2', BrailleDot::Dot2 | BrailleDot::Dot3),
+        ('3', BrailleDot::Dot2 | BrailleDot::Dot5),
+        ('4', BrailleDot::Dot2 | BrailleDot::Dot5 | BrailleDot::Dot6),
+        ('5', BrailleDot::Dot2 | BrailleDot::Dot6),
+        ('6', BrailleDot::Dot2 | BrailleDot::Dot3 | BrailleDot::Dot5),
+        (
+            '7',
+            BrailleDot::Dot2 | BrailleDot::Dot3 | BrailleDot::Dot5 | BrailleDot::Dot6,
+        ),
+        ('8', BrailleDot::Dot2 | BrailleDot::Dot3 | BrailleDot::Dot6),
+        ('9', BrailleDot::Dot2 | BrailleDot::Dot5),
+        ('a', enum_set!(BrailleDot::Dot1)),
+        ('b', BrailleDot::Dot1 | BrailleDot::Dot2),
+        ('c', BrailleDot::Dot1 | BrailleDot::Dot4),
+        ('d', BrailleDot::Dot1 | BrailleDot::Dot4 | BrailleDot::Dot5),
+        ('e', BrailleDot::Dot1 | BrailleDot::Dot5),
+        ('f', BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot4),
+        (
+            '\\',
+            BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot5 | BrailleDot::Dot6,
+        ),
+        (
+            'x',
+            BrailleDot::Dot1 | BrailleDot::Dot3 | BrailleDot::Dot4 | BrailleDot::Dot6,
+        ),
+    ]);
+
+    let dots = north_american_braille_computer_code.get(&ch).unwrap();
+    dot_to_unicode(dots)
 }
 
 #[cfg(test)]
