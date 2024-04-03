@@ -127,8 +127,7 @@ impl TranslationTable {
                     chars.to_string(),
                     dots_to_unicode(&dots),
                     Boundary::Word,
-                    // Boundary::NotWord, FIXME:
-                    Boundary::None,
+                    Boundary::NotWord,
                 ),
                 Rule::Sufword {
                     chars,
@@ -152,10 +151,8 @@ impl TranslationTable {
                 } => trie.insert(
                     chars.to_string(),
                     dots_to_unicode(&dots),
-                    Boundary::NotWord, // FIXME:
-                    Boundary::NotWord, // FIXME:
-                                       // Boundary::None,
-                                       // Boundary::None,
+                    Boundary::NotWord,
+                    Boundary::NotWord,
                 ),
                 Rule::Midendword {
                     chars,
@@ -190,8 +187,7 @@ impl TranslationTable {
                     chars.to_string(),
                     dots_to_unicode(&dots),
                     Boundary::None,
-                    // Boundary::NotWord, FIXME:
-                    Boundary::None,
+                    Boundary::NotWord,
                 ),
                 _ => (),
             }
@@ -276,7 +272,7 @@ impl DisplayTable {
                     if cfg!(feature = "backwards_compatibility") {
                         // first rule wins
                         let key = dots_to_unicode(&dots).chars().nth(0).unwrap();
-			mapping.entry(key).or_insert(character);
+                        mapping.entry(key).or_insert(character);
                     } else {
                         // last rule wins
                         mapping.insert(dots_to_unicode(&dots).chars().nth(0).unwrap(), character);

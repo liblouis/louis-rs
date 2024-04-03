@@ -105,7 +105,7 @@ The parser is built from the grammar used in [[https://github.com/liblouis/tree-
 which is a port of the [[https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form][EBNF grammar]] in [[https://github.com/liblouis/rewrite-louis][rewrite-louis]], which in turn is
 a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][Parsing expression grammar]] from [[https://github.com/liblouis/louis-parser][louis-parser]].
 
-* Todo
+* Todo [4/12]
 - [ ] (Emphasis and Caps) Indication
   - presumably this could be done independently of translation, i.e.
     find indication locations and put them in the typeform array
@@ -113,7 +113,7 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
 - [X] Add support for virtual dots
   - Virtual dots are supported and are converted to Unicode Supplementary Private Use Area-A
 - [ ] The correct, multipass and match opcodes
-- [ ] Word boundaries so we could support beg- and endword.
+- [X] Word boundaries so we could support beg- and endword.
   - the [[https://docs.rs/unicode-segmentation/latest/unicode_segmentation/][unicode_segmentation]] crate would probably help. It has
     functions like [[https://docs.rs/unicode-segmentation/latest/unicode_segmentation/trait.UnicodeSegmentation.html#tymethod.split_word_bound_indices][split_word_bound_indices]], that give you word bounds
     based on the Unicode standard.
@@ -124,8 +124,8 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
   - will probably be delegated to the [[https://docs.rs/hyphenation/latest/hyphenation/][hyphenation crate]]
 - [ ] Add an API so that the functionality can be used as a library
   - end expose it as a C ABI so that it can be used from other
-    languages (see also [[https://github.com/mozilla/cbindgen][cbindgen]])
-- [ ] Table resolution based on metadata
+    languages (see also [[https://github.com/mozilla/cbindgen][cbindgen]] or even better [[https://github.com/rust-diplomat/diplomat][Diplomat]])
+- [X] Table resolution based on metadata
 - [ ] Display tables
   - When testing the YAML files the display tables are used.
   - However normal translation has currently no way to specify a
