@@ -258,9 +258,7 @@ impl DisplayTable {
                     if cfg!(feature = "backwards_compatibility") {
                         // first rule wins
                         let key = dots_to_unicode(&dots).chars().nth(0).unwrap();
-                        if !mapping.contains_key(&key) {
-                            mapping.insert(key, character);
-                        }
+			mapping.entry(key).or_insert(character);
                     } else {
                         // last rule wins
                         mapping.insert(dots_to_unicode(&dots).chars().nth(0).unwrap(), character);
