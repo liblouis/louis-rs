@@ -90,6 +90,9 @@ fn dot_to_hex(dot: &BrailleDot) -> u32 {
     }
 }
 
+// rustfmt always seems to mangle the following enum_set macro, so we
+// disable it here
+#[rustfmt::skip::macros(enum_set)]
 fn has_virtual_dots(char: &BrailleChar) -> bool {
     let virtual_dots = enum_set!(
 	BrailleDot::Dot9 |
