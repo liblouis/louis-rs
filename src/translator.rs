@@ -251,11 +251,22 @@ impl DisplayTable {
             .collect();
 
         for rule in rules {
-            if let Rule::Display {
-                character, dots, ..
-            } = rule
-            {
-                mapping.insert(dots_to_unicode(&dots).chars().nth(0).unwrap(), character);
+            match rule {
+                Rule::Display {
+                    character, dots, ..
+                } => {
+                    if cfg!(feature = "backwards_compatibility") {
+                        // first rule wins
+                        let key = dots_to_unicode(&dots).chars().nth(0).unwrap();
+                        if !mapping.contains_key(&key) {
+                            mapping.insert(key, character);
+                        }
+                    } else {
+                        // last rule wins
+                        mapping.insert(dots_to_unicode(&dots).chars().nth(0).unwrap(), character);
+                    }
+                }
+                _ => (), // ignore all other rules for display tables
             }
         }
         DisplayTable {
