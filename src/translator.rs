@@ -216,8 +216,6 @@ impl TranslationTable {
                 let next_char = current.chars().next().unwrap();
                 let replacement = match self.undefined {
                     Some(ref r) => r.to.clone(),
-                    // FIXME: convert the next char to escape chars
-                    // instead of using a constant replacement
                     None => self.handle_undefined_char(next_char),
                 };
                 let mapping = TranslationMapping {
