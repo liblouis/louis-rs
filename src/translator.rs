@@ -365,6 +365,7 @@ mod tests {
             RuleParser::new("lowercase f 3").rule().unwrap(),
             RuleParser::new("lowercase o 4").rule().unwrap(),
             RuleParser::new("lowercase r 5").rule().unwrap(),
+            RuleParser::new("punctuation . 6").rule().unwrap(),
             RuleParser::new("always foo 14").rule().unwrap(),
             RuleParser::new("endword bar 15").rule().unwrap(),
             RuleParser::new("space \\s 0").rule().unwrap(),
@@ -372,9 +373,33 @@ mod tests {
         let table = TranslationTable::compile(rules, Direction::Forward);
         assert_eq!(table.translate("bar"), "⠑"); // should contract
         assert_eq!(table.translate("foobar"), "⠉⠑"); // both should be contracted
-        assert_eq!(table.translate("foobarfoo"), "⠉⠂⠁⠐⠉"); // only foo should be  contracted
+        assert_eq!(table.translate("foobar."), "⠉⠑⠠"); // both should be contracted
+        assert_eq!(table.translate("foobarfoo"), "⠉⠂⠁⠐⠉"); // only foo should be contracted
         assert_eq!(table.translate("foobar foo"), "⠉⠑⠀⠉"); // both should be contracted
         assert_eq!(table.translate("foo bar foo"), "⠉⠀⠑⠀⠉"); // both should be contracted
+    }
+
+    #[test]
+    fn partword_test() {
+        let rules = vec![
+            RuleParser::new("lowercase a 1").rule().unwrap(),
+            RuleParser::new("lowercase b 2").rule().unwrap(),
+            RuleParser::new("lowercase f 3").rule().unwrap(),
+            RuleParser::new("lowercase o 4").rule().unwrap(),
+            RuleParser::new("lowercase r 5").rule().unwrap(),
+            RuleParser::new("punctuation . 6").rule().unwrap(),
+            RuleParser::new("always foo 14").rule().unwrap(),
+            RuleParser::new("partword bar 15").rule().unwrap(),
+            RuleParser::new("space \\s 0").rule().unwrap(),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward);
+        assert_eq!(table.translate("bar"), "⠂⠁⠐"); // bar should not be contracted
+        assert_eq!(table.translate("foobar"), "⠉⠂⠁⠐"); // bar should not be contracted
+        assert_eq!(table.translate("foobar."), "⠉⠂⠁⠐⠠"); // bar should not be contracted
+        assert_eq!(table.translate("foobarfoo"), "⠉⠑⠉"); // bar should be contracted
+        assert_eq!(table.translate("foobar foo"), "⠉⠂⠁⠐⠀⠉"); // bar should not be contracted
+        assert_eq!(table.translate("foobar. foo"), "⠉⠂⠁⠐⠠⠀⠉"); // bar should not be contracted
+        assert_eq!(table.translate("foo bar foo"), "⠉⠀⠂⠁⠐⠀⠉"); // bar should not be contracted
     }
 
     #[test]
