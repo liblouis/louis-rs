@@ -105,7 +105,7 @@ The parser is built from the grammar used in [[https://github.com/liblouis/tree-
 which is a port of the [[https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form][EBNF grammar]] in [[https://github.com/liblouis/rewrite-louis][rewrite-louis]], which in turn is
 a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][Parsing expression grammar]] from [[https://github.com/liblouis/louis-parser][louis-parser]].
 
-* Todo [5/13]
+* Todo [4/13]
 - [ ] (Emphasis and Caps) Indication
   - presumably this could be done independently of translation, i.e.
     find indication locations and put them in the typeform array
@@ -113,8 +113,13 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
 - [X] Add support for virtual dots
   - Virtual dots are supported and are converted to Unicode Supplementary Private Use Area-A
 - [ ] The correct, multipass and match opcodes
-- [X] Currently the matching of input text against the rules is case
-  sensitive. Make it case insensitive.
+- [-] Currently the matching of input text against the rules is case
+  sensitive.
+  - [X] Make it case insensitive.
+  - [ ] Now everything is case insensitive, even character
+    definitions. This is probably not what we want. We might have to
+    move the character definitions out of the trie into a separate
+    structure.
 - [X] Word boundaries so we could support beg- and endword.
   - the [[https://docs.rs/unicode-segmentation/latest/unicode_segmentation/][unicode_segmentation]] crate would probably help. It has
     functions like [[https://docs.rs/unicode-segmentation/latest/unicode_segmentation/trait.UnicodeSegmentation.html#tymethod.split_word_bound_indices][split_word_bound_indices]], that give you word bounds
