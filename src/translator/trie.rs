@@ -140,11 +140,11 @@ impl Trie {
             }
             prev = Some(c);
         }
-	// at this point we have either
-	// - exhausted the input (chars.next() is None) or
-	// - exhausted the trie (current_node has no applicable transitions)
-	// TODO: assert this invariant (how can we do this without the
-	// side-effecting chars.next()?)
+        // at this point we have either
+        // - exhausted the input (chars.next() is None) or
+        // - exhausted the trie (current_node has no applicable transitions)
+        // TODO: assert this invariant (how can we do this without the
+        // side-effecting chars.next()?)
         if let Some(node) = current_node.word_end_transition() {
             if word_end(prev, chars.next()) {
                 if let Some(ref translation) = node.translation {
