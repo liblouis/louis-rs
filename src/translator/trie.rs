@@ -85,11 +85,11 @@ impl Trie {
         if cfg!(feature = "backwards_compatibility") {
             // first rule wins
             if current_node.translation.is_none() {
-                current_node.translation = Some(Translation { from, to, length });
+                current_node.translation = Some(Translation::new(from, to, length));
             }
         } else {
             // last rule wins
-            current_node.translation = Some(Translation { from, to, length });
+            current_node.translation = Some(Translation::new(from, to, length));
         }
     }
 
@@ -186,31 +186,11 @@ mod tests {
     fn find_translations_test() {
         let mut trie = Trie::new();
         let empty = Vec::<&Translation>::new();
-        let a = Translation {
-            from: "a".into(),
-            to: "A".into(),
-            length: 1,
-        };
-        let f = Translation {
-            from: "f".into(),
-            to: "F".into(),
-            length: 1,
-        };
-        let fo = Translation {
-            from: "fo".into(),
-            to: "FO".into(),
-            length: 2,
-        };
-        let foo = Translation {
-            from: "foo".into(),
-            to: "FOO".into(),
-            length: 3,
-        };
-        let foobar = Translation {
-            from: "foobar".into(),
-            to: "FOOBAR".into(),
-            length: 6,
-        };
+        let a = Translation::new("a".into(), "A".into(), 1);
+        let f = Translation::new("f".into(), "F".into(), 1);
+        let fo = Translation::new("fo".into(), "FO".into(), 2);
+        let foo = Translation::new("foo".into(), "FOO".into(), 3);
+        let foobar = Translation::new("foobar".into(), "FOOBAR".into(), 6);
         trie.insert("a".into(), "A".into(), Boundary::None, Boundary::None);
         trie.insert("f".into(), "F".into(), Boundary::None, Boundary::None);
         trie.insert("fo".into(), "FO".into(), Boundary::None, Boundary::None);
@@ -242,11 +222,7 @@ mod tests {
     fn find_translations_with_boundaries_test() {
         let mut trie = Trie::new();
         let empty = Vec::<&Translation>::new();
-        let a = Translation {
-            from: "a".into(),
-            to: "A".into(),
-            length: 3,
-        };
+        let a = Translation::new("a".into(), "A".into(), 3);
         trie.insert("a".into(), "A".into(), Boundary::Word, Boundary::Word);
         assert_eq!(trie.find_translations("a", None), vec![&a]);
         assert_eq!(trie.find_translations("aha", None), empty);
@@ -256,11 +232,7 @@ mod tests {
     fn find_translations_with_negative_boundary_after_test() {
         let mut trie = Trie::new();
         let empty = Vec::<&Translation>::new();
-        let foo = Translation {
-            from: "foo".into(),
-            to: "FOO".into(),
-            length: 5,
-        };
+        let foo = Translation::new("foo".into(), "FOO".into(), 5);
         trie.insert(
             "foo".into(),
             "FOO".into(),
@@ -277,11 +249,7 @@ mod tests {
     fn find_translations_with_negative_boundary_before_test() {
         let mut trie = Trie::new();
         let empty = Vec::<&Translation>::new();
-        let foo = Translation {
-            from: "foo".into(),
-            to: "FOO".into(),
-            length: 4,
-        };
+        let foo = Translation::new("foo".into(), "FOO".into(), 4);
         trie.insert(
             "foo".into(),
             "FOO".into(),
@@ -298,11 +266,7 @@ mod tests {
     fn find_translations_with_negative_boundaries_test() {
         let mut trie = Trie::new();
         let empty = Vec::<&Translation>::new();
-        let foo = Translation {
-            from: "foo".into(),
-            to: "FOO".into(),
-            length: 5,
-        };
+        let foo = Translation::new("foo".into(), "FOO".into(), 5);
         trie.insert(
             "foo".into(),
             "FOO".into(),

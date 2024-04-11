@@ -16,6 +16,12 @@ pub struct Translation {
     length: usize,
 }
 
+impl Translation {
+    pub fn new(from: String, to: String, length: usize) -> Self {
+        Self { from, to, length }
+    }
+}
+
 /// Mapping of an input char to the translated output
 #[derive(Debug, PartialEq)]
 pub struct TranslationMapping<'a> {
@@ -52,11 +58,7 @@ impl TranslationTable {
         for rule in rules {
             match rule {
                 Rule::Undefined { dots } => {
-                    undefined = Some(Translation {
-                        from: "".into(),
-                        to: dots_to_unicode(&dots),
-                        length: 0,
-                    });
+                    undefined = Some(Translation::new("".into(), dots_to_unicode(&dots), 0));
                 }
                 Rule::Space {
                     character, dots, ..
