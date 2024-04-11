@@ -210,7 +210,12 @@ impl TranslationTable {
             let candidates = self.trie.find_translations(current, prev);
             if let Some(t) = candidates.last() {
                 let mapping = TranslationMapping::from(*t);
-                current = current.strip_prefix(mapping.input).unwrap();
+                let length = current
+                    .chars()
+                    .take(mapping.input.chars().count())
+                    .map(|c| c.len_utf8())
+                    .sum();
+                current = &current[length..];
                 prev = mapping.input.chars().last();
                 translations.push(mapping);
             } else {

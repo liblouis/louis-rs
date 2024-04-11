@@ -104,12 +104,23 @@ impl Trie {
         let mut chars = input.chars();
 
         while let Some(c) = chars.next() {
+	    let lowercase = match c.to_lowercase().count() {
+		1 => c.to_lowercase().next().unwrap(),
+		// FIXME: ignore cases where the lowercase of a
+		// character maps into more than one character
+		_ => c,
+	    };
             if let Some(node) = current_node.char_transition(c) {
                 current_node = node;
                 if let Some(ref translation) = node.translation {
                     matching_rules.push(translation)
                 }
-            } else if let Some(node) = current_node.word_end_transition() {
+            } else if let Some(node) = current_node.char_transition(lowercase) {
+                current_node = node;
+                if let Some(ref translation) = node.translation {
+                    matching_rules.push(translation)
+                }
+	    } else if let Some(node) = current_node.word_end_transition() {
                 current_node = node;
                 if word_end(prev, Some(c)) {
                     if let Some(ref translation) = node.translation {
@@ -278,5 +289,22 @@ mod tests {
         assert_eq!(trie.find_translations("foo", Some('.')), empty);
         assert_eq!(trie.find_translations("foo", Some('c')), empty);
         assert_eq!(trie.find_translations("foobar", Some('c')), vec![&foo]);
+    }
+
+    #[test]
+    fn find_translations_case_insensitive_test() {
+        let mut trie = Trie::new();
+        let empty = Vec::<&Translation>::new();
+        let foo = Translation::new("foo".into(), "FOO".into(), 3);
+        trie.insert(
+            "foo".into(),
+            "FOO".into(),
+            Boundary::None,
+            Boundary::None,
+        );
+        assert_eq!(trie.find_translations("foo", None), vec![&foo]);
+        assert_eq!(trie.find_translations("Foo", None), vec![&foo]);
+        assert_eq!(trie.find_translations("FOO", None), vec![&foo]);
+        assert_eq!(trie.find_translations("foO", None), vec![&foo]);
     }
 }
