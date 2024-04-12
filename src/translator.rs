@@ -41,6 +41,7 @@ impl<'a> From<&'a Translation> for TranslationMapping<'a> {
 #[derive(Debug)]
 pub struct TranslationTable {
     undefined: Option<Translation>,
+    character_definitions: HashMap<char, String>,
     translations: Trie,
     direction: Direction,
 }
@@ -48,6 +49,7 @@ pub struct TranslationTable {
 impl TranslationTable {
     pub fn compile(rules: Vec<Rule>, direction: Direction) -> Self {
         let mut undefined = None;
+        let mut character_definitions = HashMap::new();
         let mut translations = Trie::new();
 
         let rules: Vec<Rule> = rules
@@ -88,12 +90,9 @@ impl TranslationTable {
                 }
                 | Rule::Math {
                     character, dots, ..
-                } => translations.insert(
-                    character.to_string(),
-                    dots_to_unicode(&dots),
-                    Boundary::None,
-                    Boundary::None,
-                ),
+                } => {
+                    character_definitions.insert(character, dots_to_unicode(&dots));
+                }
                 Rule::Comp6 {
                     chars,
                     dots: Braille::Explicit(dots),
@@ -197,6 +196,7 @@ impl TranslationTable {
         TranslationTable {
             undefined,
             direction,
+            character_definitions,
             translations,
         }
     }
@@ -207,6 +207,7 @@ impl TranslationTable {
         let mut prev: Option<char> = None;
 
         while !current.is_empty() {
+            // is there a matching translation rule
             let candidates = self.translations.find_translations(current, prev);
             if let Some(t) = candidates.last() {
                 let mapping = TranslationMapping::from(*t);
@@ -221,28 +222,31 @@ impl TranslationTable {
             } else {
                 prev = current.chars().next();
                 let next_char = current.chars().next().unwrap();
-                let replacement = match self.undefined {
-                    Some(ref r) => r.to.clone(),
-                    None => self.handle_undefined_char(next_char),
-                };
-                let mapping = TranslationMapping {
-                    input: &current[..next_char.len_utf8()],
-                    output: replacement,
-                };
-                current = current.strip_prefix(mapping.input).unwrap();
-                translations.push(mapping);
+                // or is there a character definition for the next character?
+                if let Some(translation) = self.character_definitions.get(&next_char) {
+                    let mapping = TranslationMapping {
+                        input: &current[..next_char.len_utf8()],
+                        output: translation.to_string(),
+                    };
+                    current = current.strip_prefix(mapping.input).unwrap();
+                    translations.push(mapping);
+                } else {
+                    // or is there rule for undefined characters
+                    let replacement = match self.undefined {
+                        Some(ref r) => r.to.clone(),
+                        // if all else fails
+                        None => self.handle_undefined_char(next_char),
+                    };
+                    let mapping = TranslationMapping {
+                        input: &current[..next_char.len_utf8()],
+                        output: replacement,
+                    };
+                    current = current.strip_prefix(mapping.input).unwrap();
+                    translations.push(mapping);
+                }
             }
         }
         translations.into_iter().map(|t| t.output).collect()
-    }
-
-    /// Return a mapping for character `ch` if there is one in the table
-    fn character_definition(&self, ch: char) -> Option<char> {
-        let candidates = self.translations.find_translations(&ch.to_string(), None);
-        match candidates.last() {
-            Some(translation) => translation.to.chars().next(),
-            None => None,
-        }
     }
 
     fn handle_undefined_char(&self, ch: char) -> String {
@@ -251,7 +255,13 @@ impl TranslationTable {
             .replace(r"\u", r"\x") // replace \u by \x
             .replace(['{', '}'], "") // drop the curly braces
             .chars()
-            .map(|c| self.character_definition(c).unwrap_or_else(|| fallback(c)))
+            .map(|c| {
+                if let Some(s) = self.character_definitions.get(&c) {
+                    s.clone()
+                } else {
+                    fallback(c).to_string()
+                }
+            })
             .collect()
     }
 }
