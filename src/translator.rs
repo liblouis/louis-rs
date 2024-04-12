@@ -93,14 +93,14 @@ impl TranslationTable {
                 } => {
                     character_definitions.insert(character, dots_to_unicode(&dots));
                 }
-                Rule::Base { from, to, .. } => {
-                    if let Some(dots) = character_definitions.get(&to) {
-                        character_definitions.insert(from, dots.to_string());
+                Rule::Base { derived, base, .. } => {
+                    if let Some(dots) = character_definitions.get(&base) {
+                        character_definitions.insert(derived, dots.to_string());
                     } else {
                         // FIXME: return an error here instead of logging
                         eprintln!(
-                            "Character in base rule not defined: from: {}, to: {}",
-                            from, to
+                            "Character in base rule not defined: derived: {}, base: {}",
+                            derived, base
                         );
                     }
                 }

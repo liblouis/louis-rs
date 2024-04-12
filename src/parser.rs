@@ -288,8 +288,8 @@ pub enum Rule {
     },
     Base {
         name: String,
-        from: char,
-        to: char,
+        derived: char,
+        base: char,
     },
     Lowercase {
         character: char,
@@ -1274,8 +1274,8 @@ impl<'a> RuleParser<'a> {
                 fail_if_invalid_constraints(Constraints::EMPTY, constraints, opcode)?;
                 Rule::Base {
                     name: self.name()?,
-                    from: self.one_char()?,
-                    to: self.one_char()?,
+                    derived: self.one_char()?,
+                    base: self.one_char()?,
                 }
             }
             Opcode::Lowercase => {
