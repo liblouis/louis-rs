@@ -41,14 +41,14 @@ impl<'a> From<&'a Translation> for TranslationMapping<'a> {
 #[derive(Debug)]
 pub struct TranslationTable {
     undefined: Option<Translation>,
-    trie: Trie,
+    translations: Trie,
     direction: Direction,
 }
 
 impl TranslationTable {
     pub fn compile(rules: Vec<Rule>, direction: Direction) -> Self {
         let mut undefined = None;
-        let mut trie = Trie::new();
+        let mut translations = Trie::new();
 
         let rules: Vec<Rule> = rules
             .into_iter()
@@ -88,7 +88,7 @@ impl TranslationTable {
                 }
                 | Rule::Math {
                     character, dots, ..
-                } => trie.insert(
+                } => translations.insert(
                     character.to_string(),
                     dots_to_unicode(&dots),
                     Boundary::None,
@@ -103,7 +103,7 @@ impl TranslationTable {
                     chars,
                     dots: Braille::Explicit(dots),
                     ..
-                } => trie.insert(
+                } => translations.insert(
                     chars.to_string(),
                     dots_to_unicode(&dots),
                     Boundary::None,
@@ -115,7 +115,7 @@ impl TranslationTable {
                     ..
                 }
                 | Rule::Joinword { chars, dots, .. }
-                | Rule::Lowword { chars, dots, .. } => trie.insert(
+                | Rule::Lowword { chars, dots, .. } => translations.insert(
                     chars.to_string(),
                     dots_to_unicode(&dots),
                     Boundary::Word,
@@ -125,7 +125,7 @@ impl TranslationTable {
                     chars,
                     dots: Braille::Explicit(dots),
                     ..
-                } => trie.insert(
+                } => translations.insert(
                     chars.to_string(),
                     dots_to_unicode(&dots),
                     Boundary::Word,
@@ -135,7 +135,7 @@ impl TranslationTable {
                     chars,
                     dots: Braille::Explicit(dots),
                     ..
-                } => trie.insert(
+                } => translations.insert(
                     chars.to_string(),
                     dots_to_unicode(&dots),
                     Boundary::Word,
@@ -150,7 +150,7 @@ impl TranslationTable {
                     chars,
                     dots: Braille::Explicit(dots),
                     ..
-                } => trie.insert(
+                } => translations.insert(
                     chars.to_string(),
                     dots_to_unicode(&dots),
                     Boundary::NotWord,
@@ -160,7 +160,7 @@ impl TranslationTable {
                     chars,
                     dots: Braille::Explicit(dots),
                     ..
-                } => trie.insert(
+                } => translations.insert(
                     chars.to_string(),
                     dots_to_unicode(&dots),
                     Boundary::NotWord,
@@ -175,7 +175,7 @@ impl TranslationTable {
                     chars,
                     dots: Braille::Explicit(dots),
                     ..
-                } => trie.insert(
+                } => translations.insert(
                     chars.to_string(),
                     dots_to_unicode(&dots),
                     Boundary::None,
@@ -185,7 +185,7 @@ impl TranslationTable {
                     chars,
                     dots: Braille::Explicit(dots),
                     ..
-                } => trie.insert(
+                } => translations.insert(
                     chars.to_string(),
                     dots_to_unicode(&dots),
                     Boundary::None,
@@ -197,7 +197,7 @@ impl TranslationTable {
         TranslationTable {
             undefined,
             direction,
-            trie,
+            translations,
         }
     }
 
@@ -207,7 +207,7 @@ impl TranslationTable {
         let mut prev: Option<char> = None;
 
         while !current.is_empty() {
-            let candidates = self.trie.find_translations(current, prev);
+            let candidates = self.translations.find_translations(current, prev);
             if let Some(t) = candidates.last() {
                 let mapping = TranslationMapping::from(*t);
                 let length = current
@@ -238,7 +238,7 @@ impl TranslationTable {
 
     /// Return a mapping for character `ch` if there is one in the table
     fn character_definition(&self, ch: char) -> Option<char> {
-        let candidates = self.trie.find_translations(&ch.to_string(), None);
+        let candidates = self.translations.find_translations(&ch.to_string(), None);
         match candidates.last() {
             Some(translation) => translation.to.chars().next(),
             None => None,
