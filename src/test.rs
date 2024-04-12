@@ -64,6 +64,7 @@ impl TestResult {
     }
 }
 
+#[derive(Debug)]
 pub struct TestMatrix<'a> {
     display: &'a Option<Display>,
     tables: &'a Vec<Table>,

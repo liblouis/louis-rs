@@ -427,6 +427,7 @@ impl<'a> YAMLParser<'a> {
         let mut current_display_table = None;
         let mut current_tables = Vec::new();
         let mut test_mode: TestMode = TestMode::Forward;
+        let mut previous_event_was_table = false;
 
         self.stream_start()?;
         self.document_start()?;
@@ -436,12 +437,24 @@ impl<'a> YAMLParser<'a> {
             match &*value {
                 "display" => {
                     current_display_table = Some(self.display_table()?);
+                    previous_event_was_table = false;
                 }
                 "table" => {
-                    current_tables.push(self.table()?);
+                    // if multiple table definitions are in sequence then we
+                    // collect all tables and run the following tests for all of
+                    // them. Otherwise we replace the previous table definition
+                    // with the current one.
+                    if previous_event_was_table {
+                        current_tables.push(self.table()?);
+                    } else {
+                        current_tables.clear();
+                        current_tables.push(self.table()?);
+                    }
+                    previous_event_was_table = true;
                 }
                 "flags" => {
                     test_mode = self.flags()?;
+                    previous_event_was_table = false;
                 }
                 "tests" => {
                     let tests = self.tests()?;
@@ -452,7 +465,7 @@ impl<'a> YAMLParser<'a> {
                         &tests,
                     );
                     results.extend(suite.check()?);
-                    current_tables.clear();
+                    previous_event_was_table = false;
                 }
                 _ => {
                     return Err(ParseError::InvalidToken(value));
