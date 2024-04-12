@@ -301,7 +301,6 @@ mod tests {
     #[test]
     fn find_translations_case_insensitive_test() {
         let mut trie = Trie::new();
-        let empty = Vec::<&Translation>::new();
         let foo = Translation::new("foo".into(), "FOO".into(), 3);
         trie.insert("foo".into(), "FOO".into(), Boundary::None, Boundary::None);
         assert_eq!(trie.find_translations("foo", None), vec![&foo]);
