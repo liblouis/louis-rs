@@ -29,6 +29,19 @@ impl TrieNode {
     fn char_transition(&self, c: char) -> Option<&TrieNode> {
         self.transitions.get(&Transition::Character(c))
     }
+    fn char_case_insensitive_transition(&self, c: char) -> Option<&TrieNode> {
+        // if the character is already lowercase we can ignore it
+        if c.is_lowercase() {
+            return None;
+        };
+        // FIXME: we ignore characters that do not map to a single
+        // character lowercase character
+        if c.to_lowercase().count() != 1 {
+            return None;
+        };
+        let lowercase = c.to_lowercase().next().unwrap();
+        self.char_transition(lowercase)
+    }
     fn word_start_transition(&self) -> Option<&TrieNode> {
         self.transitions.get(&Transition::Start(Boundary::Word))
     }
@@ -104,18 +117,12 @@ impl Trie {
         let mut chars = input.chars();
 
         while let Some(c) = chars.next() {
-	    let lowercase = match c.to_lowercase().count() {
-		1 => c.to_lowercase().next().unwrap(),
-		// FIXME: ignore cases where the lowercase of a
-		// character maps into more than one character
-		_ => c,
-	    };
             if let Some(node) = current_node.char_transition(c) {
                 current_node = node;
                 if let Some(ref translation) = node.translation {
                     matching_rules.push(translation)
                 }
-            } else if let Some(node) = current_node.char_transition(lowercase) {
+            } else if let Some(node) = current_node.char_case_insensitive_transition(c) {
                 current_node = node;
                 if let Some(ref translation) = node.translation {
                     matching_rules.push(translation)
