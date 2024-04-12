@@ -93,6 +93,17 @@ impl TranslationTable {
                 } => {
                     character_definitions.insert(character, dots_to_unicode(&dots));
                 }
+                Rule::Base { from, to, .. } => {
+                    if let Some(dots) = character_definitions.get(&to) {
+                        character_definitions.insert(from, dots.to_string());
+                    } else {
+                        // FIXME: return an error here instead of logging
+                        eprintln!(
+                            "Character in base rule not defined: from: {}, to: {}",
+                            from, to
+                        );
+                    }
+                }
                 Rule::Comp6 {
                     chars,
                     dots: Braille::Explicit(dots),
@@ -417,6 +428,20 @@ mod tests {
         assert_eq!(table.translate("foobar foo"), "⠉⠂⠁⠐⠀⠉"); // bar should not be contracted
         assert_eq!(table.translate("foobar. foo"), "⠉⠂⠁⠐⠠⠀⠉"); // bar should not be contracted
         assert_eq!(table.translate("foo bar foo"), "⠉⠀⠂⠁⠐⠀⠉"); // bar should not be contracted
+    }
+
+    #[test]
+    fn base_test() {
+        let rules = vec![
+            RuleParser::new("lowercase a 1").rule().unwrap(),
+            RuleParser::new("lowercase b 12").rule().unwrap(),
+            RuleParser::new("base uppercase A a").rule().unwrap(),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward);
+        assert_eq!(table.translate("a"), "⠁");
+        assert_eq!(table.translate("A"), "⠁");
+        assert_eq!(table.translate("ab"), "⠁⠃");
+        assert_eq!(table.translate("Ab"), "⠁⠃");
     }
 
     #[test]
