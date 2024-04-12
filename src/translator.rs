@@ -231,26 +231,30 @@ impl TranslationTable {
                 prev = mapping.input.chars().last();
                 translations.push(mapping);
             } else {
+                // no translation rule found; try character definition rules
                 prev = current.chars().next();
                 let next_char = current.chars().next().unwrap();
-                // or is there a character definition for the next character?
                 if let Some(translation) = self.character_definitions.get(&next_char) {
+                    // or is there a matching character definition for the next character?
                     let mapping = TranslationMapping {
                         input: &current[..next_char.len_utf8()],
                         output: translation.to_string(),
                     };
                     current = current.strip_prefix(mapping.input).unwrap();
                     translations.push(mapping);
-                } else {
+                } else if let Some(ref r) = self.undefined {
                     // or is there rule for undefined characters
-                    let replacement = match self.undefined {
-                        Some(ref r) => r.to.clone(),
-                        // if all else fails
-                        None => self.handle_undefined_char(next_char),
-                    };
                     let mapping = TranslationMapping {
                         input: &current[..next_char.len_utf8()],
-                        output: replacement,
+                        output: r.to.clone(),
+                    };
+                    current = current.strip_prefix(mapping.input).unwrap();
+                    translations.push(mapping);
+                } else {
+                    // if all else fails
+                    let mapping = TranslationMapping {
+                        input: &current[..next_char.len_utf8()],
+                        output: self.handle_undefined_char(next_char),
                     };
                     current = current.strip_prefix(mapping.input).unwrap();
                     translations.push(mapping);
