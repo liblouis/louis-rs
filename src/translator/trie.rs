@@ -127,7 +127,7 @@ impl Trie {
                 if let Some(ref translation) = node.translation {
                     matching_rules.push(translation)
                 }
-	    } else if let Some(node) = current_node.word_end_transition() {
+            } else if let Some(node) = current_node.word_end_transition() {
                 current_node = node;
                 if word_end(prev, Some(c)) {
                     if let Some(ref translation) = node.translation {
@@ -303,12 +303,7 @@ mod tests {
         let mut trie = Trie::new();
         let empty = Vec::<&Translation>::new();
         let foo = Translation::new("foo".into(), "FOO".into(), 3);
-        trie.insert(
-            "foo".into(),
-            "FOO".into(),
-            Boundary::None,
-            Boundary::None,
-        );
+        trie.insert("foo".into(), "FOO".into(), Boundary::None, Boundary::None);
         assert_eq!(trie.find_translations("foo", None), vec![&foo]);
         assert_eq!(trie.find_translations("Foo", None), vec![&foo]);
         assert_eq!(trie.find_translations("FOO", None), vec![&foo]);
