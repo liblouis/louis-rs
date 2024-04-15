@@ -82,7 +82,7 @@ impl TranslationTable {
             .filter(|r| r.is_direction(direction))
             .collect();
 
-        for rule in rules {
+        for rule in &rules {
             match rule {
                 Rule::Undefined { dots } => {
                     undefined = Some(Translation::new("".into(), dots_to_unicode(&dots), 0));
@@ -117,20 +117,9 @@ impl TranslationTable {
                     character, dots, ..
                 } => {
                     character_definitions.insert(
-                        character,
+                        *character,
                         Translation::new(character.to_string(), dots_to_unicode(&dots), 1),
                     );
-                }
-                Rule::Base { derived, base, .. } => {
-                    if let Some(translation) = character_definitions.get(&base) {
-                        character_definitions.insert(derived, Translation { from: derived.to_string(), ..translation.clone() });
-                    } else {
-                        // FIXME: return an error here instead of logging
-                        eprintln!(
-                            "Character in base rule not defined: derived: {}, base: {}",
-                            derived, base
-                        );
-                    }
                 }
                 Rule::Comp6 {
                     chars,
@@ -232,6 +221,32 @@ impl TranslationTable {
                 _ => (),
             }
         }
+
+        // use a second pass through the rules to resolve the base opcodes and
+        // `=` arguments in rules
+        for rule in rules {
+            match rule {
+                Rule::Base { derived, base, .. } => {
+                    if let Some(translation) = character_definitions.get(&base) {
+                        character_definitions.insert(
+                            derived,
+                            Translation {
+                                from: derived.to_string(),
+                                ..translation.clone()
+                            },
+                        );
+                    } else {
+                        // FIXME: return an error here instead of logging
+                        eprintln!(
+                            "Character in base rule not defined: derived: {}, base: {}, direction: {:?}",
+                            derived, base, direction
+                        );
+                    }
+                }
+                _ => (),
+            }
+        }
+
         TranslationTable {
             undefined,
             direction,
