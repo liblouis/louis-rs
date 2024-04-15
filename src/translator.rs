@@ -9,7 +9,7 @@ use self::trie::Boundary;
 mod boundaries;
 mod trie;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Translation {
     from: String,
     to: String,
@@ -39,9 +39,26 @@ impl<'a> From<&'a Translation> for TranslationMapping<'a> {
 }
 
 #[derive(Debug)]
+struct CharacterDefinition(HashMap<char, Translation>);
+
+impl CharacterDefinition {
+    fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    fn insert(&mut self, c: char, translation: Translation) {
+        self.0.insert(c, translation);
+    }
+
+    fn get(&self, c: &char) -> Option<&Translation> {
+        self.0.get(c)
+    }
+}
+
+#[derive(Debug)]
 pub struct TranslationTable {
     undefined: Option<Translation>,
-    character_definitions: HashMap<char, String>,
+    character_definitions: CharacterDefinition,
     translations: Trie,
     direction: Direction,
 }
@@ -49,7 +66,7 @@ pub struct TranslationTable {
 impl TranslationTable {
     pub fn compile(rules: Vec<Rule>, direction: Direction) -> Self {
         let mut undefined = None;
-        let mut character_definitions = HashMap::new();
+        let mut character_definitions = CharacterDefinition::new();
         let mut translations = Trie::new();
 
         let rules: Vec<Rule> = rules
@@ -91,11 +108,14 @@ impl TranslationTable {
                 | Rule::Math {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(character, dots_to_unicode(&dots));
+                    character_definitions.insert(
+                        character,
+                        Translation::new(character.to_string(), dots_to_unicode(&dots), 1),
+                    );
                 }
                 Rule::Base { derived, base, .. } => {
-                    if let Some(dots) = character_definitions.get(&base) {
-                        character_definitions.insert(derived, dots.to_string());
+                    if let Some(translation) = character_definitions.get(&base) {
+                        character_definitions.insert(derived, Translation { from: derived.to_string(), ..translation.clone() });
                     } else {
                         // FIXME: return an error here instead of logging
                         eprintln!(
@@ -236,10 +256,7 @@ impl TranslationTable {
                 let next_char = current.chars().next().unwrap();
                 if let Some(translation) = self.character_definitions.get(&next_char) {
                     // or is there a matching character definition for the next character?
-                    let mapping = TranslationMapping {
-                        input: &current[..next_char.len_utf8()],
-                        output: translation.to_string(),
-                    };
+                    let mapping = TranslationMapping::from(translation);
                     current = current.strip_prefix(mapping.input).unwrap();
                     translations.push(mapping);
                 } else if let Some(ref r) = self.undefined {
@@ -271,8 +288,8 @@ impl TranslationTable {
             .replace(['{', '}'], "") // drop the curly braces
             .chars()
             .map(|c| {
-                if let Some(s) = self.character_definitions.get(&c) {
-                    s.clone()
+                if let Some(t) = self.character_definitions.get(&c) {
+                    t.to.clone()
                 } else {
                     fallback(c).to_string()
                 }
