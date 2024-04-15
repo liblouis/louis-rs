@@ -47,7 +47,15 @@ impl CharacterDefinition {
     }
 
     fn insert(&mut self, c: char, translation: Translation) {
-        self.0.insert(c, translation);
+        if cfg!(feature = "backwards_compatibility") {
+            // first rule wins
+            if !self.0.contains_key(&c) {
+                self.0.insert(c, translation);
+            }
+        } else {
+            // last rule wins
+            self.0.insert(c, translation);
+        }
     }
 
     fn get(&self, c: &char) -> Option<&Translation> {
