@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
 use trie::Trie;
 
@@ -31,22 +31,6 @@ impl Translation {
     }
 }
 
-/// Mapping of an input char to the translated output
-#[derive(Debug, PartialEq)]
-pub struct TranslationMapping<'a> {
-    input: &'a str,
-    output: String,
-}
-
-impl<'a> From<&'a Translation> for TranslationMapping<'a> {
-    fn from(translation: &'a Translation) -> Self {
-        Self {
-            input: &translation.input,
-            output: translation.output.clone(),
-        }
-    }
-}
-
 #[derive(Debug)]
 struct CharacterDefinition(HashMap<char, Translation>);
 
@@ -74,7 +58,7 @@ impl CharacterDefinition {
 
 #[derive(Debug)]
 pub struct TranslationTable {
-    undefined: Option<Translation>,
+    undefined: Option<String>,
     character_definitions: CharacterDefinition,
     translations: Trie,
     direction: Direction,
@@ -94,7 +78,7 @@ impl TranslationTable {
         for rule in &rules {
             match rule {
                 Rule::Undefined { dots } => {
-                    undefined = Some(Translation::new("".into(), dots_to_unicode(&dots), 0));
+                    undefined = Some(dots_to_unicode(&dots));
                 }
                 Rule::Space {
                     character, dots, ..
@@ -265,7 +249,7 @@ impl TranslationTable {
     }
 
     pub fn translate(&self, input: &str) -> String {
-        let mut translations: Vec<TranslationMapping> = Vec::new();
+        let mut translations: Vec<Cow<Translation>> = Vec::new();
         let mut current = input;
         let mut prev: Option<char> = None;
 
@@ -273,44 +257,41 @@ impl TranslationTable {
             // is there a matching translation rule
             let candidates = self.translations.find_translations(current, prev);
             if let Some(t) = candidates.last() {
-                let mapping = TranslationMapping::from(*t);
-                let length = current
-                    .chars()
-                    .take(t.length)
-                    .map(|c| c.len_utf8())
-                    .sum();
+                let translation = Cow::Borrowed(*t);
+                let length = current.chars().take(t.length).map(|c| c.len_utf8()).sum();
                 current = &current[length..];
-                prev = mapping.input.chars().last();
-                translations.push(mapping);
+                prev = translation.input.chars().last();
+                translations.push(translation);
             } else {
                 // no translation rule found; try character definition rules
                 prev = current.chars().next();
                 let next_char = current.chars().next().unwrap();
                 if let Some(translation) = self.character_definitions.get(&next_char) {
                     // or is there a matching character definition for the next character?
-                    let mapping = TranslationMapping::from(translation);
-                    current = current.strip_prefix(mapping.input).unwrap();
-                    translations.push(mapping);
-                } else if let Some(ref r) = self.undefined {
+                    let translation = Cow::Borrowed(translation);
+                    current = current.strip_prefix(&translation.input).unwrap();
+                    translations.push(translation);
+                } else if let Some(ref replacement) = self.undefined {
                     // or is there rule for undefined characters
-                    let mapping = TranslationMapping {
-                        input: &current[..next_char.len_utf8()],
-                        output: r.output.clone(),
-                    };
-                    current = current.strip_prefix(mapping.input).unwrap();
-                    translations.push(mapping);
+                    let translation =
+                        Translation::new(next_char.to_string(), replacement.to_string(), 1);
+                    let translation: Cow<'_, Translation> = Cow::Owned(translation);
+                    current = current.strip_prefix(&translation.input).unwrap();
+                    translations.push(translation);
                 } else {
                     // if all else fails
-                    let mapping = TranslationMapping {
-                        input: &current[..next_char.len_utf8()],
-                        output: self.handle_undefined_char(next_char),
-                    };
-                    current = current.strip_prefix(mapping.input).unwrap();
-                    translations.push(mapping);
+                    let translation = Translation::new(
+                        next_char.to_string(),
+                        self.handle_undefined_char(next_char),
+                        1,
+                    );
+                    let translation: Cow<'_, Translation> = Cow::Owned(translation);
+                    current = current.strip_prefix(&translation.input).unwrap();
+                    translations.push(translation);
                 }
             }
         }
-        translations.into_iter().map(|t| t.output).collect()
+        translations.iter().map(|t| t.output.to_string()).collect()
     }
 
     fn handle_undefined_char(&self, ch: char) -> String {
