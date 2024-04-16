@@ -13,15 +13,20 @@ mod trie;
 pub struct Translation {
     input: String,
     output: String,
+    /// number of chars in `input`
+    length: usize,
+    /// the length of the match in chars including word boundaries
     weight: usize,
 }
 
 impl Translation {
     pub fn new(input: String, output: String, weight: usize) -> Self {
+        let length = input.chars().count();
         Self {
             input,
             output,
             weight,
+            length,
         }
     }
 }
@@ -271,7 +276,7 @@ impl TranslationTable {
                 let mapping = TranslationMapping::from(*t);
                 let length = current
                     .chars()
-                    .take(mapping.input.chars().count())
+                    .take(t.length)
                     .map(|c| c.len_utf8())
                     .sum();
                 current = &current[length..];
