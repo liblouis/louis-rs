@@ -11,14 +11,18 @@ mod trie;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Translation {
-    from: String,
-    to: String,
-    length: usize,
+    input: String,
+    output: String,
+    weight: usize,
 }
 
 impl Translation {
-    pub fn new(from: String, to: String, length: usize) -> Self {
-        Self { from, to, length }
+    pub fn new(input: String, output: String, weight: usize) -> Self {
+        Self {
+            input,
+            output,
+            weight,
+        }
     }
 }
 
@@ -32,8 +36,8 @@ pub struct TranslationMapping<'a> {
 impl<'a> From<&'a Translation> for TranslationMapping<'a> {
     fn from(translation: &'a Translation) -> Self {
         Self {
-            input: &translation.from,
-            output: translation.to.clone(),
+            input: &translation.input,
+            output: translation.output.clone(),
         }
     }
 }
@@ -231,7 +235,7 @@ impl TranslationTable {
                         character_definitions.insert(
                             derived,
                             Translation {
-                                from: derived.to_string(),
+                                input: derived.to_string(),
                                 ..translation.clone()
                             },
                         );
@@ -286,7 +290,7 @@ impl TranslationTable {
                     // or is there rule for undefined characters
                     let mapping = TranslationMapping {
                         input: &current[..next_char.len_utf8()],
-                        output: r.to.clone(),
+                        output: r.output.clone(),
                     };
                     current = current.strip_prefix(mapping.input).unwrap();
                     translations.push(mapping);
@@ -312,7 +316,7 @@ impl TranslationTable {
             .chars()
             .map(|c| {
                 if let Some(t) = self.character_definitions.get(&c) {
-                    t.to.clone()
+                    t.output.clone()
                 } else {
                     fallback(c).to_string()
                 }

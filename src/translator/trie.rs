@@ -182,7 +182,7 @@ impl Trie {
         }
 
         matching_rules.extend(self.find_translations_from_node(input, &self.root));
-        matching_rules.sort_by_key(|translation| translation.length);
+        matching_rules.sort_by_key(|translation| translation.weight);
         matching_rules
     }
 }
