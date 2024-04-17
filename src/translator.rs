@@ -250,47 +250,46 @@ impl TranslationTable {
 
     pub fn translate(&self, input: &str) -> String {
         let mut translations: Vec<Cow<Translation>> = Vec::new();
-        let mut current = input;
+	let mut chars = input.chars();
         let mut prev: Option<char> = None;
 
-        while !current.is_empty() {
-            // is there a matching translation rule
-            let candidates = self.translations.find_translations(current, prev);
+	loop {
+            let candidates = self.translations.find_translations(&chars.as_str(), prev);
             if let Some(t) = candidates.last() {
+		// there is a matching translation rule
                 let translation = Cow::Borrowed(*t);
-                let length = current.chars().take(t.length).map(|c| c.len_utf8()).sum();
-                current = &current[length..];
+		// move the iterator forward by the number of characters in the translation
+                chars.nth(t.length-1);
                 prev = translation.input.chars().last();
                 translations.push(translation);
-            } else {
+            } else if let Some(next_char) = chars.next() {
                 // no translation rule found; try character definition rules
-                prev = current.chars().next();
-                let next_char = current.chars().next().unwrap();
+                prev = Some(next_char);
                 if let Some(translation) = self.character_definitions.get(&next_char) {
-                    // or is there a matching character definition for the next character?
+                    // there is a matching character definition for the next character
                     let translation = Cow::Borrowed(translation);
-                    current = current.strip_prefix(&translation.input).unwrap();
                     translations.push(translation);
                 } else if let Some(ref replacement) = self.undefined {
-                    // or is there rule for undefined characters
+                    // there is a rule for undefined characters
                     let translation =
                         Translation::new(next_char.to_string(), replacement.to_string(), 1);
                     let translation: Cow<'_, Translation> = Cow::Owned(translation);
-                    current = current.strip_prefix(&translation.input).unwrap();
                     translations.push(translation);
                 } else {
-                    // if all else fails
+                    // otherwise handle it as a undefined character
                     let translation = Translation::new(
                         next_char.to_string(),
                         self.handle_undefined_char(next_char),
                         1,
                     );
                     let translation: Cow<'_, Translation> = Cow::Owned(translation);
-                    current = current.strip_prefix(&translation.input).unwrap();
                     translations.push(translation);
                 }
-            }
-        }
+            } else {
+		// the chars iterator is exhausted
+		break;
+	    }
+	}
         translations.iter().map(|t| t.output.as_str()).collect()
     }
 
