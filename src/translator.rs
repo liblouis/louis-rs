@@ -42,9 +42,7 @@ impl CharacterDefinition {
     fn insert(&mut self, c: char, translation: Translation) {
         if cfg!(feature = "backwards_compatibility") {
             // first rule wins
-            if !self.0.contains_key(&c) {
-                self.0.insert(c, translation);
-            }
+            self.0.entry(c).or_insert(translation);
         } else {
             // last rule wins
             self.0.insert(c, translation);
@@ -78,7 +76,7 @@ impl TranslationTable {
         for rule in &rules {
             match rule {
                 Rule::Undefined { dots } => {
-                    undefined = Some(dots_to_unicode(&dots));
+                    undefined = Some(dots_to_unicode(dots));
                 }
                 Rule::Space {
                     character, dots, ..
@@ -111,7 +109,7 @@ impl TranslationTable {
                 } => {
                     character_definitions.insert(
                         *character,
-                        Translation::new(character.to_string(), dots_to_unicode(&dots), 1),
+                        Translation::new(character.to_string(), dots_to_unicode(dots), 1),
                     );
                 }
                 Rule::Comp6 {
@@ -125,7 +123,7 @@ impl TranslationTable {
                     ..
                 } => translations.insert(
                     chars.to_string(),
-                    dots_to_unicode(&dots),
+                    dots_to_unicode(dots),
                     Boundary::None,
                     Boundary::None,
                 ),
@@ -137,7 +135,7 @@ impl TranslationTable {
                 | Rule::Joinword { chars, dots, .. }
                 | Rule::Lowword { chars, dots, .. } => translations.insert(
                     chars.to_string(),
-                    dots_to_unicode(&dots),
+                    dots_to_unicode(dots),
                     Boundary::Word,
                     Boundary::Word,
                 ),
@@ -147,7 +145,7 @@ impl TranslationTable {
                     ..
                 } => translations.insert(
                     chars.to_string(),
-                    dots_to_unicode(&dots),
+                    dots_to_unicode(dots),
                     Boundary::Word,
                     Boundary::NotWord,
                 ),
@@ -157,7 +155,7 @@ impl TranslationTable {
                     ..
                 } => translations.insert(
                     chars.to_string(),
-                    dots_to_unicode(&dots),
+                    dots_to_unicode(dots),
                     Boundary::Word,
                     Boundary::None,
                 ),
@@ -172,7 +170,7 @@ impl TranslationTable {
                     ..
                 } => translations.insert(
                     chars.to_string(),
-                    dots_to_unicode(&dots),
+                    dots_to_unicode(dots),
                     Boundary::NotWord,
                     Boundary::NotWord,
                 ),
@@ -182,7 +180,7 @@ impl TranslationTable {
                     ..
                 } => translations.insert(
                     chars.to_string(),
-                    dots_to_unicode(&dots),
+                    dots_to_unicode(dots),
                     Boundary::NotWord,
                     Boundary::None,
                 ),
@@ -197,7 +195,7 @@ impl TranslationTable {
                     ..
                 } => translations.insert(
                     chars.to_string(),
-                    dots_to_unicode(&dots),
+                    dots_to_unicode(dots),
                     Boundary::None,
                     Boundary::Word,
                 ),
@@ -207,7 +205,7 @@ impl TranslationTable {
                     ..
                 } => translations.insert(
                     chars.to_string(),
-                    dots_to_unicode(&dots),
+                    dots_to_unicode(dots),
                     Boundary::None,
                     Boundary::NotWord,
                 ),
@@ -250,16 +248,16 @@ impl TranslationTable {
 
     pub fn translate(&self, input: &str) -> String {
         let mut translations: Vec<Cow<Translation>> = Vec::new();
-	let mut chars = input.chars();
+        let mut chars = input.chars();
         let mut prev: Option<char> = None;
 
-	loop {
-            let candidates = self.translations.find_translations(&chars.as_str(), prev);
+        loop {
+            let candidates = self.translations.find_translations(chars.as_str(), prev);
             if let Some(t) = candidates.last() {
-		// there is a matching translation rule
+                // there is a matching translation rule
                 let translation = Cow::Borrowed(*t);
-		// move the iterator forward by the number of characters in the translation
-                chars.nth(t.length-1);
+                // move the iterator forward by the number of characters in the translation
+                chars.nth(t.length - 1);
                 prev = translation.input.chars().last();
                 translations.push(translation);
             } else if let Some(next_char) = chars.next() {
@@ -286,10 +284,10 @@ impl TranslationTable {
                     translations.push(translation);
                 }
             } else {
-		// the chars iterator is exhausted
-		break;
-	    }
-	}
+                // the chars iterator is exhausted
+                break;
+            }
+        }
         translations.iter().map(|t| t.output.as_str()).collect()
     }
 
