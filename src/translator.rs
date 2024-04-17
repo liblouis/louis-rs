@@ -291,7 +291,7 @@ impl TranslationTable {
                 }
             }
         }
-        translations.iter().map(|t| t.output.to_string()).collect()
+        translations.iter().map(|t| t.output.as_str()).collect()
     }
 
     fn handle_undefined_char(&self, ch: char) -> String {
