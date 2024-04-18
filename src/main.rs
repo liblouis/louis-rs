@@ -209,6 +209,8 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool, list: bool) {
 }
 
 fn main() {
+    env_logger::init();
+
     let args = Cli::parse();
 
     match args.command {

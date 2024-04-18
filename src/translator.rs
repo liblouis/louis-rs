@@ -1,3 +1,4 @@
+use log::warn;
 use std::{borrow::Cow, collections::HashMap};
 
 use trie::Trie;
@@ -227,11 +228,8 @@ impl TranslationTable {
                             },
                         );
                     } else {
-                        // FIXME: return an error here instead of logging
-                        eprintln!(
-                            "Character in base rule not defined: derived: {}, base: {}, direction: {:?}",
-                            derived, base, direction
-                        );
+                        warn!("Character in base rule not defined: derived: {}, base: {}, direction: {:?}",
+                            derived, base, direction);
                     }
                 }
                 _ => (),
