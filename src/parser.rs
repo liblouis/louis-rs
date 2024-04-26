@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     ffi::OsStr,
     fs::read_to_string,
     io,
@@ -42,7 +42,7 @@ pub enum Direction {
     Backward,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum WithClass {
     Before { class: String },
     After { class: String },
@@ -50,7 +50,7 @@ pub enum WithClass {
 
 type WithClasses = Vec<WithClass>;
 
-#[derive(Hash, PartialEq, Eq, Debug)]
+#[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub enum WithMatch {
     Before,
     After,
@@ -108,6 +108,10 @@ pub enum ParseError {
     MatchPostExpected,
     #[error("Expected a single char, got {found:?}")]
     SingleCharExpected { found: Option<String> },
+    #[error("Base char '{c}' not defined")]
+    BaseCharNotDefined { c: char },
+    #[error("No character definition for '{c}' in implicit dots")]
+    ImplicitCharNotDefined { c: char },
 }
 
 #[derive(PartialEq, Debug)]
@@ -242,7 +246,7 @@ pub enum Opcode {
     Literal,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Rule {
     Include {
         file: String,
@@ -283,7 +287,7 @@ pub enum Rule {
     },
     Letter {
         character: char,
-        dots: Braille,
+        dots: BrailleChars,
         constraints: Constraints,
     },
     Base {
@@ -743,13 +747,13 @@ impl Rule {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Braille {
     Implicit,
     Explicit(BrailleChars),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Position {
     Before,
     After,
@@ -1266,7 +1270,7 @@ impl<'a> RuleParser<'a> {
                 fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Letter {
                     character: self.one_char()?,
-                    dots: self.dots()?,
+                    dots: self.explicit_dots()?,
                     constraints,
                 }
             }
@@ -1920,6 +1924,135 @@ pub enum TableError {
     FormatNotSupported(PathBuf),
 }
 
+impl Rule {
+    fn character_definition(&self) -> Option<(char, BrailleChars)> {
+        match self {
+            Rule::Space {
+                character, dots, ..
+            }
+            | Rule::Punctuation {
+                character, dots, ..
+            }
+            | Rule::Digit {
+                character, dots, ..
+            }
+            | Rule::Letter {
+                character, dots, ..
+            }
+            | Rule::Lowercase {
+                character, dots, ..
+            }
+            | Rule::Uppercase {
+                character, dots, ..
+            }
+            | Rule::Litdigit {
+                character, dots, ..
+            }
+            | Rule::Sign {
+                character, dots, ..
+            }
+            | Rule::Math {
+                character, dots, ..
+            } => Some((*character, dots.clone())),
+            _ => None,
+        }
+    }
+
+    fn resolve_character_definitions(
+        self,
+        path: Option<PathBuf>,
+        line: usize,
+        definitions: &HashMap<char, BrailleChars>,
+    ) -> Result<Rule, TableError> {
+        let mut resolved = self.clone();
+        match &mut resolved {
+            Rule::Base { base, .. } if !definitions.contains_key(&base) => {
+                Err(TableError::ParseError {
+                    path,
+                    line,
+                    error: ParseError::BaseCharNotDefined { c: *base },
+                })
+            }
+            Rule::Always {
+                chars,
+                dots: dots @ Braille::Implicit,
+                ..
+            }
+            | Rule::Comp6 {
+                chars,
+                dots: dots @ Braille::Implicit,
+                ..
+            }
+            | Rule::Word {
+                chars,
+                dots: dots @ Braille::Implicit,
+                ..
+            }
+            | Rule::Begword {
+                chars,
+                dots: dots @ Braille::Implicit,
+                ..
+            }
+            | Rule::Sufword {
+                chars,
+                dots: dots @ Braille::Implicit,
+                ..
+            }
+            | Rule::Midword {
+                chars,
+                dots: dots @ Braille::Implicit,
+                ..
+            }
+            | Rule::Partword {
+                chars,
+                dots: dots @ Braille::Implicit,
+                ..
+            }
+            | Rule::Midendword {
+                chars,
+                dots: dots @ Braille::Implicit,
+                ..
+            }
+            | Rule::Endword {
+                chars,
+                dots: dots @ Braille::Implicit,
+                ..
+            }
+            | Rule::Prfword {
+                chars,
+                dots: dots @ Braille::Implicit,
+                ..
+            }
+            | Rule::Begmidword {
+                chars,
+                dots: dots @ Braille::Implicit,
+                ..
+            } => {
+                if chars.chars().all(|c| definitions.contains_key(&c)) {
+                    let explicit_dots = chars
+                        .chars()
+                        .flat_map(|ref c| definitions.get(c).unwrap().clone())
+                        .collect();
+                    *dots = Braille::Explicit(explicit_dots);
+                    Ok(resolved)
+                } else {
+                    let missing = chars
+                        .chars()
+                        .filter(|c| !definitions.contains_key(&c))
+                        .next() // just get the first missing character
+                        .unwrap();
+                    Err(TableError::ParseError {
+                        path,
+                        line,
+                        error: ParseError::ImplicitCharNotDefined { c: missing },
+                    })
+                }
+            }
+            _ => Ok(self),
+        }
+    }
+}
+
 pub fn table(table: &str, path: Option<PathBuf>) -> Result<Vec<Rule>, Vec<TableError>> {
     let (rules, errors): (Vec<_>, Vec<_>) = table
         .lines()
@@ -1935,6 +2068,26 @@ pub fn table(table: &str, path: Option<PathBuf>) -> Result<Vec<Rule>, Vec<TableE
                     line: line_no,
                     error: e,
                 })
+                .map(|rule| (path.clone(), line_no, rule))
+        })
+        .partition(Result::is_ok);
+    let errors: Vec<_> = errors.into_iter().map(Result::unwrap_err).collect();
+    if !errors.is_empty() {
+        return Err(errors);
+    }
+    // now do a second pass over the rules to check if all the base
+    // rules and implicit braille definitions have corresponding
+    // character definitions
+    let rules: Vec<_> = rules.into_iter().map(Result::unwrap).collect();
+    let character_definitions = rules
+        .iter()
+        .map(|(_, _, rule)| rule)
+        .flat_map(|rule| rule.character_definition())
+        .collect();
+    let (rules, errors): (Vec<_>, Vec<_>) = rules
+        .into_iter()
+        .map(|(path, line, rule)| {
+            rule.resolve_character_definitions(path, line, &character_definitions)
         })
         .partition(Result::is_ok);
     let rules: Vec<_> = rules.into_iter().map(Result::unwrap).collect();

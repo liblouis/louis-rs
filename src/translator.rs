@@ -89,9 +89,7 @@ impl TranslationTable {
                     character, dots, ..
                 }
                 | Rule::Letter {
-                    character,
-                    dots: Braille::Explicit(dots),
-                    ..
+                    character, dots, ..
                 }
                 | Rule::Lowercase {
                     character, dots, ..
