@@ -1920,7 +1920,24 @@ pub enum TableError {
     FormatNotSupported(PathBuf),
 }
 
-pub fn table(table: &str, path: Option<PathBuf>) -> Result<Vec<Rule>, Vec<TableError>> {
+#[derive(PartialEq, Debug)]
+pub struct AnchoredRule {
+    pub rule: Rule,
+    pub path: Option<PathBuf>,
+    pub line: usize,
+}
+
+impl From<Rule> for AnchoredRule {
+    fn from(rule: Rule) -> Self {
+        Self {
+            rule,
+            path: None,
+            line: 0,
+        }
+    }
+}
+
+pub fn table(table: &str, path: Option<PathBuf>) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     let (rules, errors): (Vec<_>, Vec<_>) = table
         .lines()
         .enumerate()
@@ -1930,6 +1947,11 @@ pub fn table(table: &str, path: Option<PathBuf>) -> Result<Vec<Rule>, Vec<TableE
             // parse the line
             RuleParser::new(line)
                 .rule()
+                .map(|rule| AnchoredRule {
+                    rule,
+                    path: path.clone(),
+                    line: line_no,
+                })
                 .map_err(|e| TableError::ParseError {
                     path: path.clone(),
                     line: line_no,
@@ -1946,12 +1968,12 @@ pub fn table(table: &str, path: Option<PathBuf>) -> Result<Vec<Rule>, Vec<TableE
     }
 }
 
-pub fn table_file(path: &Path) -> Result<Vec<Rule>, Vec<TableError>> {
+pub fn table_file(path: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     let text = read_to_string(path).map_err(|e| vec![TableError::TableNotReadable(e)])?;
     table(&text, Some(path.into()))
 }
 
-pub fn table_expanded(file: &Path) -> Result<Vec<Rule>, Vec<TableError>> {
+pub fn table_expanded(file: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     let search_path = &SearchPath::new_or("LOUIS_TABLE_PATH", ".");
     let path = search_path.find_file(file);
     match path {
@@ -1964,9 +1986,9 @@ pub fn table_expanded(file: &Path) -> Result<Vec<Rule>, Vec<TableError>> {
     }
 }
 
-fn expand_include(rule: Rule) -> Result<Vec<Rule>, Vec<TableError>> {
+fn expand_include(rule: AnchoredRule) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     let search_path = &SearchPath::new_or("LOUIS_TABLE_PATH", ".");
-    if let Rule::Include { ref file } = rule {
+    if let Rule::Include { ref file } = rule.rule {
         let path = Path::new(file);
         if path.extension().and_then(OsStr::to_str) == Some("dic") {
             return Err(vec![TableError::FormatNotSupported(path.into())]);
@@ -1981,7 +2003,7 @@ fn expand_include(rule: Rule) -> Result<Vec<Rule>, Vec<TableError>> {
     }
 }
 
-pub fn expand_includes(rules: Vec<Rule>) -> Result<Vec<Rule>, Vec<TableError>> {
+pub fn expand_includes(rules: Vec<AnchoredRule>) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     let (rules, errors): (Vec<_>, Vec<_>) = rules
         .into_iter()
         .map(expand_include)

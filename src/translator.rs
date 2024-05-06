@@ -3,7 +3,7 @@ use std::{borrow::Cow, collections::HashMap};
 
 use trie::Trie;
 
-use crate::parser::{dots_to_unicode, fallback, Braille, Direction, Rule};
+use crate::parser::{dots_to_unicode, fallback, AnchoredRule, Braille, Direction, Rule};
 
 use self::trie::Boundary;
 
@@ -64,18 +64,18 @@ pub struct TranslationTable {
 }
 
 impl TranslationTable {
-    pub fn compile(rules: Vec<Rule>, direction: Direction) -> Self {
+    pub fn compile(rules: Vec<AnchoredRule>, direction: Direction) -> Self {
         let mut undefined = None;
         let mut character_definitions = CharacterDefinition::new();
         let mut translations = Trie::new();
 
-        let rules: Vec<Rule> = rules
+        let rules: Vec<AnchoredRule> = rules
             .into_iter()
-            .filter(|r| r.is_direction(direction))
+            .filter(|r| r.rule.is_direction(direction))
             .collect();
 
         for rule in &rules {
-            match rule {
+            match &rule.rule {
                 Rule::Undefined { dots } => {
                     undefined = Some(dots_to_unicode(dots));
                 }
@@ -217,7 +217,7 @@ impl TranslationTable {
         // use a second pass through the rules to resolve the base opcodes and
         // `=` arguments in rules
         for rule in rules {
-            match rule {
+            match rule.rule {
                 Rule::Base { derived, base, .. } => {
                     if let Some(translation) = character_definitions.get(&base) {
                         character_definitions.insert(
@@ -312,15 +312,15 @@ pub struct DisplayTable {
 }
 
 impl DisplayTable {
-    pub fn compile(rules: Vec<Rule>, direction: Direction) -> DisplayTable {
+    pub fn compile(rules: Vec<AnchoredRule>, direction: Direction) -> DisplayTable {
         let mut mapping = HashMap::new();
-        let rules: Vec<Rule> = rules
+        let rules: Vec<_> = rules
             .into_iter()
-            .filter(|r| r.is_direction(direction))
+            .filter(|r| r.rule.is_direction(direction))
             .collect();
 
         for rule in rules {
-            match rule {
+            match rule.rule {
                 Rule::Display {
                     character, dots, ..
                 } => {
@@ -360,12 +360,16 @@ mod tests {
 
     use crate::RuleParser;
 
+    fn parse_rule(source: &str) -> AnchoredRule {
+        RuleParser::new(source).rule().unwrap().into()
+    }
+
     #[test]
     fn translate_test() {
         let rules = vec![
-            RuleParser::new("always foo 123").rule().unwrap(),
-            RuleParser::new("always bar 456").rule().unwrap(),
-            RuleParser::new("space \\s 0").rule().unwrap(),
+            parse_rule("always foo 123"),
+            parse_rule("always bar 456"),
+            parse_rule("space \\s 0"),
         ];
         let table = TranslationTable::compile(rules, Direction::Forward);
         assert_eq!(table.translate("foobar"), "⠇⠸");
@@ -376,14 +380,14 @@ mod tests {
     #[test]
     fn midword_test() {
         let rules = vec![
-            RuleParser::new("lowercase a 1").rule().unwrap(),
-            RuleParser::new("lowercase b 2").rule().unwrap(),
-            RuleParser::new("lowercase f 3").rule().unwrap(),
-            RuleParser::new("lowercase o 4").rule().unwrap(),
-            RuleParser::new("lowercase r 5").rule().unwrap(),
-            RuleParser::new("always foo 14").rule().unwrap(),
-            RuleParser::new("midword bar 15").rule().unwrap(),
-            RuleParser::new("space \\s 0").rule().unwrap(),
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 2"),
+            parse_rule("lowercase f 3"),
+            parse_rule("lowercase o 4"),
+            parse_rule("lowercase r 5"),
+            parse_rule("always foo 14"),
+            parse_rule("midword bar 15"),
+            parse_rule("space \\s 0"),
         ];
         let table = TranslationTable::compile(rules, Direction::Forward);
         assert_eq!(table.translate("bar"), "⠂⠁⠐"); // should not contract
@@ -396,15 +400,15 @@ mod tests {
     #[test]
     fn midword_with_precedence_test() {
         let rules = vec![
-            RuleParser::new("lowercase a 1").rule().unwrap(),
-            RuleParser::new("lowercase b 2").rule().unwrap(),
-            RuleParser::new("lowercase f 3").rule().unwrap(),
-            RuleParser::new("lowercase o 4").rule().unwrap(),
-            RuleParser::new("lowercase r 5").rule().unwrap(),
-            RuleParser::new("always foo 14").rule().unwrap(),
-            RuleParser::new("always bar 24").rule().unwrap(),
-            RuleParser::new("midword bar 26").rule().unwrap(),
-            RuleParser::new("space \\s 0").rule().unwrap(),
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 2"),
+            parse_rule("lowercase f 3"),
+            parse_rule("lowercase o 4"),
+            parse_rule("lowercase r 5"),
+            parse_rule("always foo 14"),
+            parse_rule("always bar 24"),
+            parse_rule("midword bar 26"),
+            parse_rule("space \\s 0"),
         ];
         let table = TranslationTable::compile(rules, Direction::Forward);
         assert_eq!(table.translate("bar"), "⠊"); // bar should contract with 24
@@ -417,15 +421,15 @@ mod tests {
     #[test]
     fn endword_test() {
         let rules = vec![
-            RuleParser::new("lowercase a 1").rule().unwrap(),
-            RuleParser::new("lowercase b 2").rule().unwrap(),
-            RuleParser::new("lowercase f 3").rule().unwrap(),
-            RuleParser::new("lowercase o 4").rule().unwrap(),
-            RuleParser::new("lowercase r 5").rule().unwrap(),
-            RuleParser::new("punctuation . 6").rule().unwrap(),
-            RuleParser::new("always foo 14").rule().unwrap(),
-            RuleParser::new("endword bar 15").rule().unwrap(),
-            RuleParser::new("space \\s 0").rule().unwrap(),
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 2"),
+            parse_rule("lowercase f 3"),
+            parse_rule("lowercase o 4"),
+            parse_rule("lowercase r 5"),
+            parse_rule("punctuation . 6"),
+            parse_rule("always foo 14"),
+            parse_rule("endword bar 15"),
+            parse_rule("space \\s 0"),
         ];
         let table = TranslationTable::compile(rules, Direction::Forward);
         assert_eq!(table.translate("bar"), "⠑"); // should contract
@@ -439,15 +443,15 @@ mod tests {
     #[test]
     fn partword_test() {
         let rules = vec![
-            RuleParser::new("lowercase a 1").rule().unwrap(),
-            RuleParser::new("lowercase b 2").rule().unwrap(),
-            RuleParser::new("lowercase f 3").rule().unwrap(),
-            RuleParser::new("lowercase o 4").rule().unwrap(),
-            RuleParser::new("lowercase r 5").rule().unwrap(),
-            RuleParser::new("punctuation . 6").rule().unwrap(),
-            RuleParser::new("always foo 14").rule().unwrap(),
-            RuleParser::new("partword bar 15").rule().unwrap(),
-            RuleParser::new("space \\s 0").rule().unwrap(),
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 2"),
+            parse_rule("lowercase f 3"),
+            parse_rule("lowercase o 4"),
+            parse_rule("lowercase r 5"),
+            parse_rule("punctuation . 6"),
+            parse_rule("always foo 14"),
+            parse_rule("partword bar 15"),
+            parse_rule("space \\s 0"),
         ];
         let table = TranslationTable::compile(rules, Direction::Forward);
         assert_eq!(table.translate("bar"), "⠂⠁⠐"); // bar should not be contracted
@@ -462,9 +466,9 @@ mod tests {
     #[test]
     fn base_test() {
         let rules = vec![
-            RuleParser::new("lowercase a 1").rule().unwrap(),
-            RuleParser::new("lowercase b 12").rule().unwrap(),
-            RuleParser::new("base uppercase A a").rule().unwrap(),
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 12"),
+            parse_rule("base uppercase A a"),
         ];
         let table = TranslationTable::compile(rules, Direction::Forward);
         assert_eq!(table.translate("a"), "⠁");
@@ -475,10 +479,7 @@ mod tests {
 
     #[test]
     fn display_table_test() {
-        let display_rules = vec![
-            RuleParser::new("display a 1").rule().unwrap(),
-            RuleParser::new("display \\s 0").rule().unwrap(),
-        ];
+        let display_rules = vec![parse_rule("display a 1"), parse_rule("display \\s 0")];
         let display_table = DisplayTable::compile(display_rules, Direction::Forward);
         assert_eq!(display_table.translate("⠁"), "a");
         assert_eq!(display_table.translate("⠀"), " ");
@@ -488,14 +489,8 @@ mod tests {
 
     #[test]
     fn translate_with_display_test() {
-        let display_rules = vec![
-            RuleParser::new("display A 1").rule().unwrap(),
-            RuleParser::new("display \\s 0").rule().unwrap(),
-        ];
-        let rules = vec![
-            RuleParser::new("letter a 1").rule().unwrap(),
-            RuleParser::new("space \\s 0").rule().unwrap(),
-        ];
+        let display_rules = vec![parse_rule("display A 1"), parse_rule("display \\s 0")];
+        let rules = vec![parse_rule("letter a 1"), parse_rule("space \\s 0")];
         let display_table = DisplayTable::compile(display_rules, Direction::Forward);
         let table = TranslationTable::compile(rules, Direction::Forward);
         assert_eq!(display_table.translate(&table.translate("a")), "A");
