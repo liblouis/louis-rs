@@ -1,4 +1,3 @@
-use log::warn;
 use std::{borrow::Cow, collections::HashMap};
 
 use trie::Trie;
@@ -14,6 +13,8 @@ mod trie;
 pub enum TranslationError {
     #[error("Implicit character {0:?} not defined")]
     ImplicitCharacterNotDefined(char),
+    #[error("Character in base rule not defined: derived: {derived:?}, base: {base:?}, direction: {direction:?}")]
+    BaseCharacterNotDefined{base: char, derived: char, direction: Direction},
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -241,18 +242,14 @@ impl TranslationTable {
         for rule in rules {
             match rule.rule {
                 Rule::Base { derived, base, .. } => {
-                    if let Some(translation) = character_definitions.get(&base) {
-                        character_definitions.insert(
-                            derived,
-                            Translation {
-                                input: derived.to_string(),
-                                ..translation.clone()
-                            },
-                        );
-                    } else {
-                        warn!("Character in base rule not defined: derived: {}, base: {}, direction: {:?}",
-                            derived, base, direction);
-                    }
+		    let translation = character_definitions.get(&base).ok_or(TranslationError::BaseCharacterNotDefined{base, derived, direction})?;
+                    character_definitions.insert(
+                        derived,
+                        Translation {
+                            input: derived.to_string(),
+                            ..translation.clone()
+                        },
+                    );
                 }
                 Rule::Comp6 {
                     chars,
