@@ -283,7 +283,7 @@ pub enum Rule {
     },
     Letter {
         character: char,
-        dots: Braille,
+        dots: BrailleChars,
         constraints: Constraints,
     },
     Base {
@@ -1266,7 +1266,7 @@ impl<'a> RuleParser<'a> {
                 fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
                 Rule::Letter {
                     character: self.one_char()?,
-                    dots: self.dots()?,
+                    dots: self.explicit_dots()?,
                     constraints,
                 }
             }
