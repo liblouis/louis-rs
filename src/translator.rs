@@ -61,6 +61,21 @@ impl CharacterDefinition {
     }
 }
 
+fn resolve_implicit_dots(
+    chars: &str,
+    character_definitions: &CharacterDefinition,
+) -> Result<String, TranslationError> {
+    chars
+        .chars()
+        .map(|c| {
+            character_definitions
+                .get(&c)
+                .ok_or(TranslationError::ImplicitCharacterNotDefined(c))
+                .map(|t| t.output.to_string())
+        })
+        .collect()
+}
+
 #[derive(Debug)]
 pub struct TranslationTable {
     undefined: Option<String>,
@@ -222,7 +237,7 @@ impl TranslationTable {
         }
 
         // use a second pass through the rules to resolve the base opcodes and
-        // `=` arguments in rules
+        // implicit (`=`) arguments in rules
         for rule in rules {
             match rule.rule {
                 Rule::Base { derived, base, .. } => {
@@ -239,6 +254,106 @@ impl TranslationTable {
                             derived, base, direction);
                     }
                 }
+                Rule::Comp6 {
+                    chars,
+                    dots: Braille::Implicit,
+                }
+                | Rule::Always {
+                    chars,
+                    dots: Braille::Implicit,
+                    ..
+                } => {
+                    translations.insert(
+                        chars.to_string(),
+                        resolve_implicit_dots(&chars, &character_definitions)?,
+                        Boundary::None,
+                        Boundary::None,
+                    );
+                }
+                Rule::Word {
+                    chars,
+                    dots: Braille::Implicit,
+                    ..
+                } => {
+                    translations.insert(
+                        chars.to_string(),
+                        resolve_implicit_dots(&chars, &character_definitions)?,
+                        Boundary::Word,
+                        Boundary::Word,
+                    );
+                }
+                Rule::Begword {
+                    chars,
+                    dots: Braille::Implicit,
+                    ..
+                } => translations.insert(
+                    chars.to_string(),
+                    resolve_implicit_dots(&chars, &character_definitions)?,
+                    Boundary::Word,
+                    Boundary::NotWord,
+                ),
+                Rule::Sufword {
+                    chars,
+                    dots: Braille::Implicit,
+                    ..
+                } => {
+                    translations.insert(
+                        chars.to_string(),
+                        resolve_implicit_dots(&chars, &character_definitions)?,
+                        Boundary::Word,
+                        Boundary::None,
+                    );
+                }
+                Rule::Midword {
+                    chars,
+                    dots: Braille::Implicit,
+                    ..
+                }
+                | Rule::Partword {
+                    chars,
+                    dots: Braille::Implicit,
+                    ..
+                } => translations.insert(
+                    chars.to_string(),
+                    resolve_implicit_dots(&chars, &character_definitions)?,
+                    Boundary::NotWord,
+                    Boundary::NotWord,
+                ),
+                Rule::Midendword {
+                    chars,
+                    dots: Braille::Implicit,
+                    ..
+                } => translations.insert(
+                    chars.to_string(),
+                    resolve_implicit_dots(&chars, &character_definitions)?,
+                    Boundary::NotWord,
+                    Boundary::None,
+                ),
+                Rule::Endword {
+                    chars,
+                    dots: Braille::Implicit,
+                    ..
+                }
+                | Rule::Prfword {
+                    chars,
+                    dots: Braille::Implicit,
+                    ..
+                } => translations.insert(
+                    chars.to_string(),
+                    resolve_implicit_dots(&chars, &character_definitions)?,
+                    Boundary::None,
+                    Boundary::Word,
+                ),
+                Rule::Begmidword {
+                    chars,
+                    dots: Braille::Implicit,
+                    ..
+                } => translations.insert(
+                    chars.to_string(),
+                    resolve_implicit_dots(&chars, &character_definitions)?,
+                    Boundary::None,
+                    Boundary::NotWord,
+                ),
                 _ => (),
             }
         }
@@ -249,21 +364,6 @@ impl TranslationTable {
             character_definitions,
             translations,
         })
-    }
-
-    fn resolve_implicit_dots(
-        chars: &str,
-        character_definitions: &CharacterDefinition,
-    ) -> Result<String, TranslationError> {
-        chars
-            .chars()
-            .map(|c| {
-                character_definitions
-                    .get(&c)
-                    .ok_or(TranslationError::ImplicitCharacterNotDefined(c))
-                    .map(|t| t.output.to_string())
-            })
-            .collect()
     }
 
     pub fn translate(&self, input: &str) -> String {
@@ -390,16 +490,13 @@ mod tests {
     fn resolve_implicit_dots_test() {
         let char_defs = CharacterDefinition::new();
         assert_eq!(
-            TranslationTable::resolve_implicit_dots("xs", &char_defs),
+            resolve_implicit_dots("xs", &char_defs),
             Err(TranslationError::ImplicitCharacterNotDefined('x'))
         );
         let mut char_defs = CharacterDefinition::new();
         char_defs.insert('a', Translation::new("a".to_string(), "A".to_string(), 1));
         char_defs.insert('h', Translation::new("h".to_string(), "H".to_string(), 1));
-        assert_eq!(
-            TranslationTable::resolve_implicit_dots("haha", &char_defs),
-            Ok("HAHA".into())
-        );
+        assert_eq!(resolve_implicit_dots("haha", &char_defs), Ok("HAHA".into()));
     }
 
     #[test]
