@@ -10,6 +10,12 @@ use self::trie::Boundary;
 mod boundaries;
 mod trie;
 
+#[derive(thiserror::Error, Debug, PartialEq)]
+pub enum TranslationError {
+    #[error("Implicit character {0:?} not defined")]
+    ImplicitCharacterNotDefined(char),
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Translation {
     input: String,
@@ -64,7 +70,10 @@ pub struct TranslationTable {
 }
 
 impl TranslationTable {
-    pub fn compile(rules: Vec<AnchoredRule>, direction: Direction) -> Self {
+    pub fn compile(
+        rules: Vec<AnchoredRule>,
+        direction: Direction,
+    ) -> Result<Self, TranslationError> {
         let mut undefined = None;
         let mut character_definitions = CharacterDefinition::new();
         let mut translations = Trie::new();
@@ -234,12 +243,14 @@ impl TranslationTable {
             }
         }
 
-        TranslationTable {
+        Ok(TranslationTable {
             undefined,
             direction,
             character_definitions,
             translations,
-        }
+        })
+    }
+
     fn resolve_implicit_dots(
         chars: &str,
         character_definitions: &CharacterDefinition,
@@ -398,7 +409,7 @@ mod tests {
             parse_rule("always bar 456"),
             parse_rule("space \\s 0"),
         ];
-        let table = TranslationTable::compile(rules, Direction::Forward);
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
         assert_eq!(table.translate("foobar"), "⠇⠸");
         assert_eq!(table.translate("  "), "⠀⠀");
         assert_eq!(table.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
@@ -416,7 +427,7 @@ mod tests {
             parse_rule("midword bar 15"),
             parse_rule("space \\s 0"),
         ];
-        let table = TranslationTable::compile(rules, Direction::Forward);
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
         assert_eq!(table.translate("bar"), "⠂⠁⠐"); // should not contract
         assert_eq!(table.translate("foobar"), "⠉⠂⠁⠐"); // only foo should be contracted
         assert_eq!(table.translate("foobarfoo"), "⠉⠑⠉"); // foo and bar should be contracted
@@ -437,7 +448,7 @@ mod tests {
             parse_rule("midword bar 26"),
             parse_rule("space \\s 0"),
         ];
-        let table = TranslationTable::compile(rules, Direction::Forward);
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
         assert_eq!(table.translate("bar"), "⠊"); // bar should contract with 24
         assert_eq!(table.translate("foobar"), "⠉⠊"); // bar should contract with 24
         assert_eq!(table.translate("foobarfoo"), "⠉⠢⠉"); // bar should contract with 26
@@ -458,7 +469,7 @@ mod tests {
             parse_rule("endword bar 15"),
             parse_rule("space \\s 0"),
         ];
-        let table = TranslationTable::compile(rules, Direction::Forward);
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
         assert_eq!(table.translate("bar"), "⠑"); // should contract
         assert_eq!(table.translate("foobar"), "⠉⠑"); // both should be contracted
         assert_eq!(table.translate("foobar."), "⠉⠑⠠"); // both should be contracted
@@ -480,7 +491,7 @@ mod tests {
             parse_rule("partword bar 15"),
             parse_rule("space \\s 0"),
         ];
-        let table = TranslationTable::compile(rules, Direction::Forward);
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
         assert_eq!(table.translate("bar"), "⠂⠁⠐"); // bar should not be contracted
         assert_eq!(table.translate("foobar"), "⠉⠂⠁⠐"); // bar should not be contracted
         assert_eq!(table.translate("foobar."), "⠉⠂⠁⠐⠠"); // bar should not be contracted
@@ -497,7 +508,7 @@ mod tests {
             parse_rule("lowercase b 12"),
             parse_rule("base uppercase A a"),
         ];
-        let table = TranslationTable::compile(rules, Direction::Forward);
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
         assert_eq!(table.translate("a"), "⠁");
         assert_eq!(table.translate("A"), "⠁");
         assert_eq!(table.translate("ab"), "⠁⠃");
@@ -519,7 +530,7 @@ mod tests {
         let display_rules = vec![parse_rule("display A 1"), parse_rule("display \\s 0")];
         let rules = vec![parse_rule("letter a 1"), parse_rule("space \\s 0")];
         let display_table = DisplayTable::compile(display_rules, Direction::Forward);
-        let table = TranslationTable::compile(rules, Direction::Forward);
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
         assert_eq!(display_table.translate(&table.translate("a")), "A");
         assert_eq!(display_table.translate(&table.translate(" ")), " ");
         assert_eq!(display_table.translate(&table.translate("a a")), "A A");

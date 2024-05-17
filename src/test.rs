@@ -4,7 +4,7 @@ use enumset::{EnumSet, EnumSetType};
 
 use crate::{
     parser::{self, Direction, TableError},
-    translator::{DisplayTable, TranslationTable},
+    translator::{self, DisplayTable, TranslationTable},
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -13,6 +13,8 @@ pub enum TestError {
     NotImplemented,
     #[error("Errors in table {0:?}")]
     TableErrors(Vec<TableError>),
+    #[error("Error when compiling table {0:?}")]
+    CompilationError(#[from] translator::TranslationError),
 }
 
 impl From<Vec<TableError>> for TestError {
@@ -128,7 +130,7 @@ impl<'a> TestMatrix<'a> {
                     }
                     Table::Query(..) => return Err(TestError::NotImplemented),
                 };
-                let table = TranslationTable::compile(rules, *direction);
+                let table = TranslationTable::compile(rules, *direction)?;
                 for test in self.tests {
                     results.push(test.check(&table, &display_table, *direction));
                 }

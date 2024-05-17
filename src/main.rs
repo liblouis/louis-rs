@@ -99,8 +99,10 @@ fn translate(table: &Path, direction: Direction, input: &str) {
     let rules = parser::table_file(table);
     match rules {
         Ok(rules) => {
-            let table = TranslationTable::compile(rules, direction);
-            println!("{}", table.translate(input));
+            match TranslationTable::compile(rules, direction) {
+                Ok(table) => println!("{}", table.translate(input)),
+                Err(e) => eprintln!("Could not compile table: {:?}", e),
+            };
         }
         Err(errors) => {
             print_errors(errors);
@@ -227,12 +229,12 @@ fn main() {
             None => {
                 let rules = parser::table_file(&table);
                 match rules {
-                    Ok(rules) => {
-                        let table = TranslationTable::compile(rules, direction);
-                        repl(Box::new(move |input| {
+                    Ok(rules) => match TranslationTable::compile(rules, direction) {
+                        Ok(table) => repl(Box::new(move |input| {
                             println!("{}", table.translate(&input))
-                        }));
-                    }
+                        })),
+                        Err(e) => eprintln!("Could not compile table: {:?}", e),
+                    },
                     Err(errors) => {
                         print_errors(errors);
                     }
