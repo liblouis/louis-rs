@@ -240,6 +240,19 @@ impl TranslationTable {
             character_definitions,
             translations,
         }
+    fn resolve_implicit_dots(
+        chars: &str,
+        character_definitions: &CharacterDefinition,
+    ) -> Result<String, TranslationError> {
+        chars
+            .chars()
+            .map(|c| {
+                character_definitions
+                    .get(&c)
+                    .ok_or(TranslationError::ImplicitCharacterNotDefined(c))
+                    .map(|t| t.output.to_string())
+            })
+            .collect()
     }
 
     pub fn translate(&self, input: &str) -> String {
@@ -360,6 +373,22 @@ mod tests {
 
     fn parse_rule(source: &str) -> AnchoredRule {
         RuleParser::new(source).rule().unwrap().into()
+    }
+
+    #[test]
+    fn resolve_implicit_dots_test() {
+        let char_defs = CharacterDefinition::new();
+        assert_eq!(
+            TranslationTable::resolve_implicit_dots("xs", &char_defs),
+            Err(TranslationError::ImplicitCharacterNotDefined('x'))
+        );
+        let mut char_defs = CharacterDefinition::new();
+        char_defs.insert('a', Translation::new("a".to_string(), "A".to_string(), 1));
+        char_defs.insert('h', Translation::new("h".to_string(), "H".to_string(), 1));
+        assert_eq!(
+            TranslationTable::resolve_implicit_dots("haha", &char_defs),
+            Ok("HAHA".into())
+        );
     }
 
     #[test]
