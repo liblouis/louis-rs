@@ -14,7 +14,11 @@ pub enum TranslationError {
     #[error("Implicit character {0:?} not defined")]
     ImplicitCharacterNotDefined(char),
     #[error("Character in base rule not defined: derived: {derived:?}, base: {base:?}, direction: {direction:?}")]
-    BaseCharacterNotDefined{base: char, derived: char, direction: Direction},
+    BaseCharacterNotDefined {
+        base: char,
+        derived: char,
+        direction: Direction,
+    },
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -242,7 +246,13 @@ impl TranslationTable {
         for rule in rules {
             match rule.rule {
                 Rule::Base { derived, base, .. } => {
-		    let translation = character_definitions.get(&base).ok_or(TranslationError::BaseCharacterNotDefined{base, derived, direction})?;
+                    let translation = character_definitions.get(&base).ok_or(
+                        TranslationError::BaseCharacterNotDefined {
+                            base,
+                            derived,
+                            direction,
+                        },
+                    )?;
                     character_definitions.insert(
                         derived,
                         Translation {
