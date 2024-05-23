@@ -246,21 +246,28 @@ impl TranslationTable {
         for rule in rules {
             match rule.rule {
                 Rule::Base { derived, base, .. } => {
-                    let translation = character_definitions.get(&base).ok_or(
-                        TranslationError::BaseCharacterNotDefined {
-                            base,
-                            derived,
-                            direction,
-                        },
-                    )?;
-                    character_definitions.insert(
-                        derived,
-                        Translation {
-                            input: derived.to_string(),
-                            ..translation.clone()
-                        },
-                    );
-                }
+		    if let Some(translation) = character_definitions.get(&base) {
+			character_definitions.insert(
+			    derived,
+			    Translation {
+				input: derived.to_string(),
+				..translation.clone()
+			    },
+			);
+		    } else {
+			// hm, there is no character definition for the base character
+			if cfg!(feature = "backwards_compatibility") {
+			    // ignore this problem
+			} else {
+			    // trow an error
+			    return Err(TranslationError::BaseCharacterNotDefined {
+				base,
+				derived,
+				direction,
+			    });
+			}
+		    }
+		}
                 Rule::Comp6 {
                     chars,
                     dots: Braille::Implicit,
