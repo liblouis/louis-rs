@@ -85,6 +85,8 @@ impl<'a> PatternParser<'a> {
         }
     }
 
+    // FIXME: I think this is a missunderstanding of []. It is
+    // supposed to behave like in normal RegExps, i.e. like a set
     fn characters(&mut self) -> Result<Pattern, ParseError> {
         if self.chars.peek() == Some(&'[') {
             self.consume('[')?;
