@@ -16,8 +16,8 @@ use search_path::SearchPath;
 
 use self::{
     braille::{braille_chars, chars_to_dots, BrailleChars},
+    match_rule::Patterns,
     multipass::Test,
-    match_rule::Pattern,
 };
 
 pub use braille::dots_to_unicode;
@@ -675,9 +675,9 @@ pub enum Rule {
     },
 
     Match {
-        pre: Pattern,
+        pre: Patterns,
         chars: String,
-        post: Pattern,
+        post: Patterns,
         dots: Braille,
         constraints: Constraints,
         matches: Option<WithMatches>,
@@ -1186,7 +1186,7 @@ impl<'a> RuleParser<'a> {
             .map(|s| s.to_string())
     }
 
-    fn match_pre(&mut self) -> Result<Pattern, ParseError> {
+    fn match_pre(&mut self) -> Result<Patterns, ParseError> {
         self.tokens
             .next()
             .ok_or(ParseError::MatchPreExpected)
@@ -1197,7 +1197,7 @@ impl<'a> RuleParser<'a> {
             })?
     }
 
-    fn match_post(&mut self) -> Result<Pattern, ParseError> {
+    fn match_post(&mut self) -> Result<Patterns, ParseError> {
         self.tokens
             .next()
             .ok_or(ParseError::MatchPostExpected)

@@ -6,6 +6,8 @@ pub enum ParseError {
     CharExpected { expected: char, found: Option<char> },
     #[error("Invalid attribute {0:?}")]
     InvalidAttribute(Option<char>),
+    #[error("Quantifier not allowed without pattern")]
+    MissingPatternBeforeQuantifier,
     #[error("Pattern cannot be empty")]
     EmptyPattern,
     #[error("Group cannot be empty")]
@@ -41,7 +43,7 @@ pub enum Pattern {
     Either(Box<Pattern>, Box<Pattern>),
 }
 
-type Patterns = Vec<Pattern>;
+pub type Patterns = Vec<Pattern>;
 
 pub struct PatternParser<'a> {
     chars: Peekable<Chars<'a>>,
@@ -145,9 +147,9 @@ impl<'a> PatternParser<'a> {
 
     fn group(&mut self) -> Result<Pattern, ParseError> {
         self.consume('(')?;
-        let mut patterns: Vec<Pattern> = Vec::new();
+        let mut patterns: Patterns = Vec::new();
         while self.chars.peek() != Some(&')') {
-            patterns.push(self.pattern()?);
+            patterns.push(self.pattern_with_quantifier()?);
         }
         self.consume(')')?;
         if patterns.is_empty() {
@@ -159,7 +161,7 @@ impl<'a> PatternParser<'a> {
 
     fn negate(&mut self) -> Result<Pattern, ParseError> {
         self.consume('!')?;
-        let pattern = self.pattern()?;
+        let pattern = self.pattern_with_quantifier()?;
         Ok(Pattern::Negate(Box::new(pattern)))
     }
 
@@ -172,12 +174,16 @@ impl<'a> PatternParser<'a> {
             Some('!') => self.negate(),
             Some('[') => self.characters(),
             Some('(') => self.group(),
+	    // FIXME: handle escaped special chars
+            Some('?') | Some('*') | Some('+') | Some('|') => {
+                Err(ParseError::MissingPatternBeforeQuantifier)
+            }
             Some(_) => self.characters(),
             None => Err(ParseError::EmptyPattern),
         }
     }
 
-    pub fn pattern(&mut self) -> Result<Pattern, ParseError> {
+    fn pattern_with_quantifier(&mut self) -> Result<Pattern, ParseError> {
         let inner = self.inner_pattern()?;
         if self.chars.next_if(|&c| c == '?').is_some() {
             return Ok(Pattern::Optional(Box::new(inner)));
@@ -186,10 +192,18 @@ impl<'a> PatternParser<'a> {
         } else if self.chars.next_if(|&c| c == '+').is_some() {
             return Ok(Pattern::OneOrMore(Box::new(inner)));
         } else if self.chars.next_if(|&c| c == '|').is_some() {
-            let outer = self.pattern()?;
+            let outer = self.pattern_with_quantifier()?;
             return Ok(Pattern::Either(Box::new(inner), Box::new(outer)));
         }
         Ok(inner)
+    }
+
+    pub fn pattern(&mut self) -> Result<Patterns, ParseError> {
+        let mut patterns: Patterns = Vec::new();
+        while self.chars.peek().is_some() {
+            patterns.push(self.pattern_with_quantifier()?);
+        }
+        Ok(patterns)
     }
 }
 
@@ -275,43 +289,45 @@ mod tests {
     fn pattern_test() {
         assert_eq!(
             PatternParser::new("(abc)").pattern(),
-            Ok(Pattern::Group(Vec::from([
+            Ok(vec![Pattern::Group(Vec::from([
                 Pattern::Characters("a".into()),
                 Pattern::Characters("b".into()),
                 Pattern::Characters("c".into())
-            ])))
+            ]))])
         );
         assert_eq!(
             PatternParser::new("(abc)?").pattern(),
-            Ok(Pattern::Optional(Box::new(Pattern::Group(Vec::from([
-                Pattern::Characters("a".into()),
-                Pattern::Characters("b".into()),
-                Pattern::Characters("c".into())
-            ])))))
+            Ok(vec![Pattern::Optional(Box::new(Pattern::Group(
+                Vec::from([
+                    Pattern::Characters("a".into()),
+                    Pattern::Characters("b".into()),
+                    Pattern::Characters("c".into())
+                ])
+            )))])
         );
         assert_eq!(
             PatternParser::new("(abc)+").pattern(),
-            Ok(Pattern::OneOrMore(Box::new(Pattern::Group(Vec::from([
-                Pattern::Characters("a".into()),
-                Pattern::Characters("b".into()),
-                Pattern::Characters("c".into())
-            ])))))
+            Ok(vec![Pattern::OneOrMore(Box::new(Pattern::Group(
+                Vec::from([
+                    Pattern::Characters("a".into()),
+                    Pattern::Characters("b".into()),
+                    Pattern::Characters("c".into())
+                ])
+            )))])
         );
         assert_eq!(
             PatternParser::new("(abc)*").pattern(),
-            Ok(Pattern::ZeroOrMore(Box::new(Pattern::Group(Vec::from([
-                Pattern::Characters("a".into()),
-                Pattern::Characters("b".into()),
-                Pattern::Characters("c".into())
-            ])))))
+            Ok(vec![Pattern::ZeroOrMore(Box::new(Pattern::Group(
+                Vec::from([
+                    Pattern::Characters("a".into()),
+                    Pattern::Characters("b".into()),
+                    Pattern::Characters("c".into())
+                ])
+            )))])
         );
         assert_eq!(
-            // FIXME: This test should fail as it contains a lonely *
-            // that doesn't belong to a pattern
             PatternParser::new("a**").pattern(),
-            Ok(Pattern::ZeroOrMore(Box::new(Pattern::Characters(
-                "a".into()
-            ))))
+            Err(ParseError::MissingPatternBeforeQuantifier)
         );
     }
 }
