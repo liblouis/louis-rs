@@ -17,6 +17,7 @@ use search_path::SearchPath;
 use self::{
     braille::{braille_chars, chars_to_dots, BrailleChars},
     multipass::Test,
+    match_rule::Pattern,
 };
 
 pub use braille::dots_to_unicode;
@@ -103,6 +104,8 @@ pub enum ParseError {
     MultipassActionExpected,
     #[error("Invalid multipass test: {0}")]
     InvalidMultipassTest(#[from] multipass::ParseError),
+    #[error("Invalid match pattern: {0}")]
+    InvalidMatchPattern(#[from] match_rule::ParseError),
     #[error("Match pre-pattern expected")]
     MatchPreExpected,
     #[error("Match post-pattern expected")]
@@ -672,9 +675,9 @@ pub enum Rule {
     },
 
     Match {
-        pre: String,
+        pre: Pattern,
         chars: String,
-        post: String,
+        post: Pattern,
         dots: Braille,
         constraints: Constraints,
         matches: Option<WithMatches>,
@@ -1183,18 +1186,26 @@ impl<'a> RuleParser<'a> {
             .map(|s| s.to_string())
     }
 
-    fn match_pre(&mut self) -> Result<String, ParseError> {
+    fn match_pre(&mut self) -> Result<Pattern, ParseError> {
         self.tokens
             .next()
             .ok_or(ParseError::MatchPreExpected)
-            .map(|s| s.to_string())
+            .map(|s| {
+                match_rule::PatternParser::new(&s)
+                    .pattern()
+                    .map_err(ParseError::InvalidMatchPattern)
+            })?
     }
 
-    fn match_post(&mut self) -> Result<String, ParseError> {
+    fn match_post(&mut self) -> Result<Pattern, ParseError> {
         self.tokens
             .next()
             .ok_or(ParseError::MatchPostExpected)
-            .map(|s| s.to_string())
+            .map(|s| {
+                match_rule::PatternParser::new(&s)
+                    .pattern()
+                    .map_err(ParseError::InvalidMatchPattern)
+            })?
     }
 
     pub fn rule(&mut self) -> Result<Rule, ParseError> {

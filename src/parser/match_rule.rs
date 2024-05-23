@@ -31,7 +31,7 @@ enum Attribute {
 }
 
 #[derive(Debug, PartialEq)]
-enum Pattern {
+pub enum Pattern {
     Characters(String),
     Any,
     Set(HashSet<char>),
