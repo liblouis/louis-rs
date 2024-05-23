@@ -6,10 +6,6 @@ pub enum ParseError {
     CharExpected { expected: char, found: Option<char> },
     #[error("Invalid attribute {0:?}")]
     InvalidAttribute(Option<char>),
-    #[error("Invalid boundary {0:?}")]
-    InvalidBoundary(Option<char>),
-    #[error("Invalid any {0:?}")]
-    InvalidAny(Option<char>),
     #[error("Pattern cannot be empty")]
     EmptyPattern,
     #[error("Group cannot be empty")]
@@ -17,7 +13,7 @@ pub enum ParseError {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-enum Attribute {
+pub enum Attribute {
     Space,
     Digit,
     Letter,
@@ -174,7 +170,7 @@ impl<'a> PatternParser<'a> {
             Some('!') => self.negate(),
             Some('[') => self.characters(),
             Some('(') => self.group(),
-            Some(c) => self.characters(),
+            Some(_) => self.characters(),
             None => Err(ParseError::EmptyPattern),
         }
     }
