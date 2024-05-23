@@ -23,6 +23,7 @@ pub use braille::dots_to_unicode;
 pub use braille::fallback;
 
 mod braille;
+mod match_rule;
 mod multipass;
 
 #[derive(EnumSetType, Debug)]
