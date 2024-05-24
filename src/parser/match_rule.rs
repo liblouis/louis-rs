@@ -26,6 +26,7 @@ pub enum Attribute {
     Seqdelimiter,
     Seqbeforechars,
     Seqafterchars,
+    Boundary,
 }
 
 #[derive(Debug, PartialEq)]
@@ -34,7 +35,6 @@ pub enum Pattern {
     Any,
     Set(HashSet<char>),
     Attributes(HashSet<Attribute>),
-    Boundary,
     Group(Patterns),
     Negate(Box<Pattern>),
     Optional(Box<Pattern>),
@@ -82,6 +82,8 @@ impl<'a> PatternParser<'a> {
             Some('~') => Ok(Attribute::Seqdelimiter),
             Some('<') => Ok(Attribute::Seqbeforechars),
             Some('>') => Ok(Attribute::Seqafterchars),
+	    Some('^') => Ok(Attribute::Boundary),
+	    Some('$') => Ok(Attribute::Boundary),
             Some(c) => Err(ParseError::InvalidAttribute(Some(c))),
             _ => Err(ParseError::InvalidAttribute(None)),
         }
@@ -135,16 +137,6 @@ impl<'a> PatternParser<'a> {
         Ok(Pattern::Any)
     }
 
-    fn boundary(&mut self) -> Result<Pattern, ParseError> {
-        self.consume('$')?;
-        Ok(Pattern::Boundary)
-    }
-
-    fn boundary_other(&mut self) -> Result<Pattern, ParseError> {
-        self.consume('^')?;
-        Ok(Pattern::Boundary)
-    }
-
     fn group(&mut self) -> Result<Pattern, ParseError> {
         self.consume('(')?;
         let mut patterns: Patterns = Vec::new();
@@ -169,8 +161,6 @@ impl<'a> PatternParser<'a> {
         match self.chars.peek() {
             Some('.') => self.any(),
             Some('%') => self.attributes(),
-            Some('$') => self.boundary(),
-            Some('^') => self.boundary_other(),
             Some('!') => self.negate(),
             Some('[') => self.characters(),
             Some('(') => self.group(),
