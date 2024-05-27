@@ -27,6 +27,7 @@ pub enum Attribute {
     Seqbeforechars,
     Seqafterchars,
     Boundary,
+    UserDefined(u8),
 }
 
 #[derive(Debug, PartialEq)]
@@ -82,8 +83,15 @@ impl<'a> PatternParser<'a> {
             Some('~') => Ok(Attribute::Seqdelimiter),
             Some('<') => Ok(Attribute::Seqbeforechars),
             Some('>') => Ok(Attribute::Seqafterchars),
-	    Some('^') => Ok(Attribute::Boundary),
-	    Some('$') => Ok(Attribute::Boundary),
+            Some('^') => Ok(Attribute::Boundary),
+            Some('0') => Ok(Attribute::UserDefined(0)),
+            Some('1') => Ok(Attribute::UserDefined(1)),
+            Some('2') => Ok(Attribute::UserDefined(2)),
+            Some('3') => Ok(Attribute::UserDefined(3)),
+            Some('4') => Ok(Attribute::UserDefined(4)),
+            Some('5') => Ok(Attribute::UserDefined(5)),
+            Some('6') => Ok(Attribute::UserDefined(6)),
+            Some('7') => Ok(Attribute::UserDefined(7)),
             Some(c) => Err(ParseError::InvalidAttribute(Some(c))),
             _ => Err(ParseError::InvalidAttribute(None)),
         }
