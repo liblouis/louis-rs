@@ -33,6 +33,7 @@ pub enum Attribute {
 #[derive(Debug, PartialEq)]
 pub enum Pattern {
     Characters(String),
+    Boundary,
     Any,
     Set(HashSet<char>),
     Attributes(HashSet<Attribute>),
@@ -165,10 +166,22 @@ impl<'a> PatternParser<'a> {
         Ok(Pattern::Negate(Box::new(pattern)))
     }
 
+    fn start_boundary(&mut self) -> Result<Pattern, ParseError> {
+        self.consume('^')?;
+        Ok(Pattern::Boundary)
+    }
+
+    fn end_boundary(&mut self) -> Result<Pattern, ParseError> {
+        self.consume('$')?;
+        Ok(Pattern::Boundary)
+    }
+
     fn inner_pattern(&mut self) -> Result<Pattern, ParseError> {
         match self.chars.peek() {
             Some('.') => self.any(),
             Some('%') => self.attributes(),
+            Some('^') => self.start_boundary(),
+            Some('$') => self.end_boundary(),
             Some('!') => self.negate(),
             Some('[') => self.characters(),
             Some('(') => self.group(),
