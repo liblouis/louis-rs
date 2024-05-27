@@ -172,7 +172,7 @@ impl<'a> PatternParser<'a> {
             Some('!') => self.negate(),
             Some('[') => self.characters(),
             Some('(') => self.group(),
-	    // FIXME: handle escaped special chars
+            // FIXME: handle escaped special chars
             Some('?') | Some('*') | Some('+') | Some('|') => {
                 Err(ParseError::MissingPatternBeforeQuantifier)
             }
