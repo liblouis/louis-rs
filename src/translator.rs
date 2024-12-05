@@ -237,6 +237,42 @@ impl TranslationTable {
                     Boundary::None,
                     Boundary::NotWord,
                 ),
+                Rule::Begnum { chars, dots, .. } => translations.insert(
+                    chars.to_string(),
+                    dots_to_unicode(dots),
+                    Boundary::Word,
+                    Boundary::WordNumber,
+                ),
+                Rule::Midnum { chars, dots, .. } => translations.insert(
+                    chars.to_string(),
+                    dots_to_unicode(dots),
+                    Boundary::Number,
+                    Boundary::Number,
+                ),
+                Rule::Endnum {
+                    chars,
+                    dots: Braille::Explicit(dots),
+                    ..
+                } => translations.insert(
+                    chars.to_string(),
+                    dots_to_unicode(dots),
+                    Boundary::NumberWord,
+                    Boundary::Word,
+                ),
+                Rule::Endnum {
+                    chars,
+                    dots: Braille::Implicit,
+                    ..
+                } => translations.insert(
+                    chars.to_string(),
+                    resolve_implicit_dots(&chars, &character_definitions)?,
+                    Boundary::NumberWord,
+                    Boundary::Word,
+                ),
+                // the base rule is handled in the second pass
+                Rule::Base { .. } => (),
+                // display rules are ignored for translation tables
+                Rule::Display { .. } => (),
                 _ => (),
             }
         }
@@ -609,6 +645,37 @@ mod tests {
         assert_eq!(table.translate("foobar foo"), "⠉⠂⠁⠐⠀⠉"); // bar should not be contracted
         assert_eq!(table.translate("foobar. foo"), "⠉⠂⠁⠐⠠⠀⠉"); // bar should not be contracted
         assert_eq!(table.translate("foo bar foo"), "⠉⠀⠂⠁⠐⠀⠉"); // bar should not be contracted
+    }
+
+    #[test]
+    #[ignore = "Not implemented properly"]
+    fn begnum_test() {
+        let rules = vec![
+            parse_rule("digit 1 1"),
+            parse_rule("sign a 3456"),
+            parse_rule("begnum a 4"),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
+        assert_eq!(table.translate("1"), "⠁");
+        assert_eq!(table.translate("a"), "⠼");
+        assert_eq!(table.translate("a1"), "⠈⠁");
+    }
+
+    #[test]
+    #[ignore = "Not implemented properly"]
+    fn endnum_test() {
+        let rules = vec![
+            parse_rule("digit 1 1"),
+            parse_rule("lowercase h 125"),
+            parse_rule("lowercase t 2345"),
+            parse_rule("punctuation . 6"),
+            parse_rule("always th 14"),
+            parse_rule("endnum th 15"),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
+        assert_eq!(table.translate("th"), "⠉");
+        assert_eq!(table.translate("1th"), "⠁⠑");
+        assert_eq!(table.translate("1th."), "⠁⠑⠠");
     }
 
     #[test]

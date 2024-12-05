@@ -9,6 +9,8 @@ pub enum Boundary {
     Word,
     NotWord,
     Number,
+    NumberWord,
+    WordNumber,
     None,
 }
 
