@@ -1,15 +1,31 @@
+//! Helper functions to define boundaries
+//!
+//! For simplicity sake for now this module defines boundaries based
+//! on Unicode properties. The original liblouis uses the character
+//! definitions instead.
+
+/// Return true if a character is part of a word
+fn is_word(c: char) -> bool {
+    // TODO: the definition of what really constitutes a word is a bit
+    // hand-wavy here. Maybe it should be something along the lines of
+    //    !c.is_numeric() && !c.is_whitespace() && !c.is_control()
+    c.is_alphabetic()
+}
+
+/// Return true if a character is at the beginning of a word
 pub fn word_start(prev: Option<char>, current: Option<char>) -> bool {
     match (prev, current) {
-        (None, Some(c)) if c.is_alphabetic() => true,
-        (Some(p), Some(c)) if c.is_alphabetic() => !p.is_alphabetic(),
+        (None, Some(c)) => is_word(c),
+        (Some(p), Some(c)) if is_word(c) => !is_word(p),
         (_, _) => false,
     }
 }
 
+/// Return true if a character is at the end of a word
 pub fn word_end(prev: Option<char>, current: Option<char>) -> bool {
     match (prev, current) {
-        (Some(c), None) => c.is_alphabetic(),
-        (Some(p), Some(c)) if p.is_alphabetic() => !c.is_alphabetic(),
+        (Some(c), None) => is_word(c),
+        (Some(p), Some(c)) if is_word(p) => !is_word(c),
         (_, _) => false,
     }
 }
