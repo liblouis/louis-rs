@@ -46,6 +46,24 @@ fn number_end(prev: Option<char>, current: Option<char>) -> bool {
     }
 }
 
+/// Return true if a character is at the boundary between a word and a
+/// number
+pub fn word_number(prev: Option<char>, current: Option<char>) -> bool {
+    match (prev, current) {
+        (Some(c1), Some(c2)) => is_word(c1) && c2.is_numeric(),
+        (_, _) => false,
+    }
+}
+
+/// Return true if a character is at the boundary between a number and a
+/// word
+pub fn number_word(prev: Option<char>, current: Option<char>) -> bool {
+    match (prev, current) {
+        (Some(c1), Some(c2)) => c1.is_numeric() && is_word(c2),
+        (_, _) => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -98,5 +116,33 @@ mod tests {
         assert!(!number_end(Some(' '), Some(' ')));
         assert!(!number_end(Some(';'), Some('.')));
         assert!(!number_end(Some(' '), Some('c')));
+    }
+
+    #[test]
+    fn word_number_test() {
+        assert!(word_number(Some('a'), Some('1')));
+        // TODO: '#' is currently not recognized as a word
+        //        assert!(word_number(Some('#'), Some('2')));
+        assert!(!word_number(Some('1'), Some('1')));
+        assert!(!word_number(Some('1'), Some(' ')));
+        assert!(!word_number(Some('1'), Some('a')));
+        assert!(!word_number(Some(' '), Some('1')));
+        assert!(!word_number(Some('a'), Some('a')));
+        assert!(!word_number(Some(' '), Some(' ')));
+    }
+
+    #[test]
+    fn number_word_test() {
+        assert!(number_word(Some('1'), Some('a')));
+        // TODO: '#' and '$' are currently not recognized as a word
+        //        assert!(number_word(Some('2'), Some('#')));
+        //        assert!(number_word(Some('2'), Some('$')));
+        assert!(!number_word(Some('1'), Some('1')));
+        assert!(!number_word(Some('1'), Some(' ')));
+        assert!(!number_word(Some('a'), Some('1')));
+        assert!(!number_word(Some(' '), Some('1')));
+        assert!(!number_word(Some('a'), Some('a')));
+        assert!(!number_word(Some(' '), Some(' ')));
+        assert!(!number_word(None, Some('a')));
     }
 }
