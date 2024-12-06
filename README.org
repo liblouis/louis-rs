@@ -17,7 +17,7 @@ using only character and most translation opcodes basically works.
 The original YAML test suite is supported and can be used to test the
 re-implementation.
 
-Currently, the re-implementation passes 66% of the liblouis test suite
+Currently, the re-implementation passes 68% of the liblouis test suite
 successfully.
 
 * Relation to liblouis
@@ -71,11 +71,11 @@ Run all YAML tests:
 #+BEGIN_SRC shell
   $ LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis ./target/release/louis check --summary ~/src/liblouis/tests/braille-specs/*.yaml ~/src/liblouis/tests/yaml/*.yaml 2> /dev/null 
   ================================================================================
-  693247 tests run:
-  459026 successes [66.2%]
-  221808 failures [32.0%]
-  12031 expected failures [1.7%]
-  382 unexpected successes [0.1%]
+  473240 tests run:
+  324695 successes [68.6%]
+  137803 failures [29.1%]
+  10319 expected failures [2.2%]
+  423 unexpected successes [0.1%]
 #+END_SRC
 
 Test the table query functionality:
