@@ -259,6 +259,13 @@ impl TranslationTable {
                     Boundary::NumberWord,
                     Boundary::Word,
                 ),
+                Rule::Match {
+                    pre,
+                    chars,
+                    post,
+                    dots: Braille::Explicit(dots),
+                    ..
+                } => translations.insert_match(chars.to_string(), dots_to_unicode(dots), pre, post),
                 // the base rule is handled in the second pass
                 Rule::Base { .. } => (),
                 // display rules are ignored for translation tables
@@ -709,5 +716,21 @@ mod tests {
         assert_eq!(display_table.translate(&table.translate("a")), "A");
         assert_eq!(display_table.translate(&table.translate(" ")), " ");
         assert_eq!(display_table.translate(&table.translate("a a")), "A A");
+    }
+
+    #[test]
+    fn match_test() {
+        let rules = vec![
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 2"),
+            parse_rule("lowercase f 3"),
+            parse_rule("lowercase o 4"),
+            parse_rule("lowercase r 5"),
+            parse_rule("match a foo b 14"),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
+        assert_eq!(table.translate("foo"), "⠄⠈⠈");
+        assert_eq!(table.translate("afoo"), "⠁⠄⠈⠈");
+        assert_eq!(table.translate("afoob"), "⠁⠉⠂");
     }
 }

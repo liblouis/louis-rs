@@ -16,12 +16,12 @@ use search_path::SearchPath;
 
 use self::{
     braille::{braille_chars, chars_to_dots, BrailleChars},
-    match_rule::Patterns,
     multipass::Test,
 };
 
 pub use braille::dots_to_unicode;
 pub use braille::fallback;
+pub use match_rule::{Pattern, Patterns};
 
 mod braille;
 mod match_rule;
