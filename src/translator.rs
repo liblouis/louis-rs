@@ -648,7 +648,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Not implemented properly"]
     fn begnum_test() {
         let rules = vec![
             parse_rule("digit 1 1"),
@@ -662,7 +661,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Not implemented properly"]
     fn endnum_test() {
         let rules = vec![
             parse_rule("digit 1 1"),
