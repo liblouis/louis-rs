@@ -112,7 +112,7 @@ impl Trie {
         &'a self,
         input: &str,
         node: &'a TrieNode,
-    ) -> Vec<&Translation> {
+    ) -> Vec<&'a Translation> {
         let mut current_node = node;
         let mut matching_rules = Vec::new();
         let mut prev: Option<char> = None;
