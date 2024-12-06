@@ -259,16 +259,6 @@ impl TranslationTable {
                     Boundary::NumberWord,
                     Boundary::Word,
                 ),
-                Rule::Endnum {
-                    chars,
-                    dots: Braille::Implicit,
-                    ..
-                } => translations.insert(
-                    chars.to_string(),
-                    resolve_implicit_dots(&chars, &character_definitions)?,
-                    Boundary::NumberWord,
-                    Boundary::Word,
-                ),
                 // the base rule is handled in the second pass
                 Rule::Base { .. } => (),
                 // display rules are ignored for translation tables
@@ -402,6 +392,16 @@ impl TranslationTable {
                     resolve_implicit_dots(&chars, &character_definitions)?,
                     Boundary::None,
                     Boundary::NotWord,
+                ),
+                Rule::Endnum {
+                    chars,
+                    dots: Braille::Implicit,
+                    ..
+                } => translations.insert(
+                    chars.to_string(),
+                    resolve_implicit_dots(&chars, &character_definitions)?,
+                    Boundary::NumberWord,
+                    Boundary::Word,
                 ),
                 _ => (),
             }
