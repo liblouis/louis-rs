@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::collections::HashMap;
 
 use trie::Trie;
 
@@ -29,6 +29,10 @@ pub struct Translation {
     length: usize,
     /// the length of the match in chars including word boundaries
     weight: usize,
+    /// the pre pattern of match rules is essentially a look-behind regexp. The offset is the length
+    /// of the pre-pattern (calculated at run-time) so that we can apply the translation later in
+    /// the input string, when the pre pattern has been consumed.
+    offset: usize,
 }
 
 impl Translation {
@@ -39,6 +43,18 @@ impl Translation {
             output,
             weight,
             length,
+            offset: 0,
+        }
+    }
+
+    fn with_offset(self, offset: usize) -> Self {
+        Self { offset, ..self }
+    }
+
+    fn decrement_offset(self, decrement: usize) -> Self {
+        Self {
+            offset: self.offset - decrement,
+            ..self
         }
     }
 }
@@ -422,33 +438,67 @@ impl TranslationTable {
         })
     }
 
+    fn update_offsets(&self, translations: Vec<Translation>, decrement: usize) -> Vec<Translation> {
+        translations
+            .into_iter()
+            .map(|t| t.decrement_offset(decrement))
+            .collect()
+    }
+
     pub fn translate(&self, input: &str) -> String {
-        let mut translations: Vec<Cow<Translation>> = Vec::new();
+        let mut translations: Vec<Translation> = Vec::new();
+        let mut delayed_translations: Vec<Translation> = Vec::new();
         let mut chars = input.chars();
         let mut prev: Option<char> = None;
 
         loop {
-            let candidates = self.translations.find_translations(chars.as_str(), prev);
+            let (mut candidates, delayed): (Vec<Translation>, Vec<Translation>) = self
+                .translations
+                .find_translations(chars.as_str(), prev)
+                .into_iter()
+                // split off candidates with an offset
+                // TODO: figure out what to do with delayed rules that have a negative offset, i.e.
+                // if there was a matching rule that consumed so much input that the delayed rule is
+                // no longer applicable
+                .partition(|t| t.offset == 0);
+            delayed_translations.extend(delayed);
+            let (current, delayed): (Vec<Translation>, Vec<Translation>) = delayed_translations
+                .into_iter()
+                .partition(|t| t.offset == 0);
+            delayed_translations = delayed;
+            candidates.extend(current);
+            candidates.sort_by_key(|translation| translation.weight);
             if let Some(t) = candidates.last() {
                 // there is a matching translation rule
-                let translation = Cow::Borrowed(*t);
+                let translation = t.clone();
                 // move the iterator forward by the number of characters in the translation
-                chars.nth(t.length - 1);
+                let length = t.length - 1;
+                chars.nth(length);
                 prev = translation.input.chars().last();
                 translations.push(translation);
+                delayed_translations = delayed_translations
+                    .into_iter()
+                    .map(|t| t.decrement_offset(length))
+                    .collect();
             } else if let Some(next_char) = chars.next() {
                 // no translation rule found; try character definition rules
                 prev = Some(next_char);
                 if let Some(translation) = self.character_definitions.get(&next_char) {
                     // there is a matching character definition for the next character
-                    let translation = Cow::Borrowed(translation);
-                    translations.push(translation);
+                    translations.push(translation.clone());
+                    delayed_translations = delayed_translations
+                        .into_iter()
+                        .map(|t| t.decrement_offset(1))
+                        .collect();
                 } else if let Some(ref replacement) = self.undefined {
                     // there is a rule for undefined characters
                     let translation =
                         Translation::new(next_char.to_string(), replacement.to_string(), 1);
-                    let translation: Cow<'_, Translation> = Cow::Owned(translation);
                     translations.push(translation);
+                    delayed_translations = delayed_translations
+                        .into_iter()
+                        .map(|t| t.decrement_offset(1))
+                        .collect();
                 } else {
                     // otherwise handle it as a undefined character
                     let translation = Translation::new(
@@ -456,8 +506,11 @@ impl TranslationTable {
                         self.handle_undefined_char(next_char),
                         1,
                     );
-                    let translation: Cow<'_, Translation> = Cow::Owned(translation);
                     translations.push(translation);
+                    delayed_translations = delayed_translations
+                        .into_iter()
+                        .map(|t| t.decrement_offset(1))
+                        .collect();
                 }
             } else {
                 // the chars iterator is exhausted
