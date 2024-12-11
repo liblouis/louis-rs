@@ -23,15 +23,21 @@ pub enum TranslationError {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Translation {
+    /// Input string to be translated
     input: String,
+    /// The translation of `input`, typically Unicode braille. In the case of back-translation the
+    /// `input` contains Unicode braille and the output plain text.
     output: String,
-    /// number of chars in `input`
+    /// Number of chars in `input`
     length: usize,
-    /// the length of the match in chars including word boundaries
+    /// Weight of a translation. Typically this is the length of the input, but often it includes
+    /// word boundaries as well. In some cases the weight has to be calculated dynamically, for
+    /// instance for `match` opcodes where the length of the matched input often depends on regular
+    /// expressions.
     weight: usize,
-    /// the pre pattern of match rules is essentially a look-behind regexp. The offset is the length
-    /// of the pre-pattern (calculated at run-time) so that we can apply the translation later in
-    /// the input string, when the pre pattern has been consumed.
+    /// The `match` opcode contains a pre-pattern which is essentially a look-behind regexp. The
+    /// `offset` is the length of this pre-pattern (calculated at run-time) so that the translation
+    /// can be applied later in the input string, when the pre-pattern has been consumed.
     offset: usize,
 }
 
@@ -47,10 +53,13 @@ impl Translation {
         }
     }
 
+    /// Set the `offset` of a translation.
     fn with_offset(self, offset: usize) -> Self {
         Self { offset, ..self }
     }
 
+    /// Set the `weight` of a translation if `offset` is greater than 0, otherwise return the
+    /// translation unchanged.
     fn with_weight_if_offset(self, weight: usize, offset: usize) -> Self {
         if offset > 0 {
             Self { weight, ..self }
@@ -59,6 +68,7 @@ impl Translation {
         }
     }
 
+    /// Decrement the `offset` of a translation.
     fn decrement_offset(self, decrement: usize) -> Self {
         Self {
             offset: self.offset - decrement,
