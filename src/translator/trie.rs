@@ -47,6 +47,9 @@ impl TrieNode {
         let lowercase = c.to_lowercase().next().unwrap();
         self.char_transition(lowercase)
     }
+    fn any_transition(&self) -> Option<&TrieNode> {
+        self.transitions.get(&Transition::Any)
+    }
     fn word_start_transition(&self) -> Option<&TrieNode> {
         self.transitions.get(&Transition::Start(Boundary::Word))
     }
@@ -237,14 +240,21 @@ impl Trie {
                     match_length + 1,
                     offset,
                 ));
-            }
-            if let Some(node) = node.char_case_insensitive_transition(c) {
+            } else if let Some(node) = node.char_case_insensitive_transition(c) {
                 matching_rules.extend(self.find_translations_from_node(
                     &input[bytes..],
                     Some(c),
                     node,
                     match_length + 1,
                     offset,
+                ));
+            } else if let Some(node) = node.any_transition() {
+                matching_rules.extend(self.find_translations_from_node(
+		    &input[bytes..],
+		    Some(c),
+		    node,
+		    match_length + 1,
+		    offset,
                 ));
             }
         }
