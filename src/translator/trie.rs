@@ -218,8 +218,12 @@ impl Trie {
 
         // if this node has a translation add it to the list of matching rules
         if let Some(ref translation) = node.translation {
-            // FIXME: we need to add the the match_length as a weight to this translation here
-            let translation = Translation::with_offset(translation.clone(), offset);
+            let translation = translation
+                .clone()
+                .with_offset(offset)
+                // if there is an offset (typically in a match opcode), the weight needs
+                // to be calculated at run-time. The weight is the actual length of match.
+                .with_weight_if_offset(match_length, offset);
             matching_rules.push(translation)
         }
         let c = chars.next();

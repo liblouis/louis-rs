@@ -51,6 +51,14 @@ impl Translation {
         Self { offset, ..self }
     }
 
+    fn with_weight_if_offset(self, weight: usize, offset: usize) -> Self {
+        if offset > 0 {
+            Self { weight, ..self }
+        } else {
+            self
+        }
+    }
+
     fn decrement_offset(self, decrement: usize) -> Self {
         Self {
             offset: self.offset - decrement,
@@ -452,11 +460,12 @@ impl TranslationTable {
         let mut prev: Option<char> = None;
 
         loop {
+            // given an input query the translation table for matching translations. Then split off
+            // the translations that are delayed, i.e. have an offset because they have a  pre-pattern
             let (mut candidates, delayed): (Vec<Translation>, Vec<Translation>) = self
                 .translations
                 .find_translations(chars.as_str(), prev)
                 .into_iter()
-                // split off candidates with an offset
                 // TODO: figure out what to do with delayed rules that have a negative offset, i.e.
                 // if there was a matching rule that consumed so much input that the delayed rule is
                 // no longer applicable
