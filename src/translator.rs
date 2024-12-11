@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use trie::Trie;
 
-use crate::parser::{dots_to_unicode, fallback, AnchoredRule, Braille, Direction, Rule};
+use crate::parser::{dots_to_unicode, fallback, AnchoredRule, Attribute, Braille, Direction, Rule};
 
 use self::trie::Boundary;
 
@@ -116,9 +116,27 @@ fn resolve_implicit_dots(
 }
 
 #[derive(Debug)]
+struct CharacterAttributes(HashSet<(char, Attribute)>);
+
+impl CharacterAttributes {
+    fn new() -> Self {
+        Self(HashSet::new())
+    }
+
+    fn insert(&mut self, c: char, attribute: Attribute) {
+        self.0.insert((c, attribute));
+    }
+
+    fn contains(&self, c: char, attribute: Attribute) -> bool {
+        self.0.contains(&(c, attribute))
+    }
+}
+
+#[derive(Debug)]
 pub struct TranslationTable {
     undefined: Option<String>,
     character_definitions: CharacterDefinition,
+    character_attributes: CharacterAttributes,
     translations: Trie,
     direction: Direction,
 }
@@ -130,6 +148,7 @@ impl TranslationTable {
     ) -> Result<Self, TranslationError> {
         let mut undefined = None;
         let mut character_definitions = CharacterDefinition::new();
+        let mut character_attributes = CharacterAttributes::new();
         let mut translations = Trie::new();
 
         let rules: Vec<AnchoredRule> = rules
@@ -144,35 +163,71 @@ impl TranslationTable {
                 }
                 Rule::Space {
                     character, dots, ..
+                } => {
+                    let translation =
+                        Translation::new(character.to_string(), dots_to_unicode(dots), 1);
+                    character_definitions.insert(*character, translation);
+                    character_attributes.insert(*character, Attribute::Space);
                 }
-                | Rule::Punctuation {
+                Rule::Punctuation {
                     character, dots, ..
+                } => {
+                    let translation =
+                        Translation::new(character.to_string(), dots_to_unicode(dots), 1);
+                    character_definitions.insert(*character, translation);
+                    character_attributes.insert(*character, Attribute::Punctuation);
                 }
-                | Rule::Digit {
-                    character, dots, ..
-                }
-                | Rule::Letter {
-                    character, dots, ..
-                }
-                | Rule::Lowercase {
-                    character, dots, ..
-                }
-                | Rule::Uppercase {
+                Rule::Digit {
                     character, dots, ..
                 }
                 | Rule::Litdigit {
                     character, dots, ..
+                } => {
+                    let translation =
+                        Translation::new(character.to_string(), dots_to_unicode(dots), 1);
+                    character_definitions.insert(*character, translation);
+                    character_attributes.insert(*character, Attribute::Digit);
                 }
-                | Rule::Sign {
+                Rule::Letter {
                     character, dots, ..
+                } => {
+                    let translation =
+                        Translation::new(character.to_string(), dots_to_unicode(dots), 1);
+                    character_definitions.insert(*character, translation);
+                    character_attributes.insert(*character, Attribute::Letter);
                 }
-                | Rule::Math {
+                Rule::Lowercase {
+                    character, dots, ..
+                } => {
+                    let translation =
+                        Translation::new(character.to_string(), dots_to_unicode(dots), 1);
+                    character_definitions.insert(*character, translation);
+                    character_attributes.insert(*character, Attribute::Lowercase);
+                }
+                Rule::Uppercase {
+                    character, dots, ..
+                } => {
+                    let translation =
+                        Translation::new(character.to_string(), dots_to_unicode(dots), 1);
+                    character_definitions.insert(*character, translation);
+                    character_attributes.insert(*character, Attribute::Uppercase);
+                }
+                Rule::Sign {
+                    character, dots, ..
+                } => {
+                    let translation =
+                        Translation::new(character.to_string(), dots_to_unicode(dots), 1);
+                    character_definitions.insert(*character, translation);
+                    character_attributes.insert(*character, Attribute::Sign);
+                }
+                Rule::Math {
                     character, dots, ..
                 } => {
                     character_definitions.insert(
                         *character,
                         Translation::new(character.to_string(), dots_to_unicode(dots), 1),
                     );
+		    // TODO: should the math opcode not also define a CharacterAttribute?
                 }
                 Rule::Comp6 {
                     chars,
@@ -452,6 +507,7 @@ impl TranslationTable {
             undefined,
             direction,
             character_definitions,
+            character_attributes,
             translations,
         })
     }

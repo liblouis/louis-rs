@@ -21,7 +21,7 @@ use self::{
 
 pub use braille::dots_to_unicode;
 pub use braille::fallback;
-pub use match_rule::{Pattern, Patterns};
+pub use match_rule::{Attribute, Pattern, Patterns};
 
 mod braille;
 mod match_rule;
