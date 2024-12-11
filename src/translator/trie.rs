@@ -250,11 +250,11 @@ impl Trie {
                 ));
             } else if let Some(node) = node.any_transition() {
                 matching_rules.extend(self.find_translations_from_node(
-		    &input[bytes..],
-		    Some(c),
-		    node,
-		    match_length + 1,
-		    offset,
+                    &input[bytes..],
+                    Some(c),
+                    node,
+                    match_length + 1,
+                    offset,
                 ));
             }
         }
