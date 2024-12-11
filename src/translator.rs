@@ -115,6 +115,27 @@ fn resolve_implicit_dots(
         .collect()
 }
 
+/// Convert braille dots to Unicode characters.
+///
+/// Convert given braille `dots` to Unicode characters. If the dots are `Explicit` then simply
+/// delegate to the [dots_to_unicode] function. Otherwise, if the dots are `Implicit` convert the
+/// given `chars` to braille with the given `character_definitions` and using the
+/// [resolve_implicit_dots] function
+///
+/// Returns the braille Unicode characters or `TranslationError` if the implicit characters could
+/// not be converted.
+fn braille_to_unicode(
+    dots: &Braille,
+    chars: &str,
+    character_definitions: &CharacterDefinition,
+) -> Result<String, TranslationError> {
+    let dots = match dots {
+        Braille::Implicit => resolve_implicit_dots(&chars, character_definitions)?,
+        Braille::Explicit(dots) => dots_to_unicode(&dots),
+    };
+    Ok(dots)
+}
+
 #[derive(Debug)]
 struct CharacterAttributes(HashSet<(char, Attribute)>);
 
@@ -227,105 +248,85 @@ impl TranslationTable {
                         *character,
                         Translation::new(character.to_string(), dots_to_unicode(dots), 1),
                     );
-		    // TODO: should the math opcode not also define a CharacterAttribute?
+                    // TODO: should the math opcode not also define a CharacterAttribute?
                 }
-                Rule::Comp6 {
-                    chars,
-                    dots: Braille::Explicit(dots),
-                    ..
+                // display rules are ignored for translation tables
+                Rule::Display { .. } => (),
+                _ => (),
+            }
+        }
+
+        // The second pass goes through the rules to resolve the base opcodes and implicit (`=`)
+        // arguments in rules
+        for rule in &rules {
+            match &rule.rule {
+                Rule::Base { derived, base, .. } => {
+                    if let Some(translation) = character_definitions.get(base) {
+                        character_definitions.insert(
+                            *derived,
+                            Translation {
+                                input: derived.to_string(),
+                                ..translation.clone()
+                            },
+                        );
+                    } else {
+                        // hm, there is no character definition for the base character.
+                        // If we are backwards compatible ignore the problem, otherwise
+                        // throw an error
+                        if !cfg!(feature = "backwards_compatibility") {
+                            return Err(TranslationError::BaseCharacterNotDefined {
+                                base: *base,
+                                derived: *derived,
+                                direction,
+                            });
+                        }
+                    }
                 }
-                | Rule::Always {
-                    chars,
-                    dots: Braille::Explicit(dots),
-                    ..
-                } => translations.insert(
-                    chars.to_string(),
-                    dots_to_unicode(dots),
-                    Boundary::None,
-                    Boundary::None,
-                ),
-                Rule::Word {
-                    chars,
-                    dots: Braille::Explicit(dots),
-                    ..
+                Rule::Comp6 { chars, dots } | Rule::Always { chars, dots, .. } => {
+                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    translations.insert(chars.to_string(), dots, Boundary::None, Boundary::None);
                 }
-                | Rule::Joinword { chars, dots, .. }
-                | Rule::Lowword { chars, dots, .. } => translations.insert(
-                    chars.to_string(),
-                    dots_to_unicode(dots),
-                    Boundary::Word,
-                    Boundary::Word,
-                ),
-                Rule::Begword {
-                    chars,
-                    dots: Braille::Explicit(dots),
-                    ..
-                } => translations.insert(
-                    chars.to_string(),
-                    dots_to_unicode(dots),
-                    Boundary::Word,
-                    Boundary::NotWord,
-                ),
-                Rule::Sufword {
-                    chars,
-                    dots: Braille::Explicit(dots),
-                    ..
-                } => translations.insert(
-                    chars.to_string(),
-                    dots_to_unicode(dots),
-                    Boundary::Word,
-                    Boundary::None,
-                ),
-                Rule::Midword {
-                    chars,
-                    dots: Braille::Explicit(dots),
-                    ..
+                Rule::Word { chars, dots, .. } => {
+                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    translations.insert(chars.to_string(), dots, Boundary::Word, Boundary::Word);
                 }
-                | Rule::Partword {
-                    chars,
-                    dots: Braille::Explicit(dots),
-                    ..
-                } => translations.insert(
-                    chars.to_string(),
-                    dots_to_unicode(dots),
-                    Boundary::NotWord,
-                    Boundary::NotWord,
-                ),
-                Rule::Midendword {
-                    chars,
-                    dots: Braille::Explicit(dots),
-                    ..
-                } => translations.insert(
-                    chars.to_string(),
-                    dots_to_unicode(dots),
-                    Boundary::NotWord,
-                    Boundary::None,
-                ),
-                Rule::Endword {
-                    chars,
-                    dots: Braille::Explicit(dots),
-                    ..
+                Rule::Begword { chars, dots, .. } => {
+                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    translations.insert(chars.to_string(), dots, Boundary::Word, Boundary::NotWord)
                 }
-                | Rule::Prfword {
-                    chars,
-                    dots: Braille::Explicit(dots),
-                    ..
-                } => translations.insert(
-                    chars.to_string(),
-                    dots_to_unicode(dots),
-                    Boundary::None,
-                    Boundary::Word,
-                ),
-                Rule::Begmidword {
-                    chars,
-                    dots: Braille::Explicit(dots),
-                    ..
-                } => translations.insert(
-                    chars.to_string(),
-                    dots_to_unicode(dots),
-                    Boundary::None,
-                    Boundary::NotWord,
-                ),
+                Rule::Sufword { chars, dots, .. } => {
+                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    translations.insert(chars.to_string(), dots, Boundary::Word, Boundary::None);
+                }
+                Rule::Midword { chars, dots, .. } | Rule::Partword { chars, dots, .. } => {
+                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    translations.insert(
+                        chars.to_string(),
+                        dots,
+                        Boundary::NotWord,
+                        Boundary::NotWord,
+                    )
+                }
+                Rule::Midendword { chars, dots, .. } => {
+                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    translations.insert(chars.to_string(), dots, Boundary::NotWord, Boundary::None);
+                }
+                Rule::Endword { chars, dots, .. } | Rule::Prfword { chars, dots, .. } => {
+                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    translations.insert(chars.to_string(), dots, Boundary::None, Boundary::Word);
+                }
+                Rule::Begmidword { chars, dots, .. } => {
+                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    translations.insert(chars.to_string(), dots, Boundary::None, Boundary::NotWord);
+                }
+                Rule::Joinword { chars, dots, .. } | Rule::Lowword { chars, dots, .. } => {
+                    translations.insert(
+                        chars.to_string(),
+                        dots_to_unicode(dots),
+                        Boundary::Word,
+                        Boundary::Word,
+                    )
+                }
                 Rule::Begnum { chars, dots, .. } => translations.insert(
                     chars.to_string(),
                     dots_to_unicode(dots),
@@ -338,167 +339,26 @@ impl TranslationTable {
                     Boundary::Number,
                     Boundary::Number,
                 ),
-                Rule::Endnum {
-                    chars,
-                    dots: Braille::Explicit(dots),
-                    ..
-                } => translations.insert(
-                    chars.to_string(),
-                    dots_to_unicode(dots),
-                    Boundary::NumberWord,
-                    Boundary::Word,
-                ),
+                Rule::Endnum { chars, dots, .. } => {
+                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    translations.insert(
+                        chars.to_string(),
+                        dots,
+                        Boundary::NumberWord,
+                        Boundary::Word,
+                    );
+                }
                 Rule::Match {
                     pre,
                     chars,
                     post,
-                    dots: Braille::Explicit(dots),
+                    dots,
                     ..
-                } => translations.insert_match(chars.to_string(), dots_to_unicode(dots), pre, post),
-                // the base rule is handled in the second pass
-                Rule::Base { .. } => (),
-                // display rules are ignored for translation tables
-                Rule::Display { .. } => (),
-                _ => (),
-            }
-        }
+                } => {
+                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    translations.insert_match(chars.to_string(), dots, pre, post);
+                }
 
-        // use a second pass through the rules to resolve the base opcodes and
-        // implicit (`=`) arguments in rules
-        for rule in rules {
-            match rule.rule {
-                Rule::Base { derived, base, .. } => {
-                    if let Some(translation) = character_definitions.get(&base) {
-                        character_definitions.insert(
-                            derived,
-                            Translation {
-                                input: derived.to_string(),
-                                ..translation.clone()
-                            },
-                        );
-                    } else {
-                        // hm, there is no character definition for the base character.
-                        // If we are backwards compatible ignore the problem, otherwise
-                        // throw an error
-                        if !cfg!(feature = "backwards_compatibility") {
-                            return Err(TranslationError::BaseCharacterNotDefined {
-                                base,
-                                derived,
-                                direction,
-                            });
-                        }
-                    }
-                }
-                Rule::Comp6 {
-                    chars,
-                    dots: Braille::Implicit,
-                }
-                | Rule::Always {
-                    chars,
-                    dots: Braille::Implicit,
-                    ..
-                } => {
-                    translations.insert(
-                        chars.to_string(),
-                        resolve_implicit_dots(&chars, &character_definitions)?,
-                        Boundary::None,
-                        Boundary::None,
-                    );
-                }
-                Rule::Word {
-                    chars,
-                    dots: Braille::Implicit,
-                    ..
-                } => {
-                    translations.insert(
-                        chars.to_string(),
-                        resolve_implicit_dots(&chars, &character_definitions)?,
-                        Boundary::Word,
-                        Boundary::Word,
-                    );
-                }
-                Rule::Begword {
-                    chars,
-                    dots: Braille::Implicit,
-                    ..
-                } => translations.insert(
-                    chars.to_string(),
-                    resolve_implicit_dots(&chars, &character_definitions)?,
-                    Boundary::Word,
-                    Boundary::NotWord,
-                ),
-                Rule::Sufword {
-                    chars,
-                    dots: Braille::Implicit,
-                    ..
-                } => {
-                    translations.insert(
-                        chars.to_string(),
-                        resolve_implicit_dots(&chars, &character_definitions)?,
-                        Boundary::Word,
-                        Boundary::None,
-                    );
-                }
-                Rule::Midword {
-                    chars,
-                    dots: Braille::Implicit,
-                    ..
-                }
-                | Rule::Partword {
-                    chars,
-                    dots: Braille::Implicit,
-                    ..
-                } => translations.insert(
-                    chars.to_string(),
-                    resolve_implicit_dots(&chars, &character_definitions)?,
-                    Boundary::NotWord,
-                    Boundary::NotWord,
-                ),
-                Rule::Midendword {
-                    chars,
-                    dots: Braille::Implicit,
-                    ..
-                } => translations.insert(
-                    chars.to_string(),
-                    resolve_implicit_dots(&chars, &character_definitions)?,
-                    Boundary::NotWord,
-                    Boundary::None,
-                ),
-                Rule::Endword {
-                    chars,
-                    dots: Braille::Implicit,
-                    ..
-                }
-                | Rule::Prfword {
-                    chars,
-                    dots: Braille::Implicit,
-                    ..
-                } => translations.insert(
-                    chars.to_string(),
-                    resolve_implicit_dots(&chars, &character_definitions)?,
-                    Boundary::None,
-                    Boundary::Word,
-                ),
-                Rule::Begmidword {
-                    chars,
-                    dots: Braille::Implicit,
-                    ..
-                } => translations.insert(
-                    chars.to_string(),
-                    resolve_implicit_dots(&chars, &character_definitions)?,
-                    Boundary::None,
-                    Boundary::NotWord,
-                ),
-                Rule::Endnum {
-                    chars,
-                    dots: Braille::Implicit,
-                    ..
-                } => translations.insert(
-                    chars.to_string(),
-                    resolve_implicit_dots(&chars, &character_definitions)?,
-                    Boundary::NumberWord,
-                    Boundary::Word,
-                ),
                 _ => (),
             }
         }
