@@ -177,6 +177,9 @@ impl TranslationTable {
             .filter(|r| r.rule.is_direction(direction))
             .collect();
 
+        // The compilation is done in two passes: The first pass simply collects all character
+        // definitions and character attributes, so that they are then known in a second pass, e.g.
+        // for implicit braille definitions or for the `base` opcode
         for rule in &rules {
             match &rule.rule {
                 Rule::Undefined { dots } => {
