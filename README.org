@@ -105,7 +105,7 @@ The parser is built from the grammar used in [[https://github.com/liblouis/tree-
 which is a port of the [[https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form][EBNF grammar]] in [[https://github.com/liblouis/rewrite-louis][rewrite-louis]], which in turn is
 a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][Parsing expression grammar]] from [[https://github.com/liblouis/louis-parser][louis-parser]].
 
-* Todo [6/14]
+* Todo [6/15]
 - [ ] Parse with context
   - currently tables are parsed line by line. Opcodes have no idea
     whether a character or a class has been defined before
@@ -146,6 +146,11 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
   - However normal translation has currently no way to specify a
     display table
 - [X] Handle undefined characters similarly to liblouis
+- [ ] Use a well established FST or graph library as a bases
+  - currently regular expressions are implemented using a simple
+    directed acyclic graph. It would surely be better to use a well
+    established library for that task such as [[https://github.com/garvys-org/rustfst][rustfst]], [[https://crates.io/crates/petgraph][petgraph]] or
+    [[https://github.com/neo4j-labs/graph][graph]].
 
 * License
 
