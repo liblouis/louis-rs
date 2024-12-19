@@ -20,6 +20,10 @@ mod test;
 mod translator;
 mod yaml;
 
+use tabled::{
+    settings::{object::Rows, Border, Style},
+    Table, Tabled,
+};
 use yaml::YAMLParser;
 
 #[derive(Debug, Subcommand)]
@@ -46,9 +50,6 @@ enum Commands {
         /// Only show a summary of the test results
         #[arg(short, long)]
         summary: bool,
-        /// Instead of printing all the failures only list the YAML files where a test failed
-        #[arg(short, long)]
-        list: bool,
         /// YAML document(s) that specify the tests
         #[arg(required = true)]
         yaml_files: Vec<PathBuf>,
@@ -139,47 +140,98 @@ fn parse_line(line: String) {
     }
 }
 
-fn percentage(n: usize, total: usize) -> String {
-    let n = n as f32;
-    let total = total as f32;
-    let result = (n * 100.0) / total;
-    format!("{:.1}%", result)
+#[derive(Tabled, Default)]
+#[tabled(rename_all = "PascalCase")]
+struct YAMLTestResult {
+    #[tabled(rename = "YAML File")]
+    yaml_file: String,
+    tests: usize,
+    #[tabled(display_with("Self::display_successes", self))]
+    successes: usize,
+    #[tabled(display_with("Self::display_failures", self))]
+    failures: usize,
+    #[tabled(
+        rename = "Expected\nFailures",
+        display_with("Self::display_expected", self)
+    )]
+    expected_failures: usize,
+    #[tabled(
+        rename = "Unexpected\nSuccesses",
+        display_with("Self::display_unexpected", self)
+    )]
+    unexpected_successes: usize,
 }
 
-fn print_check_row(label: &str, occurences: usize, total: usize) {
-    println!(
-        "{} {} [{}]",
-        occurences,
-        label,
-        percentage(occurences, total)
-    );
+fn percent(n: usize, total: usize) -> f64 {
+    (n as f64 * 100.0) / total as f64
 }
 
-fn check_yaml(paths: Vec<PathBuf>, summary: bool, list: bool) {
-    let mut total = 0;
-    let mut successes = 0;
-    let mut failures = 0;
-    let mut expected_failures = 0;
-    let mut unexpected_successes = 0;
+impl YAMLTestResult {
+    fn display_successes(&self) -> String {
+        format!("{:.1}%", percent(self.successes, self.tests))
+    }
+    fn display_failures(&self) -> String {
+        format!("{:.1}%", percent(self.failures, self.tests))
+    }
+    fn display_expected(&self) -> String {
+        format!("{:.1}%", percent(self.expected_failures, self.tests))
+    }
+    fn display_unexpected(&self) -> String {
+        format!("{:.1}%", percent(self.unexpected_successes, self.tests))
+    }
+    fn update(
+        &mut self,
+        tests: usize,
+        successes: usize,
+        failures: usize,
+        expected_failures: usize,
+        unexpected_successes: usize,
+    ) {
+        self.tests += tests;
+        self.successes += successes;
+        self.failures += failures;
+        self.expected_failures += expected_failures;
+        self.unexpected_successes += unexpected_successes;
+    }
+}
+
+fn check_yaml(paths: Vec<PathBuf>, summary: bool) {
+    let mut total = YAMLTestResult::default();
+    let mut yaml_results: Vec<YAMLTestResult> = Vec::new();
     for path in paths {
         match File::open(&path) {
             Ok(file) => match YAMLParser::new(file) {
                 Ok(mut parser) => match parser.yaml() {
                     Ok(test_results) => {
-                        total += test_results.len();
-                        successes += test_results.iter().filter(|r| r.is_success()).count();
-                        failures += test_results.iter().filter(|r| r.is_failure()).count();
-                        expected_failures += test_results
+                        let tests = test_results.len();
+                        let successes = test_results.iter().filter(|r| r.is_success()).count();
+                        let failures = test_results.iter().filter(|r| r.is_failure()).count();
+                        let expected_failures = test_results
                             .iter()
                             .filter(|r| r.is_expected_failure())
                             .count();
-                        unexpected_successes += test_results
+                        let unexpected_successes = test_results
                             .iter()
                             .filter(|r| r.is_unexpected_success())
                             .count();
-                        if list && (test_results.iter().filter(|r| !r.is_success()).count() > 0) {
-                            println!("Failures in {:?}", path);
-                        } else if !summary {
+                        total.update(
+                            tests,
+                            successes,
+                            failures,
+                            expected_failures,
+                            unexpected_successes,
+                        );
+                        yaml_results.push(YAMLTestResult {
+                            yaml_file: path
+                                .file_name()
+                                .map_or("".to_string(), |f| f.to_string_lossy().into_owned()),
+                            tests,
+                            successes,
+                            failures,
+                            expected_failures,
+                            unexpected_successes,
+                        });
+                        if !summary {
                             for res in test_results.iter().filter(|r| !r.is_success()) {
                                 println!("{:?}", res);
                             }
@@ -199,14 +251,12 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool, list: bool) {
         }
     }
     if summary {
-        println!(
-            "================================================================================"
-        );
-        println!("{} tests run:", total);
-        print_check_row("successes", successes, total);
-        print_check_row("failures", failures, total);
-        print_check_row("expected failures", expected_failures, total);
-        print_check_row("unexpected successes", unexpected_successes, total);
+        total.yaml_file = "Total".to_string();
+        yaml_results.push(total);
+        let mut table = Table::new(yaml_results);
+        // add a special separator above the Total row
+        table.modify(Rows::last(), Border::inherit(Style::ascii()).top('='));
+        println!("{}", table);
     }
 }
 
@@ -244,8 +294,7 @@ fn main() {
         Commands::Check {
             yaml_files,
             summary,
-            list,
-        } => check_yaml(yaml_files, summary, list),
+        } => check_yaml(yaml_files, summary),
         Commands::Query { query } => match metadata::index() {
             Ok(index) => {
                 let query = query
