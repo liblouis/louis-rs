@@ -7,6 +7,103 @@
 
 #+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
 
+* DRAFT Hyphenation
+- Deciders :: CE
+- Date :: [2024-12-20 Fr]
+
+** Context and Problem Statement
+
+Liblouis uses hyphenation dictionaries from the TeX project to provide
+some functionality in the form of the ~nocross~ opcode prefix. It
+would be nice if we could use off-the-shelf functionality instead of
+having to re-implement this as in the C version.
+
+The [[https://crates.io/crates/hyphenation][hyphenation crate]] makes it fairly easy to use a dictionary. It
+comes pre-configured with [[https://github.com/tapeinosyne/hyphenation/tree/master/dictionaries][a lot]] of TeX and OpenOffice hyphenation
+dictionaries. These come not in their standard form but are encoded
+using the bincode format. This encoding happens during the build
+process of the hyphenation crate, where all the [[https://github.com/tapeinosyne/hyphenation/tree/master/patterns][pattern files]] in
+the ~patterns~ directory are ecoded and stored in the ~dictionaries~
+directory.
+
+I added the 3 relevant dictionaries from liblouis, namely
+~da-dk-g2.dic~, ~de-g1-core-patterns.dic~ and
+~de-g2-core-patterns.dic~ to the patterns folder of hyphenation, added
+the files to ~build.rs~ and ~hyphenation_commons/src/language.rs~ and
+finally built the hyphenation crate with
+
+#+begin_src shell
+  cargo build --features build_dictionaries
+#+end_src
+
+The liblouis dictionary files were encoded and I grabed them out of
+~target/debug/build/hyphenation-4f7fc3b4af290d85/out/dictionaries~.
+
+You can now load this dictionary and hyphenate words:
+
+#+begin_src rust
+  use std::error::Error;
+
+use hyphenation::Load;
+use hyphenation::{Hyphenator, Language, Standard};
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let path_to_dict = "/path/to/da-g2.standard.bincode";
+    let en_us = Standard::from_path(Language::Dutch, path_to_dict)?;
+
+    let hyphenated = en_us.hyphenate("bestemmer");
+    println!("Hello, {:?}!", hyphenated);
+
+    Ok(())
+}
+#+end_src
+
+which results in
+
+#+begin_src shell
+cargo run
+Hello, Word { text: "bestemmer", breaks: [7] }!
+#+end_src
+
+You'll notice that I used the language ~Language::Dutch~. The
+language ~DanishGrade2~, that I had added to my local version of the
+~hyphenation_commons~ crate, does not exist when I use the
+~hyphenation~ crate from crates.io. If I use ~Language::EnglishUS~ it
+compiles but complains and tells me the the dictionary is in for the
+~Language::Dutch~.
+
+The problem is that the ~hyphenation_commons~ crate converts the list
+of languages to an enum that is baked into the build. There does not
+seem to be a way to load a dictionary with out the ~Language~ enum.
+The bincode seems to contain the language in its serialized data
+structure.
+
+At the moment it definitely looks like there is more research needed
+as to how we could use the hyphenation crate using our own
+dictionaries. Maybe we'll have to rip out the relevant parsing code
+from ~hyphenation_commons~ and then provide the hyphenator with a
+deserialized version of that.
+
+** Decision Drivers
+
+** Considered Options
+
+** Decision Outcome
+
+Chosen option: "TBD", because ...
+
+** Positive Consequences
+
+-
+
+** Negative Consequences
+
+-
+
+** Pros and Cons of the Options
+
+** Links
+
 * DRAFT Handle word boundaries
 - Deciders :: CE
 - Date :: [2024-03-08 Fr]
