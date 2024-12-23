@@ -1,12 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
-use trie::Trie;
+use graph::Graph;
 
 use crate::parser::{dots_to_unicode, fallback, AnchoredRule, Attribute, Braille, Direction, Rule};
 
-use self::trie::Boundary;
+use self::graph::Boundary;
 
 mod boundaries;
+mod graph;
 mod trie;
 
 #[derive(thiserror::Error, Debug, PartialEq)]
@@ -158,7 +159,7 @@ pub struct TranslationTable {
     undefined: Option<String>,
     character_definitions: CharacterDefinition,
     character_attributes: CharacterAttributes,
-    translations: Trie,
+    translations: Graph,
     direction: Direction,
 }
 
@@ -170,7 +171,7 @@ impl TranslationTable {
         let mut undefined = None;
         let mut character_definitions = CharacterDefinition::new();
         let mut character_attributes = CharacterAttributes::new();
-        let mut translations = Trie::new();
+        let mut translations = Graph::new();
 
         let rules: Vec<AnchoredRule> = rules
             .into_iter()
