@@ -38,8 +38,7 @@ pub struct Graph {
 
 impl Graph {
     pub fn new() -> Graph {
-        let mut nodes = Vec::new();
-        nodes.push(Node::default());
+        let nodes = vec![Node::default()];
         let edges = HashMap::new();
         Graph { nodes, edges }
     }
@@ -141,7 +140,7 @@ impl Graph {
                     let next_node = self.add_node();
                     for c in chars {
                         match self.edges.get(&(current_node, Transition::Character(*c))) {
-                            Some(node) => {}
+                            Some(_) => (),
                             None => {
                                 self.add_edge(current_node, Transition::Character(*c), next_node);
                             }
@@ -201,7 +200,7 @@ impl Graph {
                     let next_node = self.add_node();
                     for c in chars {
                         match self.edges.get(&(current_node, Transition::Character(*c))) {
-                            Some(node) => {}
+                            Some(_) => (),
                             None => {
                                 self.add_edge(current_node, Transition::Character(*c), next_node);
                             }
@@ -279,7 +278,7 @@ impl Graph {
         if let Some(node_id) = self.edges.get(&(node_id, Transition::Start(Boundary::Word))) {
             if word_start(prev, c) {
                 matching_rules.extend(self.find_translations_from_node(
-                    &input[..],
+                    input,
                     prev,
                     *node_id,
                     match_length,
@@ -290,7 +289,7 @@ impl Graph {
         if let Some(node_id) = self.edges.get(&(node_id, Transition::Start(Boundary::NotWord))) {
             if !word_start(prev, c) {
                 matching_rules.extend(self.find_translations_from_node(
-                    &input[..],
+                    input,
                     prev,
                     *node_id,
                     match_length,
@@ -301,7 +300,7 @@ impl Graph {
         if let Some(node_id) = self.edges.get(&(node_id, Transition::End(Boundary::Word))) {
             if word_end(prev, c) {
                 matching_rules.extend(self.find_translations_from_node(
-                    &input[..],
+                    input,
                     prev,
                     *node_id,
                     match_length,
@@ -312,7 +311,7 @@ impl Graph {
         if let Some(node_id) = self.edges.get(&(node_id, Transition::End(Boundary::NotWord))) {
             if !word_end(prev, c) {
                 matching_rules.extend(self.find_translations_from_node(
-                    &input[..],
+                    input,
                     prev,
                     *node_id,
                     match_length,
@@ -323,7 +322,7 @@ impl Graph {
         if let Some(node_id) = self.edges.get(&(node_id, Transition::End(Boundary::WordNumber))) {
             if word_number(prev, c) {
                 matching_rules.extend(self.find_translations_from_node(
-                    &input[..],
+                    input,
                     prev,
                     *node_id,
                     match_length,
@@ -334,7 +333,7 @@ impl Graph {
         if let Some(node_id) = self.edges.get(&(node_id, Transition::Start(Boundary::NumberWord))) {
             if number_word(prev, c) {
                 matching_rules.extend(self.find_translations_from_node(
-                    &input[..],
+                    input,
                     prev,
                     *node_id,
                     match_length,
@@ -344,7 +343,7 @@ impl Graph {
         }
         if let Some(node_id) = self.edges.get(&(node_id, Transition::End(Boundary::PrePattern))) {
             matching_rules.extend(self.find_translations_from_node(
-                &input[..],
+                input,
                 prev,
                 *node_id,
                 match_length,

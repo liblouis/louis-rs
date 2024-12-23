@@ -55,7 +55,7 @@ pub struct YAMLParser<'a> {
     events: Peekable<ParserIter<'a>>,
 }
 
-impl<'a> YAMLParser<'a> {
+impl YAMLParser<'_> {
     pub fn new(reader: File) -> Result<Self, ParseError> {
         let parser = Parser::new(reader)?;
         Ok(Self {
