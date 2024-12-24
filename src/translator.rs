@@ -742,4 +742,20 @@ mod tests {
         assert_eq!(table.translate("afoob"), "⠁⠉⠂");
         assert_eq!(table.translate("ffoob"), "⠄⠉⠂");
     }
+
+    #[test]
+    fn match_with_set_test() {
+        let rules = vec![
+            parse_rule("lowercase f 3"),
+            parse_rule("lowercase o 4"),
+            parse_rule("lowercase s 7"),
+            parse_rule("lowercase z 5"),
+            parse_rule("match [fz] oo [fz] 14"),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
+        assert_eq!(table.translate("oo"), "⠈⠈");
+        assert_eq!(table.translate("soo"), "⡀⠈⠈");
+        assert_eq!(table.translate("foof"), "⠄⠉⠄");
+        assert_eq!(table.translate("zoof"), "⠐⠉⠄");
+    }
 }
