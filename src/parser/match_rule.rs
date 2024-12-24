@@ -51,6 +51,10 @@ pub struct PatternParser<'a> {
     chars: Peekable<Chars<'a>>,
 }
 
+fn char_is_special(c: char) -> bool {
+    ".*%^$![]()\\?*+|".contains(c)
+}
+
 impl<'a> PatternParser<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
@@ -98,26 +102,29 @@ impl<'a> PatternParser<'a> {
         }
     }
 
-    // FIXME: I think this is a missunderstanding of []. It is
-    // supposed to behave like in normal RegExps, i.e. like a set
     fn characters(&mut self) -> Result<Pattern, ParseError> {
-        if self.chars.peek() == Some(&'[') {
-            self.consume('[')?;
-            let mut characters: String = String::new();
-            while let Some(c) = self.chars.next_if(|&c| c != ']') {
-                characters.push(c);
-            }
-            self.consume(']')?;
-            if characters.is_empty() {
-                Err(ParseError::EmptyPattern)
-            } else {
-                Ok(Pattern::Characters(characters))
-            }
+        let mut characters: String = String::new();
+        while let Some(c) = self.chars.next_if(|&c| !char_is_special(c)) {
+            characters.push(c);
+        }
+        if characters.is_empty() {
+            Err(ParseError::EmptyPattern)
         } else {
-            match self.chars.next() {
-                Some(c) => Ok(Pattern::Characters(c.to_string())),
-                None => Err(ParseError::EmptyPattern),
-            }
+            Ok(Pattern::Characters(characters))
+        }
+    }
+
+    fn set(&mut self) -> Result<Pattern, ParseError> {
+        self.consume('[')?;
+        let mut characters = HashSet::new();
+        while let Some(c) = self.chars.next_if(|&c| c != ']') {
+            characters.insert(c);
+        }
+        self.consume(']')?;
+        if characters.is_empty() {
+            Err(ParseError::EmptyPattern)
+        } else {
+            Ok(Pattern::Set(characters))
         }
     }
 
@@ -183,7 +190,7 @@ impl<'a> PatternParser<'a> {
             Some('^') => self.start_boundary(),
             Some('$') => self.end_boundary(),
             Some('!') => self.negate(),
-            Some('[') => self.characters(),
+            Some('[') => self.set(),
             Some('(') => self.group(),
             // FIXME: handle escaped special chars
             Some('?') | Some('*') | Some('+') | Some('|') => {
@@ -259,14 +266,18 @@ mod tests {
     fn characters_test() {
         assert_eq!(
             PatternParser::new("abc").characters(),
-            Ok(Pattern::Characters("a".into()))
-        );
-        assert_eq!(
-            PatternParser::new("[abc]").characters(),
             Ok(Pattern::Characters("abc".into()))
         );
+    }
+
+    #[test]
+    fn set_test() {
         assert_eq!(
-            PatternParser::new("[abc").characters(),
+            PatternParser::new("[abc]").set(),
+            Ok(Pattern::Set(HashSet::from(['a', 'b', 'c'])))
+        );
+        assert_eq!(
+            PatternParser::new("[abc").set(),
             Err(ParseError::CharExpected {
                 expected: ']',
                 found: None
@@ -278,17 +289,13 @@ mod tests {
     fn group_test() {
         assert_eq!(
             PatternParser::new("(abc)").group(),
-            Ok(Pattern::Group(Vec::from([
-                Pattern::Characters("a".into()),
-                Pattern::Characters("b".into()),
-                Pattern::Characters("c".into())
-            ])))
+            Ok(Pattern::Group(vec![Pattern::Characters("abc".into())]))
         );
         assert_eq!(
             PatternParser::new("([abc])").group(),
-            Ok(Pattern::Group(Vec::from([Pattern::Characters(
-                "abc".into()
-            ),])))
+            Ok(Pattern::Group(vec![Pattern::Set(HashSet::from([
+                'a', 'b', 'c'
+            ]))]))
         );
         assert_eq!(
             PatternParser::new("()").group(),
@@ -300,41 +307,27 @@ mod tests {
     fn pattern_test() {
         assert_eq!(
             PatternParser::new("(abc)").pattern(),
-            Ok(vec![Pattern::Group(Vec::from([
-                Pattern::Characters("a".into()),
-                Pattern::Characters("b".into()),
-                Pattern::Characters("c".into())
-            ]))])
+            Ok(vec![Pattern::Group(vec![Pattern::Characters(
+                "abc".into()
+            )])])
         );
         assert_eq!(
             PatternParser::new("(abc)?").pattern(),
-            Ok(vec![Pattern::Optional(Box::new(Pattern::Group(
-                Vec::from([
-                    Pattern::Characters("a".into()),
-                    Pattern::Characters("b".into()),
-                    Pattern::Characters("c".into())
-                ])
-            )))])
+            Ok(vec![Pattern::Optional(Box::new(Pattern::Group(vec![
+                Pattern::Characters("abc".into())
+            ])))])
         );
         assert_eq!(
             PatternParser::new("(abc)+").pattern(),
-            Ok(vec![Pattern::OneOrMore(Box::new(Pattern::Group(
-                Vec::from([
-                    Pattern::Characters("a".into()),
-                    Pattern::Characters("b".into()),
-                    Pattern::Characters("c".into())
-                ])
-            )))])
+            Ok(vec![Pattern::OneOrMore(Box::new(Pattern::Group(vec![
+                Pattern::Characters("abc".into())
+            ])))])
         );
         assert_eq!(
             PatternParser::new("(abc)*").pattern(),
-            Ok(vec![Pattern::ZeroOrMore(Box::new(Pattern::Group(
-                Vec::from([
-                    Pattern::Characters("a".into()),
-                    Pattern::Characters("b".into()),
-                    Pattern::Characters("c".into())
-                ])
-            )))])
+            Ok(vec![Pattern::ZeroOrMore(Box::new(Pattern::Group(vec![
+                Pattern::Characters("abc".into())
+            ])))])
         );
         assert_eq!(
             PatternParser::new("a**").pattern(),
