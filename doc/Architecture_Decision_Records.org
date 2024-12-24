@@ -7,6 +7,53 @@
 
 #+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
 
+* DRAFT Regexps duplicate character transitions
+- Deciders :: CE
+- Date :: [2024-12-24 Di]
+
+** Context and Problem Statement
+We have a graph for all regular expressions. For alternatives we
+create a new node and add all the alternatives between the current and
+the new node. Now what do we do if there is already a character
+transition for one of the characters in the alternatives? We could
+either
+1. merge the nodes
+   - how do we handle the case where both nodes are accepting, i.e.
+     have translations? Which translation gets precedence?
+2. add an epsilon transition
+   - from the new node to the existing one
+   - and delete the edge
+3. allow multiple character transition edges with the same character
+   from the same node
+   - this of course totally breaks the current data structure
+
+#+begin_example
+letter a 1
+letter b 2
+letter o 3
+letter r 4
+letter z 5
+
+always bor 17
+match b(a|o) r z 14
+#+end_example
+
+#+begin_example
+/bor|b(a|o)rz/
+#+end_example
+
+** Decision Drivers
+** Considered Options
+** Decision Outcome
+Chosen option: "TBD", because ...
+
+** Positive Consequences
+-
+** Negative Consequences
+-
+** Pros and Cons of the Options
+** Links
+
 * DRAFT Hyphenation
 - Deciders :: CE
 - Date :: [2024-12-20 Fr]
