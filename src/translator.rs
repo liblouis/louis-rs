@@ -9,6 +9,7 @@ use self::graph::Boundary;
 mod boundaries;
 mod graph;
 mod trie;
+mod regexp;
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum TranslationError {
