@@ -1,6 +1,6 @@
 use std::{collections::HashSet, iter::Peekable, num::ParseIntError, str::Chars};
 
-use super::braille::{self, braille_chars, is_braille_dot, BrailleChars};
+use super::braille::{self, BrailleChars, braille_chars, is_braille_dot};
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum ParseError {

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use graph::Graph;
 
-use crate::parser::{dots_to_unicode, fallback, AnchoredRule, Attribute, Braille, Direction, Rule};
+use crate::parser::{AnchoredRule, Attribute, Braille, Direction, Rule, dots_to_unicode, fallback};
 
 use self::graph::Boundary;
 
@@ -14,7 +14,9 @@ mod trie;
 pub enum TranslationError {
     #[error("Implicit character {0:?} not defined")]
     ImplicitCharacterNotDefined(char),
-    #[error("Character in base rule not defined: derived: {derived:?}, base: {base:?}, direction: {direction:?}")]
+    #[error(
+        "Character in base rule not defined: derived: {derived:?}, base: {base:?}, direction: {direction:?}"
+    )]
     BaseCharacterNotDefined {
         base: char,
         derived: char,

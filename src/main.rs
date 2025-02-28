@@ -21,8 +21,8 @@ mod translator;
 mod yaml;
 
 use tabled::{
-    settings::{object::Rows, Border, Style},
     Table, Tabled,
+    settings::{Border, Style, object::Rows},
 };
 use yaml::YAMLParser;
 

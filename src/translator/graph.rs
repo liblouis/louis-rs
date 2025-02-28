@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use crate::parser::{Pattern, Patterns};
 
 use super::{
-    boundaries::{number_word, word_end, word_number, word_start},
     Translation,
+    boundaries::{number_word, word_end, word_number, word_start},
 };
 
 #[derive(Debug, Default)]

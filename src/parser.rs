@@ -15,7 +15,7 @@ use enumset::{EnumSet, EnumSetType};
 use search_path::SearchPath;
 
 use self::{
-    braille::{braille_chars, chars_to_dots, BrailleChars},
+    braille::{BrailleChars, braille_chars, chars_to_dots},
     multipass::Test,
 };
 
@@ -862,7 +862,7 @@ impl<'a> RuleParser<'a> {
                 Some(class) => {
                     return Ok(Some(WithClass::Before {
                         class: class.into(),
-                    }))
+                    }));
                 }
                 None => return Err(ParseError::ClassNameExpected { found: None }),
             }
@@ -872,7 +872,7 @@ impl<'a> RuleParser<'a> {
                 Some(class) => {
                     return Ok(Some(WithClass::After {
                         class: class.into(),
-                    }))
+                    }));
                 }
                 None => return Err(ParseError::ClassNameExpected { found: None }),
             }
