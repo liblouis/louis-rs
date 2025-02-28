@@ -10,7 +10,7 @@ name = "louis"
 path = "src/main.rs"
 
 [dependencies]
-thiserror = "1.0"
+thiserror = "2"
 search_path = "0.1.4"
 clap = { version = "4.4.11", features = ["derive"] }
 enumset = "1.1.3"
