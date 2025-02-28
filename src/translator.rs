@@ -8,6 +8,7 @@ use self::graph::Boundary;
 
 mod boundaries;
 mod graph;
+mod nfa;
 mod trie;
 
 #[derive(thiserror::Error, Debug, PartialEq)]
