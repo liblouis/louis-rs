@@ -2000,18 +2000,19 @@ pub fn table_expanded(file: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>>
 
 fn expand_include(rule: AnchoredRule) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     let search_path = &SearchPath::new_or("LOUIS_TABLE_PATH", ".");
-    if let Rule::Include { ref file } = rule.rule {
-        let path = Path::new(file);
-        if path.extension().and_then(OsStr::to_str) == Some("dic") {
-            return Err(vec![TableError::FormatNotSupported(path.into())]);
+    match rule.rule {
+        Rule::Include { ref file } => {
+            let path = Path::new(file);
+            if path.extension().and_then(OsStr::to_str) == Some("dic") {
+                return Err(vec![TableError::FormatNotSupported(path.into())]);
+            }
+            let path = search_path
+                .find_file(path)
+                .ok_or(vec![TableError::TableNotFound(path.into())])?;
+            let rules = table_expanded(&path)?;
+            Ok(rules)
         }
-        let path = search_path
-            .find_file(path)
-            .ok_or(vec![TableError::TableNotFound(path.into())])?;
-        let rules = table_expanded(&path)?;
-        Ok(rules)
-    } else {
-        Ok(vec![rule])
+        _ => Ok(vec![rule]),
     }
 }
 

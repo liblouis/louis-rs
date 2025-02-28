@@ -261,13 +261,14 @@ impl YAMLParser<'_> {
     }
 
     fn cursor_position(&mut self) -> Result<CursorPosition, ParseError> {
-        let pos = if let Some(Ok(Event::SequenceStart { .. })) = self.events.peek() {
-            self.sequence_start()?;
-            let p = CursorPosition::Tuple(self.u16_value()?, self.u16_value()?);
-            self.sequence_end()?;
-            p
-        } else {
-            CursorPosition::Single(self.u16_value()?)
+        let pos = match self.events.peek() {
+            Some(Ok(Event::SequenceStart { .. })) => {
+                self.sequence_start()?;
+                let p = CursorPosition::Tuple(self.u16_value()?, self.u16_value()?);
+                self.sequence_end()?;
+                p
+            }
+            _ => CursorPosition::Single(self.u16_value()?),
         };
         Ok(pos)
     }
@@ -387,17 +388,17 @@ impl YAMLParser<'_> {
     }
 
     fn stream_start(&mut self) -> Result<(), ParseError> {
-        if let Some(Ok(Event::StreamStart {
-            encoding: Some(encoding),
-        })) = self.events.next()
-        {
-            if encoding == Encoding::Utf8 {
-                Ok(())
-            } else {
-                Err(ParseError::InvalidEncoding(encoding))
+        match self.events.next() {
+            Some(Ok(Event::StreamStart {
+                encoding: Some(encoding),
+            })) => {
+                if encoding == Encoding::Utf8 {
+                    Ok(())
+                } else {
+                    Err(ParseError::InvalidEncoding(encoding))
+                }
             }
-        } else {
-            Err(ParseError::StreamStartExpected)
+            _ => Err(ParseError::StreamStartExpected),
         }
     }
 

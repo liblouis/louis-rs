@@ -219,13 +219,13 @@ impl<'a> PatternParser<'a> {
 
     pub fn pattern(&mut self) -> Result<Patterns, ParseError> {
         let mut patterns: Patterns = Vec::new();
-	if self.chars.next_if(|&c| c == '-').is_some() {
-	    patterns.push(Pattern::Empty);
-	} else {
+        if self.chars.next_if(|&c| c == '-').is_some() {
+            patterns.push(Pattern::Empty);
+        } else {
             while self.chars.peek().is_some() {
-		patterns.push(self.pattern_with_quantifier()?);
+                patterns.push(self.pattern_with_quantifier()?);
             }
-	}
+        }
         Ok(patterns)
     }
 }
@@ -338,9 +338,6 @@ mod tests {
             PatternParser::new("a**").pattern(),
             Err(ParseError::MissingPatternBeforeQuantifier)
         );
-        assert_eq!(
-            PatternParser::new("-").pattern(),
-	    Ok(vec![Pattern::Empty])
-        );
+        assert_eq!(PatternParser::new("-").pattern(), Ok(vec![Pattern::Empty]));
     }
 }
