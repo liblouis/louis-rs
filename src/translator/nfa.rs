@@ -34,11 +34,17 @@ enum Boundary {
 /// An transition between two [States](State) in the [NFA]
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 enum Transition {
+    /// A transition that accepts a character
     Character(char),
+    /// A transition that accepts any character
     Any,
     Start(Boundary),
     End(Boundary),
+    /// An epsilon transition that accepts the empty string
     Epsilon,
+    /// An Offset transition is essentially an epsilon transition that marks the end of a
+    /// non-capturing group. It is used to mark the end of the pre pattern in match rules
+    Offset,
 }
 
 /// An NFA consisting of a set of states and transitions between them
@@ -273,6 +279,78 @@ impl NFA {
             .iter()
             .any(|s| self.states[*s].translation.is_some())
     }
+
+    fn find_translations_from_state(
+        &self,
+        state: StateId,
+        input: &str,
+        match_length: usize,
+        offset: usize,
+    ) -> Vec<Translation> {
+        dbg!(&state);
+        let mut matching_rules = Vec::new();
+        let mut next_states = self.epsilon_closure(&HashSet::from([state]));
+
+        // if any of the states in the epsilon closure (reachable via epsilon transition)
+        // has a translation add it to the list of matching rules
+        matching_rules.extend(
+            next_states
+                .iter()
+                .flat_map(|state| &self.states[*state].translation)
+                .map(|translation| {
+                    translation
+                        .clone()
+                        .with_offset(offset)
+                        // if there is an offset (typically in a match opcode), the weight needs
+                        // to be calculated at run-time. The weight is the actual length of match.
+                        .with_weight_if_offset(match_length, offset)
+                }),
+        );
+
+        // traverse all states that are reachable via an offset transition (essentially an
+        // epsilon transition that marks the end of a non-capture group)
+        let reachable_via_offset = self.move_state(&next_states, Transition::Offset);
+        let next_states_with_offset = self.epsilon_closure(&reachable_via_offset);
+        for state in next_states_with_offset {
+            matching_rules.extend(self.find_translations_from_state(
+                state,
+                input,
+                match_length + 1,
+                offset + match_length,
+            ));
+        }
+
+        match input.chars().next() {
+            Some(c) => {
+                let reachable_via_character =
+                    self.move_state(&next_states, Transition::Character(c));
+                let reachable_via_any = self.move_state(&next_states, Transition::Any);
+                next_states = reachable_via_character
+                    .union(&reachable_via_any)
+                    .cloned()
+                    .collect();
+                next_states = self.epsilon_closure(&next_states);
+                for state in next_states {
+                    let bytes = c.len_utf8();
+                    matching_rules.extend(self.find_translations_from_state(
+                        state,
+                        &input[bytes..],
+                        match_length + 1,
+                        offset,
+                    ));
+                }
+                matching_rules
+            }
+            None => matching_rules,
+        }
+    }
+
+    pub fn find_translations(&self, input: &str) -> Vec<Translation> {
+        let mut matching_rules = Vec::new();
+
+        matching_rules.extend(self.find_translations_from_state(self.start, input, 0, 0));
+        matching_rules
+    }
 }
 
 /**
@@ -296,6 +374,9 @@ pub fn nfa_dot(nfa: &NFA) -> String {
             }
             Transition::Any => {
                 dot.push_str(&format!("\t{} -> {} [label=\"{}\"]\n", from, to, "Any"))
+            }
+            Transition::Offset => {
+                dot.push_str(&format!("\t{} -> {} [label=\"{}\"]\n", from, to, "Offset"))
             }
             Transition::Start(boundary) => dot.push_str(&format!(
                 "\t{} -> {} [label=\"{:?}\"]\n",
@@ -330,6 +411,14 @@ mod tests {
     }
 
     #[test]
+    fn find_character() {
+        let ast = AST::Character('a');
+        let nfa = NFA::from(&ast);
+        assert!(!nfa.find_translations("a").is_empty());
+        assert!(nfa.find_translations("b").is_empty());
+    }
+
+    #[test]
     fn alteration() {
         let ast = AST::Either(Box::new(AST::Character('a')), Box::new(AST::Character('b')));
         let nfa = NFA::from(&ast);
@@ -337,6 +426,16 @@ mod tests {
         assert!(nfa.accepts("b"));
         assert!(!nfa.accepts("ab"));
         assert!(!nfa.accepts("c"));
+    }
+
+    #[test]
+    fn find_alteration() {
+        let ast = AST::Either(Box::new(AST::Character('a')), Box::new(AST::Character('b')));
+        let nfa = NFA::from(&ast);
+        assert!(!nfa.find_translations("a").is_empty());
+        assert!(!nfa.find_translations("b").is_empty());
+        assert!(!nfa.find_translations("ab").is_empty());
+        assert!(nfa.find_translations("c").is_empty());
     }
 
     #[test]
@@ -349,6 +448,18 @@ mod tests {
         assert!(!nfa.accepts("ba"));
         assert!(!nfa.accepts("c"));
         assert!(!nfa.accepts("abc"));
+    }
+
+    #[test]
+    fn find_concatenation() {
+        let ast = AST::Concat(Box::new(AST::Character('a')), Box::new(AST::Character('b')));
+        let nfa = NFA::from(&ast);
+        assert!(!nfa.find_translations("ab").is_empty());
+        assert!(!nfa.find_translations("abc").is_empty());
+        assert!(nfa.find_translations("a").is_empty());
+        assert!(nfa.find_translations("b").is_empty());
+        assert!(nfa.find_translations("ba").is_empty());
+        assert!(nfa.find_translations("c").is_empty());
     }
 
     #[test]
@@ -367,6 +478,38 @@ mod tests {
     }
 
     #[test]
+    fn find_kleene() {
+        let ast = AST::ZeroOrMore(Box::new(AST::Character('a')));
+        let nfa = dbg!(NFA::from(&ast));
+        assert!(!nfa.find_translations("").is_empty());
+        assert!(!nfa.find_translations("a").is_empty());
+        assert!(!nfa.find_translations("aa").is_empty());
+        assert!(!nfa.find_translations("aaaaa").is_empty());
+        assert!(!nfa.find_translations("ab").is_empty());
+        assert!(!nfa.find_translations("abc").is_empty());
+        assert!(!nfa.find_translations("b").is_empty());
+        assert!(!nfa.find_translations("ba").is_empty());
+        assert!(!nfa.find_translations("c").is_empty());
+
+        let ast = AST::Concat(
+            Box::new(AST::Character('a')),
+            Box::new(AST::ZeroOrMore(Box::new(AST::Character('b')))),
+        );
+        let nfa = dbg!(NFA::from(&ast));
+        assert!(!nfa.find_translations("a").is_empty());
+        assert!(!nfa.find_translations("aa").is_empty());
+        assert!(!nfa.find_translations("ab").is_empty());
+        assert!(!nfa.find_translations("abbbb").is_empty());
+        assert!(nfa.find_translations("").is_empty());
+        assert!(nfa.find_translations("ccccc").is_empty());
+        assert!(nfa.find_translations("cb").is_empty());
+        assert!(nfa.find_translations("cba").is_empty());
+        assert!(nfa.find_translations("b").is_empty());
+        assert!(nfa.find_translations("ba").is_empty());
+        assert!(nfa.find_translations("c").is_empty());
+    }
+
+    #[test]
     fn one_or_more() {
         let ast = AST::OneOrMore(Box::new(AST::Character('a')));
         let nfa = NFA::from(&ast);
@@ -382,6 +525,21 @@ mod tests {
     }
 
     #[test]
+    fn find_one_or_more() {
+        let ast = AST::OneOrMore(Box::new(AST::Character('a')));
+        let nfa = NFA::from(&ast);
+        assert!(nfa.find_translations("").is_empty());
+        assert!(!nfa.find_translations("a").is_empty());
+        assert!(!nfa.find_translations("aa").is_empty());
+        assert!(!nfa.find_translations("aaaaa").is_empty());
+        assert!(nfa.find_translations("b").is_empty());
+        assert!(nfa.find_translations("ba").is_empty());
+        assert!(!nfa.find_translations("ab").is_empty());
+        assert!(nfa.find_translations("c").is_empty());
+        assert!(!nfa.find_translations("abc").is_empty());
+    }
+
+    #[test]
     fn any() {
         let ast = AST::Concat(
             Box::new(AST::Concat(
@@ -392,6 +550,19 @@ mod tests {
         );
         let nfa = NFA::from(&ast);
         assert!(nfa.accepts("abb"));
+    }
+
+    #[test]
+    fn find_any() {
+        let ast = AST::Concat(
+            Box::new(AST::Concat(
+                Box::new(AST::Character('a')),
+                Box::new(AST::Any),
+            )),
+            Box::new(AST::Character('b')),
+        );
+        let nfa = NFA::from(&ast);
+        assert!(!nfa.find_translations("abb").is_empty());
     }
 
     #[test]
@@ -412,6 +583,24 @@ mod tests {
     }
 
     #[test]
+    fn find_optional() {
+        let ast = AST::Concat(
+            Box::new(AST::Optional(Box::new(AST::Concat(
+                Box::new(AST::Character('a')),
+                Box::new(AST::Any),
+            )))),
+            Box::new(AST::Character('b')),
+        );
+        let nfa = NFA::from(&ast);
+        assert!(!nfa.find_translations("acb").is_empty());
+        assert!(!nfa.find_translations("axb").is_empty());
+        assert!(!nfa.find_translations("b").is_empty());
+        assert!(!nfa.find_translations("bbb").is_empty());
+        assert!(nfa.find_translations("c").is_empty());
+        assert!(nfa.find_translations("").is_empty());
+    }
+
+    #[test]
     fn string() {
         let ast = AST::Concat(
             Box::new(AST::Concat(
@@ -428,5 +617,24 @@ mod tests {
         assert!(!nfa.accepts("hello)"));
         assert!(!nfa.accepts("()"));
         assert!(!nfa.accepts("(helo)"));
+    }
+
+    #[test]
+    fn find_string() {
+        let ast = AST::Concat(
+            Box::new(AST::Concat(
+                Box::new(AST::OneOrMore(Box::new(AST::Character('(')))),
+                Box::new(AST::String("hello".to_string())),
+            )),
+            Box::new(AST::OneOrMore(Box::new(AST::Character(')')))),
+        );
+        let nfa = NFA::from(&ast);
+        assert!(!nfa.find_translations("(hello)").is_empty());
+        assert!(!nfa.find_translations("(((((hello)))").is_empty());
+        assert!(nfa.find_translations("hello").is_empty());
+        assert!(nfa.find_translations("(hello").is_empty());
+        assert!(nfa.find_translations("hello)").is_empty());
+        assert!(nfa.find_translations("()").is_empty());
+        assert!(nfa.find_translations("(helo)").is_empty());
     }
 }
