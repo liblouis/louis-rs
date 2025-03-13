@@ -325,7 +325,6 @@ mod tests {
     fn character() {
         let ast = AST::Character('a');
         let nfa = NFA::from(&ast);
-        nfa.accepts("a");
         assert!(nfa.accepts("a"));
         assert!(!nfa.accepts("b"));
     }
