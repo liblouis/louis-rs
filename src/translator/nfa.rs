@@ -7,6 +7,8 @@
 //! the reachable states is an accepting state
 use std::collections::{HashMap, HashSet, VecDeque};
 
+use crate::parser::Pattern;
+
 use super::Translation;
 
 /// Reference to a state in the [NFA] states vector
@@ -181,6 +183,16 @@ impl NFA {
         }
     }
 
+    fn add_character_class(&mut self, chars: &HashSet<char>) -> Fragment {
+        let start = self.add_state(State { translation: None });
+        let end = self.add_state(State { translation: None });
+        for c in chars {
+            self.transitions
+                .insert((start, Transition::Character(*c)), end);
+        }
+        Fragment { start, end }
+    }
+
     fn add_fragment(&mut self, ast: &AST) -> Fragment {
         match ast {
             AST::Character(c) => self.add_char(*c, None),
@@ -226,6 +238,46 @@ impl NFA {
             offset: 0,
         };
         nfa.states[body.end].translation = Some(dummy);
+        nfa
+    }
+
+    fn add_pattern_fragment(&mut self, pattern: &Pattern) -> Fragment {
+        match pattern {
+            Pattern::Empty => todo!(),
+            Pattern::Characters(s) => self.add_string(s, None),
+            Pattern::Boundary => todo!(),
+            Pattern::Any => self.add_any(None),
+            Pattern::Set(chars) => self.add_character_class(chars),
+            Pattern::Attributes(hash_set) => todo!(),
+            Pattern::Group(vec) => todo!(),
+            Pattern::Negate(pattern) => todo!(),
+            Pattern::Optional(pattern) => {
+                let fragment = self.add_pattern_fragment(pattern);
+                self.add_optional(&fragment)
+            }
+            Pattern::ZeroOrMore(pattern) => {
+                let fragment = self.add_pattern_fragment(pattern);
+                self.add_kleene(&fragment)
+            }
+            Pattern::OneOrMore(pattern) => {
+                let one = self.add_pattern_fragment(pattern);
+                let fragment = self.add_pattern_fragment(pattern);
+                let kleene = self.add_kleene(&fragment);
+                self.add_concatenation(&one, &kleene)
+            }
+            Pattern::Either(pattern, other) => {
+                let r1 = self.add_pattern_fragment(pattern);
+                let r2 = self.add_pattern_fragment(other);
+                self.add_union(&r1, &r2)
+            }
+        }
+    }
+
+    fn from_match_pattern(pattern: &Pattern, translation: &Translation) -> NFA {
+        let mut nfa = NFA::new();
+        let body = nfa.add_pattern_fragment(pattern);
+        nfa.start = body.start;
+        nfa.states[body.end].translation = Some(translation.clone());
         nfa
     }
 
@@ -289,7 +341,7 @@ impl NFA {
     ) -> Vec<Translation> {
         dbg!(&state);
         let mut matching_rules = Vec::new();
-        let mut next_states = self.epsilon_closure(&HashSet::from([state]));
+        let next_states = dbg!(self.epsilon_closure(&HashSet::from([state])));
 
         // if any of the states in the epsilon closure (reachable via epsilon transition)
         // has a translation add it to the list of matching rules
@@ -320,36 +372,30 @@ impl NFA {
             ));
         }
 
-        match input.chars().next() {
-            Some(c) => {
-                let reachable_via_character =
-                    self.move_state(&next_states, Transition::Character(c));
-                let reachable_via_any = self.move_state(&next_states, Transition::Any);
-                next_states = reachable_via_character
-                    .union(&reachable_via_any)
-                    .cloned()
-                    .collect();
-                next_states = self.epsilon_closure(&next_states);
-                for state in next_states {
-                    let bytes = c.len_utf8();
-                    matching_rules.extend(self.find_translations_from_state(
-                        state,
-                        &input[bytes..],
-                        match_length + 1,
-                        offset,
-                    ));
-                }
-                matching_rules
+        if let Some(c) = input.chars().next() {
+            let reachable_via_character = self.move_state(&next_states, Transition::Character(c));
+            let reachable_via_any = self.move_state(&next_states, Transition::Any);
+            let mut next_states = reachable_via_character
+                .union(&reachable_via_any)
+                .cloned()
+                .collect();
+            next_states = self.epsilon_closure(&next_states);
+            for state in next_states {
+                let bytes = c.len_utf8();
+                matching_rules.extend(self.find_translations_from_state(
+                    state,
+                    &input[bytes..],
+                    match_length + 1,
+                    offset,
+                ));
             }
-            None => matching_rules,
         }
+
+        matching_rules
     }
 
     pub fn find_translations(&self, input: &str) -> Vec<Translation> {
-        let mut matching_rules = Vec::new();
-
-        matching_rules.extend(self.find_translations_from_state(self.start, input, 0, 0));
-        matching_rules
+        self.find_translations_from_state(self.start, input, 0, 0)
     }
 }
 
@@ -401,6 +447,7 @@ pub fn nfa_dot(nfa: &NFA) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::PatternParser;
 
     #[test]
     fn character() {
@@ -480,7 +527,7 @@ mod tests {
     #[test]
     fn find_kleene() {
         let ast = AST::ZeroOrMore(Box::new(AST::Character('a')));
-        let nfa = dbg!(NFA::from(&ast));
+        let nfa = NFA::from(&ast);
         assert!(!nfa.find_translations("").is_empty());
         assert!(!nfa.find_translations("a").is_empty());
         assert!(!nfa.find_translations("aa").is_empty());
@@ -495,7 +542,7 @@ mod tests {
             Box::new(AST::Character('a')),
             Box::new(AST::ZeroOrMore(Box::new(AST::Character('b')))),
         );
-        let nfa = dbg!(NFA::from(&ast));
+        let nfa = NFA::from(&ast);
         assert!(!nfa.find_translations("a").is_empty());
         assert!(!nfa.find_translations("aa").is_empty());
         assert!(!nfa.find_translations("ab").is_empty());
@@ -636,5 +683,43 @@ mod tests {
         assert!(nfa.find_translations("hello)").is_empty());
         assert!(nfa.find_translations("()").is_empty());
         assert!(nfa.find_translations("(helo)").is_empty());
+    }
+
+    #[test]
+    fn find_pattern() {
+        let patterns = PatternParser::new("abc").pattern().unwrap();
+        let pattern = patterns.first().unwrap();
+        let blank = String::new();
+        let translation = Translation::new(blank.clone(), blank, 0);
+        let nfa = dbg!(NFA::from_match_pattern(&pattern, &translation));
+        assert_eq!(nfa.find_translations("abc"), vec![translation]);
+        assert!(nfa.find_translations("def").is_empty());
+    }
+
+    #[test]
+    fn find_character_class() {
+        let patterns = PatternParser::new("[abc]").pattern().unwrap();
+        let pattern = patterns.first().unwrap();
+        let blank = String::new();
+        let translation = Translation::new(blank.clone(), blank, 0);
+        let nfa = NFA::from_match_pattern(&pattern, &translation);
+        assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);
+        assert_eq!(nfa.find_translations("b"), vec![translation.clone()]);
+        assert_eq!(nfa.find_translations("c"), vec![translation]);
+        assert!(nfa.find_translations("def").is_empty());
+    }
+
+    #[test]
+    #[ignore = "finds the same translation multiple times"]
+    fn find_character_class_one_or_more() {
+        let patterns = PatternParser::new("[abc]+").pattern().unwrap();
+        let pattern = patterns.first().unwrap();
+        let blank = String::new();
+        let translation = Translation::new(blank.clone(), blank, 0);
+        let nfa = NFA::from_match_pattern(&pattern, &translation);
+        assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);
+        assert_eq!(nfa.find_translations("b"), vec![translation.clone()]);
+        assert_eq!(nfa.find_translations("c"), vec![translation]);
+        assert!(nfa.find_translations("def").is_empty());
     }
 }
