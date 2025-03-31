@@ -338,8 +338,8 @@ impl NFA {
         input: &str,
         match_length: usize,
         offset: usize,
-    ) -> HashSet<Translation> {
-        let mut matching_rules = HashSet::new();
+    ) -> Vec<Translation> {
+        let mut matching_rules = Vec::new();
         let next_states = self.epsilon_closure(&HashSet::from([state]));
 
         // if any of the states in the epsilon closure (reachable via epsilon transition)
@@ -394,9 +394,9 @@ impl NFA {
     }
 
     pub fn find_translations(&self, input: &str) -> Vec<Translation> {
-        let mut translations =
-            Vec::from_iter(self.find_translations_from_state(self.start, input, 0, 0));
+        let mut translations =self.find_translations_from_state(self.start, input, 0, 0);
         translations.sort_by(|a, b| b.weight.cmp(&a.weight));
+	translations.dedup();
         translations
     }
 }
