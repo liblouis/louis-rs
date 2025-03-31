@@ -338,10 +338,9 @@ impl NFA {
         input: &str,
         match_length: usize,
         offset: usize,
-    ) -> Vec<Translation> {
-        dbg!(&state);
-        let mut matching_rules = Vec::new();
-        let next_states = dbg!(self.epsilon_closure(&HashSet::from([state])));
+    ) -> HashSet<Translation> {
+        let mut matching_rules = HashSet::new();
+        let next_states = self.epsilon_closure(&HashSet::from([state]));
 
         // if any of the states in the epsilon closure (reachable via epsilon transition)
         // has a translation add it to the list of matching rules
@@ -395,7 +394,10 @@ impl NFA {
     }
 
     pub fn find_translations(&self, input: &str) -> Vec<Translation> {
-        self.find_translations_from_state(self.start, input, 0, 0)
+        let mut translations =
+            Vec::from_iter(self.find_translations_from_state(self.start, input, 0, 0));
+        translations.sort_by(|a, b| b.weight.cmp(&a.weight));
+        translations
     }
 }
 
@@ -691,7 +693,7 @@ mod tests {
         let pattern = patterns.first().unwrap();
         let blank = String::new();
         let translation = Translation::new(blank.clone(), blank, 0);
-        let nfa = dbg!(NFA::from_match_pattern(&pattern, &translation));
+        let nfa = NFA::from_match_pattern(&pattern, &translation);
         assert_eq!(nfa.find_translations("abc"), vec![translation]);
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -710,7 +712,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "finds the same translation multiple times"]
     fn find_character_class_one_or_more() {
         let patterns = PatternParser::new("[abc]+").pattern().unwrap();
         let pattern = patterns.first().unwrap();

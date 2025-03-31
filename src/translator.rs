@@ -25,7 +25,7 @@ pub enum TranslationError {
     },
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub struct Translation {
     /// Input string to be translated
     input: String,
