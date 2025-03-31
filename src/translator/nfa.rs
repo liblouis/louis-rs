@@ -156,6 +156,11 @@ impl NFA {
 
     /// Combine two NFAs into the concatenation of both
     fn add_concatenation(&mut self, r1: &Fragment, r2: &Fragment) -> Fragment {
+        // FIXME: instead of adding an epsilon transition between the
+        // end node of r1 and the start node of r2 we should *merge* the
+        // two nodes as outlined in the dragon book. But for that we
+        // need a way to find all transitions going of a certain node.
+        // This doesn't feel very easy with the current data structure
         self.add_epsilon(r1.end, r2.start);
         Fragment {
             start: r1.start,
@@ -394,9 +399,11 @@ impl NFA {
     }
 
     pub fn find_translations(&self, input: &str) -> Vec<Translation> {
-        let mut translations =self.find_translations_from_state(self.start, input, 0, 0);
+        let mut translations = self.find_translations_from_state(self.start, input, 0, 0);
         translations.sort_by(|a, b| b.weight.cmp(&a.weight));
-	translations.dedup();
+        // FIXME: It feels a bit smelly to have to dedup the list of translations. Maybe
+        // there is something wrong how we traverse the NFA or even how we build it?
+        translations.dedup();
         translations
     }
 }
