@@ -58,8 +58,6 @@ Build a release version:
 
 #+BEGIN_SRC shell
   $ cargo build --release
-  $ cd ~/src
-  $ ln -s liblouis-[version] liblouis
 #+END_SRC
 
 Run the tests in a YAML file:
