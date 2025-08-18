@@ -54,6 +54,12 @@ Test the parser:
   Letter { character: 'e', dots: Explicit([{Dot2, Dot1, Dot3}, {Dot1}]), constraints: EnumSet(Nofor) }
 #+END_SRC
 
+Build a release version:
+
+#+BEGIN_SRC shell
+  $ cargo build --release
+#+END_SRC
+
 Run the tests in a YAML file:
 
 #+begin_src shell
