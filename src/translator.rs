@@ -8,6 +8,7 @@ use self::graph::Boundary;
 
 mod boundaries;
 mod graph;
+mod match_pattern;
 mod nfa;
 mod trie;
 
@@ -25,7 +26,7 @@ pub enum TranslationError {
     },
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub struct Translation {
     /// Input string to be translated
     input: String,

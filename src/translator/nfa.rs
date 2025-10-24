@@ -7,8 +7,6 @@
 //! the reachable states is an accepting state
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::parser::Pattern;
-
 use super::Translation;
 
 /// Reference to a state in the [NFA] states vector
@@ -68,16 +66,17 @@ pub struct NFA {
 /// A fragment of an [AST] with a `start` and `end` state
 ///
 /// Used to construct an NFA from smaller parts
-#[derive(Debug)]
-struct Fragment {
+#[derive(Debug, Default)]
+pub struct Fragment {
     start: StateId,
     end: StateId,
 }
 
 /// An abstract syntax tree
-enum AST {
+pub enum AST {
     Character(char),
     String(String),
+    Set(HashSet<char>),
     Any,
     Concat(Box<AST>, Box<AST>),
     ZeroOrMore(Box<AST>),
@@ -102,27 +101,30 @@ impl NFA {
         idx
     }
 
+    fn set_accepting(&mut self, end: StateId, translation: Translation) {
+        self.states[end].translation = Some(translation);
+    }
+
     /// Add a character transition to the NFA
-    fn add_char(&mut self, c: char, translation: Option<Translation>) -> Fragment {
-        let start = self.add_state(State { translation: None });
-        let end = self.add_state(State { translation });
+    fn add_char(&mut self, c: char) -> Fragment {
+        let start = self.add_state(State::default());
+        let end = self.add_state(State::default());
         self.transitions
             .insert((start, Transition::Character(c)), end);
         Fragment { start, end }
     }
 
     /// Add a sequence of character transitions to the NFA
-    fn add_string(&mut self, s: &str, translation: Option<Translation>) -> Fragment {
-        let start = self.add_state(State { translation: None });
+    fn add_string(&mut self, s: &str) -> Fragment {
+        let start = self.add_state(State::default());
         let mut prev = start;
         let mut end = start;
         for c in s.chars() {
-            end = self.add_state(State { translation: None });
+            end = self.add_state(State::default());
             self.transitions
                 .insert((prev, Transition::Character(c)), end);
             prev = end;
         }
-        self.states[end].translation = translation;
         Fragment { start, end }
     }
 
@@ -136,17 +138,17 @@ impl NFA {
     }
 
     /// Add an "any" transition to the NFA
-    fn add_any(&mut self, translation: Option<Translation>) -> Fragment {
-        let start = self.add_state(State { translation: None });
-        let end = self.add_state(State { translation });
+    fn add_any(&mut self) -> Fragment {
+        let start = self.add_state(State::default());
+        let end = self.add_state(State::default());
         self.transitions.insert((start, Transition::Any), end);
         Fragment { start, end }
     }
 
     /// Combine two NFAs into the union of both
-    fn add_union(&mut self, r1: &Fragment, r2: &Fragment) -> Fragment {
-        let start = self.add_state(State { translation: None });
-        let end = self.add_state(State { translation: None });
+    pub fn add_union(&mut self, r1: &Fragment, r2: &Fragment) -> Fragment {
+        let start = self.add_state(State::default());
+        let end = self.add_state(State::default());
         self.add_epsilon(start, r1.start);
         self.add_epsilon(start, r2.start);
         self.add_epsilon(r1.end, end);
@@ -170,8 +172,8 @@ impl NFA {
 
     /// Wrap an NFA so that it can be repeated zero or many times
     fn add_kleene(&mut self, r: &Fragment) -> Fragment {
-        let start = self.add_state(State { translation: None });
-        let end = self.add_state(State { translation: None });
+        let start = self.add_state(State::default());
+        let end = self.add_state(State::default());
         self.add_epsilon(start, r.start);
         self.add_epsilon(start, end);
         self.add_epsilon(r.end, r.start);
@@ -189,8 +191,8 @@ impl NFA {
     }
 
     fn add_character_class(&mut self, chars: &HashSet<char>) -> Fragment {
-        let start = self.add_state(State { translation: None });
-        let end = self.add_state(State { translation: None });
+        let start = self.add_state(State::default());
+        let end = self.add_state(State::default());
         for c in chars {
             self.transitions
                 .insert((start, Transition::Character(*c)), end);
@@ -198,11 +200,12 @@ impl NFA {
         Fragment { start, end }
     }
 
-    fn add_fragment(&mut self, ast: &AST) -> Fragment {
+    pub fn add_fragment(&mut self, ast: &AST) -> Fragment {
         match ast {
-            AST::Character(c) => self.add_char(*c, None),
-            AST::String(s) => self.add_string(s, None),
-            AST::Any => self.add_any(None),
+            AST::Character(c) => self.add_char(*c),
+            AST::String(s) => self.add_string(s),
+	    AST::Set(chars) => self.add_character_class(chars),
+            AST::Any => self.add_any(),
             AST::Concat(ast1, ast2) => {
                 let r1 = self.add_fragment(ast1);
                 let r2 = self.add_fragment(ast2);
@@ -230,60 +233,19 @@ impl NFA {
         }
     }
 
-    /// Create an NFA from an abstract syntax tree `ast`
-    fn from(ast: &AST) -> NFA {
-        let mut nfa = NFA::new();
-        let body = nfa.add_fragment(ast);
-        nfa.start = body.start;
-        let dummy = Translation {
-            input: "".to_string(),
-            output: "".to_string(),
-            length: 0,
-            weight: 0,
-            offset: 0,
-        };
-        nfa.states[body.end].translation = Some(dummy);
-        nfa
+    fn add_accepting_fragment(&mut self, ast: &AST, translation: Translation) -> Fragment {
+	let fragment = self.add_fragment(ast);
+	self.set_accepting(fragment.end, translation);
+	fragment
     }
 
-    fn add_pattern_fragment(&mut self, pattern: &Pattern) -> Fragment {
-        match pattern {
-            Pattern::Empty => todo!(),
-            Pattern::Characters(s) => self.add_string(s, None),
-            Pattern::Boundary => todo!(),
-            Pattern::Any => self.add_any(None),
-            Pattern::Set(chars) => self.add_character_class(chars),
-            Pattern::Attributes(hash_set) => todo!(),
-            Pattern::Group(vec) => todo!(),
-            Pattern::Negate(pattern) => todo!(),
-            Pattern::Optional(pattern) => {
-                let fragment = self.add_pattern_fragment(pattern);
-                self.add_optional(&fragment)
-            }
-            Pattern::ZeroOrMore(pattern) => {
-                let fragment = self.add_pattern_fragment(pattern);
-                self.add_kleene(&fragment)
-            }
-            Pattern::OneOrMore(pattern) => {
-                let one = self.add_pattern_fragment(pattern);
-                let fragment = self.add_pattern_fragment(pattern);
-                let kleene = self.add_kleene(&fragment);
-                self.add_concatenation(&one, &kleene)
-            }
-            Pattern::Either(pattern, other) => {
-                let r1 = self.add_pattern_fragment(pattern);
-                let r2 = self.add_pattern_fragment(other);
-                self.add_union(&r1, &r2)
-            }
-        }
-    }
-
-    fn from_match_pattern(pattern: &Pattern, translation: &Translation) -> NFA {
-        let mut nfa = NFA::new();
-        let body = nfa.add_pattern_fragment(pattern);
-        nfa.start = body.start;
-        nfa.states[body.end].translation = Some(translation.clone());
-        nfa
+    fn merge_accepting_fragments(&mut self, asts: Vec<(&AST, Translation)>) {
+	let mut union = Fragment::default();
+	for (ast, translation) in asts {
+	    let fragment = self.add_accepting_fragment(ast, translation);
+	    union = self.add_union(&union, &fragment);
+	}
+	self.start = union.start;
     }
 
     /// Return all states that are reachable from a set of `states`
@@ -456,7 +418,16 @@ pub fn nfa_dot(nfa: &NFA) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::PatternParser;
+
+    /// Create an NFA from an abstract syntax tree `ast`
+    impl From<&AST> for NFA {
+	fn from(ast: &AST) -> Self {
+	    let mut nfa = NFA::new();
+            let body = nfa.add_accepting_fragment(ast, Translation::default());
+            nfa.start = body.start;
+            nfa
+	}
+    }
 
     #[test]
     fn character() {
@@ -695,39 +666,25 @@ mod tests {
     }
 
     #[test]
-    fn find_pattern() {
-        let patterns = PatternParser::new("abc").pattern().unwrap();
-        let pattern = patterns.first().unwrap();
-        let blank = String::new();
-        let translation = Translation::new(blank.clone(), blank, 0);
-        let nfa = NFA::from_match_pattern(&pattern, &translation);
-        assert_eq!(nfa.find_translations("abc"), vec![translation]);
-        assert!(nfa.find_translations("def").is_empty());
-    }
-
-    #[test]
     fn find_character_class() {
-        let patterns = PatternParser::new("[abc]").pattern().unwrap();
-        let pattern = patterns.first().unwrap();
-        let blank = String::new();
-        let translation = Translation::new(blank.clone(), blank, 0);
-        let nfa = NFA::from_match_pattern(&pattern, &translation);
-        assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("b"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("c"), vec![translation]);
-        assert!(nfa.find_translations("def").is_empty());
+	let ast = AST::Set(HashSet::from(['a', 'b']));
+        let nfa = NFA::from(&ast);
+        assert!(nfa.accepts("a"));
+        assert!(nfa.accepts("b"));
+        assert!(!nfa.accepts(""));
+        assert!(!nfa.accepts("c"));
     }
 
     #[test]
     fn find_character_class_one_or_more() {
-        let patterns = PatternParser::new("[abc]+").pattern().unwrap();
-        let pattern = patterns.first().unwrap();
-        let blank = String::new();
-        let translation = Translation::new(blank.clone(), blank, 0);
-        let nfa = NFA::from_match_pattern(&pattern, &translation);
-        assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("b"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("c"), vec![translation]);
-        assert!(nfa.find_translations("def").is_empty());
+	let ast = AST::OneOrMore(Box::new(AST::Set(HashSet::from(['a', 'b']))));
+        let nfa = NFA::from(&ast);
+        assert!(nfa.accepts("a"));
+        assert!(nfa.accepts("b"));
+        assert!(nfa.accepts("ab"));
+        assert!(nfa.accepts("abbbbbbaaaa"));
+        assert!(!nfa.accepts(""));
+        assert!(!nfa.accepts("c"));
     }
+
 }
