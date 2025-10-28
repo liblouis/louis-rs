@@ -125,7 +125,6 @@ impl Trie {
         prev: Option<char>,
         node: &TrieNode,
         match_length: usize,
-        offset: usize,
     ) -> Vec<Translation> {
         let mut matching_rules = Vec::new();
         let mut chars = input.chars();
@@ -133,11 +132,7 @@ impl Trie {
         // if this node has a translation add it to the list of matching rules
         if let Some(ref translation) = node.translation {
             let translation = translation
-                .clone()
-                .with_offset(offset)
-                // if there is an offset (typically in a match opcode), the weight needs
-                // to be calculated at run-time. The weight is the actual length of match.
-                .with_weight_if_offset(match_length, offset);
+                .clone();
             matching_rules.push(translation)
         }
         let c = chars.next();
@@ -149,7 +144,6 @@ impl Trie {
                     Some(c),
                     node,
                     match_length + 1,
-                    offset,
                 ));
             } else if let Some(node) = node.char_case_insensitive_transition(c) {
                 matching_rules.extend(self.find_translations_from_node(
@@ -157,7 +151,6 @@ impl Trie {
                     Some(c),
                     node,
                     match_length + 1,
-                    offset,
                 ));
             } else if let Some(node) = node.any_transition() {
                 matching_rules.extend(self.find_translations_from_node(
@@ -165,7 +158,6 @@ impl Trie {
                     Some(c),
                     node,
                     match_length + 1,
-                    offset,
                 ));
             }
         }
@@ -176,7 +168,6 @@ impl Trie {
                     prev,
                     node,
                     match_length,
-                    offset,
                 ));
             }
         }
@@ -187,7 +178,6 @@ impl Trie {
                     prev,
                     node,
                     match_length,
-                    offset,
                 ));
             }
         }
@@ -198,7 +188,6 @@ impl Trie {
                     prev,
                     node,
                     match_length,
-                    offset,
                 ));
             }
         }
@@ -209,7 +198,6 @@ impl Trie {
                     prev,
                     node,
                     match_length,
-                    offset,
                 ));
             }
         }
@@ -220,7 +208,6 @@ impl Trie {
                     prev,
                     node,
                     match_length,
-                    offset,
                 ));
             }
         }
@@ -231,7 +218,6 @@ impl Trie {
                     prev,
                     node,
                     match_length,
-                    offset,
                 ));
             }
         }
@@ -241,7 +227,7 @@ impl Trie {
     pub fn find_translations(&self, input: &str, prev: Option<char>) -> Vec<Translation> {
         let mut matching_rules = Vec::new();
 
-        matching_rules.extend(self.find_translations_from_node(input, prev, &self.root, 0, 0));
+        matching_rules.extend(self.find_translations_from_node(input, prev, &self.root, 0));
         //matching_rules.sort_by_key(|translation| translation.weight);
         matching_rules
     }
