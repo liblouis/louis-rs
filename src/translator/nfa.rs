@@ -70,6 +70,7 @@ pub enum AST {
     Optional(Box<AST>),
     OneOrMore(Box<AST>),
     Either(Box<AST>, Box<AST>),
+    Offset,
 }
 
 impl NFA {
@@ -129,6 +130,14 @@ impl NFA {
         let start = self.add_state(State::default());
         let end = self.add_state(State::default());
         self.transitions.insert((start, Transition::Any), end);
+        Fragment { start, end }
+    }
+
+    /// Add a Offset transition to the NFA
+    fn add_offset(&mut self) -> Fragment {
+        let start = self.add_state(State::default());
+        let end = self.add_state(State::default());
+        self.transitions.insert((start, Transition::Offset), end);
         Fragment { start, end }
     }
 
@@ -217,6 +226,7 @@ impl NFA {
                 let r2 = self.add_fragment(ast2);
                 self.add_union(&r1, &r2)
             }
+	    AST::Offset => self.add_offset(),
         }
     }
 
@@ -320,7 +330,7 @@ impl NFA {
             matching_rules.extend(self.find_translations_from_state(
                 state,
                 input,
-                match_length + 1,
+                match_length,
                 offset + match_length,
             ));
         }
@@ -664,6 +674,23 @@ mod tests {
         assert!(nfa.accepts("abbbbbbaaaa"));
         assert!(!nfa.accepts(""));
         assert!(!nfa.accepts("c"));
+    }
+
+    #[test]
+    fn find_with_offset() {
+	let translation = Translation::new("".into(), "".into(), 7).with_offset(4);
+        let ast = AST::Concat(
+	    Box::new(AST::Concat(
+		Box::new(AST::OneOrMore(Box::new(AST::Any))),
+		Box::new(AST::Offset))),
+	    Box::new(AST::String("foo".into())));
+        let nfa = NFA::from(&ast);
+        assert_eq!(nfa.find_translations("aaaafoo"), vec![translation.clone()]);
+        assert_eq!(nfa.find_translations("____foo"), vec![translation.clone()]);
+        assert_eq!(nfa.find_translations("1111foo"), vec![translation.clone()]);
+        assert_eq!(nfa.find_translations("fooofoo"), vec![translation.clone()]);
+        assert_ne!(nfa.find_translations("foo"), vec![translation.clone()]);
+        assert_ne!(nfa.find_translations("foofoo"), vec![translation.clone()]);
     }
 
 }
