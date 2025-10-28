@@ -316,8 +316,8 @@ impl NFA {
                     translation
                         .clone()
                         .with_offset(offset)
-                        // if there is an offset (typically in a match opcode), the weight needs
-                        // to be calculated at run-time. The weight is the actual length of match.
+                        // if there is an offset, the weight needs to be calculated at run-time.
+                        // The weight is the actual length of match.
                         .with_weight_if_offset(match_length, offset)
                 }),
         );
