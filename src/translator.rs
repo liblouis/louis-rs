@@ -103,42 +103,42 @@ impl CharacterDefinition {
     fn get(&self, c: &char) -> Option<&Translation> {
         self.0.get(c)
     }
-}
 
-fn resolve_implicit_dots(
-    chars: &str,
-    character_definitions: &CharacterDefinition,
-) -> Result<String, TranslationError> {
-    chars
-        .chars()
-        .map(|c| {
-            character_definitions
-                .get(&c)
-                .ok_or(TranslationError::ImplicitCharacterNotDefined(c))
-                .map(|t| t.output.to_string())
-        })
-        .collect()
-}
+    fn resolve_implicit_dots(
+	&self,
+	chars: &str,
+    ) -> Result<String, TranslationError> {
+	chars
+            .chars()
+            .map(|c| {
+		self
+                    .get(&c)
+                    .ok_or(TranslationError::ImplicitCharacterNotDefined(c))
+                    .map(|t| t.output.to_string())
+            })
+            .collect()
+    }
 
-/// Convert braille dots to Unicode characters.
-///
-/// Convert given braille `dots` to Unicode characters. If the dots are `Explicit` then simply
-/// delegate to the [dots_to_unicode] function. Otherwise, if the dots are `Implicit` convert the
-/// given `chars` to braille with the given `character_definitions` and using the
-/// [resolve_implicit_dots] function
-///
-/// Returns the braille Unicode characters or `TranslationError` if the implicit characters could
-/// not be converted.
-fn braille_to_unicode(
-    dots: &Braille,
-    chars: &str,
-    character_definitions: &CharacterDefinition,
-) -> Result<String, TranslationError> {
-    let dots = match dots {
-        Braille::Implicit => resolve_implicit_dots(&chars, character_definitions)?,
-        Braille::Explicit(dots) => dots_to_unicode(&dots),
-    };
-    Ok(dots)
+    /// Convert braille dots to Unicode characters.
+    ///
+    /// Convert given braille `dots` to Unicode characters. If the dots are `Explicit` then simply
+    /// delegate to the [dots_to_unicode] function. Otherwise, if the dots are `Implicit` convert the
+    /// given `chars` to braille with the given `character_definitions` and using the
+    /// [resolve_implicit_dots] function
+    ///
+    /// Returns the braille Unicode characters or `TranslationError` if the implicit characters could
+    /// not be converted.
+    fn braille_to_unicode(
+	&self,
+	dots: &Braille,
+	chars: &str,
+    ) -> Result<String, TranslationError> {
+	let dots = match dots {
+            Braille::Implicit => self.resolve_implicit_dots(&chars)?,
+            Braille::Explicit(dots) => dots_to_unicode(&dots),
+	};
+	Ok(dots)
+    }
 }
 
 #[derive(Debug)]
@@ -291,23 +291,23 @@ impl TranslationTable {
                     }
                 }
                 Rule::Comp6 { chars, dots } | Rule::Always { chars, dots, .. } => {
-                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    let dots = character_definitions.braille_to_unicode(dots, chars)?;
                     translations.insert(chars.to_string(), dots, Boundary::None, Boundary::None);
                 }
                 Rule::Word { chars, dots, .. } => {
-                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    let dots = character_definitions.braille_to_unicode(dots, chars)?;
                     translations.insert(chars.to_string(), dots, Boundary::Word, Boundary::Word);
                 }
                 Rule::Begword { chars, dots, .. } => {
-                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    let dots = character_definitions.braille_to_unicode(dots, chars)?;
                     translations.insert(chars.to_string(), dots, Boundary::Word, Boundary::NotWord)
                 }
                 Rule::Sufword { chars, dots, .. } => {
-                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    let dots = character_definitions.braille_to_unicode(dots, chars)?;
                     translations.insert(chars.to_string(), dots, Boundary::Word, Boundary::None);
                 }
                 Rule::Midword { chars, dots, .. } | Rule::Partword { chars, dots, .. } => {
-                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    let dots = character_definitions.braille_to_unicode(dots, chars)?;
                     translations.insert(
                         chars.to_string(),
                         dots,
@@ -316,15 +316,15 @@ impl TranslationTable {
                     )
                 }
                 Rule::Midendword { chars, dots, .. } => {
-                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    let dots = character_definitions.braille_to_unicode(dots, chars)?;
                     translations.insert(chars.to_string(), dots, Boundary::NotWord, Boundary::None);
                 }
                 Rule::Endword { chars, dots, .. } | Rule::Prfword { chars, dots, .. } => {
-                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    let dots = character_definitions.braille_to_unicode(dots, chars)?;
                     translations.insert(chars.to_string(), dots, Boundary::None, Boundary::Word);
                 }
                 Rule::Begmidword { chars, dots, .. } => {
-                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    let dots = character_definitions.braille_to_unicode(dots, chars)?;
                     translations.insert(chars.to_string(), dots, Boundary::None, Boundary::NotWord);
                 }
                 Rule::Joinword { chars, dots, .. } | Rule::Lowword { chars, dots, .. } => {
@@ -348,7 +348,7 @@ impl TranslationTable {
                     Boundary::Number,
                 ),
                 Rule::Endnum { chars, dots, .. } => {
-                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    let dots = character_definitions.braille_to_unicode(dots, chars)?;
                     translations.insert(
                         chars.to_string(),
                         dots,
@@ -363,7 +363,7 @@ impl TranslationTable {
                     dots,
                     ..
                 } => {
-                    let dots = braille_to_unicode(dots, chars, &character_definitions)?;
+                    let dots = character_definitions.braille_to_unicode(dots, chars)?;
                     translations.insert_match(chars.to_string(), dots, pre, post);
                 }
 
@@ -542,13 +542,13 @@ mod tests {
     fn resolve_implicit_dots_test() {
         let char_defs = CharacterDefinition::new();
         assert_eq!(
-            resolve_implicit_dots("xs", &char_defs),
+            char_defs.resolve_implicit_dots("xs"),
             Err(TranslationError::ImplicitCharacterNotDefined('x'))
         );
         let mut char_defs = CharacterDefinition::new();
         char_defs.insert('a', Translation::new("a".to_string(), "A".to_string(), 1));
         char_defs.insert('h', Translation::new("h".to_string(), "H".to_string(), 1));
-        assert_eq!(resolve_implicit_dots("haha", &char_defs), Ok("HAHA".into()));
+        assert_eq!(char_defs.resolve_implicit_dots("haha"), Ok("HAHA".into()));
     }
 
     #[test]
