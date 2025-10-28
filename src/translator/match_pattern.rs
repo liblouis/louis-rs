@@ -51,7 +51,7 @@ impl From<&Pattern> for AST {
 impl AST {
     /// Combine the pre and post patterns with the match characters into one big regexp AST by joining the with concat
     fn from_match_rule(pre: &Patterns, chars: String, post: &Patterns) -> Self {
-        AST::Concat(Box::new(AST::Concat(Box::new(AST::from(pre)), Box::new(AST::String(chars)))), Box::new(AST::from(post)))
+        AST::Concat(Box::new(AST::Concat(Box::new(AST::Concat(Box::new(AST::from(pre)), Box::new(AST::Offset))), Box::new(AST::String(chars)))), Box::new(AST::from(post)))
     }
 }
 
@@ -112,6 +112,24 @@ mod tests {
         assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);
         assert_eq!(nfa.find_translations("b"), vec![translation.clone()]);
         assert_eq!(nfa.find_translations("c"), vec![translation]);
+        assert!(nfa.find_translations("def").is_empty());
+    }
+
+    #[test]
+    fn find_match() {
+        let pre = PatternParser::new("[abc]+").pattern().unwrap();
+        let post = PatternParser::new("[123]+").pattern().unwrap();
+	let ast = AST::from_match_rule(&pre, "foo".into(), &post);
+        let nfa = NFA::from(&ast);
+	let translation = Translation::new("".into(), "".into(), 5).with_offset(1);
+        assert_eq!(nfa.find_translations("afoo1"), vec![translation.clone()]);
+        assert_eq!(nfa.find_translations("bfoo2"), vec![translation.clone()]);
+	let translations = vec![
+	    Translation::new("".into(), "".into(), 9).with_offset(3),
+	    Translation::new("".into(), "".into(), 8).with_offset(3),
+	    Translation::new("".into(), "".into(), 7).with_offset(3),
+	];
+        assert_eq!(nfa.find_translations("cccfoo333"), translations);
         assert!(nfa.find_translations("def").is_empty());
     }
 
