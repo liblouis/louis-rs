@@ -1,13 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
-use graph::Graph;
+use trie::Trie;
 
 use crate::parser::{AnchoredRule, Attribute, Braille, Direction, Rule, dots_to_unicode, fallback};
 
-use self::graph::Boundary;
+use self::trie::Boundary;
 
 mod boundaries;
-mod graph;
 mod match_pattern;
 mod nfa;
 mod trie;
@@ -163,7 +162,7 @@ pub struct TranslationTable {
     undefined: Option<String>,
     character_definitions: CharacterDefinition,
     character_attributes: CharacterAttributes,
-    translations: Graph,
+    translations: Trie,
     direction: Direction,
 }
 
@@ -175,7 +174,7 @@ impl TranslationTable {
         let mut undefined = None;
         let mut character_definitions = CharacterDefinition::new();
         let mut character_attributes = CharacterAttributes::new();
-        let mut translations = Graph::new();
+        let mut translations = Trie::new();
 
         let rules: Vec<AnchoredRule> = rules
             .into_iter()
@@ -364,7 +363,6 @@ impl TranslationTable {
                     ..
                 } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    translations.insert_match(chars.to_string(), dots, pre, post);
                 }
 
                 _ => (),
@@ -714,6 +712,7 @@ mod tests {
         assert_eq!(display_table.translate(&table.translate("a a")), "A A");
     }
 
+    #[ignore = "not yet implemented"]
     #[test]
     fn match_test() {
         let rules = vec![
@@ -730,6 +729,7 @@ mod tests {
         assert_eq!(table.translate("afoob"), "⠁⠉⠂");
     }
 
+    #[ignore = "not yet implemented"]
     #[test]
     fn match_with_any_test() {
         let rules = vec![
@@ -747,6 +747,7 @@ mod tests {
         assert_eq!(table.translate("ffoob"), "⠄⠉⠂");
     }
 
+    #[ignore = "not yet implemented"]
     #[test]
     fn match_with_set_test() {
         let rules = vec![

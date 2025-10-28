@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::parser::{Pattern, Patterns};
 use crate::translator::boundaries::{number_word, word_end, word_number, word_start};
 
 use super::Translation;
@@ -12,7 +11,6 @@ pub enum Boundary {
     Number,
     NumberWord,
     WordNumber,
-    PrePattern,
     None,
 }
 
@@ -69,9 +67,6 @@ impl TrieNode {
         self.transitions
             .get(&Transition::Start(Boundary::NumberWord))
     }
-    fn pre_end_transition(&self) -> Option<&TrieNode> {
-        self.transitions.get(&Transition::End(Boundary::PrePattern))
-    }
 }
 
 #[derive(Default, Debug)]
@@ -113,90 +108,6 @@ impl Trie {
                 .or_default();
         }
 
-        if cfg!(feature = "backwards_compatibility") {
-            // first rule wins
-            if current_node.translation.is_none() {
-                current_node.translation = Some(Translation::new(from, to, length));
-            }
-        } else {
-            // last rule wins
-            current_node.translation = Some(Translation::new(from, to, length));
-        }
-    }
-
-    pub fn insert_match(&mut self, from: String, to: String, pre: &Patterns, post: &Patterns) {
-        let mut current_node = &mut self.root;
-        let mut length = from.chars().count();
-
-        for p in pre.into_iter() {
-            match p {
-                Pattern::Characters(s) => {
-                    for c in s.chars() {
-                        current_node = current_node
-                            .transitions
-                            .entry(Transition::Character(c))
-                            .or_default();
-                        length += 1;
-                    }
-                }
-                Pattern::Any => {
-                    current_node = current_node.transitions.entry(Transition::Any).or_default();
-                    length += 1;
-                }
-                Pattern::Set(chars) => {
-                    for c in chars {
-                        current_node = current_node
-                            .transitions
-                            .entry(Transition::Character(*c))
-                            .or_default();
-                        length += 1;
-                    }
-                }
-                _ => (),
-            }
-        }
-
-        // add an epsilon transition to mark the end of the
-        // pre-pattern. We need to know where the real match starts
-        current_node = current_node
-            .transitions
-            .entry(Transition::End(Boundary::PrePattern))
-            .or_default();
-
-        for c in from.chars() {
-            current_node = current_node
-                .transitions
-                .entry(Transition::Character(c))
-                .or_default();
-        }
-
-        for p in post {
-            match p {
-                Pattern::Characters(s) => {
-                    for c in s.chars() {
-                        current_node = current_node
-                            .transitions
-                            .entry(Transition::Character(c))
-                            .or_default();
-                        length += 1;
-                    }
-                }
-                Pattern::Any => {
-                    current_node = current_node.transitions.entry(Transition::Any).or_default();
-                    length += 1;
-                }
-                Pattern::Set(chars) => {
-                    for c in chars {
-                        current_node = current_node
-                            .transitions
-                            .entry(Transition::Character(*c))
-                            .or_default();
-                        length += 1;
-                    }
-                }
-                _ => (),
-            }
-        }
         if cfg!(feature = "backwards_compatibility") {
             // first rule wins
             if current_node.translation.is_none() {
@@ -323,15 +234,6 @@ impl Trie {
                     offset,
                 ));
             }
-        }
-        if let Some(node) = node.pre_end_transition() {
-            matching_rules.extend(self.find_translations_from_node(
-                &input[..],
-                prev,
-                node,
-                match_length,
-                match_length,
-            ));
         }
         matching_rules
     }
