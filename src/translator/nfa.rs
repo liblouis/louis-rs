@@ -20,17 +20,6 @@ struct State {
     translation: Option<Translation>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-enum Boundary {
-    Word,
-    NotWord,
-    Number,
-    NumberWord,
-    WordNumber,
-    PrePattern,
-    None,
-}
-
 /// An transition between two [States](State) in the [NFA]
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 enum Transition {
@@ -38,8 +27,6 @@ enum Transition {
     Character(char),
     /// A transition that accepts any character
     Any,
-    Start(Boundary),
-    End(Boundary),
     /// An epsilon transition that accepts the empty string
     Epsilon,
     /// An Offset transition is essentially an epsilon transition that marks the end of a
@@ -395,14 +382,6 @@ pub fn nfa_dot(nfa: &NFA) -> String {
             Transition::Offset => {
                 dot.push_str(&format!("\t{} -> {} [label=\"{}\"]\n", from, to, "Offset"))
             }
-            Transition::Start(boundary) => dot.push_str(&format!(
-                "\t{} -> {} [label=\"{:?}\"]\n",
-                from, to, boundary
-            )),
-            Transition::End(boundary) => dot.push_str(&format!(
-                "\t{} -> {} [label=\"{:?}\"]\n",
-                from, to, boundary
-            )),
             Transition::Epsilon => unreachable!(),
         }
     }
