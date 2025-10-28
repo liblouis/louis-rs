@@ -4,8 +4,6 @@ use crate::parser::{Pattern, Patterns};
 
 use crate::translator::nfa::{AST, NFA};
 
-use super::Translation;
-
 impl From<&Patterns> for AST {
     fn from(patterns: &Patterns) -> Self {
         match patterns.len() {
@@ -80,6 +78,7 @@ impl NFA {
 mod tests {
     use super::*;
     use crate::parser::PatternParser;
+    use crate::translator::Translation;
 
     #[test]
     fn find_pattern() {
