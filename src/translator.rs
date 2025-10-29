@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use match_pattern::MatchPatterns;
 use trie::Trie;
 
 use crate::parser::{AnchoredRule, Attribute, Braille, Direction, Rule, dots_to_unicode, fallback};
@@ -163,6 +164,7 @@ pub struct TranslationTable {
     character_definitions: CharacterDefinition,
     character_attributes: CharacterAttributes,
     translations: Trie,
+    match_patterns: MatchPatterns,
     direction: Direction,
 }
 
@@ -175,6 +177,7 @@ impl TranslationTable {
         let mut character_definitions = CharacterDefinition::new();
         let mut character_attributes = CharacterAttributes::new();
         let mut translations = Trie::new();
+        let mut match_patterns = MatchPatterns::new();
 
         let rules: Vec<AnchoredRule> = rules
             .into_iter()
@@ -363,6 +366,7 @@ impl TranslationTable {
                     ..
                 } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
+		    match_patterns.insert(pre, chars.to_string(), post, dots);
                 }
 
                 _ => (),
@@ -375,6 +379,7 @@ impl TranslationTable {
             character_definitions,
             character_attributes,
             translations,
+	    match_patterns,
         })
     }
 
@@ -403,6 +408,15 @@ impl TranslationTable {
                 // no longer applicable
                 .partition(|t| t.offset == 0);
             delayed_translations.extend(delayed);
+	    // then search for matching match patterns. Unless they have empty pre patterns they will all have
+	    // an offset. Split those off.
+	    let (match_candidates, match_delayed): (Vec<Translation>, Vec<Translation>) = self
+		.match_patterns
+		.find_translations(chars.as_str())
+		.into_iter().partition(|t| t.offset == 0);
+            delayed_translations.extend(match_delayed);
+	    candidates.extend(match_candidates);
+	    // merge the candidates from the match patters with the candidates from the plain translations
             let (current, delayed): (Vec<Translation>, Vec<Translation>) = delayed_translations
                 .into_iter()
                 .partition(|t| t.offset == 0);
@@ -712,7 +726,6 @@ mod tests {
         assert_eq!(display_table.translate(&table.translate("a a")), "A A");
     }
 
-    #[ignore = "not yet implemented"]
     #[test]
     fn match_test() {
         let rules = vec![
@@ -729,7 +742,6 @@ mod tests {
         assert_eq!(table.translate("afoob"), "⠁⠉⠂");
     }
 
-    #[ignore = "not yet implemented"]
     #[test]
     fn match_with_any_test() {
         let rules = vec![
@@ -747,7 +759,6 @@ mod tests {
         assert_eq!(table.translate("ffoob"), "⠄⠉⠂");
     }
 
-    #[ignore = "not yet implemented"]
     #[test]
     fn match_with_set_test() {
         let rules = vec![

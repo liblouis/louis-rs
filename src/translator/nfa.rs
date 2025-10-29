@@ -83,6 +83,10 @@ impl NFA {
         }
     }
 
+    fn is_empty(&self) -> bool {
+	self.states.is_empty()
+    }
+
     fn add_state(&mut self, state: State) -> StateId {
         let idx = self.states.len();
         self.states.push(state);
@@ -302,6 +306,10 @@ impl NFA {
         offset: usize,
     ) -> Vec<Translation> {
         let mut matching_rules = Vec::new();
+
+	// return early if the nfa is empty
+	if self.is_empty() {return matching_rules};
+
         let next_states = self.epsilon_closure(&HashSet::from([state]));
 
         // if any of the states in the epsilon closure (reachable via epsilon transition)
