@@ -47,7 +47,7 @@ impl From<&Pattern> for AST {
 }
 
 impl AST {
-    /// Combine the pre and post patterns with the match characters into one big regexp AST by joining the with concat
+    /// Combine the pre and post patterns with the match characters into one big regexp AST by joining them with concat
     fn from_match_rule(pre: &Patterns, chars: String, post: &Patterns) -> Self {
         AST::Concat(Box::new(AST::Concat(Box::new(AST::Concat(Box::new(AST::from(pre)), Box::new(AST::Offset))), Box::new(AST::String(chars)))), Box::new(AST::from(post)))
     }
