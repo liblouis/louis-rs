@@ -1,6 +1,7 @@
+use std::collections::HashSet;
 use std::ops::Deref;
 
-use crate::parser::{Pattern, Patterns};
+use crate::parser::{Attribute, Pattern, Patterns};
 
 use crate::translator::Translation;
 use crate::translator::nfa::{AST, NFA};
@@ -36,7 +37,7 @@ impl From<&Pattern> for AST {
             Pattern::Boundary => todo!(),
             Pattern::Any => AST::Any,
             Pattern::Set(hash_set) => AST::Set(hash_set.clone()),
-            Pattern::Attributes(hash_set) => todo!(),
+            Pattern::Attributes(hash_set) => AST::from(hash_set),
             Pattern::Group(vec) => todo!(),
             Pattern::Negate(pattern) => todo!(),
             Pattern::Optional(pattern) => AST::Optional(Box::new(AST::from(pattern))),
@@ -44,6 +45,31 @@ impl From<&Pattern> for AST {
             Pattern::OneOrMore(pattern) => AST::OneOrMore(Box::new(AST::from(pattern))),
             Pattern::Either(left, right) => AST::Either(Box::new(AST::from(left)), Box::new(AST::from(right)))
         }
+    }
+}
+
+impl From<&HashSet<Attribute>> for AST {
+    fn from(items: &HashSet<Attribute>) -> Self {
+	let mut chars = HashSet::new();
+	let digits = HashSet::from(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
+	let letters = HashSet::from(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']);
+	for attr in items {
+	    match attr {
+		Attribute::Space => {chars.insert(' ');},
+		Attribute::Digit => {chars.extend(&digits);},
+		Attribute::Letter => {chars.extend(&letters)},
+		Attribute::Uppercase => todo!(),
+		Attribute::Lowercase => chars.extend(&letters),
+		Attribute::Punctuation => todo!(),
+		Attribute::Sign => todo!(),
+		Attribute::Seqdelimiter => todo!(),
+		Attribute::Seqbeforechars => todo!(),
+		Attribute::Seqafterchars => todo!(),
+		Attribute::Boundary => todo!(),
+		Attribute::UserDefined(_) => todo!(),
+	    }
+	}
+	AST::Set(chars)
     }
 }
 
