@@ -12,6 +12,8 @@ pub enum ParseError {
     EmptyPattern,
     #[error("Group cannot be empty")]
     EmptyGroup,
+    #[error("invalid escape sequence")]
+    InvalidEscape,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -118,9 +120,22 @@ impl<'a> PatternParser<'a> {
     fn set(&mut self) -> Result<Pattern, ParseError> {
         self.consume('[')?;
         let mut characters = HashSet::new();
-        while let Some(c) = self.chars.next_if(|&c| c != ']') {
-            characters.insert(c);
-        }
+	while let Some(&c) = self.chars.peek() {
+            if c == ']' { break; }
+	    else if c == '\\' {
+		// Handle escape sequence
+		self.chars.next(); // consume the backslash
+		if let Some(escaped_char) = self.chars.next_if(|&c| c == ']' || c == '\\') {
+                    characters.insert(escaped_char);
+		} else {
+                    return Err(ParseError::InvalidEscape);
+		}
+            } else {
+		// Regular character
+		characters.insert(c);
+		self.chars.next();
+            }
+	}
         self.consume(']')?;
         if characters.is_empty() {
             Err(ParseError::EmptyPattern)
@@ -287,6 +302,27 @@ mod tests {
                 expected: ']',
                 found: None
             })
+        );
+    }
+
+    #[test]
+    fn set_with_escape_test() {
+        assert_eq!(
+            PatternParser::new("[abc\\]]").set(),
+            Ok(Pattern::Set(HashSet::from(['a', 'b', 'c', ']'])))
+        );
+        assert_eq!(
+            PatternParser::new("[)}\\]]").set(),
+            Ok(Pattern::Set(HashSet::from([')', '}', ']'])))
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "InvalidEscape")]
+    fn set_with_invalid_escape_test() {
+        assert_eq!(
+            PatternParser::new("[\\a]]").set(),
+            Ok(Pattern::Set(HashSet::from(['a'])))
         );
     }
 
