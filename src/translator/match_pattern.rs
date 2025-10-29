@@ -43,40 +43,55 @@ impl From<&Pattern> for AST {
             Pattern::Optional(pattern) => AST::Optional(Box::new(AST::from(pattern))),
             Pattern::ZeroOrMore(pattern) => AST::ZeroOrMore(Box::new(AST::from(pattern))),
             Pattern::OneOrMore(pattern) => AST::OneOrMore(Box::new(AST::from(pattern))),
-            Pattern::Either(left, right) => AST::Either(Box::new(AST::from(left)), Box::new(AST::from(right)))
+            Pattern::Either(left, right) => {
+                AST::Either(Box::new(AST::from(left)), Box::new(AST::from(right)))
+            }
         }
     }
 }
 
 impl From<&HashSet<Attribute>> for AST {
     fn from(items: &HashSet<Attribute>) -> Self {
-	let mut chars = HashSet::new();
-	let digits = HashSet::from(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
-	let letters = HashSet::from(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']);
-	for attr in items {
-	    match attr {
-		Attribute::Space => {chars.insert(' ');},
-		Attribute::Digit => {chars.extend(&digits);},
-		Attribute::Letter => {chars.extend(&letters)},
-		Attribute::Uppercase => todo!(),
-		Attribute::Lowercase => chars.extend(&letters),
-		Attribute::Punctuation => todo!(),
-		Attribute::Sign => todo!(),
-		Attribute::Seqdelimiter => todo!(),
-		Attribute::Seqbeforechars => todo!(),
-		Attribute::Seqafterchars => todo!(),
-		Attribute::Boundary => todo!(),
-		Attribute::UserDefined(_) => todo!(),
-	    }
-	}
-	AST::Set(chars)
+        let mut chars = HashSet::new();
+        let digits = HashSet::from(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
+        let letters = HashSet::from([
+            'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q',
+            'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+        ]);
+        for attr in items {
+            match attr {
+                Attribute::Space => {
+                    chars.insert(' ');
+                }
+                Attribute::Digit => {
+                    chars.extend(&digits);
+                }
+                Attribute::Letter => chars.extend(&letters),
+                Attribute::Uppercase => todo!(),
+                Attribute::Lowercase => chars.extend(&letters),
+                Attribute::Punctuation => todo!(),
+                Attribute::Sign => todo!(),
+                Attribute::Seqdelimiter => todo!(),
+                Attribute::Seqbeforechars => todo!(),
+                Attribute::Seqafterchars => todo!(),
+                Attribute::Boundary => todo!(),
+                Attribute::UserDefined(_) => todo!(),
+            }
+        }
+        AST::Set(chars)
     }
 }
 
 impl AST {
     /// Combine the pre and post patterns with the match characters into one big regexp AST by joining them with concat
     fn from_match_rule(pre: &Patterns, chars: String, post: &Patterns) -> Self {
-        AST::Concat(Box::new(AST::Concat(Box::new(AST::Concat(Box::new(AST::from(pre)), Box::new(AST::Offset))), Box::new(AST::String(chars)))), Box::new(AST::from(post)))
+        AST::Concat(
+            Box::new(AST::Concat(
+                Box::new(AST::Concat(Box::new(AST::from(pre)), Box::new(AST::Offset))),
+                Box::new(AST::String(chars)),
+            )),
+            Box::new(AST::from(post)),
+        )
     }
 }
 
@@ -93,13 +108,13 @@ impl MatchPatterns {
     }
 
     pub fn insert(&mut self, pre: &Patterns, chars: String, post: &Patterns, to: String) {
-	let translation = Translation::new(chars.clone(), to, 0);
-	let ast = AST::from_match_rule(pre, chars, post);
-	self.nfa.merge_accepting_fragment(&ast, translation);
+        let translation = Translation::new(chars.clone(), to, 0);
+        let ast = AST::from_match_rule(pre, chars, post);
+        self.nfa.merge_accepting_fragment(&ast, translation);
     }
 
     pub fn find_translations(&self, input: &str) -> Vec<Translation> {
-	self.nfa.find_translations(input)
+        self.nfa.find_translations(input)
     }
 }
 
@@ -112,7 +127,7 @@ mod tests {
     fn find_pattern() {
         let patterns = PatternParser::new("abc").pattern().unwrap();
         let translation = Translation::default();
-	let ast = AST::from(&patterns);
+        let ast = AST::from(&patterns);
         let nfa = NFA::from(&ast);
         assert_eq!(nfa.find_translations("abc"), vec![translation]);
         assert!(nfa.find_translations("def").is_empty());
@@ -122,7 +137,7 @@ mod tests {
     fn find_character_class() {
         let patterns = PatternParser::new("[abc]").pattern().unwrap();
         let translation = Translation::default();
-	let ast = AST::from(&patterns);
+        let ast = AST::from(&patterns);
         let nfa = NFA::from(&ast);
         assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);
         assert_eq!(nfa.find_translations("b"), vec![translation.clone()]);
@@ -134,7 +149,7 @@ mod tests {
     fn find_character_class_one_or_more() {
         let patterns = PatternParser::new("[abc]+").pattern().unwrap();
         let translation = Translation::default();
-	let ast = AST::from(&patterns);
+        let ast = AST::from(&patterns);
         let nfa = NFA::from(&ast);
         assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);
         assert_eq!(nfa.find_translations("b"), vec![translation.clone()]);
@@ -146,16 +161,16 @@ mod tests {
     fn find_match() {
         let pre = PatternParser::new("[abc]+").pattern().unwrap();
         let post = PatternParser::new("[123]+").pattern().unwrap();
-	let ast = AST::from_match_rule(&pre, "foo".into(), &post);
+        let ast = AST::from_match_rule(&pre, "foo".into(), &post);
         let nfa = NFA::from(&ast);
-	let translation = Translation::new("".into(), "".into(), 5).with_offset(1);
+        let translation = Translation::new("".into(), "".into(), 5).with_offset(1);
         assert_eq!(nfa.find_translations("afoo1"), vec![translation.clone()]);
         assert_eq!(nfa.find_translations("bfoo2"), vec![translation.clone()]);
-	let translations = vec![
-	    Translation::new("".into(), "".into(), 9).with_offset(3),
-	    Translation::new("".into(), "".into(), 8).with_offset(3),
-	    Translation::new("".into(), "".into(), 7).with_offset(3),
-	];
+        let translations = vec![
+            Translation::new("".into(), "".into(), 9).with_offset(3),
+            Translation::new("".into(), "".into(), 8).with_offset(3),
+            Translation::new("".into(), "".into(), 7).with_offset(3),
+        ];
         assert_eq!(nfa.find_translations("cccfoo333"), translations);
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -164,14 +179,13 @@ mod tests {
     fn find_multiple_match() {
         let pre = PatternParser::new("[abc]+").pattern().unwrap();
         let post = PatternParser::new("[1234567890]").pattern().unwrap();
-	let mut match_patterns = MatchPatterns::new();
-	match_patterns.insert(&pre, "foo".into(), &post, "FOO".into());
-	match_patterns.insert(&pre, "bar".into(), &post, "BAR".into());
-	let translation = vec![Translation::new("foo".into(), "FOO".into(), 7).with_offset(3)];
+        let mut match_patterns = MatchPatterns::new();
+        match_patterns.insert(&pre, "foo".into(), &post, "FOO".into());
+        match_patterns.insert(&pre, "bar".into(), &post, "BAR".into());
+        let translation = vec![Translation::new("foo".into(), "FOO".into(), 7).with_offset(3)];
         assert_eq!(match_patterns.find_translations("aaafoo333"), translation);
-	let translation = vec![Translation::new("bar".into(), "BAR".into(), 7).with_offset(3)];
+        let translation = vec![Translation::new("bar".into(), "BAR".into(), 7).with_offset(3)];
         assert_eq!(match_patterns.find_translations("aaabar333"), translation);
         assert_ne!(match_patterns.find_translations("aaabaz333"), translation);
     }
-
 }

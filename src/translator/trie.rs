@@ -131,8 +131,7 @@ impl Trie {
 
         // if this node has a translation add it to the list of matching rules
         if let Some(ref translation) = node.translation {
-            let translation = translation
-                .clone();
+            let translation = translation.clone();
             matching_rules.push(translation)
         }
         let c = chars.next();

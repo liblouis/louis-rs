@@ -84,7 +84,7 @@ impl NFA {
     }
 
     fn is_empty(&self) -> bool {
-	self.states.is_empty()
+        self.states.is_empty()
     }
 
     fn add_state(&mut self, state: State) -> StateId {
@@ -204,7 +204,7 @@ impl NFA {
         match ast {
             AST::Character(c) => self.add_char(*c),
             AST::String(s) => self.add_string(s),
-	    AST::Set(chars) => self.add_character_class(chars),
+            AST::Set(chars) => self.add_character_class(chars),
             AST::Any => self.add_any(),
             AST::Concat(ast1, ast2) => {
                 let r1 = self.add_fragment(ast1);
@@ -230,21 +230,21 @@ impl NFA {
                 let r2 = self.add_fragment(ast2);
                 self.add_union(&r1, &r2)
             }
-	    AST::Offset => self.add_offset(),
+            AST::Offset => self.add_offset(),
         }
     }
 
     pub fn add_accepting_fragment(&mut self, ast: &AST, translation: Translation) -> Fragment {
-	let fragment = self.add_fragment(ast);
-	self.set_accepting(fragment.end, translation);
-	fragment
+        let fragment = self.add_fragment(ast);
+        self.set_accepting(fragment.end, translation);
+        fragment
     }
 
     pub fn merge_accepting_fragment(&mut self, ast: &AST, translation: Translation) {
-	let mut union = Fragment::default();
-	let fragment = self.add_accepting_fragment(ast, translation);
-	union = self.add_union(&union, &fragment);
-	self.start = union.start;
+        let mut union = Fragment::default();
+        let fragment = self.add_accepting_fragment(ast, translation);
+        union = self.add_union(&union, &fragment);
+        self.start = union.start;
     }
 
     /// Return all states that are reachable from a set of `states`
@@ -307,8 +307,10 @@ impl NFA {
     ) -> Vec<Translation> {
         let mut matching_rules = Vec::new();
 
-	// return early if the nfa is empty
-	if self.is_empty() {return matching_rules};
+        // return early if the nfa is empty
+        if self.is_empty() {
+            return matching_rules;
+        };
 
         let next_states = self.epsilon_closure(&HashSet::from([state]));
 
@@ -416,12 +418,12 @@ mod tests {
 
     /// Create an NFA from an abstract syntax tree `ast`
     impl From<&AST> for NFA {
-	fn from(ast: &AST) -> Self {
-	    let mut nfa = NFA::new();
+        fn from(ast: &AST) -> Self {
+            let mut nfa = NFA::new();
             let body = nfa.add_accepting_fragment(ast, Translation::default());
             nfa.start = body.start;
             nfa
-	}
+        }
     }
 
     #[test]
@@ -662,7 +664,7 @@ mod tests {
 
     #[test]
     fn find_character_class() {
-	let ast = AST::Set(HashSet::from(['a', 'b']));
+        let ast = AST::Set(HashSet::from(['a', 'b']));
         let nfa = NFA::from(&ast);
         assert!(nfa.accepts("a"));
         assert!(nfa.accepts("b"));
@@ -672,7 +674,7 @@ mod tests {
 
     #[test]
     fn find_character_class_one_or_more() {
-	let ast = AST::OneOrMore(Box::new(AST::Set(HashSet::from(['a', 'b']))));
+        let ast = AST::OneOrMore(Box::new(AST::Set(HashSet::from(['a', 'b']))));
         let nfa = NFA::from(&ast);
         assert!(nfa.accepts("a"));
         assert!(nfa.accepts("b"));
@@ -684,12 +686,14 @@ mod tests {
 
     #[test]
     fn find_with_offset() {
-	let translation = Translation::new("".into(), "".into(), 7).with_offset(4);
+        let translation = Translation::new("".into(), "".into(), 7).with_offset(4);
         let ast = AST::Concat(
-	    Box::new(AST::Concat(
-		Box::new(AST::OneOrMore(Box::new(AST::Any))),
-		Box::new(AST::Offset))),
-	    Box::new(AST::String("foo".into())));
+            Box::new(AST::Concat(
+                Box::new(AST::OneOrMore(Box::new(AST::Any))),
+                Box::new(AST::Offset),
+            )),
+            Box::new(AST::String("foo".into())),
+        );
         let nfa = NFA::from(&ast);
         assert_eq!(nfa.find_translations("aaaafoo"), vec![translation.clone()]);
         assert_eq!(nfa.find_translations("____foo"), vec![translation.clone()]);
@@ -698,5 +702,4 @@ mod tests {
         assert_ne!(nfa.find_translations("foo"), vec![translation.clone()]);
         assert_ne!(nfa.find_translations("foofoo"), vec![translation.clone()]);
     }
-
 }

@@ -104,15 +104,11 @@ impl CharacterDefinition {
         self.0.get(c)
     }
 
-    fn resolve_implicit_dots(
-	&self,
-	chars: &str,
-    ) -> Result<String, TranslationError> {
-	chars
+    fn resolve_implicit_dots(&self, chars: &str) -> Result<String, TranslationError> {
+        chars
             .chars()
             .map(|c| {
-		self
-                    .get(&c)
+                self.get(&c)
                     .ok_or(TranslationError::ImplicitCharacterNotDefined(c))
                     .map(|t| t.output.to_string())
             })
@@ -128,16 +124,12 @@ impl CharacterDefinition {
     ///
     /// Returns the braille Unicode characters or `TranslationError` if the implicit characters could
     /// not be converted.
-    fn braille_to_unicode(
-	&self,
-	dots: &Braille,
-	chars: &str,
-    ) -> Result<String, TranslationError> {
-	let dots = match dots {
+    fn braille_to_unicode(&self, dots: &Braille, chars: &str) -> Result<String, TranslationError> {
+        let dots = match dots {
             Braille::Implicit => self.resolve_implicit_dots(&chars)?,
             Braille::Explicit(dots) => dots_to_unicode(&dots),
-	};
-	Ok(dots)
+        };
+        Ok(dots)
     }
 }
 
@@ -366,7 +358,7 @@ impl TranslationTable {
                     ..
                 } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-		    match_patterns.insert(pre, chars.to_string(), post, dots);
+                    match_patterns.insert(pre, chars.to_string(), post, dots);
                 }
 
                 _ => (),
@@ -379,7 +371,7 @@ impl TranslationTable {
             character_definitions,
             character_attributes,
             translations,
-	    match_patterns,
+            match_patterns,
         })
     }
 
@@ -408,15 +400,16 @@ impl TranslationTable {
                 // no longer applicable
                 .partition(|t| t.offset == 0);
             delayed_translations.extend(delayed);
-	    // then search for matching match patterns. Unless they have empty pre patterns they will all have
-	    // an offset. Split those off.
-	    let (match_candidates, match_delayed): (Vec<Translation>, Vec<Translation>) = self
-		.match_patterns
-		.find_translations(chars.as_str())
-		.into_iter().partition(|t| t.offset == 0);
+            // then search for matching match patterns. Unless they have empty pre patterns they will all have
+            // an offset. Split those off.
+            let (match_candidates, match_delayed): (Vec<Translation>, Vec<Translation>) = self
+                .match_patterns
+                .find_translations(chars.as_str())
+                .into_iter()
+                .partition(|t| t.offset == 0);
             delayed_translations.extend(match_delayed);
-	    candidates.extend(match_candidates);
-	    // merge the candidates from the match patters with the candidates from the plain translations
+            candidates.extend(match_candidates);
+            // merge the candidates from the match patters with the candidates from the plain translations
             let (current, delayed): (Vec<Translation>, Vec<Translation>) = delayed_translations
                 .into_iter()
                 .partition(|t| t.offset == 0);

@@ -120,22 +120,23 @@ impl<'a> PatternParser<'a> {
     fn set(&mut self) -> Result<Pattern, ParseError> {
         self.consume('[')?;
         let mut characters = HashSet::new();
-	while let Some(&c) = self.chars.peek() {
-            if c == ']' { break; }
-	    else if c == '\\' {
-		// Handle escape sequence
-		self.chars.next(); // consume the backslash
-		if let Some(escaped_char) = self.chars.next_if(|&c| c == ']' || c == '\\') {
+        while let Some(&c) = self.chars.peek() {
+            if c == ']' {
+                break;
+            } else if c == '\\' {
+                // Handle escape sequence
+                self.chars.next(); // consume the backslash
+                if let Some(escaped_char) = self.chars.next_if(|&c| c == ']' || c == '\\') {
                     characters.insert(escaped_char);
-		} else {
+                } else {
                     return Err(ParseError::InvalidEscape);
-		}
+                }
             } else {
-		// Regular character
-		characters.insert(c);
-		self.chars.next();
+                // Regular character
+                characters.insert(c);
+                self.chars.next();
             }
-	}
+        }
         self.consume(']')?;
         if characters.is_empty() {
             Err(ParseError::EmptyPattern)
