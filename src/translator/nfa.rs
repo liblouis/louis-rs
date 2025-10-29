@@ -42,7 +42,7 @@ enum Transition {
 /// there can be any number of epsilon transitions originating from a
 /// state. That is why `epsilon_transitions` contains a set of states
 /// for a given start state
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct NFA {
     states: Vec<State>,
     start: StateId,
@@ -196,7 +196,7 @@ impl NFA {
         Fragment { start, end }
     }
 
-    pub fn add_fragment(&mut self, ast: &AST) -> Fragment {
+    fn add_fragment(&mut self, ast: &AST) -> Fragment {
         match ast {
             AST::Character(c) => self.add_char(*c),
             AST::String(s) => self.add_string(s),
@@ -230,18 +230,16 @@ impl NFA {
         }
     }
 
-    fn add_accepting_fragment(&mut self, ast: &AST, translation: Translation) -> Fragment {
+    pub fn add_accepting_fragment(&mut self, ast: &AST, translation: Translation) -> Fragment {
 	let fragment = self.add_fragment(ast);
 	self.set_accepting(fragment.end, translation);
 	fragment
     }
 
-    fn merge_accepting_fragments(&mut self, asts: Vec<(&AST, Translation)>) {
+    pub fn merge_accepting_fragment(&mut self, ast: &AST, translation: Translation) {
 	let mut union = Fragment::default();
-	for (ast, translation) in asts {
-	    let fragment = self.add_accepting_fragment(ast, translation);
-	    union = self.add_union(&union, &fragment);
-	}
+	let fragment = self.add_accepting_fragment(ast, translation);
+	union = self.add_union(&union, &fragment);
 	self.start = union.start;
     }
 

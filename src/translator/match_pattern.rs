@@ -2,6 +2,7 @@ use std::ops::Deref;
 
 use crate::parser::{Pattern, Patterns};
 
+use crate::translator::Translation;
 use crate::translator::nfa::{AST, NFA};
 
 impl From<&Patterns> for AST {
@@ -53,24 +54,26 @@ impl AST {
     }
 }
 
-impl NFA {
-    fn merge_patterns(&mut self, patterns: &Patterns) {
-	match patterns.len() {
-	    0 => (),
-	    1 => {
-		let ast = AST::from(&patterns[0]);
-		self.add_fragment(&ast);
-	    }
-	    _ => {
-		let ast = AST::from(&patterns[0]);
-		let mut union = self.add_fragment(&ast);
-		for pattern in patterns.iter().skip(1) {
-		    let ast = AST::from(pattern);
-		    let fragment = self.add_fragment(&ast);
-		    union = self.add_union(&union, &fragment)
-		}
-	    }
-	}
+#[derive(Debug)]
+pub struct MatchPatterns {
+    nfa: NFA,
+}
+
+impl MatchPatterns {
+    pub fn new() -> Self {
+        Self {
+            nfa: NFA::default(),
+        }
+    }
+
+    pub fn insert(&mut self, pre: &Patterns, chars: String, post: &Patterns, to: String) {
+	let translation = Translation::new(chars.clone(), to, 0);
+	let ast = AST::from_match_rule(pre, chars, post);
+	self.nfa.merge_accepting_fragment(&ast, translation);
+    }
+
+    pub fn find_translations(&self, input: &str) -> Vec<Translation> {
+	self.nfa.find_translations(input)
     }
 }
 
@@ -78,7 +81,6 @@ impl NFA {
 mod tests {
     use super::*;
     use crate::parser::PatternParser;
-    use crate::translator::Translation;
 
     #[test]
     fn find_pattern() {
@@ -130,6 +132,20 @@ mod tests {
 	];
         assert_eq!(nfa.find_translations("cccfoo333"), translations);
         assert!(nfa.find_translations("def").is_empty());
+    }
+
+    #[test]
+    fn find_multiple_match() {
+        let pre = PatternParser::new("[abc]+").pattern().unwrap();
+        let post = PatternParser::new("[1234567890]").pattern().unwrap();
+	let mut match_patterns = MatchPatterns::new();
+	match_patterns.insert(&pre, "foo".into(), &post, "FOO".into());
+	match_patterns.insert(&pre, "bar".into(), &post, "BAR".into());
+	let translation = vec![Translation::new("foo".into(), "FOO".into(), 7).with_offset(3)];
+        assert_eq!(match_patterns.find_translations("aaafoo333"), translation);
+	let translation = vec![Translation::new("bar".into(), "BAR".into(), 7).with_offset(3)];
+        assert_eq!(match_patterns.find_translations("aaabar333"), translation);
+        assert_ne!(match_patterns.find_translations("aaabaz333"), translation);
     }
 
 }
