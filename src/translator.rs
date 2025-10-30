@@ -133,20 +133,16 @@ impl CharacterDefinition {
     }
 }
 
-#[derive(Debug)]
-struct CharacterAttributes(HashSet<(char, Attribute)>);
+#[derive(Debug, Default)]
+struct CharacterAttributes(HashMap<Attribute, HashSet<char>>);
 
 impl CharacterAttributes {
     fn new() -> Self {
-        Self(HashSet::new())
+        Self(HashMap::new())
     }
 
-    fn insert(&mut self, c: char, attribute: Attribute) {
-        self.0.insert((c, attribute));
-    }
-
-    fn contains(&self, c: char, attribute: Attribute) -> bool {
-        self.0.contains(&(c, attribute))
+    fn insert(&mut self, attribute: Attribute, c: char) {
+        self.0.entry(attribute).or_default().insert(c);
     }
 }
 
@@ -190,7 +186,7 @@ impl TranslationTable {
                     let translation =
                         Translation::new(character.to_string(), dots_to_unicode(dots), 1);
                     character_definitions.insert(*character, translation);
-                    character_attributes.insert(*character, Attribute::Space);
+                    character_attributes.insert(Attribute::Space, *character);
                 }
                 Rule::Punctuation {
                     character, dots, ..
@@ -198,7 +194,7 @@ impl TranslationTable {
                     let translation =
                         Translation::new(character.to_string(), dots_to_unicode(dots), 1);
                     character_definitions.insert(*character, translation);
-                    character_attributes.insert(*character, Attribute::Punctuation);
+                    character_attributes.insert(Attribute::Punctuation, *character);
                 }
                 Rule::Digit {
                     character, dots, ..
@@ -209,7 +205,7 @@ impl TranslationTable {
                     let translation =
                         Translation::new(character.to_string(), dots_to_unicode(dots), 1);
                     character_definitions.insert(*character, translation);
-                    character_attributes.insert(*character, Attribute::Digit);
+                    character_attributes.insert(Attribute::Digit, *character);
                 }
                 Rule::Letter {
                     character, dots, ..
@@ -217,7 +213,7 @@ impl TranslationTable {
                     let translation =
                         Translation::new(character.to_string(), dots_to_unicode(dots), 1);
                     character_definitions.insert(*character, translation);
-                    character_attributes.insert(*character, Attribute::Letter);
+                    character_attributes.insert(Attribute::Letter, *character);
                 }
                 Rule::Lowercase {
                     character, dots, ..
@@ -225,7 +221,7 @@ impl TranslationTable {
                     let translation =
                         Translation::new(character.to_string(), dots_to_unicode(dots), 1);
                     character_definitions.insert(*character, translation);
-                    character_attributes.insert(*character, Attribute::Lowercase);
+                    character_attributes.insert(Attribute::Lowercase, *character);
                 }
                 Rule::Uppercase {
                     character, dots, ..
@@ -233,7 +229,7 @@ impl TranslationTable {
                     let translation =
                         Translation::new(character.to_string(), dots_to_unicode(dots), 1);
                     character_definitions.insert(*character, translation);
-                    character_attributes.insert(*character, Attribute::Uppercase);
+                    character_attributes.insert(Attribute::Uppercase, *character);
                 }
                 Rule::Sign {
                     character, dots, ..
@@ -241,7 +237,7 @@ impl TranslationTable {
                     let translation =
                         Translation::new(character.to_string(), dots_to_unicode(dots), 1);
                     character_definitions.insert(*character, translation);
-                    character_attributes.insert(*character, Attribute::Sign);
+                    character_attributes.insert(Attribute::Sign, *character);
                 }
                 Rule::Math {
                     character, dots, ..
