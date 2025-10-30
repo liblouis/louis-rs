@@ -762,5 +762,6 @@ mod tests {
         assert_eq!(table.translate("soo"), "⡀⠈⠈");
         assert_eq!(table.translate("foof"), "⠄⠉⠄");
         assert_eq!(table.translate("zoof"), "⠐⠉⠄");
+        assert_eq!(table.translate("soof"), "⡀⠈⠈⠄");
     }
 }
