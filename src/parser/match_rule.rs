@@ -309,11 +309,11 @@ mod tests {
     #[test]
     fn set_with_escape_test() {
         assert_eq!(
-            PatternParser::new("[abc\\]]").set(),
+            PatternParser::new(r"[abc\]]").set(),
             Ok(Pattern::Set(HashSet::from(['a', 'b', 'c', ']'])))
         );
         assert_eq!(
-            PatternParser::new("[)}\\]]").set(),
+            PatternParser::new(r"[)}\]]").set(),
             Ok(Pattern::Set(HashSet::from([')', '}', ']'])))
         );
     }
@@ -322,7 +322,7 @@ mod tests {
     #[should_panic(expected = "InvalidEscape")]
     fn set_with_invalid_escape_test() {
         assert_eq!(
-            PatternParser::new("[\\a]]").set(),
+            PatternParser::new(r"[\a]]").set(),
             Ok(Pattern::Set(HashSet::from(['a'])))
         );
     }
