@@ -759,6 +759,12 @@ pub enum Position {
     After,
 }
 
+#[derive(PartialEq, Debug)]
+pub enum EscapingContext {
+    Default,
+    MatchPattern,
+}
+
 fn unescape_unicode(chars: &mut Chars, len: u8) -> Result<char, ParseError> {
     let mut s = String::new();
 
@@ -777,7 +783,7 @@ fn unescape_unicode(chars: &mut Chars, len: u8) -> Result<char, ParseError> {
     Err(ParseError::InvalidUnicodeLiteral { found: Some(s) })
 }
 
-fn unescape(s: &str) -> Result<String, ParseError> {
+pub fn unescape(s: &str, context: EscapingContext) -> Result<String, ParseError> {
     let mut iter = s.chars();
     let mut new = String::new();
 
@@ -796,6 +802,11 @@ fn unescape(s: &str) -> Result<String, ParseError> {
             Some('v') => new.push('\u{000B}'),
             Some('e') => new.push('\u{001B}'),
             Some('\\') => new.push('\\'),
+            // when unescaping a match pattern leave \(, \) and \] alone as they are needed later
+            Some(c @ ('(' | ')' | ']')) if context == EscapingContext::MatchPattern => {
+                new.push('\\');
+                new.push(c);
+            }
             Some('x') => new.push(unescape_unicode(&mut iter, 4)?),
             Some('y') => new.push(unescape_unicode(&mut iter, 5)?),
             Some(c) => return Err(ParseError::InvalidEscape(Some(c))),
@@ -1082,7 +1093,7 @@ impl<'a> RuleParser<'a> {
             .tokens
             .next()
             .ok_or(ParseError::SingleCharExpected { found: None })?;
-        let s = unescape(s)?;
+        let s = unescape(s, EscapingContext::Default)?;
         if s.chars().count() == 1 {
             Ok(s.chars().next().unwrap())
         } else {
@@ -1101,7 +1112,7 @@ impl<'a> RuleParser<'a> {
 
     fn chars(&mut self) -> Result<String, ParseError> {
         let s = self.tokens.next().ok_or(ParseError::CharsExpected)?;
-        unescape(s)
+        unescape(s, EscapingContext::Default)
     }
 
     fn maybe_chars(&mut self) -> Option<String> {
@@ -1192,7 +1203,7 @@ impl<'a> RuleParser<'a> {
             .next()
             .ok_or(ParseError::MatchPreExpected)
             .map(|s| {
-                match_rule::PatternParser::new(&s)
+                match_rule::PatternParser::new(&unescape(s, EscapingContext::MatchPattern)?)
                     .pattern()
                     .map_err(ParseError::InvalidMatchPattern)
             })?
@@ -1203,7 +1214,7 @@ impl<'a> RuleParser<'a> {
             .next()
             .ok_or(ParseError::MatchPostExpected)
             .map(|s| {
-                match_rule::PatternParser::new(&s)
+                match_rule::PatternParser::new(&unescape(s, EscapingContext::MatchPattern)?)
                     .pattern()
                     .map_err(ParseError::InvalidMatchPattern)
             })?
