@@ -77,8 +77,8 @@ pub enum ParseError {
     InvalidUnicodeLiteral { found: Option<String> },
     #[error("invalid number")]
     InvalidNumber(#[from] ParseIntError),
-    #[error("invalid escape sequence")]
-    InvalidEscape,
+    #[error("invalid escape sequence {0:?}")]
+    InvalidEscape(Option<char>),
     #[error("Names can only contain a-z and A-Z, got {name:?}")]
     InvalidName { name: String },
     #[error("Constraints '{constraints:?}' not allowed for opcode {opcode:?}.")]
@@ -798,7 +798,8 @@ fn unescape(s: &str) -> Result<String, ParseError> {
             Some('\\') => new.push('\\'),
             Some('x') => new.push(unescape_unicode(&mut iter, 4)?),
             Some('y') => new.push(unescape_unicode(&mut iter, 5)?),
-            _ => return Err(ParseError::InvalidEscape),
+            Some(c) => return Err(ParseError::InvalidEscape(Some(c))),
+            _ => return Err(ParseError::InvalidEscape(None)),
         };
     }
     Ok(new)
