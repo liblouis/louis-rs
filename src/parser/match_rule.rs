@@ -126,7 +126,9 @@ impl<'a> PatternParser<'a> {
             } else if c == '\\' {
                 // Handle escape sequence
                 self.chars.next(); // consume the backslash
-                if let Some(escaped_char) = self.chars.next_if(|&c| c == ']' || c == '\\') {
+                if let Some(escaped_char) =
+                    self.chars.next_if(|&c| c == ']' || c == '(' || c == ')')
+                {
                     characters.insert(escaped_char);
                 } else {
                     return Err(ParseError::InvalidEscape);
