@@ -1,5 +1,7 @@
 use std::{collections::HashMap, fs::File, iter::Peekable, num::ParseIntError, path::PathBuf};
 
+use crate::{parser, parser::EscapingContext, parser::unescape};
+
 use enumset::EnumSet;
 use libyaml::{Encoding, Event, Parser, ParserIter};
 
@@ -49,6 +51,8 @@ pub enum ParseError {
     InvalidToken(String),
     #[error(transparent)]
     TestError(#[from] TestError),
+    #[error("invalid escape sequence {0:?}")]
+    InvalidEscape(#[from] parser::ParseError),
 }
 
 pub struct YAMLParser<'a> {
@@ -303,7 +307,7 @@ impl YAMLParser<'_> {
 
     fn test(&mut self) -> Result<Test, ParseError> {
         self.sequence_start()?;
-        let mut input = self.scalar()?;
+        let mut input = unescape(&self.scalar()?, EscapingContext::Default)?;
         let mut expected = self.scalar()?;
         // the YAML format is way too flexible: You can have two
         // scalars in which case those are input and expected. But you
