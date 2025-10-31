@@ -6,8 +6,8 @@ pub enum ParseError {
     CharExpected { expected: char, found: Option<char> },
     #[error("Invalid attribute {0:?}")]
     InvalidAttribute(Option<char>),
-    #[error("Quantifier not allowed without pattern")]
-    MissingPatternBeforeQuantifier,
+    #[error("Quantifier '{0}' not allowed without pattern")]
+    MissingPatternBeforeQuantifier(char),
     #[error("Pattern cannot be empty")]
     EmptyPattern,
     #[error("Group cannot be empty")]
@@ -210,8 +210,8 @@ impl<'a> PatternParser<'a> {
             Some('[') => self.set(),
             Some('(') => self.group(),
             // FIXME: handle escaped special chars
-            Some('?') | Some('*') | Some('+') | Some('|') => {
-                Err(ParseError::MissingPatternBeforeQuantifier)
+	    Some(c @ ('?' | '*' | '+' | '|')) => {
+                Err(ParseError::MissingPatternBeforeQuantifier(*c))
             }
             Some(_) => self.characters(),
             None => Err(ParseError::EmptyPattern),
@@ -373,7 +373,7 @@ mod tests {
         );
         assert_eq!(
             PatternParser::new("a**").pattern(),
-            Err(ParseError::MissingPatternBeforeQuantifier)
+            Err(ParseError::MissingPatternBeforeQuantifier('*'))
         );
         assert_eq!(PatternParser::new("-").pattern(), Ok(vec![Pattern::Empty]));
     }
