@@ -71,6 +71,9 @@ pub enum AST {
     OneOrMore(Box<AST>),
     Either(Box<AST>, Box<AST>),
     Offset,
+    /// Stop-gap blanket "implementation" for things that might be needed but are not yet
+    /// implemented
+    NotImplemented,
 }
 
 impl NFA {
@@ -200,6 +203,13 @@ impl NFA {
         Fragment { start, end }
     }
 
+    fn add_noop(&mut self) -> Fragment {
+        let start = self.add_state(State::default());
+        let end = self.add_state(State::default());
+        self.add_epsilon(start, end);
+        Fragment { start, end }
+    }
+
     fn add_fragment(&mut self, ast: &AST) -> Fragment {
         match ast {
             AST::Character(c) => self.add_char(*c),
@@ -231,6 +241,7 @@ impl NFA {
                 self.add_union(&r1, &r2)
             }
             AST::Offset => self.add_offset(),
+            AST::NotImplemented => self.add_noop(),
         }
     }
 
