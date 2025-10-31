@@ -253,6 +253,7 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool) {
     if summary {
         total.yaml_file = "Total".to_string();
         yaml_results.push(total);
+	yaml_results.sort_by(|a, b| b.tests.cmp(&a.tests));
         let mut table = Table::new(yaml_results);
         // add a special separator above the Total row
         table.modify(Rows::last(), Border::inherit(Style::ascii()).top('='));
