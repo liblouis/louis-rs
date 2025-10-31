@@ -32,14 +32,14 @@ impl From<&Box<Pattern>> for AST {
 impl From<&Pattern> for AST {
     fn from(item: &Pattern) -> Self {
         match item {
-            Pattern::Empty => todo!(),
+            Pattern::Empty => AST::NotImplemented,
             Pattern::Characters(s) => AST::String(s.to_string()),
-            Pattern::Boundary => todo!(),
+            Pattern::Boundary => AST::NotImplemented,
             Pattern::Any => AST::Any,
             Pattern::Set(hash_set) => AST::Set(hash_set.clone()),
             Pattern::Attributes(hash_set) => AST::from(hash_set),
-            Pattern::Group(vec) => todo!(),
-            Pattern::Negate(pattern) => todo!(),
+            Pattern::Group(vec) => AST::NotImplemented,
+            Pattern::Negate(pattern) => AST::NotImplemented,
             Pattern::Optional(pattern) => AST::Optional(Box::new(AST::from(pattern))),
             Pattern::ZeroOrMore(pattern) => AST::ZeroOrMore(Box::new(AST::from(pattern))),
             Pattern::OneOrMore(pattern) => AST::OneOrMore(Box::new(AST::from(pattern))),
