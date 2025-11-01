@@ -134,6 +134,18 @@ mod tests {
     }
 
     #[test]
+    fn find_either() {
+        let patterns = PatternParser::new("a|b").pattern().unwrap();
+        let translation = Translation::default();
+        let ast = AST::from(&patterns);
+        let nfa = NFA::from(&ast);
+        assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);
+        assert_eq!(nfa.find_translations("b"), vec![translation.clone()]);
+        assert_eq!(nfa.find_translations("c"), vec![]);
+        assert!(nfa.find_translations("def").is_empty());
+    }
+
+    #[test]
     fn find_character_class() {
         let patterns = PatternParser::new("[abc]").pattern().unwrap();
         let translation = Translation::default();
