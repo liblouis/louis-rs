@@ -119,13 +119,14 @@ impl CharacterDefinition {
 
     /// Convert braille dots to Unicode characters.
     ///
-    /// Convert given braille `dots` to Unicode characters. If the dots are `Explicit` then simply
-    /// delegate to the [dots_to_unicode] function. Otherwise, if the dots are `Implicit` convert the
-    /// given `chars` to braille with the given `character_definitions` and using the
-    /// [resolve_implicit_dots] function
+    /// Convert given braille `dots` to Unicode characters. If the dots are
+    /// [explicit](Braille::Explicit) then simply delegate to the [`dots_to_unicode`] function.
+    /// Otherwise, if the dots are [implicit](Braille::Implicit) convert the given `chars` to
+    /// braille with the given `character_definitions` and using the [`Self::resolve_implicit_dots`]
+    /// function.
     ///
-    /// Returns the braille Unicode characters or `TranslationError` if the implicit characters could
-    /// not be converted.
+    /// Returns the braille Unicode characters or [`TranslationError`] if the implicit characters
+    /// could not be converted.
     fn braille_to_unicode(&self, dots: &Braille, chars: &str) -> Result<String, TranslationError> {
         let dots = match dots {
             Braille::Implicit => self.resolve_implicit_dots(&chars)?,
