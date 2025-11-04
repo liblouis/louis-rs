@@ -6,8 +6,10 @@ use trie::Trie;
 use crate::parser::{AnchoredRule, Attribute, Braille, Direction, Rule, dots_to_unicode, fallback};
 
 use self::trie::Boundary;
+use indication::{Indication, NumericIndicator};
 
 mod boundaries;
+mod indication;
 mod match_pattern;
 mod nfa;
 mod trie;
@@ -134,6 +136,23 @@ impl CharacterDefinition {
 }
 
 #[derive(Debug, Default)]
+struct IndicatorSigns(HashMap<Indication, String>);
+
+impl IndicatorSigns {
+    fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    fn insert(&mut self, indication: Indication, s: String) {
+        self.0.insert(indication, s);
+    }
+
+    fn get(&self, indication: Indication) -> Option<&String> {
+        self.0.get(&indication)
+    }
+}
+
+#[derive(Debug, Default)]
 struct CharacterAttributes(HashMap<Attribute, HashSet<char>>);
 
 impl CharacterAttributes {
@@ -144,6 +163,13 @@ impl CharacterAttributes {
     fn insert(&mut self, attribute: Attribute, c: char) {
         self.0.entry(attribute).or_default().insert(c);
     }
+
+    fn get(&self, attribute: Attribute) -> HashSet<char> {
+        self.0
+            .get(&attribute)
+            .cloned()
+            .unwrap_or(HashSet::default())
+    }
 }
 
 #[derive(Debug)]
@@ -153,6 +179,7 @@ pub struct TranslationTable {
     character_attributes: CharacterAttributes,
     translations: Trie,
     match_patterns: MatchPatterns,
+    indicator_signs: IndicatorSigns,
     direction: Direction,
 }
 
@@ -166,6 +193,7 @@ impl TranslationTable {
         let mut character_attributes = CharacterAttributes::new();
         let mut translations = Trie::new();
         let mut match_patterns = MatchPatterns::new();
+        let mut indicator_signs = IndicatorSigns::new();
 
         let rules: Vec<AnchoredRule> = rules
             .into_iter()
@@ -247,6 +275,12 @@ impl TranslationTable {
                         Translation::new(character.to_string(), dots_to_unicode(dots), 1),
                     );
                     // TODO: should the math opcode not also define a CharacterAttribute?
+                }
+                Rule::Numsign { dots } => {
+                    indicator_signs.insert(Indication::NumericStart, dots_to_unicode(dots));
+                }
+                Rule::Nonumsign { dots } => {
+                    indicator_signs.insert(Indication::NumericEnd, dots_to_unicode(dots));
                 }
                 // display rules are ignored for translation tables
                 Rule::Display { .. } => (),
@@ -368,6 +402,7 @@ impl TranslationTable {
             character_attributes,
             translations,
             match_patterns,
+            indicator_signs,
         })
     }
 
@@ -383,8 +418,35 @@ impl TranslationTable {
         let mut delayed_translations: Vec<Translation> = Vec::new();
         let mut chars = input.chars();
         let mut prev: Option<char> = None;
+        let mut indicator = NumericIndicator::new(
+            self.character_attributes.get(Attribute::Digit),
+            self.indicator_signs.get(Indication::NumericStart).cloned(),
+            self.indicator_signs.get(Indication::NumericEnd).cloned(),
+        );
 
         loop {
+            // Check if there is a need for an indication
+            if let Some(indication) = indicator.next(chars.as_str()) {
+                match indication {
+                    Indication::NumericStart => translations.push(Translation::new(
+                        "".to_string(),
+                        self.indicator_signs
+                            .get(Indication::NumericStart)
+                            .cloned()
+                            .unwrap(),
+                        1,
+                    )),
+                    Indication::NumericEnd => translations.push(Translation::new(
+                        "".to_string(),
+                        self.indicator_signs
+                            .get(Indication::NumericEnd)
+                            .cloned()
+                            .unwrap(),
+                        1,
+                    )),
+                    _ => (),
+                };
+            }
             // given an input query the translation table for matching translations. Then split off
             // the translations that are delayed, i.e. have an offset because they have a  pre-pattern
             let (mut candidates, delayed): (Vec<Translation>, Vec<Translation>) = self
@@ -763,5 +825,22 @@ mod tests {
         assert_eq!(table.translate("foof"), "⠄⠉⠄");
         assert_eq!(table.translate("zoof"), "⠐⠉⠄");
         assert_eq!(table.translate("soof"), "⡀⠈⠈⠄");
+    }
+
+    #[test]
+    fn numeric_indication_text() {
+        let rules = vec![
+            parse_rule("lowercase f 3"),
+            parse_rule("lowercase o 4"),
+            parse_rule("litdigit 1 1"),
+            parse_rule("litdigit 2 12"),
+            parse_rule("litdigit 3 14"),
+            parse_rule("numsign 3456"),
+            parse_rule("nonumsign 56"),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
+        assert_eq!(table.translate("123"), "⠼⠁⠃⠉");
+        assert_eq!(table.translate("123foo"), "⠼⠁⠃⠉⠰⠄⠈⠈");
+        assert_eq!(table.translate("foof"), "⠄⠈⠈⠄");
     }
 }
