@@ -67,15 +67,15 @@ impl From<&HashSet<Attribute>> for AST {
                     chars.extend(&digits);
                 }
                 Attribute::Letter => chars.extend(&letters),
-                Attribute::Uppercase => todo!(),
+                Attribute::Uppercase => (), // TODO: implement
                 Attribute::Lowercase => chars.extend(&letters),
-                Attribute::Punctuation => todo!(),
-                Attribute::Sign => todo!(),
-                Attribute::Seqdelimiter => todo!(),
-                Attribute::Seqbeforechars => todo!(),
-                Attribute::Seqafterchars => todo!(),
-                Attribute::Boundary => todo!(),
-                Attribute::UserDefined(_) => todo!(),
+                Attribute::Punctuation => (),    // TODO: implement
+                Attribute::Sign => (),           // TODO: implement
+                Attribute::Seqdelimiter => (),   // TODO: implement
+                Attribute::Seqbeforechars => (), // TODO: implement
+                Attribute::Seqafterchars => (),  // TODO: implement
+                Attribute::Boundary => (),       // TODO: implement
+                Attribute::UserDefined(_) => (), // TODO: implement
             }
         }
         AST::Set(chars)
