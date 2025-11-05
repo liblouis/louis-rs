@@ -169,11 +169,8 @@ impl CharacterAttributes {
         self.0.entry(attribute).or_default().insert(c);
     }
 
-    fn get(&self, attribute: Attribute) -> HashSet<char> {
-        self.0
-            .get(&attribute)
-            .cloned()
-            .unwrap_or(HashSet::default())
+    fn get(&self, attribute: Attribute) -> Option<HashSet<char>> {
+        self.0.get(&attribute).cloned()
     }
 }
 
@@ -424,7 +421,9 @@ impl TranslationTable {
         let mut chars = input.chars();
         let mut prev: Option<char> = None;
         let mut indicator = NumericIndicator::new(
-            self.character_attributes.get(Attribute::Digit),
+            self.character_attributes
+                .get(Attribute::Digit)
+                .unwrap_or(HashSet::default()),
             self.indicator_signs.get(Indication::NumericStart).cloned(),
             self.indicator_signs.get(Indication::NumericEnd).cloned(),
         );
