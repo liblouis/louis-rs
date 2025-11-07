@@ -128,8 +128,9 @@ impl Indicator {
             }
             (State::Numeric, false) => {
                 self.state = State::Default;
-                // only indicate the end of a number if there is an end_indicator
-                if self.end_indicator.is_some() {
+                // only indicate the end of a number if there is an end_indicator and the character
+                // is contained in terminating_chars
+                if self.end_indicator.is_some() && self.terminating_chars.contains(&c.unwrap()) {
                     // FIXME: end indication should only occur within a word
                     Some(Indication::NumericEnd)
                 } else {
@@ -158,7 +159,8 @@ mod tests {
         let builder = IndicatorBuilder::new()
             .numeric_characters(numeric_chars)
             .numsign("⠼")
-            .nonumsign("⠰");
+            .nonumsign("⠰")
+            .numericnocontchars("abc");
         let mut indicator = builder.build();
         assert_eq!(indicator.next("ab12 a".into()), None);
         assert_eq!(indicator.next("b12 a".into()), None);
@@ -167,8 +169,25 @@ mod tests {
             Some(Indication::NumericStart)
         );
         assert_eq!(indicator.next("2 a".into()), None);
-        assert_eq!(indicator.next(" a".into()), Some(Indication::NumericEnd));
+        assert_eq!(indicator.next(" a".into()), None);
         assert_eq!(indicator.next("a".into()), None);
+        assert_eq!(indicator.next("".into()), None);
+    }
+
+    #[test]
+    fn end_indication_test() {
+        let numeric_chars: HashSet<char> = HashSet::from(['1', '2', '3']);
+        let builder = IndicatorBuilder::new()
+            .numeric_characters(numeric_chars)
+            .numsign("⠼")
+            .nonumsign("⠰")
+            .numericnocontchars("abc");
+        let mut indicator = builder.build();
+        assert_eq!(indicator.next("ab12a".into()), None);
+        assert_eq!(indicator.next("b12a".into()), None);
+        assert_eq!(indicator.next("12a".into()), Some(Indication::NumericStart));
+        assert_eq!(indicator.next("2a".into()), None);
+        assert_eq!(indicator.next("a".into()), Some(Indication::NumericEnd));
         assert_eq!(indicator.next("".into()), None);
     }
 }

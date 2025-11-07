@@ -867,6 +867,7 @@ mod tests {
             parse_rule("litdigit 3 14"),
             parse_rule("numsign 3456"),
             parse_rule("nonumsign 56"),
+            parse_rule("numericnocontchars abcdefghij"),
         ];
         let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
         assert_eq!(table.translate("123"), "⠼⠁⠃⠉");
