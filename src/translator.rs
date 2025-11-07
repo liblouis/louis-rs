@@ -202,6 +202,23 @@ impl TranslationTable {
             .filter(|r| r.rule.is_direction(direction))
             .collect();
 
+	// FIXME: For some unknown reason the litdigit rule seems to have precedence over the digit
+	// rule. Since they both want to define digits in the same character_definitions slot we
+	// need to make sure litdigits rules are handled before digit rules
+        for rule in rules.iter().filter(|r| matches!(r.rule, Rule::Litdigit { .. })) {
+            match &rule.rule {
+                Rule::Litdigit {
+                    character, dots, ..
+                } => {
+                    let translation =
+                        Translation::new(character.to_string(), dots_to_unicode(dots), 1);
+                    character_definitions.insert(*character, translation);
+                    character_attributes.insert(Attribute::Digit, *character);
+                }
+		_ => (),
+	    }
+	}
+
         // The compilation is done in two passes: The first pass simply collects all character
         // definitions and character attributes, so that they are then known in a second pass, e.g.
         // for implicit braille definitions or for the `base` opcode
