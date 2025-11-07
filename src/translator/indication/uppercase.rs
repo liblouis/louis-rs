@@ -124,6 +124,8 @@ impl Indicator {
                     && self.uppercase_chars.contains(&next_char)
                 {
                     // well, at least two uppercase chars
+		    // FIXME: Not sure if we can deduce that the whole word is
+		    // uppercase by just looking at the first two characters
                     self.state = State::UppercaseMulti;
                     if self.start_word_indicator.is_some() {
                         Some(Indication::UppercaseStartWord)
