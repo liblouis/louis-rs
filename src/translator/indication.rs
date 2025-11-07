@@ -14,8 +14,9 @@
 //! There are multiple state machines to keep track of different indication
 //! requirements:
 //! * [`numeric::Indicator`]: knowns whether the translation is in numeric mode
-use std::collections::HashSet;
+//! * [`uppercase::Indicator`]: knowns whether the translation is in uppercase mode
 
+pub mod uppercase;
 pub mod numeric;
 
 /// Possible indication events that the indicator state machine(s) support
@@ -23,8 +24,8 @@ pub mod numeric;
 pub enum Indication {
     NumericStart,
     NumericEnd,
-    CapitalizationStart,
-    CapitalizationEnd,
+    UppercaseStart,
+    UppercaseEnd,
     EmphasisStart,
     EmphasisEnd,
 }
