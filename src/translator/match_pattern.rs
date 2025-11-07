@@ -18,9 +18,7 @@ impl AST {
             Pattern::Attributes(hash_set) => AST::from_attributes(hash_set, ctx),
             Pattern::Group(vec) => AST::NotImplemented,
             Pattern::Negate(pattern) => AST::NotImplemented,
-            Pattern::Optional(pattern) => {
-                AST::Optional(Box::new(AST::from_pattern(pattern, ctx)))
-            }
+            Pattern::Optional(pattern) => AST::Optional(Box::new(AST::from_pattern(pattern, ctx))),
             Pattern::ZeroOrMore(pattern) => {
                 AST::ZeroOrMore(Box::new(AST::from_pattern(pattern, ctx)))
             }
