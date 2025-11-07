@@ -137,25 +137,6 @@ impl CharacterDefinition {
     }
 }
 
-/// A mapping between an [Indication] and the associated braille pattern.
-#[derive(Debug, Default)]
-struct IndicatorSigns(HashMap<Indication, String>);
-
-impl IndicatorSigns {
-    fn new() -> Self {
-        Self(HashMap::new())
-    }
-
-    /// Insert a braille pattern for the given [Indication].
-    fn insert(&mut self, indication: Indication, s: String) {
-        self.0.insert(indication, s);
-    }
-
-    fn get(&self, indication: Indication) -> Option<&String> {
-        self.0.get(&indication)
-    }
-}
-
 /// A mapping between a character [Attribute] and the associated set
 /// of characters
 #[derive(Debug, Default)]
