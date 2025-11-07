@@ -16,7 +16,7 @@ pub enum ParseError {
     InvalidEscape,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Attribute {
     Space,
     Digit,

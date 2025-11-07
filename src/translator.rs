@@ -26,6 +26,8 @@ pub enum TranslationError {
         derived: char,
         direction: Direction,
     },
+    #[error("Attribute {0:?} has not been defined")]
+    AttributeNotDefined(String),
 }
 
 #[derive(Debug, PartialEq, Clone, Default)]
@@ -155,11 +157,40 @@ impl CharacterAttributes {
     }
 }
 
+/// A mapping between a name of an attribute and it's enum
+#[derive(Debug, Default)]
+struct AttributeMapping(HashMap<String, Attribute>);
+
+impl AttributeMapping {
+    fn new() -> Self {
+        Self(HashMap::from([
+            ("space".to_string(), Attribute::Space),
+            ("digit".to_string(), Attribute::Digit),
+            ("letter".to_string(), Attribute::Letter),
+            ("lowercase".to_string(), Attribute::Lowercase),
+            ("uppercase".to_string(), Attribute::Uppercase),
+            ("punctuation".to_string(), Attribute::Punctuation),
+            ("sign".to_string(), Attribute::Sign),
+            //("math".to_string(), Attribute::Math),
+            //("litdigit".to_string(), Attribute::LitDigit),
+        ]))
+    }
+
+    fn insert(&mut self, name: &str, attribute: Attribute) {
+        self.0.entry(name.to_string()).or_insert(attribute);
+    }
+
+    fn get(&self, name: &str) -> Option<Attribute> {
+        self.0.get(name).cloned()
+    }
+}
+
 #[derive(Debug)]
 pub struct TranslationTable {
     undefined: Option<String>,
     character_definitions: CharacterDefinition,
     character_attributes: CharacterAttributes,
+    attributes: AttributeMapping,
     translations: Trie,
     match_patterns: MatchPatterns,
     numeric_indicator: numeric::Indicator,
@@ -175,6 +206,7 @@ impl TranslationTable {
         let mut undefined = None;
         let mut character_definitions = CharacterDefinition::new();
         let mut character_attributes = CharacterAttributes::new();
+        let mut attributes = AttributeMapping::new();
         let mut translations = Trie::new();
         let mut match_patterns = MatchPatterns::new();
         let mut numeric_indicator_builder = numeric::IndicatorBuilder::new();
@@ -346,13 +378,10 @@ impl TranslationTable {
                                 ..translation.clone()
                             },
                         );
-			// FIXME: The functionality to derive an attribute from a string should be
-			// separated out. Also it should support more than "uppercase" :-)
-                        match &name[..] {
-                            "uppercase" => {
-                                character_attributes.insert(Attribute::Uppercase, *derived)
-                            }
-                            _ => (),
+                        if let Some(attribute) = attributes.get(name) {
+                            character_attributes.insert(attribute, *derived)
+                        } else {
+                            return Err(TranslationError::AttributeNotDefined(name.to_string()));
                         }
                     } else {
                         // hm, there is no character definition for the base character.
@@ -469,6 +498,7 @@ impl TranslationTable {
             direction,
             character_definitions,
             character_attributes,
+            attributes,
             translations,
             match_patterns,
             numeric_indicator: numeric_indicator_builder.build(),
