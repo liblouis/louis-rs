@@ -6,7 +6,7 @@ use trie::Trie;
 use crate::parser::{AnchoredRule, Attribute, Braille, Direction, Rule, dots_to_unicode, fallback};
 
 use self::trie::Boundary;
-use indication::{Indication, NumericIndicator};
+use indication::{Indication, NumericIndicator, NumericIndicatorBuilder};
 
 mod boundaries;
 mod indication;
@@ -181,7 +181,7 @@ pub struct TranslationTable {
     character_attributes: CharacterAttributes,
     translations: Trie,
     match_patterns: MatchPatterns,
-    indicator_signs: IndicatorSigns,
+    numeric_indicator: NumericIndicator,
     direction: Direction,
 }
 
@@ -195,17 +195,20 @@ impl TranslationTable {
         let mut character_attributes = CharacterAttributes::new();
         let mut translations = Trie::new();
         let mut match_patterns = MatchPatterns::new();
-        let mut indicator_signs = IndicatorSigns::new();
+        let mut numeric_indicator_builder = NumericIndicatorBuilder::new();
 
         let rules: Vec<AnchoredRule> = rules
             .into_iter()
             .filter(|r| r.rule.is_direction(direction))
             .collect();
 
-	// FIXME: For some unknown reason the litdigit rule seems to have precedence over the digit
-	// rule. Since they both want to define digits in the same character_definitions slot we
-	// need to make sure litdigits rules are handled before digit rules
-        for rule in rules.iter().filter(|r| matches!(r.rule, Rule::Litdigit { .. })) {
+        // FIXME: For some unknown reason the litdigit rule seems to have precedence over the digit
+        // rule. Since they both want to define digits in the same character_definitions slot we
+        // need to make sure litdigits rules are handled before digit rules
+        for rule in rules
+            .iter()
+            .filter(|r| matches!(r.rule, Rule::Litdigit { .. }))
+        {
             match &rule.rule {
                 Rule::Litdigit {
                     character, dots, ..
@@ -215,9 +218,9 @@ impl TranslationTable {
                     character_definitions.insert(*character, translation);
                     character_attributes.insert(Attribute::Digit, *character);
                 }
-		_ => (),
-	    }
-	}
+                _ => (),
+            }
+        }
 
         // The compilation is done in two passes: The first pass simply collects all character
         // definitions and character attributes, so that they are then known in a second pass, e.g.
@@ -296,10 +299,19 @@ impl TranslationTable {
                     // TODO: should the math opcode not also define a CharacterAttribute?
                 }
                 Rule::Numsign { dots } => {
-                    indicator_signs.insert(Indication::NumericStart, dots_to_unicode(dots));
+                    numeric_indicator_builder =
+                        numeric_indicator_builder.numsign(&dots_to_unicode(dots));
                 }
                 Rule::Nonumsign { dots } => {
-                    indicator_signs.insert(Indication::NumericEnd, dots_to_unicode(dots));
+                    numeric_indicator_builder =
+                        numeric_indicator_builder.nonumsign(&dots_to_unicode(dots));
+                }
+                Rule::Numericnocontchars { chars } => {
+                    numeric_indicator_builder =
+                        numeric_indicator_builder.numericnocontchars(&chars);
+                }
+                Rule::Numericmodechars { chars } => {
+                    numeric_indicator_builder = numeric_indicator_builder.numericmodechars(&chars);
                 }
                 // display rules are ignored for translation tables
                 Rule::Display { .. } => (),
@@ -414,6 +426,11 @@ impl TranslationTable {
             }
         }
 
+        numeric_indicator_builder = numeric_indicator_builder.numeric_characters(
+            character_attributes
+                .get(Attribute::Digit)
+                .unwrap_or(HashSet::default()),
+        );
         Ok(TranslationTable {
             undefined,
             direction,
@@ -421,7 +438,7 @@ impl TranslationTable {
             character_attributes,
             translations,
             match_patterns,
-            indicator_signs,
+            numeric_indicator: numeric_indicator_builder.build(),
         })
     }
 
@@ -437,32 +454,23 @@ impl TranslationTable {
         let mut delayed_translations: Vec<Translation> = Vec::new();
         let mut chars = input.chars();
         let mut prev: Option<char> = None;
-        let mut indicator = NumericIndicator::new(
-            self.character_attributes
-                .get(Attribute::Digit)
-                .unwrap_or(HashSet::default()),
-            self.indicator_signs.get(Indication::NumericStart).cloned(),
-            self.indicator_signs.get(Indication::NumericEnd).cloned(),
-        );
+        // FIXME: the following seems weird, but the indicator is a mutable state machine. Since
+        // self (the translation table) is immutable we build a mutable copy of the indicator for
+        // each translation
+        let mut numeric_indicator = self.numeric_indicator.clone();
 
         loop {
             // Check if there is a need for an indication
-            if let Some(indication) = indicator.next(chars.as_str()) {
+            if let Some(indication) = numeric_indicator.next(chars.as_str()) {
                 match indication {
                     Indication::NumericStart => translations.push(Translation::new(
                         "".to_string(),
-                        self.indicator_signs
-                            .get(Indication::NumericStart)
-                            .cloned()
-                            .unwrap(),
+                        numeric_indicator.start_indicator().unwrap(),
                         1,
                     )),
                     Indication::NumericEnd => translations.push(Translation::new(
                         "".to_string(),
-                        self.indicator_signs
-                            .get(Indication::NumericEnd)
-                            .cloned()
-                            .unwrap(),
+                        numeric_indicator.end_indicator().unwrap(),
                         1,
                     )),
                     _ => (),

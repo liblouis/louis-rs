@@ -26,39 +26,90 @@ pub enum Indication {
 }
 
 /// Possible states for the [NumericIndicator] state machine
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum State {
     Default,
     Numeric,
 }
 
+#[derive(Debug)]
+pub struct NumericIndicatorBuilder(NumericIndicator);
+
+impl NumericIndicatorBuilder {
+    pub fn new() -> Self {
+        NumericIndicatorBuilder(NumericIndicator {
+            state: State::Default,
+            numeric_chars: HashSet::default(),
+            extra_numeric_chars: HashSet::default(),
+            start_indicator: None,
+            end_indicator: None,
+            terminating_chars: HashSet::default(),
+        })
+    }
+
+    pub fn build(self) -> NumericIndicator {
+        self.0
+    }
+
+    pub fn start_indicator(mut self, s: &str) -> Self {
+        self.0.start_indicator = Some(s.to_string());
+        self
+    }
+
+    pub fn numsign(mut self, s: &str) -> Self {
+        self.0.start_indicator = Some(s.to_string());
+        self
+    }
+
+    pub fn nonumsign(mut self, s: &str) -> Self {
+        self.0.end_indicator = Some(s.to_string());
+        self
+    }
+
+    pub fn numericnocontchars(mut self, s: &str) -> Self {
+        self.0.terminating_chars = HashSet::from_iter(s.chars());
+        self
+    }
+
+    pub fn numericmodechars(mut self, s: &str) -> Self {
+        self.0.extra_numeric_chars = HashSet::from_iter(s.chars());
+        self
+    }
+
+    pub fn numeric_characters(mut self, chars: HashSet<char>) -> Self {
+        self.0.numeric_chars = chars;
+        self
+    }
+}
+
 /// A very simple state machine to keep track when an numeric indication is
 /// required
-#[derive(Debug)]
+///
+/// The state is changed to `State::Numeric` as soon as a character is
+/// encountered that is a member of the set of `numeric_chars`. And if a
+/// character is encountered that is neither in the set of `numeric_chars` nor
+/// in the set of `extra_numeric_chars` the state is changed to
+/// `State::Default`.
+///
+/// An indication for a start is emitted if the `start_indicator` is not None.
+/// Indication for the end is emitted if `end_indicator` is not None and the
+/// character encountered is in the set of terminating_chars.
+#[derive(Debug, Clone)]
 pub struct NumericIndicator {
     state: State,
     /// Characters that will trigger a state change to the [State::Numeric] mode
     numeric_chars: HashSet<char>,
+    /// Characters that will prevent a state change to the [State::Default] mode
+    extra_numeric_chars: HashSet<char>,
     /// The characters to indicate the start of a sequence of numerical characters
     start_indicator: Option<String>,
     /// The characters to indicate the end of a sequence of numerical characters
     end_indicator: Option<String>,
+    /// Characters that will trigger an [`Indication::NumericEndend`] indication
+    terminating_chars: HashSet<char>,
 }
 
 impl NumericIndicator {
-    pub fn new(
-        numeric_chars: HashSet<char>,
-        start_indicator: Option<String>,
-        end_indicator: Option<String>,
-    ) -> Self {
-        Self {
-            state: State::Default,
-            numeric_chars,
-            start_indicator,
-            end_indicator,
-        }
-    }
-
     /// The transition method of the numeric indication state machine.
     ///
     /// Takes a string slice to examine the next character(s). Typically the
@@ -93,6 +144,13 @@ impl NumericIndicator {
             _ => None,
         }
     }
+
+    pub fn start_indicator(&self) -> Option<String> {
+        self.start_indicator.clone()
+    }
+    pub fn end_indicator(&self) -> Option<String> {
+        self.end_indicator.clone()
+    }
 }
 
 #[cfg(test)]
@@ -102,8 +160,11 @@ mod tests {
     #[test]
     fn indicator_test() {
         let numeric_chars: HashSet<char> = HashSet::from(['1', '2', '3']);
-        let mut indicator =
-            NumericIndicator::new(numeric_chars, Some('⠼'.to_string()), Some("⠰".to_string()));
+        let builder = NumericIndicatorBuilder::new()
+            .numeric_characters(numeric_chars)
+            .numsign("⠼")
+            .nonumsign("⠰");
+        let mut indicator = builder.build();
         assert_eq!(indicator.next("ab12 a".into()), None);
         assert_eq!(indicator.next("b12 a".into()), None);
         assert_eq!(
