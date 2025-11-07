@@ -6,7 +6,8 @@ use trie::Trie;
 use crate::parser::{AnchoredRule, Attribute, Braille, Direction, Rule, dots_to_unicode, fallback};
 
 use self::trie::Boundary;
-use indication::{Indication, NumericIndicator, NumericIndicatorBuilder};
+use indication::Indication;
+use indication::numeric;
 
 mod boundaries;
 mod indication;
@@ -181,7 +182,7 @@ pub struct TranslationTable {
     character_attributes: CharacterAttributes,
     translations: Trie,
     match_patterns: MatchPatterns,
-    numeric_indicator: NumericIndicator,
+    numeric_indicator: numeric::Indicator,
     direction: Direction,
 }
 
@@ -195,7 +196,7 @@ impl TranslationTable {
         let mut character_attributes = CharacterAttributes::new();
         let mut translations = Trie::new();
         let mut match_patterns = MatchPatterns::new();
-        let mut numeric_indicator_builder = NumericIndicatorBuilder::new();
+        let mut numeric_indicator_builder = numeric::IndicatorBuilder::new();
 
         let rules: Vec<AnchoredRule> = rules
             .into_iter()
