@@ -6,8 +6,7 @@ use trie::Trie;
 use crate::parser::{AnchoredRule, Attribute, Braille, Direction, Rule, dots_to_unicode, fallback};
 
 use self::trie::Boundary;
-use indication::Indication;
-use indication::numeric;
+use indication::{Indication, numeric, uppercase};
 
 mod boundaries;
 mod indication;
@@ -164,6 +163,7 @@ pub struct TranslationTable {
     translations: Trie,
     match_patterns: MatchPatterns,
     numeric_indicator: numeric::Indicator,
+    uppercase_indicator: uppercase::Indicator,
     direction: Direction,
 }
 
@@ -178,6 +178,7 @@ impl TranslationTable {
         let mut translations = Trie::new();
         let mut match_patterns = MatchPatterns::new();
         let mut numeric_indicator_builder = numeric::IndicatorBuilder::new();
+        let mut uppercase_indicator_builder = uppercase::IndicatorBuilder::new();
 
         let rules: Vec<AnchoredRule> = rules
             .into_iter()
@@ -254,6 +255,8 @@ impl TranslationTable {
                         Translation::new(character.to_string(), dots_to_unicode(dots), 1);
                     character_definitions.insert(*character, translation);
                     character_attributes.insert(Attribute::Lowercase, *character);
+                    // a lowercase is also a letter
+                    character_attributes.insert(Attribute::Letter, *character);
                 }
                 Rule::Uppercase {
                     character, dots, ..
@@ -262,6 +265,8 @@ impl TranslationTable {
                         Translation::new(character.to_string(), dots_to_unicode(dots), 1);
                     character_definitions.insert(*character, translation);
                     character_attributes.insert(Attribute::Uppercase, *character);
+                    // an uppercase is also a letter
+                    character_attributes.insert(Attribute::Letter, *character);
                 }
                 Rule::Sign {
                     character, dots, ..
@@ -295,6 +300,29 @@ impl TranslationTable {
                 Rule::Numericmodechars { chars } => {
                     numeric_indicator_builder = numeric_indicator_builder.numericmodechars(&chars);
                 }
+                Rule::Capsletter { dots, .. } => {
+                    uppercase_indicator_builder =
+                        uppercase_indicator_builder.capsletter(&dots_to_unicode(dots));
+                }
+                Rule::Begcapsword { dots, .. } => {
+                    uppercase_indicator_builder =
+                        uppercase_indicator_builder.begcapsword(&dots_to_unicode(dots));
+                }
+                Rule::Endcapsword { dots, .. } => {
+                    uppercase_indicator_builder =
+                        uppercase_indicator_builder.endcapsword(&dots_to_unicode(dots));
+                }
+                Rule::Begcaps { dots } => {
+                    uppercase_indicator_builder =
+                        uppercase_indicator_builder.begcaps(&dots_to_unicode(dots));
+                }
+                Rule::Endcaps { dots } => {
+                    uppercase_indicator_builder =
+                        uppercase_indicator_builder.endcaps(&dots_to_unicode(dots));
+                }
+                Rule::Capsmodechars { chars } => {
+                    uppercase_indicator_builder = uppercase_indicator_builder.capsmodechars(&chars);
+                }
                 // display rules are ignored for translation tables
                 Rule::Display { .. } => (),
                 _ => (),
@@ -305,7 +333,11 @@ impl TranslationTable {
         // arguments in rules
         for rule in &rules {
             match &rule.rule {
-                Rule::Base { derived, base, .. } => {
+                Rule::Base {
+                    derived,
+                    base,
+                    name,
+                } => {
                     if let Some(translation) = character_definitions.get(base) {
                         character_definitions.insert(
                             *derived,
@@ -314,6 +346,14 @@ impl TranslationTable {
                                 ..translation.clone()
                             },
                         );
+			// FIXME: The functionality to derive an attribute from a string should be
+			// separated out. Also it should support more than "uppercase" :-)
+                        match &name[..] {
+                            "uppercase" => {
+                                character_attributes.insert(Attribute::Uppercase, *derived)
+                            }
+                            _ => (),
+                        }
                     } else {
                         // hm, there is no character definition for the base character.
                         // If we are backwards compatible ignore the problem, otherwise
@@ -413,6 +453,17 @@ impl TranslationTable {
                 .get(Attribute::Digit)
                 .unwrap_or(HashSet::default()),
         );
+        uppercase_indicator_builder = uppercase_indicator_builder
+            .uppercase_characters(
+                character_attributes
+                    .get(Attribute::Uppercase)
+                    .unwrap_or(HashSet::default()),
+            )
+            .letter_characters(
+                character_attributes
+                    .get(Attribute::Letter)
+                    .unwrap_or(HashSet::default()),
+            );
         Ok(TranslationTable {
             undefined,
             direction,
@@ -421,6 +472,7 @@ impl TranslationTable {
             translations,
             match_patterns,
             numeric_indicator: numeric_indicator_builder.build(),
+            uppercase_indicator: uppercase_indicator_builder.build(),
         })
     }
 
@@ -440,6 +492,7 @@ impl TranslationTable {
         // self (the translation table) is immutable we build a mutable copy of the indicator for
         // each translation
         let mut numeric_indicator = self.numeric_indicator.clone();
+        let mut uppercase_indicator = self.uppercase_indicator.clone();
 
         loop {
             // Check if there is a need for an indication
@@ -455,8 +508,25 @@ impl TranslationTable {
                         numeric_indicator.end_indicator().unwrap(),
                         1,
                     )),
-                    _ => (),
+                    _ => unreachable!(),
                 };
+            }
+            if let Some(indication) = uppercase_indicator.next(chars.as_str()) {
+                let output = match indication {
+                    Indication::UppercaseStart => uppercase_indicator.start_indicator().unwrap(),
+                    Indication::UppercaseEnd => uppercase_indicator.end_indicator().unwrap(),
+                    Indication::UppercaseStartLetter => {
+                        uppercase_indicator.start_letter_indicator().unwrap()
+                    }
+                    Indication::UppercaseStartWord => {
+                        uppercase_indicator.start_word_indicator().unwrap()
+                    }
+                    Indication::UppercaseEndWord => {
+                        uppercase_indicator.end_word_indicator().unwrap()
+                    }
+                    _ => unreachable!(),
+                };
+                translations.push(Translation::new("".to_string(), output, 1));
             }
             // given an input query the translation table for matching translations. Then split off
             // the translations that are delayed, i.e. have an offset because they have a  pre-pattern
@@ -854,5 +924,23 @@ mod tests {
         assert_eq!(table.translate("123"), "⠼⠁⠃⠉");
         assert_eq!(table.translate("123foo"), "⠼⠁⠃⠉⠰⠄⠈⠈");
         assert_eq!(table.translate("foof"), "⠄⠈⠈⠄");
+    }
+
+    #[test]
+    fn uppercase_indication_text() {
+        let rules = vec![
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 12"),
+            parse_rule("lowercase c 14"),
+            parse_rule("base uppercase A a"),
+            parse_rule("base uppercase B b"),
+            parse_rule("base uppercase C c"),
+            parse_rule("capsletter 46"),
+            parse_rule("begcapsword 6-6"),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
+        assert_eq!(table.translate("abc"), "⠁⠃⠉");
+        assert_eq!(table.translate("Abc"), "⠨⠁⠃⠉");
+        assert_eq!(table.translate("ABC"), "⠠⠠⠁⠃⠉");
     }
 }

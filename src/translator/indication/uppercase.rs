@@ -19,7 +19,8 @@ use std::collections::HashSet;
 #[derive(Debug, Clone)]
 enum State {
     Default,
-    Uppercase,
+    UppercaseSingle,
+    UppercaseMulti,
 }
 
 /// A builder for [`Indicator`]
@@ -35,6 +36,9 @@ impl IndicatorBuilder {
             start_indicator: None,
             end_indicator: None,
             terminating_chars: HashSet::default(),
+            start_letter_indicator: None,
+            start_word_indicator: None,
+            end_word_indicator: None,
         })
     }
 
@@ -42,8 +46,18 @@ impl IndicatorBuilder {
         self.0
     }
 
-    pub fn start_indicator(mut self, s: &str) -> Self {
-        self.0.start_indicator = Some(s.to_string());
+    pub fn capsletter(mut self, s: &str) -> Self {
+        self.0.start_letter_indicator = Some(s.to_string());
+        self
+    }
+
+    pub fn begcapsword(mut self, s: &str) -> Self {
+        self.0.start_word_indicator = Some(s.to_string());
+        self
+    }
+
+    pub fn endcapsword(mut self, s: &str) -> Self {
+        self.0.end_word_indicator = Some(s.to_string());
         self
     }
 
@@ -73,32 +87,16 @@ impl IndicatorBuilder {
     }
 }
 
-/// A very simple state machine to keep track when an uppercase indication is
-/// required
-///
-/// The state is changed to `State::Uppercase` as soon as a character is
-/// encountered that is a member of the set of `uppercase_chars`. And if a
-/// character is encountered that is neither in the set of `uppercase_chars` nor
-/// in the set of `extra_uppercase_chars` the state is changed to
-/// `State::Default`.
-///
-/// An indication for a start is emitted if the `start_indicator` is not None.
-/// Indication for the end is emitted if `end_indicator` is not None and the
-/// character encountered is in the set of terminating_chars.
 #[derive(Debug, Clone)]
 pub struct Indicator {
     state: State,
-    /// The set of characters that will trigger a state change to the
-    /// [State::Uppercase] mode
     uppercase_chars: HashSet<char>,
-    /// The set of characters that will prevent a state change to the
-    /// [State::Default] mode
     extra_uppercase_chars: HashSet<char>,
-    /// The characters to indicate the start of a sequence of uppercase characters
+    start_letter_indicator: Option<String>,
+    start_word_indicator: Option<String>,
+    end_word_indicator: Option<String>,
     start_indicator: Option<String>,
-    /// The characters to indicate the end of a sequence of uppercase characters
     end_indicator: Option<String>,
-    /// The characters that will trigger an [`Indication::UppercaseEnd`] indication
     terminating_chars: HashSet<char>,
 }
 
@@ -113,22 +111,49 @@ impl Indicator {
     /// # Arguments
     /// * `s` - A string slice containing the character(s) to process
     pub fn next(&mut self, s: &str) -> Option<Indication> {
-        let c = s.chars().next();
-        if self.start_indicator.is_none() || c.is_none() {
+        let mut chars = s.chars();
+        let c = chars.next();
+        if !self.is_indicating() || c.is_none() {
             return None;
         }
         match (&self.state, self.uppercase_chars.contains(&c.unwrap())) {
             (State::Default, true) => {
-                self.state = State::Uppercase;
-                Some(Indication::UppercaseStart)
+                // OK, so we hit an uppercase char. Are we looking at just a
+                // single char or are we looking at a whole capitalized word?
+                if let Some(next_char) = chars.next()
+                    && self.uppercase_chars.contains(&next_char)
+                {
+                    // well, at least two uppercase chars
+                    self.state = State::UppercaseMulti;
+                    if self.start_word_indicator.is_some() {
+                        Some(Indication::UppercaseStartWord)
+                    } else if self.start_letter_indicator.is_some() {
+                        Some(Indication::UppercaseStartLetter)
+                    } else {
+                        None
+                    }
+                } else {
+                    // looks like it was just a single uppercase letter
+                    self.state = State::UppercaseSingle;
+                    if self.start_letter_indicator.is_some() {
+                        Some(Indication::UppercaseStartLetter)
+                    } else {
+                        None
+                    }
+                }
             }
-            (State::Uppercase, false) => {
+            (State::UppercaseSingle, false) => {
+                self.state = State::Default;
+                // no need to indicate anything
+                None
+            }
+            (State::UppercaseMulti, false) => {
                 self.state = State::Default;
                 // only indicate the end of uppercase if there is an end_indicator and the next char
                 // is a letter
-                if self.end_indicator.is_some() && self.terminating_chars.contains(&c.unwrap()) {
-                    // FIXME: end indication should only occur within a word
-                    Some(Indication::UppercaseEnd)
+                if self.end_word_indicator.is_some() && self.terminating_chars.contains(&c.unwrap())
+                {
+                    Some(Indication::UppercaseEndWord)
                 } else {
                     None
                 }
@@ -137,11 +162,26 @@ impl Indicator {
         }
     }
 
+    fn is_indicating(&self) -> bool {
+        self.start_letter_indicator.is_some()
+            || self.start_word_indicator.is_some()
+            || self.start_indicator.is_some()
+    }
+
     pub fn start_indicator(&self) -> Option<String> {
         self.start_indicator.clone()
     }
     pub fn end_indicator(&self) -> Option<String> {
         self.end_indicator.clone()
+    }
+    pub fn start_letter_indicator(&self) -> Option<String> {
+        self.start_letter_indicator.clone()
+    }
+    pub fn start_word_indicator(&self) -> Option<String> {
+        self.start_word_indicator.clone()
+    }
+    pub fn end_word_indicator(&self) -> Option<String> {
+        self.end_word_indicator.clone()
     }
 }
 
@@ -152,16 +192,16 @@ mod tests {
     #[test]
     fn indicator_test() {
         let builder = IndicatorBuilder::new()
-            .begcaps("⠸")
+            .capsletter("⠸")
             .uppercase_characters(HashSet::from(['A', 'B', 'C']))
             .letter_characters(HashSet::from(['a', 'b', 'c']));
         let mut indicator = builder.build();
         assert_eq!(
-            indicator.next("ABC ".into()),
-            Some(Indication::UppercaseStart)
+            indicator.next("Abc ".into()),
+            Some(Indication::UppercaseStartLetter)
         );
-        assert_eq!(indicator.next("BC ".into()), None);
-        assert_eq!(indicator.next("C ".into()), None);
+        assert_eq!(indicator.next("bc ".into()), None);
+        assert_eq!(indicator.next("c ".into()), None);
         assert_eq!(indicator.next(" ".into()), None);
         assert_eq!(indicator.next("".into()), None);
     }
@@ -169,19 +209,21 @@ mod tests {
     #[test]
     fn end_indication_test() {
         let builder = IndicatorBuilder::new()
-            .begcaps("⠸")
-            .endcaps("⠠")
+            .begcapsword("⠸")
+            .endcapsword("⠠")
             .uppercase_characters(HashSet::from(['A', 'B', 'C']))
             .letter_characters(HashSet::from(['a', 'b', 'c']));
         let mut indicator = builder.build();
-        dbg!(&indicator);
         assert_eq!(
             indicator.next("ABCa".into()),
-            Some(Indication::UppercaseStart)
+            Some(Indication::UppercaseStartWord)
         );
         assert_eq!(indicator.next("BCa".into()), None);
         assert_eq!(indicator.next("Ca".into()), None);
-        assert_eq!(indicator.next("a".into()), Some(Indication::UppercaseEnd));
+        assert_eq!(
+            indicator.next("a".into()),
+            Some(Indication::UppercaseEndWord)
+        );
         assert_eq!(indicator.next("".into()), None);
     }
 }

@@ -16,14 +16,17 @@
 //! * [`numeric::Indicator`]: knowns whether the translation is in numeric mode
 //! * [`uppercase::Indicator`]: knowns whether the translation is in uppercase mode
 
-pub mod uppercase;
 pub mod numeric;
+pub mod uppercase;
 
 /// Possible indication events that the indicator state machine(s) support
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum Indication {
     NumericStart,
     NumericEnd,
+    UppercaseStartLetter,
+    UppercaseStartWord,
+    UppercaseEndWord,
     UppercaseStart,
     UppercaseEnd,
     EmphasisStart,
