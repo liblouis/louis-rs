@@ -44,11 +44,6 @@ impl IndicatorBuilder {
         self.0
     }
 
-    pub fn start_indicator(mut self, s: &str) -> Self {
-        self.0.start_indicator = Some(s.to_string());
-        self
-    }
-
     pub fn numsign(mut self, s: &str) -> Self {
         self.0.start_indicator = Some(s.to_string());
         self
