@@ -527,22 +527,15 @@ impl TranslationTable {
         loop {
             // Check if there is a need for an indication
             if let Some(indication) = numeric_indicator.next(chars.as_str()) {
-                match indication {
-                    Indication::NumericStart => translations.push(Translation::new(
-                        "".to_string(),
-                        numeric_indicator.start_indicator().unwrap(),
-                        1,
-                    )),
-                    Indication::NumericEnd => translations.push(Translation::new(
-                        "".to_string(),
-                        numeric_indicator.end_indicator().unwrap(),
-                        1,
-                    )),
+                let indicator_sign = match indication {
+                    Indication::NumericStart => numeric_indicator.start_indicator().unwrap(),
+                    Indication::NumericEnd => numeric_indicator.end_indicator().unwrap(),
                     _ => unreachable!(),
                 };
+                translations.push(Translation::new("".to_string(), indicator_sign, 1));
             }
             if let Some(indication) = uppercase_indicator.next(chars.as_str()) {
-                let output = match indication {
+                let indicator_sign = match indication {
                     Indication::UppercaseStart => uppercase_indicator.start_indicator().unwrap(),
                     Indication::UppercaseEnd => uppercase_indicator.end_indicator().unwrap(),
                     Indication::UppercaseStartLetter => {
@@ -556,7 +549,7 @@ impl TranslationTable {
                     }
                     _ => unreachable!(),
                 };
-                translations.push(Translation::new("".to_string(), output, 1));
+                translations.push(Translation::new("".to_string(), indicator_sign, 1));
             }
             // given an input query the translation table for matching translations. Then split off
             // the translations that are delayed, i.e. have an offset because they have a  pre-pattern
@@ -579,7 +572,7 @@ impl TranslationTable {
             delayed_translations.extend(match_delayed);
             // merge the candidates from the match patters with the candidates from the plain translations
             candidates.extend(match_candidates);
-	    // move delayed_translations with zero offset into candidates
+            // move delayed_translations with zero offset into candidates
             let (current, delayed): (Vec<Translation>, Vec<Translation>) = delayed_translations
                 .into_iter()
                 .partition(|t| t.offset == 0);
