@@ -593,29 +593,20 @@ impl TranslationTable {
                 chars.nth(length);
                 prev = translation.input.chars().last();
                 translations.push(translation);
-                delayed_translations = delayed_translations
-                    .into_iter()
-                    .map(|t| t.decrement_offset(length))
-                    .collect();
+                delayed_translations = self.update_offsets(delayed_translations, length);
             } else if let Some(next_char) = chars.next() {
                 // no translation rule found; try character definition rules
                 prev = Some(next_char);
                 if let Some(translation) = self.character_definitions.get(&next_char) {
                     // there is a matching character definition for the next character
                     translations.push(translation.clone());
-                    delayed_translations = delayed_translations
-                        .into_iter()
-                        .map(|t| t.decrement_offset(1))
-                        .collect();
+                    delayed_translations = self.update_offsets(delayed_translations, 1);
                 } else if let Some(ref replacement) = self.undefined {
                     // there is a rule for undefined characters
                     let translation =
                         Translation::new(next_char.to_string(), replacement.to_string(), 1);
                     translations.push(translation);
-                    delayed_translations = delayed_translations
-                        .into_iter()
-                        .map(|t| t.decrement_offset(1))
-                        .collect();
+                    delayed_translations = self.update_offsets(delayed_translations, 1);
                 } else {
                     // otherwise handle it as a undefined character
                     let translation = Translation::new(
@@ -624,10 +615,7 @@ impl TranslationTable {
                         1,
                     );
                     translations.push(translation);
-                    delayed_translations = delayed_translations
-                        .into_iter()
-                        .map(|t| t.decrement_offset(1))
-                        .collect();
+                    delayed_translations = self.update_offsets(delayed_translations, 1);
                 }
             } else {
                 // the chars iterator is exhausted
