@@ -230,13 +230,13 @@ impl Test {
             TestResult::ExpectedFailure {
                 input: self.input.to_string(),
                 expected: self.expected.to_string(),
-                actual: translated,
+                actual: displayed,
             }
         } else {
             TestResult::Failure {
                 input: self.input.to_string(),
                 expected: self.expected.to_string(),
-                actual: translated,
+                actual: displayed,
             }
         }
     }
