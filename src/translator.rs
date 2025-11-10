@@ -577,8 +577,9 @@ impl TranslationTable {
                 .into_iter()
                 .partition(|t| t.offset == 0);
             delayed_translations.extend(match_delayed);
-            candidates.extend(match_candidates);
             // merge the candidates from the match patters with the candidates from the plain translations
+            candidates.extend(match_candidates);
+	    // move delayed_translations with zero offset into candidates
             let (current, delayed): (Vec<Translation>, Vec<Translation>) = delayed_translations
                 .into_iter()
                 .partition(|t| t.offset == 0);
