@@ -94,7 +94,8 @@ impl CharacterDefinition {
         Self(HashMap::new())
     }
 
-    fn insert(&mut self, c: char, translation: Translation) {
+    fn insert(&mut self, c: char, mapped: String) {
+        let translation = Translation::new(c.to_string(), mapped.to_string(), 1);
         if cfg!(feature = "backwards_compatibility") {
             // first rule wins
             self.0.entry(c).or_insert(translation);
@@ -228,9 +229,7 @@ impl TranslationTable {
                 Rule::Litdigit {
                     character, dots, ..
                 } => {
-                    let translation =
-                        Translation::new(character.to_string(), dots_to_unicode(dots), 1);
-                    character_definitions.insert(*character, translation);
+                    character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Digit, *character);
                 }
                 _ => (),
@@ -248,17 +247,13 @@ impl TranslationTable {
                 Rule::Space {
                     character, dots, ..
                 } => {
-                    let translation =
-                        Translation::new(character.to_string(), dots_to_unicode(dots), 1);
-                    character_definitions.insert(*character, translation);
+                    character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Space, *character);
                 }
                 Rule::Punctuation {
                     character, dots, ..
                 } => {
-                    let translation =
-                        Translation::new(character.to_string(), dots_to_unicode(dots), 1);
-                    character_definitions.insert(*character, translation);
+                    character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Punctuation, *character);
                 }
                 Rule::Digit {
@@ -267,25 +262,19 @@ impl TranslationTable {
                 | Rule::Litdigit {
                     character, dots, ..
                 } => {
-                    let translation =
-                        Translation::new(character.to_string(), dots_to_unicode(dots), 1);
-                    character_definitions.insert(*character, translation);
+                    character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Digit, *character);
                 }
                 Rule::Letter {
                     character, dots, ..
                 } => {
-                    let translation =
-                        Translation::new(character.to_string(), dots_to_unicode(dots), 1);
-                    character_definitions.insert(*character, translation);
+                    character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Letter, *character);
                 }
                 Rule::Lowercase {
                     character, dots, ..
                 } => {
-                    let translation =
-                        Translation::new(character.to_string(), dots_to_unicode(dots), 1);
-                    character_definitions.insert(*character, translation);
+                    character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Lowercase, *character);
                     // a lowercase is also a letter
                     character_attributes.insert(Attribute::Letter, *character);
@@ -293,9 +282,7 @@ impl TranslationTable {
                 Rule::Uppercase {
                     character, dots, ..
                 } => {
-                    let translation =
-                        Translation::new(character.to_string(), dots_to_unicode(dots), 1);
-                    character_definitions.insert(*character, translation);
+                    character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Uppercase, *character);
                     // an uppercase is also a letter
                     character_attributes.insert(Attribute::Letter, *character);
@@ -303,18 +290,13 @@ impl TranslationTable {
                 Rule::Sign {
                     character, dots, ..
                 } => {
-                    let translation =
-                        Translation::new(character.to_string(), dots_to_unicode(dots), 1);
-                    character_definitions.insert(*character, translation);
+                    character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Sign, *character);
                 }
                 Rule::Math {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(
-                        *character,
-                        Translation::new(character.to_string(), dots_to_unicode(dots), 1),
-                    );
+                    character_definitions.insert(*character,dots_to_unicode(dots));
                     // TODO: should the math opcode not also define a CharacterAttribute?
                 }
                 Rule::Numsign { dots } => {
@@ -371,13 +353,7 @@ impl TranslationTable {
                     name,
                 } => {
                     if let Some(translation) = character_definitions.get(base) {
-                        character_definitions.insert(
-                            *derived,
-                            Translation {
-                                input: derived.to_string(),
-                                ..translation.clone()
-                            },
-                        );
+                        character_definitions.insert(*derived, translation.output.clone());
                         if let Some(attribute) = attributes.get(name) {
                             character_attributes.insert(attribute, *derived)
                         } else {
@@ -701,8 +677,8 @@ mod tests {
             Err(TranslationError::ImplicitCharacterNotDefined('x'))
         );
         let mut char_defs = CharacterDefinition::new();
-        char_defs.insert('a', Translation::new("a".to_string(), "A".to_string(), 1));
-        char_defs.insert('h', Translation::new("h".to_string(), "H".to_string(), 1));
+        char_defs.insert('a', "A".to_string());
+        char_defs.insert('h', "H".to_string());
         assert_eq!(char_defs.resolve_implicit_dots("haha"), Ok("HAHA".into()));
     }
 
