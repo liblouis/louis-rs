@@ -255,8 +255,9 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool) {
         total.yaml_file = "Total".to_string();
         yaml_results.push(total);
         let mut table = Table::new(yaml_results);
+        table.with(Style::sharp());
         // add a special separator above the Total row
-        table.modify(Rows::last(), Border::inherit(Style::ascii()).top('='));
+        table.modify(Rows::last(), Border::inherit(Style::sharp()));
         println!("{}", table);
     }
 }
