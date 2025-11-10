@@ -191,7 +191,7 @@ pub struct TranslationTable {
     character_definitions: CharacterDefinition,
     character_attributes: CharacterAttributes,
     attributes: AttributeMapping,
-    translations: Trie,
+    trie: Trie,
     match_patterns: MatchPatterns,
     numeric_indicator: numeric::Indicator,
     uppercase_indicator: uppercase::Indicator,
@@ -207,7 +207,7 @@ impl TranslationTable {
         let mut character_definitions = CharacterDefinition::new();
         let mut character_attributes = CharacterAttributes::new();
         let mut attributes = AttributeMapping::new();
-        let mut translations = Trie::new();
+        let mut trie = Trie::new();
         let mut match_patterns = MatchPatterns::new();
         let mut numeric_indicator_builder = numeric::IndicatorBuilder::new();
         let mut uppercase_indicator_builder = uppercase::IndicatorBuilder::new();
@@ -398,23 +398,23 @@ impl TranslationTable {
                 }
                 Rule::Comp6 { chars, dots } | Rule::Always { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    translations.insert(chars.to_string(), dots, Boundary::None, Boundary::None);
+                    trie.insert(chars.to_string(), dots, Boundary::None, Boundary::None);
                 }
                 Rule::Word { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    translations.insert(chars.to_string(), dots, Boundary::Word, Boundary::Word);
+                    trie.insert(chars.to_string(), dots, Boundary::Word, Boundary::Word);
                 }
                 Rule::Begword { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    translations.insert(chars.to_string(), dots, Boundary::Word, Boundary::NotWord)
+                    trie.insert(chars.to_string(), dots, Boundary::Word, Boundary::NotWord)
                 }
                 Rule::Sufword { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    translations.insert(chars.to_string(), dots, Boundary::Word, Boundary::None);
+                    trie.insert(chars.to_string(), dots, Boundary::Word, Boundary::None);
                 }
                 Rule::Midword { chars, dots, .. } | Rule::Partword { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    translations.insert(
+                    trie.insert(
                         chars.to_string(),
                         dots,
                         Boundary::NotWord,
@@ -423,31 +423,30 @@ impl TranslationTable {
                 }
                 Rule::Midendword { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    translations.insert(chars.to_string(), dots, Boundary::NotWord, Boundary::None);
+                    trie.insert(chars.to_string(), dots, Boundary::NotWord, Boundary::None);
                 }
                 Rule::Endword { chars, dots, .. } | Rule::Prfword { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    translations.insert(chars.to_string(), dots, Boundary::None, Boundary::Word);
+                    trie.insert(chars.to_string(), dots, Boundary::None, Boundary::Word);
                 }
                 Rule::Begmidword { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    translations.insert(chars.to_string(), dots, Boundary::None, Boundary::NotWord);
+                    trie.insert(chars.to_string(), dots, Boundary::None, Boundary::NotWord);
                 }
-                Rule::Joinword { chars, dots, .. } | Rule::Lowword { chars, dots, .. } => {
-                    translations.insert(
+                Rule::Joinword { chars, dots, .. } | Rule::Lowword { chars, dots, .. } => trie
+                    .insert(
                         chars.to_string(),
                         dots_to_unicode(dots),
                         Boundary::Word,
                         Boundary::Word,
-                    )
-                }
-                Rule::Begnum { chars, dots, .. } => translations.insert(
+                    ),
+                Rule::Begnum { chars, dots, .. } => trie.insert(
                     chars.to_string(),
                     dots_to_unicode(dots),
                     Boundary::Word,
                     Boundary::WordNumber,
                 ),
-                Rule::Midnum { chars, dots, .. } => translations.insert(
+                Rule::Midnum { chars, dots, .. } => trie.insert(
                     chars.to_string(),
                     dots_to_unicode(dots),
                     Boundary::Number,
@@ -455,7 +454,7 @@ impl TranslationTable {
                 ),
                 Rule::Endnum { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    translations.insert(
+                    trie.insert(
                         chars.to_string(),
                         dots,
                         Boundary::NumberWord,
@@ -499,7 +498,7 @@ impl TranslationTable {
             character_definitions,
             character_attributes,
             attributes,
-            translations,
+            trie,
             match_patterns,
             numeric_indicator: numeric_indicator_builder.build(),
             uppercase_indicator: uppercase_indicator_builder.build(),
@@ -554,7 +553,7 @@ impl TranslationTable {
             // given an input query the translation table for matching translations. Then split off
             // the translations that are delayed, i.e. have an offset because they have a  pre-pattern
             let (mut candidates, delayed): (Vec<Translation>, Vec<Translation>) = self
-                .translations
+                .trie
                 .find_translations(chars.as_str(), prev)
                 .into_iter()
                 // TODO: figure out what to do with delayed rules that have a negative offset, i.e.
