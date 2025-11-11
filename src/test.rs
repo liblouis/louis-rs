@@ -40,14 +40,17 @@ pub enum TestResult {
         input: String,
         expected: String,
         actual: String,
+        direction: Direction,
     },
     ExpectedFailure {
         input: String,
         expected: String,
         actual: String,
+        direction: Direction,
     },
     UnexpectedSuccess {
         input: String,
+        direction: Direction,
     },
 }
 
@@ -258,6 +261,7 @@ impl Test {
             } else {
                 TestResult::UnexpectedSuccess {
                     input: self.input.to_string(),
+                    direction,
                 }
             }
         } else if self.xfail.is_failure(direction) {
@@ -265,12 +269,14 @@ impl Test {
                 input: self.input.to_string(),
                 expected: self.expected.to_string(),
                 actual: displayed,
+                direction,
             }
         } else {
             TestResult::Failure {
                 input: self.input.to_string(),
                 expected: self.expected.to_string(),
                 actual: displayed,
+                direction,
             }
         }
     }

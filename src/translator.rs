@@ -231,7 +231,7 @@ impl TranslationTable {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
-                    trie.insert_char(*character, dots_to_unicode(dots));
+                    trie.insert_char(*character, dots_to_unicode(dots), direction);
                     character_attributes.insert(Attribute::Digit, *character);
                 }
                 _ => (),
@@ -251,14 +251,14 @@ impl TranslationTable {
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Space, *character);
-                    trie.insert_char(*character, dots_to_unicode(dots));
+                    trie.insert_char(*character, dots_to_unicode(dots), direction);
                 }
                 Rule::Punctuation {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Punctuation, *character);
-                    trie.insert_char(*character, dots_to_unicode(dots));
+                    trie.insert_char(*character, dots_to_unicode(dots), direction);
                 }
                 Rule::Digit {
                     character, dots, ..
@@ -268,14 +268,14 @@ impl TranslationTable {
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Digit, *character);
-                    trie.insert_char(*character, dots_to_unicode(dots));
+                    trie.insert_char(*character, dots_to_unicode(dots), direction);
                 }
                 Rule::Letter {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Letter, *character);
-                    trie.insert_char(*character, dots_to_unicode(dots));
+                    trie.insert_char(*character, dots_to_unicode(dots), direction);
                 }
                 Rule::Lowercase {
                     character, dots, ..
@@ -284,7 +284,7 @@ impl TranslationTable {
                     character_attributes.insert(Attribute::Lowercase, *character);
                     // a lowercase is also a letter
                     character_attributes.insert(Attribute::Letter, *character);
-                    trie.insert_char(*character, dots_to_unicode(dots));
+                    trie.insert_char(*character, dots_to_unicode(dots), direction);
                 }
                 Rule::Uppercase {
                     character, dots, ..
@@ -293,21 +293,21 @@ impl TranslationTable {
                     character_attributes.insert(Attribute::Uppercase, *character);
                     // an uppercase is also a letter
                     character_attributes.insert(Attribute::Letter, *character);
-                    trie.insert_char(*character, dots_to_unicode(dots));
+                    trie.insert_char(*character, dots_to_unicode(dots), direction);
                 }
                 Rule::Sign {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Sign, *character);
-                    trie.insert_char(*character, dots_to_unicode(dots));
+                    trie.insert_char(*character, dots_to_unicode(dots), direction);
                 }
                 Rule::Math {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
                     // TODO: should the math opcode not also define a CharacterAttribute?
-                    trie.insert_char(*character, dots_to_unicode(dots));
+                    trie.insert_char(*character, dots_to_unicode(dots), direction);
                 }
                 Rule::Numsign { dots } => {
                     numeric_indicator_builder =
@@ -364,7 +364,7 @@ impl TranslationTable {
                 } => {
                     if let Some(translation) = character_definitions.get(base).cloned() {
                         character_definitions.insert(*derived, translation.clone());
-                        trie.insert_char(*derived, translation);
+                        trie.insert_char(*derived, translation, direction);
                         if let Some(attribute) = attributes.get(name) {
                             character_attributes.insert(attribute, *derived)
                         } else {
@@ -385,19 +385,43 @@ impl TranslationTable {
                 }
                 Rule::Comp6 { chars, dots } | Rule::Always { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    trie.insert(chars.to_string(), dots, Boundary::None, Boundary::None);
+                    trie.insert(
+                        chars.to_string(),
+                        dots,
+                        Boundary::None,
+                        Boundary::None,
+                        direction,
+                    );
                 }
                 Rule::Word { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    trie.insert(chars.to_string(), dots, Boundary::Word, Boundary::Word);
+                    trie.insert(
+                        chars.to_string(),
+                        dots,
+                        Boundary::Word,
+                        Boundary::Word,
+                        direction,
+                    );
                 }
                 Rule::Begword { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    trie.insert(chars.to_string(), dots, Boundary::Word, Boundary::NotWord)
+                    trie.insert(
+                        chars.to_string(),
+                        dots,
+                        Boundary::Word,
+                        Boundary::NotWord,
+                        direction,
+                    )
                 }
                 Rule::Sufword { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    trie.insert(chars.to_string(), dots, Boundary::Word, Boundary::None);
+                    trie.insert(
+                        chars.to_string(),
+                        dots,
+                        Boundary::Word,
+                        Boundary::None,
+                        direction,
+                    );
                 }
                 Rule::Midword { chars, dots, .. } | Rule::Partword { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
@@ -406,19 +430,38 @@ impl TranslationTable {
                         dots,
                         Boundary::NotWord,
                         Boundary::NotWord,
+                        direction,
                     )
                 }
                 Rule::Midendword { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    trie.insert(chars.to_string(), dots, Boundary::NotWord, Boundary::None);
+                    trie.insert(
+                        chars.to_string(),
+                        dots,
+                        Boundary::NotWord,
+                        Boundary::None,
+                        direction,
+                    );
                 }
                 Rule::Endword { chars, dots, .. } | Rule::Prfword { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    trie.insert(chars.to_string(), dots, Boundary::None, Boundary::Word);
+                    trie.insert(
+                        chars.to_string(),
+                        dots,
+                        Boundary::None,
+                        Boundary::Word,
+                        direction,
+                    );
                 }
                 Rule::Begmidword { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    trie.insert(chars.to_string(), dots, Boundary::None, Boundary::NotWord);
+                    trie.insert(
+                        chars.to_string(),
+                        dots,
+                        Boundary::None,
+                        Boundary::NotWord,
+                        direction,
+                    );
                 }
                 Rule::Joinword { chars, dots, .. } | Rule::Lowword { chars, dots, .. } => trie
                     .insert(
@@ -426,18 +469,21 @@ impl TranslationTable {
                         dots_to_unicode(dots),
                         Boundary::Word,
                         Boundary::Word,
+                        direction,
                     ),
                 Rule::Begnum { chars, dots, .. } => trie.insert(
                     chars.to_string(),
                     dots_to_unicode(dots),
                     Boundary::Word,
                     Boundary::WordNumber,
+                    direction,
                 ),
                 Rule::Midnum { chars, dots, .. } => trie.insert(
                     chars.to_string(),
                     dots_to_unicode(dots),
                     Boundary::Number,
                     Boundary::Number,
+                    direction,
                 ),
                 Rule::Endnum { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
@@ -446,6 +492,7 @@ impl TranslationTable {
                         dots,
                         Boundary::NumberWord,
                         Boundary::Word,
+                        direction,
                     );
                 }
                 Rule::Match {
@@ -935,5 +982,19 @@ mod tests {
         assert_eq!(table.translate("abc"), "⠁⠃⠉");
         assert_eq!(table.translate("Abc"), "⠨⠁⠃⠉");
         assert_eq!(table.translate("ABC"), "⠠⠠⠁⠃⠉");
+    }
+    #[test]
+    fn backtranslation() {
+        let rules = vec![
+            parse_rule("lowercase f 3"),
+            parse_rule("lowercase o 4"),
+            parse_rule("always foo 123"),
+            parse_rule("always bar 456"),
+            parse_rule("space \\s 0"),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Backward).unwrap();
+        assert_eq!(table.translate("⠇⠸"), "foobar");
+        assert_eq!(table.translate("⠀⠀"), "  ");
+        assert_eq!(table.translate("⠄⠈⠈"), "foo");
     }
 }
