@@ -81,6 +81,10 @@ impl Trie {
         }
     }
 
+    pub fn insert_char(&mut self, from: char, to: String) {
+        self.insert(from.to_string(), to, Boundary::None, Boundary::None);
+    }
+
     pub fn insert(&mut self, from: String, to: String, before: Boundary, after: Boundary) {
         let mut current_node = &mut self.root;
         let mut length = from.chars().count();

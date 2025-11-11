@@ -87,26 +87,25 @@ impl Translation {
 }
 
 #[derive(Debug)]
-struct CharacterDefinition(HashMap<char, Translation>);
+struct CharacterDefinition(HashMap<char, String>);
 
 impl CharacterDefinition {
     fn new() -> Self {
         Self(HashMap::new())
     }
 
-    fn insert(&mut self, c: char, mapped: String) {
-        let translation = Translation::new(c.to_string(), mapped.to_string(), 1);
+    fn insert(&mut self, from: char, to: String) {
         if cfg!(feature = "backwards_compatibility") {
             // first rule wins
-            self.0.entry(c).or_insert(translation);
+            self.0.entry(from).or_insert(to);
         } else {
             // last rule wins
-            self.0.insert(c, translation);
+            self.0.insert(from, to);
         }
     }
 
-    fn get(&self, c: &char) -> Option<&Translation> {
-        self.0.get(c)
+    fn get(&self, from: &char) -> Option<&String> {
+        self.0.get(from)
     }
 
     fn resolve_implicit_dots(&self, chars: &str) -> Result<String, TranslationError> {
@@ -115,7 +114,7 @@ impl CharacterDefinition {
             .map(|c| {
                 self.get(&c)
                     .ok_or(TranslationError::ImplicitCharacterNotDefined(c))
-                    .map(|t| t.output.to_string())
+                    .map(|t| t.to_string())
             })
             .collect()
     }
@@ -189,6 +188,8 @@ impl AttributeMapping {
 #[derive(Debug)]
 pub struct TranslationTable {
     undefined: Option<String>,
+    /// Defines a mapping between characters and a string to translate to. Not used for translation,
+    /// only to resolve implicit braille
     character_definitions: CharacterDefinition,
     character_attributes: CharacterAttributes,
     attributes: AttributeMapping,
@@ -230,6 +231,7 @@ impl TranslationTable {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
+                    trie.insert_char(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Digit, *character);
                 }
                 _ => (),
@@ -249,12 +251,14 @@ impl TranslationTable {
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Space, *character);
+                    trie.insert_char(*character, dots_to_unicode(dots));
                 }
                 Rule::Punctuation {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Punctuation, *character);
+                    trie.insert_char(*character, dots_to_unicode(dots));
                 }
                 Rule::Digit {
                     character, dots, ..
@@ -264,12 +268,14 @@ impl TranslationTable {
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Digit, *character);
+                    trie.insert_char(*character, dots_to_unicode(dots));
                 }
                 Rule::Letter {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Letter, *character);
+                    trie.insert_char(*character, dots_to_unicode(dots));
                 }
                 Rule::Lowercase {
                     character, dots, ..
@@ -278,6 +284,7 @@ impl TranslationTable {
                     character_attributes.insert(Attribute::Lowercase, *character);
                     // a lowercase is also a letter
                     character_attributes.insert(Attribute::Letter, *character);
+                    trie.insert_char(*character, dots_to_unicode(dots));
                 }
                 Rule::Uppercase {
                     character, dots, ..
@@ -286,18 +293,21 @@ impl TranslationTable {
                     character_attributes.insert(Attribute::Uppercase, *character);
                     // an uppercase is also a letter
                     character_attributes.insert(Attribute::Letter, *character);
+                    trie.insert_char(*character, dots_to_unicode(dots));
                 }
                 Rule::Sign {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Sign, *character);
+                    trie.insert_char(*character, dots_to_unicode(dots));
                 }
                 Rule::Math {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character,dots_to_unicode(dots));
+                    character_definitions.insert(*character, dots_to_unicode(dots));
                     // TODO: should the math opcode not also define a CharacterAttribute?
+                    trie.insert_char(*character, dots_to_unicode(dots));
                 }
                 Rule::Numsign { dots } => {
                     numeric_indicator_builder =
@@ -352,8 +362,9 @@ impl TranslationTable {
                     base,
                     name,
                 } => {
-                    if let Some(translation) = character_definitions.get(base) {
-                        character_definitions.insert(*derived, translation.output.clone());
+                    if let Some(translation) = character_definitions.get(base).cloned() {
+                        character_definitions.insert(*derived, translation.clone());
+                        trie.insert_char(*derived, translation);
                         if let Some(attribute) = attributes.get(name) {
                             character_attributes.insert(attribute, *derived)
                         } else {
@@ -526,8 +537,8 @@ impl TranslationTable {
                 };
                 translations.push(Translation::new("".to_string(), indicator_sign, 1));
             }
-            // given an input query the translation table for matching translations. Then split off
-            // the translations that are delayed, i.e. have an offset because they have a  pre-pattern
+            // given an input query the trie for matching translations. Then split off the
+            // translations that are delayed, i.e. have an offset because they have a pre-pattern
             let (mut candidates, delayed): (Vec<Translation>, Vec<Translation>) = self
                 .trie
                 .find_translations(chars.as_str(), prev)
@@ -558,19 +569,14 @@ impl TranslationTable {
                 // there is a matching translation rule
                 let translation = t.clone();
                 // move the iterator forward by the number of characters in the translation
-                let length = t.length - 1;
-                chars.nth(length);
+                chars.nth(t.length - 1);
                 prev = translation.input.chars().last();
                 translations.push(translation);
-                delayed_translations = self.update_offsets(delayed_translations, length);
+                delayed_translations = self.update_offsets(delayed_translations, t.length);
             } else if let Some(next_char) = chars.next() {
-                // no translation rule found; try character definition rules
                 prev = Some(next_char);
-                if let Some(translation) = self.character_definitions.get(&next_char) {
-                    // there is a matching character definition for the next character
-                    translations.push(translation.clone());
-                    delayed_translations = self.update_offsets(delayed_translations, 1);
-                } else if let Some(ref replacement) = self.undefined {
+                // no translation rule found
+                if let Some(ref replacement) = self.undefined {
                     // there is a rule for undefined characters
                     let translation =
                         Translation::new(next_char.to_string(), replacement.to_string(), 1);
@@ -602,7 +608,7 @@ impl TranslationTable {
             .chars()
             .map(|c| {
                 if let Some(t) = self.character_definitions.get(&c) {
-                    t.output.clone()
+                    t.clone()
                 } else {
                     fallback(c).to_string()
                 }
