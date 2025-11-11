@@ -70,7 +70,7 @@ impl TestResult {
 pub struct TestMatrix<'a> {
     display: &'a Option<Display>,
     tables: &'a Vec<Table>,
-    directions: Vec<Direction>,
+    mode: &'a TestMode,
     tests: &'a Vec<Test>,
 }
 
@@ -81,60 +81,94 @@ impl<'a> TestMatrix<'a> {
         mode: &'a TestMode,
         tests: &'a Vec<Test>,
     ) -> Self {
-        let directions = match mode {
-            TestMode::Forward => vec![Direction::Forward],
-            TestMode::Backward => vec![Direction::Backward],
-            TestMode::BothDirections => vec![Direction::Forward, Direction::Backward],
-            _ => vec![],
-        };
         TestMatrix {
             display,
             tables,
-            directions,
+            mode,
             tests,
         }
     }
 
+    fn display_table(&self, direction: Direction) -> Result<DisplayTable, TestError> {
+        let display_rules = match self.display {
+            Some(Display::Simple(path)) => parser::table_expanded(path.as_path())?,
+            Some(Display::Inline(text)) => {
+                let rules = parser::table(text, None)?;
+                parser::expand_includes(rules)?
+            }
+            Some(Display::List(paths)) => {
+                let mut rules = Vec::new();
+                for path in paths {
+                    rules.extend(parser::table_expanded(path)?);
+                }
+                rules
+            }
+            None => vec![],
+        };
+        Ok(DisplayTable::compile(display_rules, direction))
+    }
+
+    fn translation_table(
+        &self,
+        table: &Table,
+        direction: Direction,
+    ) -> Result<TranslationTable, TestError> {
+        let rules = match table {
+            Table::Simple(path) => parser::table_expanded(path.as_path())?,
+            Table::List(paths) => {
+                let mut rules = Vec::new();
+                for path in paths {
+                    rules.extend(parser::table_expanded(path)?);
+                }
+                rules
+            }
+            Table::Inline(text) => {
+                let rules = parser::table(text, None)?;
+                parser::expand_includes(rules)?
+            }
+            Table::Query(..) => return Err(TestError::NotImplemented),
+        };
+        Ok(TranslationTable::compile(rules, direction)?)
+    }
+
     pub fn check(&self) -> Result<Vec<TestResult>, TestError> {
         let mut results = Vec::new();
-        for direction in &self.directions {
-            let display_rules = match self.display {
-                Some(Display::Simple(path)) => parser::table_expanded(path.as_path())?,
-                Some(Display::Inline(text)) => {
-                    let rules = parser::table(text, None)?;
-                    parser::expand_includes(rules)?
-                }
-                Some(Display::List(paths)) => {
-                    let mut rules = Vec::new();
-                    for path in paths {
-                        rules.extend(parser::table_expanded(path)?);
+        match self.mode {
+            TestMode::Forward => {
+                let display_table = self.display_table(Direction::Forward)?;
+                for table in self.tables {
+                    let table = self.translation_table(table, Direction::Forward)?;
+                    for test in self.tests {
+                        results.push(test.check(&table, &display_table, Direction::Forward));
                     }
-                    rules
-                }
-                None => vec![],
-            };
-            let display_table = DisplayTable::compile(display_rules, *direction);
-            for table in self.tables {
-                let rules = match table {
-                    Table::Simple(path) => parser::table_expanded(path.as_path())?,
-                    Table::List(paths) => {
-                        let mut rules = Vec::new();
-                        for path in paths {
-                            rules.extend(parser::table_expanded(path)?);
-                        }
-                        rules
-                    }
-                    Table::Inline(text) => {
-                        let rules = parser::table(text, None)?;
-                        parser::expand_includes(rules)?
-                    }
-                    Table::Query(..) => return Err(TestError::NotImplemented),
-                };
-                let table = TranslationTable::compile(rules, *direction)?;
-                for test in self.tests {
-                    results.push(test.check(&table, &display_table, *direction));
                 }
             }
+            TestMode::Backward => {
+                let display_table = self.display_table(Direction::Backward)?;
+                for table in self.tables {
+                    let table = self.translation_table(table, Direction::Backward)?;
+                    for test in self.tests {
+                        results.push(test.check(&table, &display_table, Direction::Backward));
+                    }
+                }
+            }
+            TestMode::BothDirections => {
+                let display_table = self.display_table(Direction::Forward)?;
+                for table in self.tables {
+                    let table = self.translation_table(table, Direction::Forward)?;
+                    for test in self.tests {
+                        results.push(test.check(&table, &display_table, Direction::Forward));
+                    }
+                }
+                let display_table = self.display_table(Direction::Backward)?;
+                for table in self.tables {
+                    let table = self.translation_table(table, Direction::Backward)?;
+                    for test in self.tests.iter().cloned().map(|t| t.reverse()) {
+                        results.push(test.check(&table, &display_table, Direction::Backward));
+                    }
+                }
+            }
+            _ => (), // FIXME: not yet implemented
         }
         Ok(results)
     }
@@ -170,7 +204,7 @@ pub enum TranslationMode {
 
 pub type Typeform = HashMap<String, String>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CursorPosition {
     Single(u16),
     Tuple(u16, u16),
@@ -178,7 +212,7 @@ pub enum CursorPosition {
 
 pub type Directions = EnumSet<Direction>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ExpectedFailure {
     Simple(bool),
     Reason(String),
@@ -195,7 +229,7 @@ impl ExpectedFailure {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Test {
     input: String,
     expected: String,
@@ -264,6 +298,14 @@ impl Test {
             modes,
             max_output_length,
             real_input_length,
+        }
+    }
+
+    pub fn reverse(self) -> Self {
+        Test {
+            input: self.expected,
+            expected: self.input,
+            ..self
         }
     }
 }
