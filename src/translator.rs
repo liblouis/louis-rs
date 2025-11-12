@@ -546,6 +546,43 @@ impl TranslationTable {
             .collect()
     }
 
+    fn numeric_indication(
+        &self,
+        input: &str,
+        indicator: &mut numeric::Indicator,
+    ) -> Option<Translation> {
+        if let Some(indication) = indicator.next(input) {
+            let indicator_sign = match indication {
+                Indication::NumericStart => indicator.start_indicator().unwrap(),
+                Indication::NumericEnd => indicator.end_indicator().unwrap(),
+                _ => unreachable!(),
+            };
+            Some(Translation::new("".to_string(), indicator_sign, 1))
+        } else {
+            None
+        }
+    }
+
+    fn uppercase_indication(
+        &self,
+        input: &str,
+        indicator: &mut uppercase::Indicator,
+    ) -> Option<Translation> {
+        if let Some(indication) = indicator.next(input) {
+            let indicator_sign = match indication {
+                Indication::UppercaseStart => indicator.start_indicator().unwrap(),
+                Indication::UppercaseEnd => indicator.end_indicator().unwrap(),
+                Indication::UppercaseStartLetter => indicator.start_letter_indicator().unwrap(),
+                Indication::UppercaseStartWord => indicator.start_word_indicator().unwrap(),
+                Indication::UppercaseEndWord => indicator.end_word_indicator().unwrap(),
+                _ => unreachable!(),
+            };
+            Some(Translation::new("".to_string(), indicator_sign, 1))
+        } else {
+            None
+        }
+    }
+
     pub fn translate(&self, input: &str) -> String {
         let mut translations: Vec<Translation> = Vec::new();
         let mut delayed_translations: Vec<Translation> = Vec::new();
@@ -559,30 +596,15 @@ impl TranslationTable {
 
         loop {
             // Check if there is a need for an indication
-            if let Some(indication) = numeric_indicator.next(chars.as_str()) {
-                let indicator_sign = match indication {
-                    Indication::NumericStart => numeric_indicator.start_indicator().unwrap(),
-                    Indication::NumericEnd => numeric_indicator.end_indicator().unwrap(),
-                    _ => unreachable!(),
-                };
-                translations.push(Translation::new("".to_string(), indicator_sign, 1));
+            if let Some(translation) =
+                self.numeric_indication(chars.as_str(), &mut numeric_indicator)
+            {
+                translations.push(translation);
             }
-            if let Some(indication) = uppercase_indicator.next(chars.as_str()) {
-                let indicator_sign = match indication {
-                    Indication::UppercaseStart => uppercase_indicator.start_indicator().unwrap(),
-                    Indication::UppercaseEnd => uppercase_indicator.end_indicator().unwrap(),
-                    Indication::UppercaseStartLetter => {
-                        uppercase_indicator.start_letter_indicator().unwrap()
-                    }
-                    Indication::UppercaseStartWord => {
-                        uppercase_indicator.start_word_indicator().unwrap()
-                    }
-                    Indication::UppercaseEndWord => {
-                        uppercase_indicator.end_word_indicator().unwrap()
-                    }
-                    _ => unreachable!(),
-                };
-                translations.push(Translation::new("".to_string(), indicator_sign, 1));
+            if let Some(translation) =
+                self.uppercase_indication(chars.as_str(), &mut uppercase_indicator)
+            {
+                translations.push(translation);
             }
             // given an input query the trie for matching translations. Then split off the
             // translations that are delayed, i.e. have an offset because they have a pre-pattern
