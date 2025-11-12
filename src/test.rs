@@ -166,6 +166,7 @@ impl<'a> TestMatrix<'a> {
                 let display_table = self.display_table(Direction::Backward)?;
                 for table in self.tables {
                     let table = self.translation_table(table, Direction::Backward)?;
+                    // reverse the tests, i.e. swap `input` and `expected`
                     for test in self.tests.iter().cloned().map(|t| t.reverse()) {
                         results.push(test.check(&table, &display_table, Direction::Backward));
                     }
@@ -307,6 +308,30 @@ impl Test {
         }
     }
 
+    /// Create a reversed copy of the test by swapping input and expected values.
+    ///
+    /// This is useful for creating bidirectional test cases where you want to test
+    /// both the forward translation (input → expected) and the reverse translation
+    /// (expected → input).
+    ///
+    /// # Returns
+    ///
+    /// A new `Test` instance with `input` and `expected` swapped, while preserving
+    /// all other fields.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let original = Test {
+    ///     input: "hello".to_string(),
+    ///     expected: "⠓⠑⠇⠇⠕".to_string(),
+    ///     // ... other fields
+    /// };
+    ///
+    /// let reversed = original.reverse();
+    /// // reversed.input == "⠓⠑⠇⠇⠕"
+    /// // reversed.expected == "hello"
+    /// ```
     pub fn reverse(self) -> Self {
         Test {
             input: self.expected,
