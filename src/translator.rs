@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use match_pattern::MatchPatterns;
 use trie::Trie;
 
+use crate::parser::HasDirection;
 use crate::parser::{AnchoredRule, Attribute, Braille, Direction, Rule, dots_to_unicode, fallback};
 
 use self::trie::Boundary;

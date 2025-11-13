@@ -687,8 +687,17 @@ pub enum Rule {
     },
 }
 
-impl Rule {
-    pub fn is_direction(&self, direction: Direction) -> bool {
+pub trait HasDirection {
+    fn directions(&self) -> EnumSet<Direction>;
+
+    // Convenience method
+    fn is_direction(&self, direction: Direction) -> bool {
+        self.directions().contains(direction)
+    }
+}
+
+impl HasDirection for Rule {
+    fn directions(&self) -> EnumSet<Direction> {
         match self {
             Rule::Display { constraints, .. }
             | Rule::Multind { constraints, .. }
@@ -736,13 +745,15 @@ impl Rule {
             | Rule::Pass4 { constraints, .. }
             | Rule::Correct { constraints, .. }
             | Rule::Match { constraints, .. } => {
-                if direction == Direction::Forward {
-                    !constraints.contains(Constraint::Nofor)
+                if constraints.contains(Constraint::Nofor) {
+                    enum_set!(Direction::Backward)
+                } else if constraints.contains(Constraint::Noback) {
+                    enum_set!(Direction::Forward)
                 } else {
-                    !constraints.contains(Constraint::Noback)
+                    enum_set!(Direction::Forward | Direction::Backward)
                 }
             }
-            _ => true,
+            _ => enum_set!(Direction::Forward | Direction::Backward),
         }
     }
 }
