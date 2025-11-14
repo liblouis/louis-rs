@@ -116,10 +116,10 @@ impl Trace {
     fn display_origin(&self) -> String {
         match &self.rule {
             Some(AnchoredRule { rule, .. }) => {
-                format!("{:?}", rule)
+                format!("{}", rule)
             }
             None => {
-                format!("")
+                format!("No rule found")
             }
         }
     }
