@@ -52,10 +52,20 @@ pub struct Translation {
     /// can be applied later in the input string, when the pre-pattern has been consumed.
     offset: usize,
     precedence: Precedence,
+    origin: Option<AnchoredRule>,
 }
 
 impl Translation {
-    pub fn new(input: String, output: String, weight: usize) -> Self {
+    pub fn new(
+        input: String,
+        output: String,
+        weight: usize,
+	// FIXME: this is some weird thing recommended by Claude: apparently the `impl
+	// Into<Option<T>>` trait bound automatically converts `T` to `Some(T)` and `None` to
+	// `None`, giving you the overloaded behavior you want with a single function. This is more
+	// idiomatic than having separate `new` and `new_with_origin` methods.
+        origin: impl Into<Option<AnchoredRule>>,
+    ) -> Self {
         let length = input.chars().count();
         Self {
             input,
@@ -64,7 +74,20 @@ impl Translation {
             length,
             offset: 0,
             precedence: Precedence::Default,
+            origin: origin.into(),
         }
+    }
+
+    pub fn input(&self) -> String {
+        self.input.clone()
+    }
+
+    pub fn output(&self) -> String {
+        self.output.clone()
+    }
+
+    pub fn origin(&self) -> Option<AnchoredRule> {
+        self.origin.clone()
     }
 
     /// Set the `offset` of a translation.
@@ -241,6 +264,7 @@ impl TranslationTable {
                         dots_to_unicode(dots),
                         direction,
                         rule.precedence(),
+                        rule,
                     );
                     character_attributes.insert(Attribute::Digit, *character);
                 }
@@ -266,6 +290,7 @@ impl TranslationTable {
                         dots_to_unicode(dots),
                         direction,
                         rule.precedence(),
+                        rule,
                     );
                 }
                 Rule::Punctuation {
@@ -278,6 +303,7 @@ impl TranslationTable {
                         dots_to_unicode(dots),
                         direction,
                         rule.precedence(),
+                        rule,
                     );
                 }
                 Rule::Digit {
@@ -293,6 +319,7 @@ impl TranslationTable {
                         dots_to_unicode(dots),
                         direction,
                         rule.precedence(),
+                        rule,
                     );
                 }
                 Rule::Letter {
@@ -305,6 +332,7 @@ impl TranslationTable {
                         dots_to_unicode(dots),
                         direction,
                         rule.precedence(),
+                        rule,
                     );
                 }
                 Rule::Lowercase {
@@ -319,6 +347,7 @@ impl TranslationTable {
                         dots_to_unicode(dots),
                         direction,
                         rule.precedence(),
+                        rule,
                     );
                 }
                 Rule::Uppercase {
@@ -333,6 +362,7 @@ impl TranslationTable {
                         dots_to_unicode(dots),
                         direction,
                         rule.precedence(),
+                        rule,
                     );
                 }
                 Rule::Sign {
@@ -345,6 +375,7 @@ impl TranslationTable {
                         dots_to_unicode(dots),
                         direction,
                         rule.precedence(),
+                        rule,
                     );
                 }
                 Rule::Math {
@@ -357,6 +388,7 @@ impl TranslationTable {
                         dots_to_unicode(dots),
                         direction,
                         rule.precedence(),
+                        rule,
                     );
                 }
                 Rule::Numsign { dots } => {
@@ -414,7 +446,7 @@ impl TranslationTable {
                 } => {
                     if let Some(translation) = character_definitions.get(base).cloned() {
                         character_definitions.insert(*derived, translation.clone());
-                        trie.insert_char(*derived, translation, direction, rule.precedence());
+                        trie.insert_char(*derived, translation, direction, rule.precedence(), rule);
                         if let Some(attribute) = attributes.get(name) {
                             character_attributes.insert(attribute, *derived)
                         } else {
@@ -442,6 +474,7 @@ impl TranslationTable {
                         Boundary::None,
                         direction,
                         rule.precedence(),
+                        rule,
                     );
                 }
                 Rule::Word { chars, dots, .. } => {
@@ -453,6 +486,7 @@ impl TranslationTable {
                         Boundary::Word,
                         direction,
                         rule.precedence(),
+                        rule,
                     );
                 }
                 Rule::Begword { chars, dots, .. } => {
@@ -464,6 +498,7 @@ impl TranslationTable {
                         Boundary::NotWord,
                         direction,
                         rule.precedence(),
+                        rule,
                     )
                 }
                 Rule::Sufword { chars, dots, .. } => {
@@ -475,6 +510,7 @@ impl TranslationTable {
                         Boundary::None,
                         direction,
                         rule.precedence(),
+                        rule,
                     );
                 }
                 Rule::Midword { chars, dots, .. } | Rule::Partword { chars, dots, .. } => {
@@ -486,6 +522,7 @@ impl TranslationTable {
                         Boundary::NotWord,
                         direction,
                         rule.precedence(),
+                        rule,
                     )
                 }
                 Rule::Midendword { chars, dots, .. } => {
@@ -497,6 +534,7 @@ impl TranslationTable {
                         Boundary::None,
                         direction,
                         rule.precedence(),
+                        rule,
                     );
                 }
                 Rule::Endword { chars, dots, .. } | Rule::Prfword { chars, dots, .. } => {
@@ -508,6 +546,7 @@ impl TranslationTable {
                         Boundary::Word,
                         direction,
                         rule.precedence(),
+                        rule,
                     );
                 }
                 Rule::Begmidword { chars, dots, .. } => {
@@ -519,6 +558,7 @@ impl TranslationTable {
                         Boundary::NotWord,
                         direction,
                         rule.precedence(),
+                        rule,
                     );
                 }
                 Rule::Joinword { chars, dots, .. } | Rule::Lowword { chars, dots, .. } => trie
@@ -529,6 +569,7 @@ impl TranslationTable {
                         Boundary::Word,
                         direction,
                         rule.precedence(),
+                        rule,
                     ),
                 Rule::Begnum { chars, dots, .. } => trie.insert(
                     chars.to_string(),
@@ -537,6 +578,7 @@ impl TranslationTable {
                     Boundary::WordNumber,
                     direction,
                     rule.precedence(),
+                    rule,
                 ),
                 Rule::Midnum { chars, dots, .. } => trie.insert(
                     chars.to_string(),
@@ -545,6 +587,7 @@ impl TranslationTable {
                     Boundary::Number,
                     direction,
                     rule.precedence(),
+                    rule,
                 ),
                 Rule::Endnum { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
@@ -555,6 +598,7 @@ impl TranslationTable {
                         Boundary::Word,
                         direction,
                         rule.precedence(),
+                        rule,
                     );
                 }
                 Rule::Match {
@@ -565,7 +609,7 @@ impl TranslationTable {
                     ..
                 } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    match_patterns.insert(pre, chars.to_string(), post, dots);
+                    match_patterns.insert(pre, chars.to_string(), post, dots, rule);
                 }
 
                 _ => (),
@@ -619,7 +663,7 @@ impl TranslationTable {
                 Indication::NumericEnd => indicator.end_indicator().unwrap(),
                 _ => unreachable!(),
             };
-            Some(Translation::new("".to_string(), indicator_sign, 1))
+            Some(Translation::new("".to_string(), indicator_sign, 1, None)) // FIXME: add the indicator rule here
         } else {
             None
         }
@@ -639,13 +683,20 @@ impl TranslationTable {
                 Indication::UppercaseEndWord => indicator.end_word_indicator().unwrap(),
                 _ => unreachable!(),
             };
-            Some(Translation::new("".to_string(), indicator_sign, 1))
+            Some(Translation::new("".to_string(), indicator_sign, 1, None)) // FIXME: add the indicator rule here
         } else {
             None
         }
     }
 
     pub fn translate(&self, input: &str) -> String {
+        self.trace(input)
+            .iter()
+            .map(|t| t.output.as_str())
+            .collect()
+    }
+
+    pub fn trace(&self, input: &str) -> Vec<Translation> {
         let mut translations: Vec<Translation> = Vec::new();
         let mut delayed_translations: Vec<Translation> = Vec::new();
         let mut chars = input.chars();
@@ -710,7 +761,7 @@ impl TranslationTable {
                 if let Some(ref replacement) = self.undefined {
                     // there is a rule for undefined characters
                     let translation =
-                        Translation::new(next_char.to_string(), replacement.to_string(), 1);
+                        Translation::new(next_char.to_string(), replacement.to_string(), 1, None); // FIXME: add the undefined rule here
                     translations.push(translation);
                     delayed_translations = self.update_offsets(delayed_translations, 1);
                 } else {
@@ -719,6 +770,7 @@ impl TranslationTable {
                         next_char.to_string(),
                         self.handle_undefined_char(next_char),
                         1,
+                        None,
                     );
                     translations.push(translation);
                     delayed_translations = self.update_offsets(delayed_translations, 1);
@@ -728,7 +780,7 @@ impl TranslationTable {
                 break;
             }
         }
-        translations.iter().map(|t| t.output.as_str()).collect()
+        translations
     }
 
     fn handle_undefined_char(&self, ch: char) -> String {

@@ -52,7 +52,7 @@ pub enum WithClass {
 
 type WithClasses = Vec<WithClass>;
 
-#[derive(Hash, PartialEq, Eq, Debug)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub enum WithMatch {
     Before,
     After,
@@ -246,7 +246,7 @@ pub enum Opcode {
     Literal,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Rule {
     Include {
         file: String,
@@ -789,13 +789,13 @@ impl HasPrecedence for Rule {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Braille {
     Implicit,
     Explicit(BrailleChars),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Position {
     Before,
     After,
@@ -1986,11 +1986,17 @@ pub enum TableError {
     FormatNotSupported(PathBuf),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct AnchoredRule {
     pub rule: Rule,
     path: Option<PathBuf>,
     line: usize,
+}
+
+impl AnchoredRule {
+    pub fn new(rule: Rule, path: Option<PathBuf>, line: usize) -> Self {
+        Self { rule, path, line }
+    }
 }
 
 impl HasDirection for AnchoredRule {

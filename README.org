@@ -46,6 +46,28 @@ Translate some text:
   ⠈⠛⠥⠞⠑⠝⠀⠈⠞⠁⠛⠀
 #+END_SRC
 
+Trace a translation:
+
+#+BEGIN_SRC shell
+  $ cargo run -- translate --tracing ~/src/liblouis/tables/de-comp6.utb
+  > Guten Tag
+⠈⠛⠥⠞⠑⠝⠀⠈⠞⠁⠛
+┌───┬──────┬────┬─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│   │ From │ To │ Rule                                                                                                            │
+├───┼──────┼────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 0 │ G    │ ⠈⠛ │ Uppercase { character: 'G', dots: [EnumSet(Dot4), EnumSet(Dot1 | Dot2 | Dot4 | Dot5)], constraints: EnumSet() } │
+│ 1 │ u    │ ⠥  │ Lowercase { character: 'u', dots: [EnumSet(Dot1 | Dot3 | Dot6)], constraints: EnumSet() }                       │
+│ 2 │ t    │ ⠞  │ Lowercase { character: 't', dots: [EnumSet(Dot2 | Dot3 | Dot4 | Dot5)], constraints: EnumSet() }                │
+│ 3 │ e    │ ⠑  │ Lowercase { character: 'e', dots: [EnumSet(Dot1 | Dot5)], constraints: EnumSet() }                              │
+│ 4 │ n    │ ⠝  │ Lowercase { character: 'n', dots: [EnumSet(Dot1 | Dot3 | Dot4 | Dot5)], constraints: EnumSet() }                │
+│ 5 │      │ ⠀  │ Space { character: ' ', dots: [EnumSet(Dot0)], constraints: EnumSet() }                                         │
+│ 6 │ T    │ ⠈⠞ │ Uppercase { character: 'T', dots: [EnumSet(Dot4), EnumSet(Dot2 | Dot3 | Dot4 | Dot5)], constraints: EnumSet() } │
+│ 7 │ a    │ ⠁  │ Lowercase { character: 'a', dots: [EnumSet(Dot1)], constraints: EnumSet() }                                     │
+│ 8 │ g    │ ⠛  │ Lowercase { character: 'g', dots: [EnumSet(Dot1 | Dot2 | Dot4 | Dot5)], constraints: EnumSet() }                │
+└───┴──────┴────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+#+END_SRC
+
+
 Test the parser:
 
 #+BEGIN_SRC shell

@@ -26,14 +26,14 @@ pub enum ParseError {
     InvalidEscapeSequence { found: Option<char> },
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Test {
     at_beginning: bool,
     at_end: bool,
     tests: Vec<TestInstruction>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 enum Attribute {
     Digit,
     Litdigit,
@@ -51,7 +51,7 @@ enum Attribute {
     Any,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum Operator {
     Eq,
     Gt,
@@ -60,14 +60,14 @@ enum Operator {
     LtEq,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum Quantifier {
     Number(u8),
     Range(u8, u8),
     Any,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum TestInstruction {
     Lookback {
         len: u8,

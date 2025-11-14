@@ -32,7 +32,7 @@ pub enum Attribute {
     UserDefined(u8),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Pattern {
     Empty,
     Characters(String),

@@ -12,7 +12,9 @@ mod parser;
 use parser::RuleParser;
 use parser::TableError;
 
+use crate::parser::AnchoredRule;
 use crate::parser::Direction;
+use crate::translator::Translation;
 use crate::translator::TranslationTable;
 
 mod metadata;
@@ -44,6 +46,9 @@ enum Commands {
         /// Direction of translation
         #[arg(value_enum, short, long, default_value_t=Direction::Forward)]
         direction: Direction,
+        /// List all the applied translation rules that were used for the translation
+        #[arg(short, long)]
+        tracing: bool,
     },
     /// Test braille translations from given <YAML> file(s)
     Check {
@@ -89,6 +94,63 @@ fn parse(file: &Path) {
             for rule in rules {
                 println!("{:?}", rule);
             }
+        }
+        Err(errors) => {
+            print_errors(errors);
+        }
+    }
+}
+
+#[derive(Tabled, Default)]
+#[tabled(rename_all = "PascalCase")]
+struct Trace {
+    #[tabled(rename = "")]
+    sequence_id: usize,
+    from: String,
+    to: String,
+    #[tabled(display_with("Self::display_origin", self))]
+    rule: Option<AnchoredRule>,
+}
+
+impl Trace {
+    fn display_origin(&self) -> String {
+        match &self.rule {
+            Some(AnchoredRule { rule, .. }) => {
+                format!("{:?}", rule)
+            }
+            None => {
+                format!("")
+            }
+        }
+    }
+}
+
+fn print_trace(translations: &Vec<Translation>) {
+    let mut traces: Vec<Trace> = Vec::new();
+    for (id, translation) in translations.iter().enumerate() {
+        traces.push(Trace {
+            sequence_id: id,
+            rule: translation.origin(),
+            from: translation.input(),
+            to: translation.output(),
+        });
+    }
+    let mut table = Table::new(traces);
+    table.with(Style::sharp());
+    println!("{}", table);
+}
+
+fn trace(table: &Path, direction: Direction, input: &str) {
+    let rules = parser::table_file(table);
+    match rules {
+        Ok(rules) => {
+            match TranslationTable::compile(rules, direction) {
+                Ok(table) => {
+                    println!("{}", table.translate(&input));
+                    print_trace(&table.trace(&input));
+                }
+                Err(e) => eprintln!("Could not compile table: {:?}", e),
+            };
         }
         Err(errors) => {
             print_errors(errors);
@@ -276,14 +338,21 @@ fn main() {
             table,
             input,
             direction,
+            tracing,
         } => match input {
-            Some(input) => translate(&table, direction, &input),
+            Some(input) => match tracing {
+                true => trace(&table, direction, &input),
+                false => translate(&table, direction, &input),
+            },
             None => {
                 let rules = parser::table_file(&table);
                 match rules {
                     Ok(rules) => match TranslationTable::compile(rules, direction) {
                         Ok(table) => repl(Box::new(move |input| {
-                            println!("{}", table.translate(&input))
+                            println!("{}", table.translate(&input));
+                            if tracing {
+                                print_trace(&table.trace(&input));
+                            }
                         })),
                         Err(e) => eprintln!("Could not compile table: {:?}", e),
                     },

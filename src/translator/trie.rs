@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    parser::{Direction, Precedence},
+    parser::{AnchoredRule, Direction, Precedence},
     translator::boundaries::{number_word, word_end, word_number, word_start},
 };
 
@@ -90,6 +90,7 @@ impl Trie {
         to: String,
         direction: Direction,
         precedence: Precedence,
+        origin: &AnchoredRule,
     ) {
         self.insert(
             from.to_string(),
@@ -98,6 +99,7 @@ impl Trie {
             Boundary::None,
             direction,
             precedence,
+            origin,
         );
     }
 
@@ -109,6 +111,7 @@ impl Trie {
         after: Boundary,
         direction: Direction,
         precedence: Precedence,
+        origin: &AnchoredRule,
     ) {
         // swap `from` and `to` for backwards translation
         let (from, to) = match direction {
@@ -152,15 +155,16 @@ impl Trie {
                     weight: length,
                     offset: 0,
                     precedence,
+                    origin: Some(origin.clone()),
                 });
             } else if cfg!(feature = "backwards_compatibility") {
                 // first rule wins, so nothing to insert
             } else {
                 // last rule wins
-                current_node.translation = Some(Translation::new(from, to, length));
+                current_node.translation = Some(Translation::new(from, to, length, origin.clone()));
             }
         } else {
-            current_node.translation = Some(Translation::new(from, to, length));
+            current_node.translation = Some(Translation::new(from, to, length, origin.clone()));
         }
     }
 
@@ -279,7 +283,15 @@ impl Trie {
 
 #[cfg(test)]
 mod tests {
+    use crate::parser::RuleParser;
+
     use super::*;
+
+    // just create some fake anchored rule for testing purposes
+    fn fake_rule() -> AnchoredRule {
+        let rule = RuleParser::new("always foo 1").rule().unwrap();
+        AnchoredRule::new(rule, None, 0)
+    }
 
     #[test]
     fn empty_trie() {
@@ -294,11 +306,12 @@ mod tests {
     fn find_translations() {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
-        let a = Translation::new("a".into(), "A".into(), 1);
-        let f = Translation::new("f".into(), "F".into(), 1);
-        let fo = Translation::new("fo".into(), "FO".into(), 2);
-        let foo = Translation::new("foo".into(), "FOO".into(), 3);
-        let foobar = Translation::new("foobar".into(), "FOOBAR".into(), 6);
+        let rule = fake_rule();
+        let a = Translation::new("a".into(), "A".into(), 1, rule.clone());
+        let f = Translation::new("f".into(), "F".into(), 1, rule.clone());
+        let fo = Translation::new("fo".into(), "FO".into(), 2, rule.clone());
+        let foo = Translation::new("foo".into(), "FOO".into(), 3, rule.clone());
+        let foobar = Translation::new("foobar".into(), "FOOBAR".into(), 6, rule.clone());
         trie.insert(
             "a".into(),
             "A".into(),
@@ -306,6 +319,7 @@ mod tests {
             Boundary::None,
             Direction::Forward,
             Precedence::Default,
+            &rule,
         );
         trie.insert(
             "f".into(),
@@ -314,6 +328,7 @@ mod tests {
             Boundary::None,
             Direction::Forward,
             Precedence::Default,
+            &rule,
         );
         trie.insert(
             "fo".into(),
@@ -322,6 +337,7 @@ mod tests {
             Boundary::None,
             Direction::Forward,
             Precedence::Default,
+            &rule,
         );
         trie.insert(
             "foo".into(),
@@ -330,6 +346,7 @@ mod tests {
             Boundary::None,
             Direction::Forward,
             Precedence::Default,
+            &rule,
         );
         trie.insert(
             "foobar".into(),
@@ -338,6 +355,7 @@ mod tests {
             Boundary::None,
             Direction::Forward,
             Precedence::Default,
+            &rule,
         );
         assert_eq!(trie.find_translations("a", None), vec![a]);
         assert_eq!(trie.find_translations("f", None), vec![f.clone()]);
@@ -369,7 +387,8 @@ mod tests {
     fn find_translations_with_boundaries() {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
-        let a = Translation::new("a".into(), "A".into(), 3);
+        let rule = fake_rule();
+        let a = Translation::new("a".into(), "A".into(), 3, rule.clone());
         trie.insert(
             "a".into(),
             "A".into(),
@@ -377,6 +396,7 @@ mod tests {
             Boundary::Word,
             Direction::Forward,
             Precedence::Default,
+            &rule,
         );
         assert_eq!(trie.find_translations("a", None), vec![a]);
         assert_eq!(trie.find_translations("aha", None), empty);
@@ -386,7 +406,8 @@ mod tests {
     fn find_translations_with_negative_boundary_after() {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
-        let foo = Translation::new("foo".into(), "FOO".into(), 5);
+        let rule = fake_rule();
+        let foo = Translation::new("foo".into(), "FOO".into(), 5, rule.clone());
         trie.insert(
             "foo".into(),
             "FOO".into(),
@@ -394,6 +415,7 @@ mod tests {
             Boundary::NotWord,
             Direction::Forward,
             Precedence::Default,
+            &rule,
         );
         assert_eq!(trie.find_translations("foo", None), empty);
         assert_eq!(trie.find_translations("foo ", None), empty);
@@ -405,7 +427,8 @@ mod tests {
     fn find_translations_with_negative_boundary_before() {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
-        let foo = Translation::new("foo".into(), "FOO".into(), 4);
+        let rule = fake_rule();
+        let foo = Translation::new("foo".into(), "FOO".into(), 4, rule.clone());
         trie.insert(
             "foo".into(),
             "FOO".into(),
@@ -413,6 +436,7 @@ mod tests {
             Boundary::None,
             Direction::Forward,
             Precedence::Default,
+            &rule,
         );
         assert_eq!(trie.find_translations("foo", None), empty);
         assert_eq!(trie.find_translations("foo", Some(' ')), empty);
@@ -424,7 +448,8 @@ mod tests {
     fn find_translations_with_negative_boundaries() {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
-        let foo = Translation::new("foo".into(), "FOO".into(), 5);
+        let rule = fake_rule();
+        let foo = Translation::new("foo".into(), "FOO".into(), 5, rule.clone());
         trie.insert(
             "foo".into(),
             "FOO".into(),
@@ -432,6 +457,7 @@ mod tests {
             Boundary::NotWord,
             Direction::Forward,
             Precedence::Default,
+            &rule,
         );
         assert_eq!(trie.find_translations("foo", None), empty);
         assert_eq!(trie.find_translations("foo", Some(' ')), empty);
@@ -444,7 +470,8 @@ mod tests {
     fn find_translations_with_word_num_boundary() {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
-        let foo = Translation::new("aaa".into(), "A".into(), 5);
+        let rule = fake_rule();
+        let foo = Translation::new("aaa".into(), "A".into(), 5, rule.clone());
         trie.insert(
             "aaa".into(),
             "A".into(),
@@ -452,6 +479,7 @@ mod tests {
             Boundary::WordNumber,
             Direction::Forward,
             Precedence::Default,
+            &rule,
         );
         assert_eq!(trie.find_translations("aaa", None), empty);
         assert_eq!(trie.find_translations("aaa1", Some(' ')), vec![foo.clone()]);
@@ -463,7 +491,8 @@ mod tests {
     fn find_translations_with_num_word_boundary() {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
-        let foo = Translation::new("st".into(), "S".into(), 4);
+        let rule = fake_rule();
+        let foo = Translation::new("st".into(), "S".into(), 4, rule.clone());
         trie.insert(
             "st".into(),
             "S".into(),
@@ -471,6 +500,7 @@ mod tests {
             Boundary::Word,
             Direction::Forward,
             Precedence::Default,
+            &rule,
         );
         assert_eq!(trie.find_translations("st", None), empty);
         assert_eq!(trie.find_translations("st", Some(' ')), empty);
@@ -482,7 +512,8 @@ mod tests {
     #[test]
     fn find_translations_case_insensitive() {
         let mut trie = Trie::new();
-        let foo = Translation::new("foo".into(), "FOO".into(), 3);
+        let rule = fake_rule();
+        let foo = Translation::new("foo".into(), "FOO".into(), 3, rule.clone());
         trie.insert(
             "foo".into(),
             "FOO".into(),
@@ -490,6 +521,7 @@ mod tests {
             Boundary::None,
             Direction::Forward,
             Precedence::Default,
+            &rule,
         );
         assert_eq!(trie.find_translations("foo", None), vec![foo.clone()]);
         assert_eq!(trie.find_translations("Foo", None), vec![foo.clone()]);
