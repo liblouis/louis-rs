@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    parser::Direction,
+    parser::{Direction, Precedence},
     translator::boundaries::{number_word, word_end, word_number, word_start},
 };
 
@@ -84,13 +84,20 @@ impl Trie {
         }
     }
 
-    pub fn insert_char(&mut self, from: char, to: String, direction: Direction) {
+    pub fn insert_char(
+        &mut self,
+        from: char,
+        to: String,
+        direction: Direction,
+        precedence: Precedence,
+    ) {
         self.insert(
             from.to_string(),
             to,
             Boundary::None,
             Boundary::None,
             direction,
+            precedence,
         );
     }
 
@@ -101,6 +108,7 @@ impl Trie {
         before: Boundary,
         after: Boundary,
         direction: Direction,
+        precedence: Precedence,
     ) {
         // swap `from` and `to` for backwards translation
         let (from, to) = match direction {
@@ -133,13 +141,25 @@ impl Trie {
                 .or_default();
         }
 
-        if cfg!(feature = "backwards_compatibility") {
-            // first rule wins
-            if current_node.translation.is_none() {
+        if let Some(translation) = &current_node.translation {
+            // this node already contains a translation
+            if precedence > translation.precedence {
+                let length = from.chars().count();
+                current_node.translation = Some(Translation {
+                    input: from,
+                    output: to,
+                    length,
+                    weight: length,
+                    offset: 0,
+                    precedence,
+                });
+            } else if cfg!(feature = "backwards_compatibility") {
+                // first rule wins, so nothing to insert
+            } else {
+                // last rule wins
                 current_node.translation = Some(Translation::new(from, to, length));
             }
         } else {
-            // last rule wins
             current_node.translation = Some(Translation::new(from, to, length));
         }
     }
@@ -285,6 +305,7 @@ mod tests {
             Boundary::None,
             Boundary::None,
             Direction::Forward,
+            Precedence::Default,
         );
         trie.insert(
             "f".into(),
@@ -292,6 +313,7 @@ mod tests {
             Boundary::None,
             Boundary::None,
             Direction::Forward,
+            Precedence::Default,
         );
         trie.insert(
             "fo".into(),
@@ -299,6 +321,7 @@ mod tests {
             Boundary::None,
             Boundary::None,
             Direction::Forward,
+            Precedence::Default,
         );
         trie.insert(
             "foo".into(),
@@ -306,6 +329,7 @@ mod tests {
             Boundary::None,
             Boundary::None,
             Direction::Forward,
+            Precedence::Default,
         );
         trie.insert(
             "foobar".into(),
@@ -313,6 +337,7 @@ mod tests {
             Boundary::None,
             Boundary::None,
             Direction::Forward,
+            Precedence::Default,
         );
         assert_eq!(trie.find_translations("a", None), vec![a]);
         assert_eq!(trie.find_translations("f", None), vec![f.clone()]);
@@ -351,6 +376,7 @@ mod tests {
             Boundary::Word,
             Boundary::Word,
             Direction::Forward,
+            Precedence::Default,
         );
         assert_eq!(trie.find_translations("a", None), vec![a]);
         assert_eq!(trie.find_translations("aha", None), empty);
@@ -367,6 +393,7 @@ mod tests {
             Boundary::Word,
             Boundary::NotWord,
             Direction::Forward,
+            Precedence::Default,
         );
         assert_eq!(trie.find_translations("foo", None), empty);
         assert_eq!(trie.find_translations("foo ", None), empty);
@@ -385,6 +412,7 @@ mod tests {
             Boundary::NotWord,
             Boundary::None,
             Direction::Forward,
+            Precedence::Default,
         );
         assert_eq!(trie.find_translations("foo", None), empty);
         assert_eq!(trie.find_translations("foo", Some(' ')), empty);
@@ -403,6 +431,7 @@ mod tests {
             Boundary::NotWord,
             Boundary::NotWord,
             Direction::Forward,
+            Precedence::Default,
         );
         assert_eq!(trie.find_translations("foo", None), empty);
         assert_eq!(trie.find_translations("foo", Some(' ')), empty);
@@ -422,6 +451,7 @@ mod tests {
             Boundary::Word,
             Boundary::WordNumber,
             Direction::Forward,
+            Precedence::Default,
         );
         assert_eq!(trie.find_translations("aaa", None), empty);
         assert_eq!(trie.find_translations("aaa1", Some(' ')), vec![foo.clone()]);
@@ -440,6 +470,7 @@ mod tests {
             Boundary::NumberWord,
             Boundary::Word,
             Direction::Forward,
+            Precedence::Default,
         );
         assert_eq!(trie.find_translations("st", None), empty);
         assert_eq!(trie.find_translations("st", Some(' ')), empty);
@@ -458,6 +489,7 @@ mod tests {
             Boundary::None,
             Boundary::None,
             Direction::Forward,
+            Precedence::Default,
         );
         assert_eq!(trie.find_translations("foo", None), vec![foo.clone()]);
         assert_eq!(trie.find_translations("Foo", None), vec![foo.clone()]);

@@ -4,6 +4,8 @@ use match_pattern::MatchPatterns;
 use trie::Trie;
 
 use crate::parser::HasDirection;
+use crate::parser::HasPrecedence;
+use crate::parser::Precedence;
 use crate::parser::{AnchoredRule, Attribute, Braille, Direction, Rule, dots_to_unicode, fallback};
 
 use self::trie::Boundary;
@@ -49,6 +51,7 @@ pub struct Translation {
     /// `offset` is the length of this pre-pattern (calculated at run-time) so that the translation
     /// can be applied later in the input string, when the pre-pattern has been consumed.
     offset: usize,
+    precedence: Precedence,
 }
 
 impl Translation {
@@ -60,6 +63,7 @@ impl Translation {
             weight,
             length,
             offset: 0,
+            precedence: Precedence::Default,
         }
     }
 
@@ -217,7 +221,7 @@ impl TranslationTable {
 
         let rules: Vec<AnchoredRule> = rules
             .into_iter()
-            .filter(|r| r.rule.is_direction(direction))
+            .filter(|r| r.is_direction(direction))
             .collect();
 
         // FIXME: For some unknown reason the litdigit rule seems to have precedence over the digit
@@ -232,7 +236,12 @@ impl TranslationTable {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
-                    trie.insert_char(*character, dots_to_unicode(dots), direction);
+                    trie.insert_char(
+                        *character,
+                        dots_to_unicode(dots),
+                        direction,
+                        rule.precedence(),
+                    );
                     character_attributes.insert(Attribute::Digit, *character);
                 }
                 _ => (),
@@ -252,14 +261,24 @@ impl TranslationTable {
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Space, *character);
-                    trie.insert_char(*character, dots_to_unicode(dots), direction);
+                    trie.insert_char(
+                        *character,
+                        dots_to_unicode(dots),
+                        direction,
+                        rule.precedence(),
+                    );
                 }
                 Rule::Punctuation {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Punctuation, *character);
-                    trie.insert_char(*character, dots_to_unicode(dots), direction);
+                    trie.insert_char(
+                        *character,
+                        dots_to_unicode(dots),
+                        direction,
+                        rule.precedence(),
+                    );
                 }
                 Rule::Digit {
                     character, dots, ..
@@ -269,14 +288,24 @@ impl TranslationTable {
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Digit, *character);
-                    trie.insert_char(*character, dots_to_unicode(dots), direction);
+                    trie.insert_char(
+                        *character,
+                        dots_to_unicode(dots),
+                        direction,
+                        rule.precedence(),
+                    );
                 }
                 Rule::Letter {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Letter, *character);
-                    trie.insert_char(*character, dots_to_unicode(dots), direction);
+                    trie.insert_char(
+                        *character,
+                        dots_to_unicode(dots),
+                        direction,
+                        rule.precedence(),
+                    );
                 }
                 Rule::Lowercase {
                     character, dots, ..
@@ -285,7 +314,12 @@ impl TranslationTable {
                     character_attributes.insert(Attribute::Lowercase, *character);
                     // a lowercase is also a letter
                     character_attributes.insert(Attribute::Letter, *character);
-                    trie.insert_char(*character, dots_to_unicode(dots), direction);
+                    trie.insert_char(
+                        *character,
+                        dots_to_unicode(dots),
+                        direction,
+                        rule.precedence(),
+                    );
                 }
                 Rule::Uppercase {
                     character, dots, ..
@@ -294,21 +328,36 @@ impl TranslationTable {
                     character_attributes.insert(Attribute::Uppercase, *character);
                     // an uppercase is also a letter
                     character_attributes.insert(Attribute::Letter, *character);
-                    trie.insert_char(*character, dots_to_unicode(dots), direction);
+                    trie.insert_char(
+                        *character,
+                        dots_to_unicode(dots),
+                        direction,
+                        rule.precedence(),
+                    );
                 }
                 Rule::Sign {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
                     character_attributes.insert(Attribute::Sign, *character);
-                    trie.insert_char(*character, dots_to_unicode(dots), direction);
+                    trie.insert_char(
+                        *character,
+                        dots_to_unicode(dots),
+                        direction,
+                        rule.precedence(),
+                    );
                 }
                 Rule::Math {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, dots_to_unicode(dots));
                     // TODO: should the math opcode not also define a CharacterAttribute?
-                    trie.insert_char(*character, dots_to_unicode(dots), direction);
+                    trie.insert_char(
+                        *character,
+                        dots_to_unicode(dots),
+                        direction,
+                        rule.precedence(),
+                    );
                 }
                 Rule::Numsign { dots } => {
                     numeric_indicator_builder =
@@ -365,7 +414,7 @@ impl TranslationTable {
                 } => {
                     if let Some(translation) = character_definitions.get(base).cloned() {
                         character_definitions.insert(*derived, translation.clone());
-                        trie.insert_char(*derived, translation, direction);
+                        trie.insert_char(*derived, translation, direction, rule.precedence());
                         if let Some(attribute) = attributes.get(name) {
                             character_attributes.insert(attribute, *derived)
                         } else {
@@ -392,6 +441,7 @@ impl TranslationTable {
                         Boundary::None,
                         Boundary::None,
                         direction,
+                        rule.precedence(),
                     );
                 }
                 Rule::Word { chars, dots, .. } => {
@@ -402,6 +452,7 @@ impl TranslationTable {
                         Boundary::Word,
                         Boundary::Word,
                         direction,
+                        rule.precedence(),
                     );
                 }
                 Rule::Begword { chars, dots, .. } => {
@@ -412,6 +463,7 @@ impl TranslationTable {
                         Boundary::Word,
                         Boundary::NotWord,
                         direction,
+                        rule.precedence(),
                     )
                 }
                 Rule::Sufword { chars, dots, .. } => {
@@ -422,6 +474,7 @@ impl TranslationTable {
                         Boundary::Word,
                         Boundary::None,
                         direction,
+                        rule.precedence(),
                     );
                 }
                 Rule::Midword { chars, dots, .. } | Rule::Partword { chars, dots, .. } => {
@@ -432,6 +485,7 @@ impl TranslationTable {
                         Boundary::NotWord,
                         Boundary::NotWord,
                         direction,
+                        rule.precedence(),
                     )
                 }
                 Rule::Midendword { chars, dots, .. } => {
@@ -442,6 +496,7 @@ impl TranslationTable {
                         Boundary::NotWord,
                         Boundary::None,
                         direction,
+                        rule.precedence(),
                     );
                 }
                 Rule::Endword { chars, dots, .. } | Rule::Prfword { chars, dots, .. } => {
@@ -452,6 +507,7 @@ impl TranslationTable {
                         Boundary::None,
                         Boundary::Word,
                         direction,
+                        rule.precedence(),
                     );
                 }
                 Rule::Begmidword { chars, dots, .. } => {
@@ -462,6 +518,7 @@ impl TranslationTable {
                         Boundary::None,
                         Boundary::NotWord,
                         direction,
+                        rule.precedence(),
                     );
                 }
                 Rule::Joinword { chars, dots, .. } | Rule::Lowword { chars, dots, .. } => trie
@@ -471,6 +528,7 @@ impl TranslationTable {
                         Boundary::Word,
                         Boundary::Word,
                         direction,
+                        rule.precedence(),
                     ),
                 Rule::Begnum { chars, dots, .. } => trie.insert(
                     chars.to_string(),
@@ -478,6 +536,7 @@ impl TranslationTable {
                     Boundary::Word,
                     Boundary::WordNumber,
                     direction,
+                    rule.precedence(),
                 ),
                 Rule::Midnum { chars, dots, .. } => trie.insert(
                     chars.to_string(),
@@ -485,6 +544,7 @@ impl TranslationTable {
                     Boundary::Number,
                     Boundary::Number,
                     direction,
+                    rule.precedence(),
                 ),
                 Rule::Endnum { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
@@ -494,6 +554,7 @@ impl TranslationTable {
                         Boundary::NumberWord,
                         Boundary::Word,
                         direction,
+                        rule.precedence(),
                     );
                 }
                 Rule::Match {
@@ -697,7 +758,7 @@ impl DisplayTable {
         let mut mapping = HashMap::new();
         let rules: Vec<_> = rules
             .into_iter()
-            .filter(|r| r.rule.is_direction(direction))
+            .filter(|r| r.is_direction(direction))
             .collect();
 
         for rule in rules {

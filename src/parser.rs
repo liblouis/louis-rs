@@ -758,6 +758,37 @@ impl HasDirection for Rule {
     }
 }
 
+#[derive(Debug, Default, Clone, PartialEq, PartialOrd)]
+pub enum Precedence {
+    #[default]
+    Default,
+    Translation,
+}
+pub trait HasPrecedence {
+    fn precedence(&self) -> Precedence;
+}
+
+impl HasPrecedence for Rule {
+    fn precedence(&self) -> Precedence {
+        match self {
+            // comp6 apparently has lower precedence than the other translation rules
+            // Rule::Comp6 { .. }
+            Rule::Word { .. }
+            | Rule::Begword { .. }
+            | Rule::Sufword { .. }
+            | Rule::Midword { .. }
+            | Rule::Midendword { .. }
+            | Rule::Endword { .. }
+            | Rule::Begmidword { .. }
+            | Rule::Joinword { .. }
+            | Rule::Begnum { .. }
+            | Rule::Midnum { .. }
+            | Rule::Endnum { .. } => Precedence::Translation,
+            _ => Precedence::Default,
+        }
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub enum Braille {
     Implicit,
@@ -1958,8 +1989,20 @@ pub enum TableError {
 #[derive(PartialEq, Debug)]
 pub struct AnchoredRule {
     pub rule: Rule,
-    pub path: Option<PathBuf>,
-    pub line: usize,
+    path: Option<PathBuf>,
+    line: usize,
+}
+
+impl HasDirection for AnchoredRule {
+    fn directions(&self) -> EnumSet<Direction> {
+        self.rule.directions()
+    }
+}
+
+impl HasPrecedence for AnchoredRule {
+    fn precedence(&self) -> Precedence {
+        self.rule.precedence()
+    }
 }
 
 impl From<Rule> for AnchoredRule {
