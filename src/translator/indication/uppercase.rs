@@ -192,7 +192,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn indicator_test() {
+    fn indicator() {
         let builder = IndicatorBuilder::new()
             .capsletter("⠸")
             .uppercase_characters(HashSet::from(['A', 'B', 'C']))
@@ -209,7 +209,7 @@ mod tests {
     }
 
     #[test]
-    fn end_indication_test() {
+    fn end_indication() {
         let builder = IndicatorBuilder::new()
             .begcapsword("⠸")
             .endcapsword("⠠")

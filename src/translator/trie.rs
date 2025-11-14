@@ -262,7 +262,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn empty_trie_test() {
+    fn empty_trie() {
         let trie = Trie::new();
         assert_eq!(
             trie.find_translations("foo", None),
@@ -271,7 +271,7 @@ mod tests {
     }
 
     #[test]
-    fn find_translations_test() {
+    fn find_translations() {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
         let a = Translation::new("a".into(), "A".into(), 1);
@@ -341,7 +341,7 @@ mod tests {
     }
 
     #[test]
-    fn find_translations_with_boundaries_test() {
+    fn find_translations_with_boundaries() {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
         let a = Translation::new("a".into(), "A".into(), 3);
@@ -357,7 +357,7 @@ mod tests {
     }
 
     #[test]
-    fn find_translations_with_negative_boundary_after_test() {
+    fn find_translations_with_negative_boundary_after() {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
         let foo = Translation::new("foo".into(), "FOO".into(), 5);
@@ -375,7 +375,7 @@ mod tests {
     }
 
     #[test]
-    fn find_translations_with_negative_boundary_before_test() {
+    fn find_translations_with_negative_boundary_before() {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
         let foo = Translation::new("foo".into(), "FOO".into(), 4);
@@ -393,7 +393,7 @@ mod tests {
     }
 
     #[test]
-    fn find_translations_with_negative_boundaries_test() {
+    fn find_translations_with_negative_boundaries() {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
         let foo = Translation::new("foo".into(), "FOO".into(), 5);
@@ -449,7 +449,7 @@ mod tests {
     }
 
     #[test]
-    fn find_translations_case_insensitive_test() {
+    fn find_translations_case_insensitive() {
         let mut trie = Trie::new();
         let foo = Translation::new("foo".into(), "FOO".into(), 3);
         trie.insert(

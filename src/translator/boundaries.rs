@@ -69,7 +69,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn word_start_test() {
+    fn test_word_start() {
         assert!(word_start(Some(' '), Some('c')));
         assert!(word_start(None, Some('c')));
         assert!(!word_start(Some('x'), Some('c')));
@@ -81,7 +81,7 @@ mod tests {
     }
 
     #[test]
-    fn word_end_test() {
+    fn test_word_end() {
         assert!(word_end(Some('c'), Some(' ')));
         assert!(word_end(Some('c'), None));
         assert!(word_end(Some('c'), Some('.')));
@@ -94,7 +94,7 @@ mod tests {
     }
 
     #[test]
-    fn number_start_test() {
+    fn test_number_start() {
         assert!(number_start(Some(' '), Some('1')));
         assert!(number_start(None, Some('1')));
         assert!(number_start(Some('x'), Some('1')));
@@ -107,7 +107,7 @@ mod tests {
     }
 
     #[test]
-    fn number_end_test() {
+    fn test_number_end() {
         assert!(number_end(Some('1'), Some(' ')));
         assert!(number_end(Some('1'), None));
         assert!(number_end(Some('1'), Some('c')));
@@ -119,7 +119,7 @@ mod tests {
     }
 
     #[test]
-    fn word_number_test() {
+    fn test_word_number() {
         assert!(word_number(Some('a'), Some('1')));
         // TODO: '#' is currently not recognized as a word
         //        assert!(word_number(Some('#'), Some('2')));
@@ -132,7 +132,7 @@ mod tests {
     }
 
     #[test]
-    fn number_word_test() {
+    fn test_number_word() {
         assert!(number_word(Some('1'), Some('a')));
         // TODO: '#' and '$' are currently not recognized as a word
         //        assert!(number_word(Some('2'), Some('#')));

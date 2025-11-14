@@ -746,7 +746,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_implicit_dots_test() {
+    fn resolve_implicit_dots() {
         let char_defs = CharacterDefinition::new();
         assert_eq!(
             char_defs.resolve_implicit_dots("xs"),
@@ -759,7 +759,7 @@ mod tests {
     }
 
     #[test]
-    fn translate_test() {
+    fn translate() {
         let rules = vec![
             parse_rule("always foo 123"),
             parse_rule("always bar 456"),
@@ -772,7 +772,7 @@ mod tests {
     }
 
     #[test]
-    fn midword_test() {
+    fn midword() {
         let rules = vec![
             parse_rule("lowercase a 1"),
             parse_rule("lowercase b 2"),
@@ -792,7 +792,7 @@ mod tests {
     }
 
     #[test]
-    fn midword_with_precedence_test() {
+    fn midword_with_precedence() {
         let rules = vec![
             parse_rule("lowercase a 1"),
             parse_rule("lowercase b 2"),
@@ -813,7 +813,7 @@ mod tests {
     }
 
     #[test]
-    fn endword_test() {
+    fn endword() {
         let rules = vec![
             parse_rule("lowercase a 1"),
             parse_rule("lowercase b 2"),
@@ -835,7 +835,7 @@ mod tests {
     }
 
     #[test]
-    fn partword_test() {
+    fn partword() {
         let rules = vec![
             parse_rule("lowercase a 1"),
             parse_rule("lowercase b 2"),
@@ -858,7 +858,7 @@ mod tests {
     }
 
     #[test]
-    fn begnum_test() {
+    fn begnum() {
         let rules = vec![
             parse_rule("digit 1 1"),
             parse_rule("sign a 3456"),
@@ -871,7 +871,7 @@ mod tests {
     }
 
     #[test]
-    fn endnum_test() {
+    fn endnum() {
         let rules = vec![
             parse_rule("digit 1 1"),
             parse_rule("lowercase h 125"),
@@ -887,7 +887,7 @@ mod tests {
     }
 
     #[test]
-    fn base_test() {
+    fn base() {
         let rules = vec![
             parse_rule("lowercase a 1"),
             parse_rule("lowercase b 12"),
@@ -901,7 +901,7 @@ mod tests {
     }
 
     #[test]
-    fn display_table_test() {
+    fn display_table() {
         let display_rules = vec![parse_rule("display a 1"), parse_rule("display \\s 0")];
         let display_table = DisplayTable::compile(display_rules, Direction::Forward);
         assert_eq!(display_table.translate("⠁"), "a");
@@ -911,7 +911,7 @@ mod tests {
     }
 
     #[test]
-    fn translate_with_display_test() {
+    fn translate_with_display() {
         let display_rules = vec![parse_rule("display A 1"), parse_rule("display \\s 0")];
         let rules = vec![parse_rule("letter a 1"), parse_rule("space \\s 0")];
         let display_table = DisplayTable::compile(display_rules, Direction::Forward);
@@ -922,7 +922,7 @@ mod tests {
     }
 
     #[test]
-    fn match_test() {
+    fn match_simple() {
         let rules = vec![
             parse_rule("lowercase a 1"),
             parse_rule("lowercase b 2"),
@@ -938,7 +938,7 @@ mod tests {
     }
 
     #[test]
-    fn match_with_any_test() {
+    fn match_with_any() {
         let rules = vec![
             parse_rule("lowercase a 1"),
             parse_rule("lowercase b 2"),
@@ -955,7 +955,7 @@ mod tests {
     }
 
     #[test]
-    fn match_with_set_test() {
+    fn match_with_set() {
         let rules = vec![
             parse_rule("lowercase f 3"),
             parse_rule("lowercase o 4"),
@@ -972,7 +972,7 @@ mod tests {
     }
 
     #[test]
-    fn numeric_indication_text() {
+    fn numeric_indication() {
         let rules = vec![
             parse_rule("lowercase f 3"),
             parse_rule("lowercase o 4"),
@@ -990,7 +990,7 @@ mod tests {
     }
 
     #[test]
-    fn uppercase_indication_text() {
+    fn uppercase_indication() {
         let rules = vec![
             parse_rule("lowercase a 1"),
             parse_rule("lowercase b 12"),

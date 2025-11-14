@@ -254,7 +254,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn attribute_test() {
+    fn attribute() {
         assert_eq!(
             PatternParser::new("%[al.]").attributes(),
             Ok(Pattern::Attributes(HashSet::from([
@@ -286,7 +286,7 @@ mod tests {
     }
 
     #[test]
-    fn characters_test() {
+    fn characters() {
         assert_eq!(
             PatternParser::new("abc").characters(),
             Ok(Pattern::Characters("abc".into()))
@@ -294,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    fn set_test() {
+    fn set() {
         assert_eq!(
             PatternParser::new("[abc]").set(),
             Ok(Pattern::Set(HashSet::from(['a', 'b', 'c'])))
@@ -309,7 +309,7 @@ mod tests {
     }
 
     #[test]
-    fn set_with_escape_test() {
+    fn set_with_escape() {
         assert_eq!(
             PatternParser::new(r"[abc\]]").set(),
             Ok(Pattern::Set(HashSet::from(['a', 'b', 'c', ']'])))
@@ -322,7 +322,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "InvalidEscape")]
-    fn set_with_invalid_escape_test() {
+    fn set_with_invalid_escape() {
         assert_eq!(
             PatternParser::new(r"[\a]]").set(),
             Ok(Pattern::Set(HashSet::from(['a'])))
@@ -330,7 +330,7 @@ mod tests {
     }
 
     #[test]
-    fn group_test() {
+    fn group() {
         assert_eq!(
             PatternParser::new("(abc)").group(),
             Ok(Pattern::Group(vec![Pattern::Characters("abc".into())]))
@@ -348,7 +348,7 @@ mod tests {
     }
 
     #[test]
-    fn pattern_test() {
+    fn pattern() {
         assert_eq!(
             PatternParser::new("(abc)").pattern(),
             Ok(vec![Pattern::Group(vec![Pattern::Characters(

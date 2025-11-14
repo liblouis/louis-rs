@@ -2059,7 +2059,7 @@ mod tests {
     use enumset::enum_set;
 
     #[test]
-    fn nocross_test() {
+    fn nocross() {
         assert_eq!(true, RuleParser::new(&"nocross").nocross());
         assert_eq!(true, RuleParser::new(&"nocross nofor").nocross());
         assert_eq!(false, RuleParser::new(&"nofor nocross").nocross());
@@ -2067,7 +2067,7 @@ mod tests {
     }
 
     #[test]
-    fn nofor_test() {
+    fn nofor() {
         assert_eq!(true, RuleParser::new(&" nofor ").nofor());
         assert_eq!(true, RuleParser::new(&"nofor nocross").nofor());
         assert_eq!(false, RuleParser::new(&"nocross nofor").nofor());
@@ -2075,7 +2075,7 @@ mod tests {
     }
 
     #[test]
-    fn constraints_test() {
+    fn constraints() {
         assert_eq!(
             enum_set!(Constraint::Nofor),
             RuleParser::new(&" nofor ").constraints()
@@ -2087,7 +2087,7 @@ mod tests {
     }
 
     #[test]
-    fn fail_if_invalid_constraints_test() {
+    fn test_fail_if_invalid_constraints() {
         assert_eq!(
             Ok(()),
             fail_if_invalid_constraints(Constraints::empty(), Constraints::empty(), Opcode::Space)
@@ -2128,7 +2128,7 @@ mod tests {
     }
 
     #[test]
-    fn withclass_test() {
+    fn withclass() {
         assert_eq!(
             Ok(Some(WithClass::Before {
                 class: "foo".into()
@@ -2148,7 +2148,7 @@ mod tests {
     }
 
     #[test]
-    fn withclasses_test() {
+    fn withclasses() {
         assert_eq!(
             Ok(Some(vec![
                 WithClass::Before {
@@ -2168,7 +2168,7 @@ mod tests {
     }
 
     #[test]
-    fn opcode_test() {
+    fn opcode() {
         assert_eq!(Ok(Opcode::Include), RuleParser::new(&"include").opcode());
         assert_eq!(
             Ok(Opcode::Always),
@@ -2190,7 +2190,7 @@ mod tests {
     }
 
     #[test]
-    fn with_matches_test() {
+    fn with_matches() {
         assert_eq!(
             Some(HashSet::from([WithMatch::After])),
             RuleParser::new(&"empmatchafter match").with_matches()
@@ -2207,7 +2207,7 @@ mod tests {
     }
 
     #[test]
-    fn rule_test() {
+    fn rule() {
         assert_eq!(
             Ok(Rule::Include {
                 file: "foo.ctb".into()
@@ -2227,7 +2227,7 @@ mod tests {
     }
 
     #[test]
-    fn display_test() {
+    fn display() {
         use self::braille::BrailleDot;
         assert_eq!(
             Ok(Rule::Display {

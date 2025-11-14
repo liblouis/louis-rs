@@ -177,7 +177,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn chars_to_dots_test() {
+    fn test_chars_to_dots() {
         assert_eq!(
             chars_to_dots("123"),
             Ok(enum_set!(
@@ -198,7 +198,7 @@ mod tests {
     }
 
     #[test]
-    fn braille_chars_test() {
+    fn test_braille_chars() {
         assert_eq!(
             braille_chars("1-1"),
             Ok(vec![
@@ -225,7 +225,7 @@ mod tests {
     }
 
     #[test]
-    fn dots_to_unicode_test() {
+    fn test_dots_to_unicode() {
         assert_eq!(
             dots_to_unicode(&vec![enum_set!(BrailleDot::Dot1 | BrailleDot::Dot8)]),
             "⢁".to_string()

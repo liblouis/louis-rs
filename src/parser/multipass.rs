@@ -385,7 +385,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ascii_number_test() {
+    fn ascii_number() {
         assert_eq!(TestParser::new("123").ascii_number(), Ok(123));
         assert_eq!(TestParser::new("1").ascii_number(), Ok(1));
         assert_eq!(TestParser::new("1 ").ascii_number(), Ok(1));
@@ -395,7 +395,7 @@ mod tests {
     }
 
     #[test]
-    fn dots_test() {
+    fn dots() {
         assert_eq!(
             TestParser::new("@123").dots(),
             Ok(TestInstruction::Dots {
@@ -425,7 +425,7 @@ mod tests {
     }
 
     #[test]
-    fn string_test() {
+    fn string() {
         assert_eq!(
             TestParser::new(r#""test""#).string(),
             Ok(TestInstruction::String { s: "test".into() })
@@ -449,7 +449,7 @@ mod tests {
     }
 
     #[test]
-    fn lookback_test() {
+    fn lookback() {
         assert_eq!(
             TestParser::new("_123").lookback(),
             Ok(TestInstruction::Lookback { len: 123 })
@@ -480,7 +480,7 @@ mod tests {
     }
 
     #[test]
-    fn attributes_test() {
+    fn attributes() {
         assert_eq!(
             TestParser::new("$a").attributes(),
             Ok(TestInstruction::Attributes {
@@ -506,7 +506,7 @@ mod tests {
     }
 
     #[test]
-    fn class_test() {
+    fn class() {
         assert_eq!(
             TestParser::new("%foo").class(),
             Ok(TestInstruction::Class {
@@ -531,7 +531,7 @@ mod tests {
     }
 
     #[test]
-    fn quantifier_test() {
+    fn quantifier() {
         assert_eq!(
             TestParser::new("$a ").attributes(),
             Ok(TestInstruction::Attributes {
@@ -571,7 +571,7 @@ mod tests {
     }
 
     #[test]
-    fn variable_test() {
+    fn variable() {
         assert_eq!(
             TestParser::new("#1<2").variable(),
             Ok(TestInstruction::Variable {
@@ -628,7 +628,7 @@ mod tests {
     }
 
     #[test]
-    fn replacement_test() {
+    fn replacement() {
         assert_eq!(
             TestParser::new("[]").replacement(),
             Ok(TestInstruction::Replace { tests: vec![] })
@@ -645,7 +645,7 @@ mod tests {
     }
 
     #[test]
-    fn test_test() {
+    fn test() {
         assert_eq!(
             TestParser::new("$d[]%digitletter").tests(),
             Ok(Test {

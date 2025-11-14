@@ -149,7 +149,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn indicator_test() {
+    fn indicator() {
         let numeric_chars: HashSet<char> = HashSet::from(['1', '2', '3']);
         let builder = IndicatorBuilder::new()
             .numeric_characters(numeric_chars)
@@ -170,7 +170,7 @@ mod tests {
     }
 
     #[test]
-    fn end_indication_test() {
+    fn end_indication() {
         let numeric_chars: HashSet<char> = HashSet::from(['1', '2', '3']);
         let builder = IndicatorBuilder::new()
             .numeric_characters(numeric_chars)
