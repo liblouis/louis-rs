@@ -50,41 +50,6 @@ Translate some text:
 Trace a translation:
 
 #+BEGIN_SRC shell
-  $ cargo run -- translate --tracing ~/src/liblouis/tables/de-comp6.utb
-  > Guten Tag
-  ⠈⠛⠥⠞⠑⠝⠀⠈⠞⠁⠛
-  ┌───┬──────┬────┬────────────────┐
-  │   │ From │ To │ Rule           │
-  ├───┼──────┼────┼────────────────┤
-  │ 0 │ G    │ ⠈⠛ │ uppercase G ⠈⠛ │
-  │ 1 │ u    │ ⠥  │ lowercase u ⠥  │
-  │ 2 │ t    │ ⠞  │ lowercase t ⠞  │
-  │ 3 │ e    │ ⠑  │ lowercase e ⠑  │
-  │ 4 │ n    │ ⠝  │ lowercase n ⠝  │
-  │ 5 │      │ ⠀  │ space   ⠀      │
-  │ 6 │ T    │ ⠈⠞ │ uppercase T ⠈⠞ │
-  │ 7 │ a    │ ⠁  │ lowercase a ⠁  │
-  │ 8 │ g    │ ⠛  │ lowercase g ⠛  │
-  └───┴──────┴────┴────────────────┘
-#+END_SRC
-
-#+BEGIN_SRC shell
-  $ export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
-  $ cargo run -- translate --tracing ~/src/liblouis/tables/en-us-g1.ctb
-  > 123st
-  ⠼⠁⠃⠉⠌
-  ┌───┬──────┬────┬──────────────┐
-  │   │ From │ To │ Rule         │
-  ├───┼──────┼────┼──────────────┤
-  │ 0 │      │ ⠼  │ numsign ⠼    │
-  │ 1 │ 1    │ ⠁  │ litdigit 1 ⠁ │
-  │ 2 │ 2    │ ⠃  │ litdigit 2 ⠃ │
-  │ 3 │ 3    │ ⠉  │ litdigit 3 ⠉ │
-  │ 4 │ st   │ ⠌  │ endnum st ⠌  │
-  └───┴──────┴────┴──────────────┘
-#+END_SRC
-
-#+BEGIN_SRC shell
   $ export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
   $ cargo run -- translate --tracing ~/src/liblouis/tables/en-us-g2.ctb
   > it's about the blind
@@ -101,6 +66,17 @@ Trace a translation:
   │ 6 │       │ ⠀   │ space   ⠀     │
   │ 7 │ blind │ ⠃⠇  │ word blind ⠃⠇ │
   └───┴───────┴─────┴───────────────┘
+  > 123st
+  ⠼⠁⠃⠉⠌
+  ┌───┬──────┬────┬──────────────┐
+  │   │ From │ To │ Rule         │
+  ├───┼──────┼────┼──────────────┤
+  │ 0 │      │ ⠼  │ numsign ⠼    │
+  │ 1 │ 1    │ ⠁  │ litdigit 1 ⠁ │
+  │ 2 │ 2    │ ⠃  │ litdigit 2 ⠃ │
+  │ 3 │ 3    │ ⠉  │ litdigit 3 ⠉ │
+  │ 4 │ st   │ ⠌  │ endnum st ⠌  │
+  └───┴──────┴────┴──────────────┘
 #+END_SRC
 
 Test the parser:
