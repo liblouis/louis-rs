@@ -737,6 +737,7 @@ impl std::fmt::Display for Rule {
             Rule::Midendword { chars, dots, .. } => write!(f, "midendword {} {}", chars, dots),
             Rule::Endword { chars, dots, .. } => write!(f, "endword {} {}", chars, dots),
             Rule::Partword { chars, dots, .. } => write!(f, "partword {} {}", chars, dots),
+	    Rule::Endnum { chars, dots, .. } => write!(f, "endnum {} {}", chars, dots),
 	    _ => todo!()
 	}
     }
