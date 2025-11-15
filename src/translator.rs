@@ -746,8 +746,7 @@ impl TranslationTable {
                 .partition(|t| t.offset == 0);
             delayed_translations = delayed;
             candidates.extend(current);
-            candidates.sort_by_key(|translation| translation.weight);
-            if let Some(t) = candidates.last() {
+            if let Some(t) = candidates.iter().max_by_key(|translation| translation.weight) {
                 // there is a matching translation rule
                 let translation = t.clone();
                 // move the iterator forward by the number of characters in the translation
