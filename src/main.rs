@@ -141,7 +141,7 @@ fn print_trace(translations: &Vec<Translation>) {
 }
 
 fn trace(table: &Path, direction: Direction, input: &str) {
-    let rules = parser::table_file(table);
+    let rules = parser::table_expanded(table);
     match rules {
         Ok(rules) => {
             match TranslationTable::compile(rules, direction) {
@@ -159,8 +159,8 @@ fn trace(table: &Path, direction: Direction, input: &str) {
 }
 
 fn translate(table: &Path, direction: Direction, input: &str) {
-    let rules = parser::table_file(table);
-    match rules {
+    let rules = parser::table_expanded(table);
+    match dbg!(rules) {
         Ok(rules) => {
             match TranslationTable::compile(rules, direction) {
                 Ok(table) => println!("{}", table.translate(input)),
@@ -345,7 +345,7 @@ fn main() {
                 false => translate(&table, direction, &input),
             },
             None => {
-                let rules = parser::table_file(&table);
+                let rules = parser::table_expanded(&table);
                 match rules {
                     Ok(rules) => match TranslationTable::compile(rules, direction) {
                         Ok(table) => repl(Box::new(move |input| {
