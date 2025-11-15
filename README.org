@@ -68,6 +68,20 @@ Trace a translation:
   └───┴──────┴────┴────────────────┘
 #+END_SRC
 
+#+BEGIN_SRC shell
+$ LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis cargo run -- translate --tracing ~/src/liblouis/tables/en-us-g1.ctb 
+> 123st
+⠼⠁⠃⠉⠌
+┌───┬──────┬────┬──────────────┐
+│   │ From │ To │ Rule         │
+├───┼──────┼────┼──────────────┤
+│ 0 │      │ ⠼  │ numsign ⠼    │
+│ 1 │ 1    │ ⠁  │ litdigit 1 ⠁ │
+│ 2 │ 2    │ ⠃  │ litdigit 2 ⠃ │
+│ 3 │ 3    │ ⠉  │ litdigit 3 ⠉ │
+│ 4 │ st   │ ⠌  │ endnum st ⠌  │
+└───┴──────┴────┴──────────────┘
+#+END_SRC
 
 Test the parser:
 

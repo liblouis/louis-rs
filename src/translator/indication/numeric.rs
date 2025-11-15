@@ -13,7 +13,7 @@
 //! changed to `State::Default` and the character encountered is in the set of
 //! [`Indicator::terminating_chars`].
 
-use crate::translator::indication::Indication;
+use crate::{parser::AnchoredRule, translator::{indication::Indication, Translation}};
 
 use std::collections::HashSet;
 
@@ -34,8 +34,8 @@ impl IndicatorBuilder {
             state: State::Default,
             numeric_chars: HashSet::default(),
             extra_numeric_chars: HashSet::default(),
-            start_indicator: None,
-            end_indicator: None,
+            start_translation: None,
+            end_translation: None,
             terminating_chars: HashSet::default(),
         })
     }
@@ -44,13 +44,13 @@ impl IndicatorBuilder {
         self.0
     }
 
-    pub fn numsign(mut self, s: &str) -> Self {
-        self.0.start_indicator = Some(s.to_string());
+    pub fn numsign(mut self, s: &str, origin: &AnchoredRule) -> Self {
+	self.0.start_translation = Some(Translation::new("".to_string(), s.to_string(), 1, origin.clone()));
         self
     }
 
-    pub fn nonumsign(mut self, s: &str) -> Self {
-        self.0.end_indicator = Some(s.to_string());
+    pub fn nonumsign(mut self, s: &str, origin: &AnchoredRule) -> Self {
+        self.0.end_translation = Some(Translation::new("".to_string(), s.to_string(), 1, origin.clone()));
         self
     }
 
@@ -91,10 +91,10 @@ pub struct Indicator {
     /// The set of characters that will prevent a state change to the
     /// [State::Default] mode
     extra_numeric_chars: HashSet<char>,
-    /// The characters to indicate the start of a sequence of numerical characters
-    start_indicator: Option<String>,
+    /// The translation to indicate the start of a sequence of numerical characters
+    start_translation: Option<Translation>,
     /// The characters to indicate the end of a sequence of numerical characters
-    end_indicator: Option<String>,
+    end_translation: Option<Translation>,
     /// The characters that will trigger an [`Indication::NumericEnd`] indication
     terminating_chars: HashSet<char>,
 }
@@ -113,7 +113,7 @@ impl Indicator {
     /// * `s` - A string slice containing the character(s) to process
     pub fn next(&mut self, s: &str) -> Option<Indication> {
         let c = s.chars().next();
-        if self.start_indicator.is_none() || c.is_none() {
+        if self.start_translation.is_none() || c.is_none() {
             return None;
         }
         match (&self.state, self.numeric_chars.contains(&c.unwrap())) {
@@ -125,7 +125,7 @@ impl Indicator {
                 self.state = State::Default;
                 // only indicate the end of a number if there is an end_indicator and the character
                 // is contained in terminating_chars
-                if self.end_indicator.is_some() && self.terminating_chars.contains(&c.unwrap()) {
+                if self.end_translation.is_some() && self.terminating_chars.contains(&c.unwrap()) {
                     // FIXME: end indication should only occur within a word
                     Some(Indication::NumericEnd)
                 } else {
@@ -136,25 +136,33 @@ impl Indicator {
         }
     }
 
-    pub fn start_indicator(&self) -> Option<String> {
-        self.start_indicator.clone()
+    pub fn start_translation(&self) -> Option<Translation> {
+        self.start_translation.clone()
     }
-    pub fn end_indicator(&self) -> Option<String> {
-        self.end_indicator.clone()
+    pub fn end_translation(&self) -> Option<Translation> {
+        self.end_translation.clone()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::parser::RuleParser;
+
     use super::*;
+
+    // just create some fake anchored rule for testing purposes
+    fn fake_rule() -> AnchoredRule {
+        let rule = RuleParser::new("always foo 1").rule().unwrap();
+        AnchoredRule::new(rule, None, 0)
+    }
 
     #[test]
     fn indicator() {
         let numeric_chars: HashSet<char> = HashSet::from(['1', '2', '3']);
         let builder = IndicatorBuilder::new()
             .numeric_characters(numeric_chars)
-            .numsign("⠼")
-            .nonumsign("⠰")
+            .numsign("⠼", &fake_rule())
+            .nonumsign("⠰", &fake_rule())
             .numericnocontchars("abc");
         let mut indicator = builder.build();
         assert_eq!(indicator.next("ab12 a".into()), None);
@@ -174,8 +182,8 @@ mod tests {
         let numeric_chars: HashSet<char> = HashSet::from(['1', '2', '3']);
         let builder = IndicatorBuilder::new()
             .numeric_characters(numeric_chars)
-            .numsign("⠼")
-            .nonumsign("⠰")
+            .numsign("⠼", &fake_rule())
+            .nonumsign("⠰", &fake_rule())
             .numericnocontchars("abc");
         let mut indicator = builder.build();
         assert_eq!(indicator.next("ab12a".into()), None);

@@ -393,11 +393,11 @@ impl TranslationTable {
                 }
                 Rule::Numsign { dots } => {
                     numeric_indicator_builder =
-                        numeric_indicator_builder.numsign(&dots_to_unicode(dots));
+                        numeric_indicator_builder.numsign(&dots_to_unicode(dots), rule);
                 }
                 Rule::Nonumsign { dots } => {
                     numeric_indicator_builder =
-                        numeric_indicator_builder.nonumsign(&dots_to_unicode(dots));
+                        numeric_indicator_builder.nonumsign(&dots_to_unicode(dots), rule);
                 }
                 Rule::Numericnocontchars { chars } => {
                     numeric_indicator_builder =
@@ -658,12 +658,11 @@ impl TranslationTable {
         indicator: &mut numeric::Indicator,
     ) -> Option<Translation> {
         if let Some(indication) = indicator.next(input) {
-            let indicator_sign = match indication {
-                Indication::NumericStart => indicator.start_indicator().unwrap(),
-                Indication::NumericEnd => indicator.end_indicator().unwrap(),
+            match indication {
+                Indication::NumericStart => indicator.start_translation(),
+                Indication::NumericEnd => indicator.end_translation(),
                 _ => unreachable!(),
-            };
-            Some(Translation::new("".to_string(), indicator_sign, 1, None)) // FIXME: add the indicator rule here
+            }
         } else {
             None
         }
