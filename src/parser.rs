@@ -741,59 +741,181 @@ pub enum Rule {
     },
 }
 
+macro_rules! write_with_prefix {
+    ($f:expr, $prefix:expr, $rest:literal $(, $args:expr)*) => {
+        if $prefix.is_empty() {
+            write!($f, $rest $(, $args)*)
+        } else {
+            write!($f, concat!("{} ", $rest), $prefix $(, $args)*)
+        }
+    };
+}
+
 impl std::fmt::Display for Rule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Rule::Undefined { dots } => write!(f, "undefined {}", dots_to_unicode(dots)),
-            Rule::Space { character, dots, .. } => {
-                write!(f, "space {} {}", character, dots_to_unicode(dots))
-            },
-            Rule::Punctuation { character, dots, .. } => {
-                write!(f, "punctuation {} {}", character, dots_to_unicode(dots))
-            },
-            Rule::Digit { character, dots, .. } => {
-                write!(f, "digit {} {}", character, dots_to_unicode(dots))
-            },
-            Rule::Letter { character, dots, .. } => {
-                write!(f, "letter {} {}", character, dots_to_unicode(dots))
-            },
-            Rule::Base { name, derived, base } => {
-                write!(f, "base {} {} {}", name, derived, base)
-            },
-            Rule::Lowercase { character, dots, .. } => {
-                write!(f, "lowercase {} {}", character, dots_to_unicode(dots))
-            },
-            Rule::Uppercase { character, dots, .. } => {
-                write!(f, "uppercase {} {}", character, dots_to_unicode(dots))
-            },
-            Rule::Litdigit { character, dots, .. } => {
-                write!(f, "litdigit {} {}", character, dots_to_unicode(dots))
-            },
-            Rule::Sign { character, dots, .. } => {
-                write!(f, "sign {} {}", character, dots_to_unicode(dots))
-            },
-            Rule::Math { character, dots, .. } => {
-                write!(f, "math {} {}", character, dots_to_unicode(dots))
-            },
+            Rule::Space {
+                character,
+                dots,
+                constraints,
+            } => write_with_prefix!(
+                f,
+                constraints,
+                "space {} {}",
+                character,
+                dots_to_unicode(dots)
+            ),
+            Rule::Punctuation {
+                character,
+                dots,
+                constraints,
+            } => write_with_prefix!(
+                f,
+                constraints,
+                "punctuation {} {}",
+                character,
+                dots_to_unicode(dots)
+            ),
+            Rule::Digit {
+                character,
+                dots,
+                constraints,
+            } => write_with_prefix!(
+                f,
+                constraints,
+                "digit {} {}",
+                character,
+                dots_to_unicode(dots)
+            ),
+            Rule::Letter {
+                character,
+                dots,
+                constraints,
+            } => write_with_prefix!(
+                f,
+                constraints,
+                "leter {} {}",
+                character,
+                dots_to_unicode(dots)
+            ),
+            Rule::Base {
+                name,
+                derived,
+                base,
+            } => write!(f, "base {name} {derived} {base}"),
+            Rule::Lowercase {
+                character,
+                dots,
+                constraints,
+            } => write_with_prefix!(
+                f,
+                constraints,
+                "lowercase {} {}",
+                character,
+                dots_to_unicode(dots)
+            ),
+            Rule::Uppercase {
+                character,
+                dots,
+                constraints,
+            } => write_with_prefix!(
+                f,
+                constraints,
+                "uppercase {} {}",
+                character,
+                dots_to_unicode(dots)
+            ),
+            Rule::Litdigit {
+                character,
+                dots,
+                constraints,
+            } => write_with_prefix!(
+                f,
+                constraints,
+                "litdigit {} {}",
+                character,
+                dots_to_unicode(dots)
+            ),
+            Rule::Sign {
+                character,
+                dots,
+                constraints,
+            } => write_with_prefix!(
+                f,
+                constraints,
+                "sign {} {}",
+                character,
+                dots_to_unicode(dots)
+            ),
+            Rule::Math {
+                character,
+                dots,
+                constraints,
+            } => write_with_prefix!(
+                f,
+                constraints,
+                "math {} {}",
+                character,
+                dots_to_unicode(dots)
+            ),
             Rule::Letsign { dots } => write!(f, "letsign {}", dots_to_unicode(dots)),
-            Rule::Noletsign { chars } => write!(f, "noletsign {}", chars),
+            Rule::Noletsign { chars } => write!(f, "noletsign {chars}"),
             Rule::Numsign { dots } => write!(f, "numsign {}", dots_to_unicode(dots)),
             Rule::Nonumsign { dots } => write!(f, "nonumsign {}", dots_to_unicode(dots)),
-            Rule::Compbrl { chars, .. } => write!(f, "compbrl {}", chars),
-            Rule::Comp6 { chars, dots } => write!(f, "comp6 {} {}", chars, dots),
-            Rule::Always { chars, dots, .. } => write!(f, "always {} {}", chars, dots),
-            Rule::Largesign { chars, dots } => write!(f, "largesign {} {}", chars, dots_to_unicode(dots)),
-            Rule::Word { chars, dots, .. } => write!(f, "word {} {}", chars, dots),
-            Rule::Contraction { chars } => write!(f, "contraction {}", chars),
-            Rule::Begword { chars, dots, .. } => write!(f, "begword {} {}", chars, dots),
-            Rule::Begmidword { chars, dots, .. } => write!(f, "begmidword {} {}", chars, dots),
-            Rule::Midword { chars, dots, .. } => write!(f, "midword {} {}", chars, dots),
-            Rule::Midendword { chars, dots, .. } => write!(f, "midendword {} {}", chars, dots),
-            Rule::Endword { chars, dots, .. } => write!(f, "endword {} {}", chars, dots),
-            Rule::Partword { chars, dots, .. } => write!(f, "partword {} {}", chars, dots),
-	    Rule::Endnum { chars, dots, .. } => write!(f, "endnum {} {}", chars, dots),
-	    _ => todo!()
-	}
+            Rule::Compbrl { chars, constraints } => write!(f, "{constraints:6} compbrl {chars}"),
+            Rule::Comp6 { chars, dots } => write!(f, "comp6 {chars} {dots}"),
+            Rule::Always {
+                chars,
+                dots,
+                constraints,
+            } => write_with_prefix!(f, constraints, "always {} {}", chars, dots),
+            Rule::Largesign { chars, dots } => {
+                write!(f, "largesign {chars} {}", dots_to_unicode(dots))
+            }
+            Rule::Word {
+                chars,
+                dots,
+                constraints,
+            } => write_with_prefix!(f, constraints, "word {} {}", chars, dots),
+            Rule::Contraction { chars } => write!(f, "contraction {chars}"),
+            Rule::Begword {
+                chars,
+                dots,
+                constraints,
+            } => write_with_prefix!(f, constraints, "begword {} {}", chars, dots),
+            Rule::Begmidword {
+                chars,
+                dots,
+                constraints,
+            } => write_with_prefix!(f, constraints, "begmidword {} {}", chars, dots),
+            Rule::Midword {
+                chars,
+                dots,
+                constraints,
+            } => write_with_prefix!(f, constraints, "midword {} {}", chars, dots),
+            Rule::Midendword {
+                chars,
+                dots,
+                constraints,
+            } => write_with_prefix!(f, constraints, "midendword {} {}", chars, dots),
+            Rule::Endword {
+                chars,
+                dots,
+                constraints,
+            } => write_with_prefix!(f, constraints, "endword {} {}", chars, dots),
+            Rule::Partword {
+                chars,
+                dots,
+                constraints,
+            } => write_with_prefix!(f, constraints, "partword {} {}", chars, dots),
+            Rule::Endnum {
+                chars,
+                dots,
+                constraints,
+            } => write_with_prefix!(f, constraints, "endnum {} {}", chars, dots),
+            _ => todo!(),
+        }
     }
 }
 
