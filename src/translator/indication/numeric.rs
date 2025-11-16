@@ -13,7 +13,10 @@
 //! changed to `State::Default` and the character encountered is in the set of
 //! [`Indicator::terminating_chars`].
 
-use crate::{parser::AnchoredRule, translator::{indication::Indication, Translation}};
+use crate::{
+    parser::AnchoredRule,
+    translator::{Translation, indication::Indication},
+};
 
 use std::collections::HashSet;
 
@@ -45,12 +48,22 @@ impl IndicatorBuilder {
     }
 
     pub fn numsign(mut self, s: &str, origin: &AnchoredRule) -> Self {
-	self.0.start_translation = Some(Translation::new("".to_string(), s.to_string(), 1, origin.clone()));
+        self.0.start_translation = Some(Translation::new(
+            "".to_string(),
+            s.to_string(),
+            1,
+            origin.clone(),
+        ));
         self
     }
 
     pub fn nonumsign(mut self, s: &str, origin: &AnchoredRule) -> Self {
-        self.0.end_translation = Some(Translation::new("".to_string(), s.to_string(), 1, origin.clone()));
+        self.0.end_translation = Some(Translation::new(
+            "".to_string(),
+            s.to_string(),
+            1,
+            origin.clone(),
+        ));
         self
     }
 

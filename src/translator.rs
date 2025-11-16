@@ -60,10 +60,10 @@ impl Translation {
         input: String,
         output: String,
         weight: usize,
-	// FIXME: this is some weird thing recommended by Claude: apparently the `impl
-	// Into<Option<T>>` trait bound automatically converts `T` to `Some(T)` and `None` to
-	// `None`, giving you the overloaded behavior you want with a single function. This is more
-	// idiomatic than having separate `new` and `new_with_origin` methods.
+        // FIXME: this is some weird thing recommended by Claude: apparently the `impl
+        // Into<Option<T>>` trait bound automatically converts `T` to `Some(T)` and `None` to
+        // `None`, giving you the overloaded behavior you want with a single function. This is more
+        // idiomatic than having separate `new` and `new_with_origin` methods.
         origin: impl Into<Option<AnchoredRule>>,
     ) -> Self {
         let length = input.chars().count();
@@ -745,7 +745,10 @@ impl TranslationTable {
                 .partition(|t| t.offset == 0);
             delayed_translations = delayed;
             candidates.extend(current);
-            if let Some(t) = candidates.iter().max_by_key(|translation| translation.weight) {
+            if let Some(t) = candidates
+                .iter()
+                .max_by_key(|translation| translation.weight)
+            {
                 // there is a matching translation rule
                 let translation = t.clone();
                 // move the iterator forward by the number of characters in the translation
