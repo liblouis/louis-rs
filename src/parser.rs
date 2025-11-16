@@ -34,9 +34,63 @@ pub enum Constraint {
     Nocross,
 }
 
-type Constraints = EnumSet<Constraint>;
+impl std::fmt::Display for Constraint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Constraint::Nofor => write!(f, "nofor"),
+            Constraint::Noback => write!(f, "noback"),
+            Constraint::Nocross => write!(f, "nocross"),
+        }
+    }
+}
 
-const DIRECTIONS: Constraints = enum_set!(Constraint::Nofor | Constraint::Noback);
+#[derive(Debug, PartialEq, Clone, Copy)]
+struct Constraints(EnumSet<Constraint>);
+
+impl Constraints {
+    fn contains(&self, value: Constraint) -> bool {
+        self.0.contains(value)
+    }
+
+    fn is_subset(&self, other: Self) -> bool {
+        self.0.is_subset(other.0)
+    }
+
+    fn difference(&self, other: Self) -> Self {
+        Constraints(self.0.difference(other.0))
+    }
+
+    fn empty() -> Self {
+        Constraints(EnumSet::empty())
+    }
+
+    fn insert(&mut self, value: Constraint) -> bool {
+        self.0.insert(value)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+macro_rules! constraint_set {
+    ($($args:tt)*) => {
+        Constraints(enum_set!($($args)*))
+    };
+}
+
+impl std::fmt::Display for Constraints {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.0.is_empty() {
+            write!(f, "")
+        } else {
+            let constraints: Vec<String> = self.0.iter().map(|c| c.to_string()).collect();
+            write!(f, "{}", constraints.join(" "))
+        }
+    }
+}
+
+const DIRECTIONS: Constraints = constraint_set!(Constraint::Nofor | Constraint::Noback);
 
 #[derive(EnumSetType, Debug, clap::ValueEnum)]
 pub enum Direction {
@@ -743,7 +797,6 @@ impl std::fmt::Display for Rule {
     }
 }
 
-
 pub trait HasDirection {
     fn directions(&self) -> EnumSet<Direction>;
 
@@ -964,7 +1017,7 @@ impl<'a> RuleParser<'a> {
     }
 
     fn constraints(&mut self) -> Constraints {
-        let mut constraints = EnumSet::empty();
+        let mut constraints = Constraints::empty();
         if self.nofor() {
             constraints.insert(Constraint::Nofor);
         } else if self.noback() {
@@ -1335,13 +1388,13 @@ impl<'a> RuleParser<'a> {
         let opcode = self.opcode()?;
         let rule = match opcode {
             Opcode::Include => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Include {
                     file: self.filename()?,
                 }
             }
             Opcode::Undefined => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Undefined {
                     dots: self.explicit_dots()?,
                 }
@@ -1403,7 +1456,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Base => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Base {
                     name: self.name()?,
                     derived: self.one_char()?,
@@ -1489,112 +1542,112 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Capsmodechars => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Capsmodechars {
                     chars: self.chars()?,
                 }
             }
             Opcode::Begcaps => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Begcaps {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Endcaps => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Endcaps {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Begcapsphrase => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Begcapsphrase {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Endcapsphrase => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Endcapsphrase {
                     position: self.position()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Lencapsphrase => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Lencapsphrase {
                     number: self.number()?,
                 }
             }
             Opcode::Letsign => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Letsign {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Noletsign => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Noletsign {
                     chars: self.chars()?,
                 }
             }
             Opcode::Noletsignbefore => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Noletsignbefore {
                     chars: self.chars()?,
                 }
             }
             Opcode::Noletsignafter => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Noletsignafter {
                     chars: self.chars()?,
                 }
             }
             Opcode::Nocontractsign => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Nocontractsign {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Numsign => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Numsign {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Nonumsign => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Nonumsign {
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Numericnocontchars => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Numericnocontchars {
                     chars: self.chars()?,
                 }
             }
             Opcode::Numericmodechars => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Numericmodechars {
                     chars: self.chars()?,
                 }
             }
             Opcode::Midendnumericmodechars => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Midendnumericmodechars {
                     chars: self.chars()?,
                 }
             }
 
             Opcode::Begmodephrase => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Begmodephrase {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Endmodephrase => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Endmodephrase {
                     name: self.name()?,
                     position: self.position()?,
@@ -1602,7 +1655,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Lenmodephrase => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Lenmodephrase {
                     name: self.name()?,
                     number: self.number()?,
@@ -1610,45 +1663,45 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Seqdelimiter => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Seqdelimiter {
                     chars: self.chars()?,
                 }
             }
             Opcode::Seqbeforechars => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Seqbeforechars {
                     chars: self.chars()?,
                 }
             }
             Opcode::Seqafterchars => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Seqafterchars {
                     chars: self.chars()?,
                 }
             }
             Opcode::Seqafterpattern => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Seqafterpattern {
                     chars: self.chars()?,
                 }
             }
             Opcode::Seqafterexpression => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Seqafterexpression {
                     chars: self.chars()?,
                 }
             }
 
             Opcode::Class => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Class {
                     name: self.name()?,
                     chars: self.chars()?,
                 }
             }
             Opcode::Emphclass => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Emphclass { name: self.name()? }
             }
             Opcode::Begemph => {
@@ -1668,49 +1721,49 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Noemphchars => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Noemphchars {
                     name: self.name()?,
                     chars: self.chars()?,
                 }
             }
             Opcode::Emphletter => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Emphletter {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Begemphword => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Begemphword {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Endemphword => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Endemphword {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Emphmodechars => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Emphmodechars {
                     name: self.name()?,
                     chars: self.chars()?,
                 }
             }
             Opcode::Begemphphrase => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Begemphphrase {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Endemphphrase => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Endemphphrase {
                     name: self.name()?,
                     position: self.position()?,
@@ -1718,7 +1771,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Lenemphphrase => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Lenemphphrase {
                     name: self.name()?,
                     number: self.number()?,
@@ -1741,7 +1794,7 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Decpoint => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Decpoint {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
@@ -1757,7 +1810,7 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Capsnocont => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Capsnocont {}
             }
 
@@ -1769,20 +1822,20 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Comp6 => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Comp6 {
                     chars: self.chars()?,
                     dots: self.dots()?,
                 }
             }
             Opcode::Nocont => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Nocont {
                     chars: self.chars()?,
                 }
             }
             Opcode::Replace => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Replace {
                     chars: self.chars()?,
                     replacement: self.maybe_chars(),
@@ -1802,14 +1855,14 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Repword => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Repword {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Rependword => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 let chars = self.chars()?;
                 let many_dots = self.many_dots()?;
                 if many_dots.len() != 2 {
@@ -1821,7 +1874,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Rependword { chars, dots, other }
             }
             Opcode::Largesign => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Largesign {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
@@ -1836,14 +1889,14 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Syllable => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Syllable {
                     chars: self.chars()?,
                     dots: self.dots()?,
                 }
             }
             Opcode::Joinword => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Joinword {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
@@ -1858,7 +1911,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Contraction => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Contraction {
                     chars: self.chars()?,
                 }
@@ -1904,7 +1957,7 @@ impl<'a> RuleParser<'a> {
                 constraints,
             },
             Opcode::Exactdots => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Exactdots {
                     chars: self.chars()?,
                 }
@@ -1941,7 +1994,7 @@ impl<'a> RuleParser<'a> {
             },
 
             Opcode::Attribute => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Attribute {
                     name: self.name()?,
                     chars: self.chars()?,
@@ -1949,7 +2002,7 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Swapcd => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Swapcd {
                     name: self.name()?,
                     chars: self.chars()?,
@@ -1957,7 +2010,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Swapdd => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Swapdd {
                     name: self.name()?,
                     dots: self.many_dots()?,
@@ -1965,7 +2018,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Swapcc => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Swapcc {
                     name: self.name()?,
                     chars: self.chars()?,
@@ -2026,7 +2079,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Literal => {
-                fail_if_invalid_constraints(EnumSet::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Literal {
                     chars: self.chars()?,
                 }
@@ -2192,11 +2245,11 @@ mod tests {
     #[test]
     fn constraints() {
         assert_eq!(
-            enum_set!(Constraint::Nofor),
+            constraint_set!(Constraint::Nofor),
             RuleParser::new(&" nofor ").constraints()
         );
         assert_eq!(
-            enum_set!(Constraint::Nofor | Constraint::Nocross),
+            constraint_set!(Constraint::Nofor | Constraint::Nocross),
             RuleParser::new(&"nofor nocross").constraints()
         );
     }
@@ -2209,34 +2262,34 @@ mod tests {
         );
         assert_eq!(
             Err(ParseError::InvalidConstraints {
-                constraints: enum_set!(Constraint::Nofor),
+                constraints: constraint_set!(Constraint::Nofor),
                 opcode: Opcode::Space
             }),
             fail_if_invalid_constraints(
                 Constraints::empty(),
-                enum_set!(Constraint::Nofor),
+                constraint_set!(Constraint::Nofor),
                 Opcode::Space
             )
         );
         assert_eq!(
             Err(ParseError::InvalidConstraints {
-                constraints: enum_set!(Constraint::Nofor | Constraint::Nocross),
+                constraints: constraint_set!(Constraint::Nofor | Constraint::Nocross),
                 opcode: Opcode::Space
             }),
             fail_if_invalid_constraints(
                 Constraints::empty(),
-                enum_set!(Constraint::Nofor | Constraint::Nocross),
+                constraint_set!(Constraint::Nofor | Constraint::Nocross),
                 Opcode::Space
             )
         );
         assert_eq!(
             Err(ParseError::InvalidConstraints {
-                constraints: enum_set!(Constraint::Nocross),
+                constraints: constraint_set!(Constraint::Nocross),
                 opcode: Opcode::Space
             }),
             fail_if_invalid_constraints(
-                enum_set!(Constraint::Nofor | Constraint::Noback),
-                enum_set!(Constraint::Nofor | Constraint::Nocross),
+                constraint_set!(Constraint::Nofor | Constraint::Noback),
+                constraint_set!(Constraint::Nofor | Constraint::Nocross),
                 Opcode::Space
             )
         );
