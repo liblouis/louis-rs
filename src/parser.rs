@@ -838,6 +838,12 @@ impl std::fmt::Display for Rule {
             Rule::Endword { chars, dots, .. } => write!(f, "endword {} {}", chars, dots),
             Rule::Partword { chars, dots, .. } => write!(f, "partword {} {}", chars, dots),
             Rule::Endnum { chars, dots, .. } => write!(f, "endnum {} {}", chars, dots),
+            Rule::Endnum { chars, dots, .. } => write!(f, "endnum {} {}", chars, dots),
+            Rule::Capsletter { dots, .. } => write!(f, "capsletter {}", dots_to_unicode(dots)),
+            Rule::Begcapsword { dots, .. } => write!(f, "begcapsword {}", dots_to_unicode(dots)),
+            Rule::Endcapsword { dots, .. } => write!(f, "endcapsword {}", dots_to_unicode(dots)),
+            Rule::Begcaps { dots } => write!(f, "begcaps {}", dots_to_unicode(dots)),
+            Rule::Endcaps { dots } => write!(f, "endcaps {}", dots_to_unicode(dots)),
             _ => todo!(),
         }
     }

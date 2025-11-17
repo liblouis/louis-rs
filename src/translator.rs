@@ -410,23 +410,23 @@ impl TranslationTable {
                 }
                 Rule::Capsletter { dots, .. } => {
                     uppercase_indicator_builder =
-                        uppercase_indicator_builder.capsletter(&dots_to_unicode(dots));
+                        uppercase_indicator_builder.capsletter(&dots_to_unicode(dots), rule);
                 }
                 Rule::Begcapsword { dots, .. } => {
                     uppercase_indicator_builder =
-                        uppercase_indicator_builder.begcapsword(&dots_to_unicode(dots));
+                        uppercase_indicator_builder.begcapsword(&dots_to_unicode(dots), rule);
                 }
                 Rule::Endcapsword { dots, .. } => {
                     uppercase_indicator_builder =
-                        uppercase_indicator_builder.endcapsword(&dots_to_unicode(dots));
+                        uppercase_indicator_builder.endcapsword(&dots_to_unicode(dots), rule);
                 }
                 Rule::Begcaps { dots } => {
                     uppercase_indicator_builder =
-                        uppercase_indicator_builder.begcaps(&dots_to_unicode(dots));
+                        uppercase_indicator_builder.begcaps(&dots_to_unicode(dots), rule);
                 }
                 Rule::Endcaps { dots } => {
                     uppercase_indicator_builder =
-                        uppercase_indicator_builder.endcaps(&dots_to_unicode(dots));
+                        uppercase_indicator_builder.endcaps(&dots_to_unicode(dots), rule);
                 }
                 Rule::Capsmodechars { chars } => {
                     uppercase_indicator_builder = uppercase_indicator_builder.capsmodechars(&chars);
@@ -676,15 +676,14 @@ impl TranslationTable {
         indicator: &mut uppercase::Indicator,
     ) -> Option<Translation> {
         if let Some(indication) = indicator.next(input) {
-            let indicator_sign = match indication {
-                Indication::UppercaseStart => indicator.start_indicator().unwrap(),
-                Indication::UppercaseEnd => indicator.end_indicator().unwrap(),
-                Indication::UppercaseStartLetter => indicator.start_letter_indicator().unwrap(),
-                Indication::UppercaseStartWord => indicator.start_word_indicator().unwrap(),
-                Indication::UppercaseEndWord => indicator.end_word_indicator().unwrap(),
+            match indication {
+                Indication::UppercaseStart => indicator.start_translation(),
+                Indication::UppercaseEnd => indicator.end_translation(),
+                Indication::UppercaseStartLetter => indicator.start_letter_translation(),
+                Indication::UppercaseStartWord => indicator.start_word_translation(),
+                Indication::UppercaseEndWord => indicator.end_word_translation(),
                 _ => unreachable!(),
-            };
-            Some(Translation::new("".to_string(), indicator_sign, 1, None)) // FIXME: add the indicator rule here
+            }
         } else {
             None
         }

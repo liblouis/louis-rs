@@ -52,20 +52,23 @@ Trace a translation:
 #+BEGIN_SRC shell
   $ export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
   $ cargo run -- translate --tracing ~/src/liblouis/tables/en-us-g2.ctb
-  > it's about the blind
-  ⠭⠄⠎⠀⠁⠃⠀⠹⠑⠀⠃⠇
-  ┌───┬───────┬─────┬───────────────┐
-  │   │ From  │ To  │ Rule          │
-  ├───┼───────┼─────┼───────────────┤
-  │ 0 │ it's  │ ⠭⠄⠎ │ word it's ⠭⠄⠎ │
-  │ 1 │       │ ⠀   │ space   ⠀     │
-  │ 2 │ about │ ⠁⠃  │ word about ⠁⠃ │
-  │ 3 │       │ ⠀   │ space   ⠀     │
-  │ 4 │ th    │ ⠹   │ always th ⠹   │
-  │ 5 │ e     │ ⠑   │ lowercase e ⠑ │
-  │ 6 │       │ ⠀   │ space   ⠀     │
-  │ 7 │ blind │ ⠃⠇  │ word blind ⠃⠇ │
-  └───┴───────┴─────┴───────────────┘
+  > It's about the blind
+  ⠠⠊⠞⠄⠎⠀⠁⠃⠀⠹⠑⠀⠃⠇
+  ┌────┬───────┬────┬────────────────────┐
+  │    │ From  │ To │ Rule               │
+  ├────┼───────┼────┼────────────────────┤
+  │ 0  │       │ ⠠  │ capsletter ⠠       │
+  │ 1  │ I     │ ⠊  │ base uppercase I i │
+  │ 2  │ t     │ ⠞  │ lowercase t ⠞      │
+  │ 3  │ 's    │ ⠄⠎ │ endword 's ⠄⠎      │
+  │ 4  │       │ ⠀  │ space   ⠀          │
+  │ 5  │ about │ ⠁⠃ │ word about ⠁⠃      │
+  │ 6  │       │ ⠀  │ space   ⠀          │
+  │ 7  │ th    │ ⠹  │ always th ⠹        │
+  │ 8  │ e     │ ⠑  │ lowercase e ⠑      │
+  │ 9  │       │ ⠀  │ space   ⠀          │
+  │ 10 │ blind │ ⠃⠇ │ word blind ⠃⠇      │
+  └────┴───────┴────┴────────────────────┘
   > 123st
   ⠼⠁⠃⠉⠌
   ┌───┬──────┬────┬──────────────┐

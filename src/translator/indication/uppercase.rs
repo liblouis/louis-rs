@@ -2,9 +2,9 @@
 //!
 //! [`Indicator`] is a simple state machine to keep track of the state of a translation. As soon as
 //! a character is encountered that is in the set of [`Indicator::uppercase_chars`] the state is
-//! changed to [`State::UppercaseSingle`] or [`State::UppercaseMulti`]. When a character is
-//! encountered that is not in [`Indicator::uppercase_chars`] the state is changed back to
-//! [`State::Default`].
+//! changed to an uppercase state ([`State::UppercaseSingle`] or [`State::UppercaseMulti`]). When a
+//! character is encountered that is not in [`Indicator::uppercase_chars`] the state is changed back
+//! to [`State::Default`].
 //!
 //! An indication for a start is only emitted if there is a [`Indicator::start_indicator`] and the
 //! state is changed to `State::Uppercase`.
@@ -12,7 +12,10 @@
 //! Indication for the end is only emitted if there is a [`Indicator::end_indicator`] and the state
 //! is changed to `State::Default`.
 
-use crate::translator::indication::Indication;
+use crate::{
+    parser::AnchoredRule,
+    translator::{Translation, indication::Indication},
+};
 
 use std::collections::HashSet;
 
@@ -34,12 +37,12 @@ impl IndicatorBuilder {
             state: State::Default,
             uppercase_chars: HashSet::default(),
             extra_uppercase_chars: HashSet::default(),
-            start_indicator: None,
-            end_indicator: None,
+            start_translation: None,
+            end_translation: None,
             terminating_chars: HashSet::default(),
-            start_letter_indicator: None,
-            start_word_indicator: None,
-            end_word_indicator: None,
+            start_letter_translation: None,
+            start_word_translation: None,
+            end_word_translation: None,
         })
     }
 
@@ -47,28 +50,53 @@ impl IndicatorBuilder {
         self.0
     }
 
-    pub fn capsletter(mut self, s: &str) -> Self {
-        self.0.start_letter_indicator = Some(s.to_string());
+    pub fn capsletter(mut self, s: &str, origin: &AnchoredRule) -> Self {
+        self.0.start_letter_translation = Some(Translation::new(
+            "".to_string(),
+            s.to_string(),
+            1,
+            origin.clone(),
+        ));
         self
     }
 
-    pub fn begcapsword(mut self, s: &str) -> Self {
-        self.0.start_word_indicator = Some(s.to_string());
+    pub fn begcapsword(mut self, s: &str, origin: &AnchoredRule) -> Self {
+        self.0.start_word_translation = Some(Translation::new(
+            "".to_string(),
+            s.to_string(),
+            1,
+            origin.clone(),
+        ));
         self
     }
 
-    pub fn endcapsword(mut self, s: &str) -> Self {
-        self.0.end_word_indicator = Some(s.to_string());
+    pub fn endcapsword(mut self, s: &str, origin: &AnchoredRule) -> Self {
+        self.0.end_word_translation = Some(Translation::new(
+            "".to_string(),
+            s.to_string(),
+            1,
+            origin.clone(),
+        ));
         self
     }
 
-    pub fn begcaps(mut self, s: &str) -> Self {
-        self.0.start_indicator = Some(s.to_string());
+    pub fn begcaps(mut self, s: &str, origin: &AnchoredRule) -> Self {
+        self.0.start_translation = Some(Translation::new(
+            "".to_string(),
+            s.to_string(),
+            1,
+            origin.clone(),
+        ));
         self
     }
 
-    pub fn endcaps(mut self, s: &str) -> Self {
-        self.0.end_indicator = Some(s.to_string());
+    pub fn endcaps(mut self, s: &str, origin: &AnchoredRule) -> Self {
+        self.0.end_translation = Some(Translation::new(
+            "".to_string(),
+            s.to_string(),
+            1,
+            origin.clone(),
+        ));
         self
     }
 
@@ -93,11 +121,11 @@ pub struct Indicator {
     state: State,
     uppercase_chars: HashSet<char>,
     extra_uppercase_chars: HashSet<char>,
-    start_letter_indicator: Option<String>,
-    start_word_indicator: Option<String>,
-    end_word_indicator: Option<String>,
-    start_indicator: Option<String>,
-    end_indicator: Option<String>,
+    start_letter_translation: Option<Translation>,
+    start_word_translation: Option<Translation>,
+    end_word_translation: Option<Translation>,
+    start_translation: Option<Translation>,
+    end_translation: Option<Translation>,
     terminating_chars: HashSet<char>,
 }
 
@@ -128,9 +156,9 @@ impl Indicator {
                     // FIXME: Not sure if we can deduce that the whole word is
                     // uppercase by just looking at the first two characters
                     self.state = State::UppercaseMulti;
-                    if self.start_word_indicator.is_some() {
+                    if self.start_word_translation.is_some() {
                         Some(Indication::UppercaseStartWord)
-                    } else if self.start_letter_indicator.is_some() {
+                    } else if self.start_letter_translation.is_some() {
                         Some(Indication::UppercaseStartLetter)
                     } else {
                         None
@@ -138,7 +166,7 @@ impl Indicator {
                 } else {
                     // looks like it was just a single uppercase letter
                     self.state = State::UppercaseSingle;
-                    if self.start_letter_indicator.is_some() {
+                    if self.start_letter_translation.is_some() {
                         Some(Indication::UppercaseStartLetter)
                     } else {
                         None
@@ -154,7 +182,8 @@ impl Indicator {
                 self.state = State::Default;
                 // only indicate the end of uppercase if there is an end_indicator and the next char
                 // is a letter
-                if self.end_word_indicator.is_some() && self.terminating_chars.contains(&c.unwrap())
+                if self.end_word_translation.is_some()
+                    && self.terminating_chars.contains(&c.unwrap())
                 {
                     Some(Indication::UppercaseEndWord)
                 } else {
@@ -166,36 +195,43 @@ impl Indicator {
     }
 
     fn is_indicating(&self) -> bool {
-        self.start_letter_indicator.is_some()
-            || self.start_word_indicator.is_some()
-            || self.start_indicator.is_some()
+        self.start_letter_translation.is_some()
+            || self.start_word_translation.is_some()
+            || self.start_translation.is_some()
     }
 
-    pub fn start_indicator(&self) -> Option<String> {
-        self.start_indicator.clone()
+    pub fn start_translation(&self) -> Option<Translation> {
+        self.start_translation.clone()
     }
-    pub fn end_indicator(&self) -> Option<String> {
-        self.end_indicator.clone()
+    pub fn end_translation(&self) -> Option<Translation> {
+        self.end_translation.clone()
     }
-    pub fn start_letter_indicator(&self) -> Option<String> {
-        self.start_letter_indicator.clone()
+    pub fn start_letter_translation(&self) -> Option<Translation> {
+        self.start_letter_translation.clone()
     }
-    pub fn start_word_indicator(&self) -> Option<String> {
-        self.start_word_indicator.clone()
+    pub fn start_word_translation(&self) -> Option<Translation> {
+        self.start_word_translation.clone()
     }
-    pub fn end_word_indicator(&self) -> Option<String> {
-        self.end_word_indicator.clone()
+    pub fn end_word_translation(&self) -> Option<Translation> {
+        self.end_word_translation.clone()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::RuleParser;
+
+    // just create some fake anchored rule for testing purposes
+    fn fake_rule() -> AnchoredRule {
+        let rule = RuleParser::new("always foo 1").rule().unwrap();
+        AnchoredRule::new(rule, None, 0)
+    }
 
     #[test]
     fn indicator() {
         let builder = IndicatorBuilder::new()
-            .capsletter("⠸")
+            .capsletter("⠸", &fake_rule())
             .uppercase_characters(HashSet::from(['A', 'B', 'C']))
             .letter_characters(HashSet::from(['a', 'b', 'c']));
         let mut indicator = builder.build();
@@ -212,8 +248,8 @@ mod tests {
     #[test]
     fn end_indication() {
         let builder = IndicatorBuilder::new()
-            .begcapsword("⠸")
-            .endcapsword("⠠")
+            .begcapsword("⠸", &fake_rule())
+            .endcapsword("⠠", &fake_rule())
             .uppercase_characters(HashSet::from(['A', 'B', 'C']))
             .letter_characters(HashSet::from(['a', 'b', 'c']));
         let mut indicator = builder.build();
