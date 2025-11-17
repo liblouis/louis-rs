@@ -1,3 +1,5 @@
+//! A parser for [liblouis](https://liblouis.io) YAML test files
+
 use std::{collections::HashMap, fs::File, iter::Peekable, num::ParseIntError, path::PathBuf};
 
 use crate::{parser, parser::EscapingContext, parser::unescape};

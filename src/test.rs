@@ -1,3 +1,5 @@
+//! A test runner for tests defined in [liblouis](https://liblouis.io) YAML test files
+
 use std::{collections::HashMap, path::PathBuf};
 
 use enumset::{EnumSet, EnumSetType};
@@ -69,11 +71,16 @@ impl TestResult {
     }
 }
 
+/// A group of [`Tests`](Test) that share the same braille table(s), display table and test mode.
 #[derive(Debug)]
 pub struct TestMatrix<'a> {
+    /// The display table used for the translation tests
     display: &'a Option<Display>,
+    /// The braille table(s) used for the translation tests
     tables: &'a Vec<Table>,
+    /// The test mode used for the translation tests
     mode: &'a TestMode,
+    /// The tests used for the translation tests
     tests: &'a Vec<Test>,
 }
 
@@ -178,18 +185,26 @@ impl<'a> TestMatrix<'a> {
     }
 }
 
+/// A braille table to be used in a [`Test`].
 #[derive(Debug)]
 pub enum Table {
+    /// A (file based) braille table
     Simple(PathBuf),
     Query(TableQuery),
+    /// A list of (file based) braille tables
     List(Vec<PathBuf>),
+    /// A braille table that is defined inline in the YAML file
     Inline(String),
 }
 
+/// A display table to be used in a [`Test`].
 #[derive(Debug)]
 pub enum Display {
+    /// A single (file based) display table
     Simple(PathBuf),
+    /// A list of (file based) display tables
     List(Vec<PathBuf>),
+    /// A display table that is defined inline in the YAML file
     Inline(String),
 }
 
@@ -233,10 +248,14 @@ impl ExpectedFailure {
     }
 }
 
+/// A test to verify a braille translation.$
 #[derive(Debug, Clone)]
 pub struct Test {
+    /// Input for the test
     input: String,
+    /// Expected output of the test
     expected: String,
+    /// Is the test expected to fail?
     xfail: ExpectedFailure,
     typeform: Typeform,
     input_pos: Vec<u16>,

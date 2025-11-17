@@ -28,15 +28,17 @@ use tabled::{
 };
 use yaml::YAMLParser;
 
+/// The commands available in the command line tool.
 #[derive(Debug, Subcommand)]
 enum Commands {
-    /// Parse and print debug information about the given table <TABLE>
+    /// Parse and print debug information about the given `table`.
     Parse {
         /// Braille table to parse. If no table is specified, a REPL
         /// is opened and each line you enter is parsed.
         table: Option<PathBuf>,
     },
-    /// translate <INPUT> to braille using <TABLE>
+    /// Translate `input` using the specified braille `table`. If `direction` is not specified the
+    /// `input` is translated to braille, otherwise the `input` is translated from braille to text.
     Translate {
         /// Braille table to use for the translation
         table: PathBuf,
@@ -50,7 +52,7 @@ enum Commands {
         #[arg(short, long)]
         tracing: bool,
     },
-    /// Test braille translations from given <YAML> file(s)
+    /// Test braille translations from given YAML file(s).
     Check {
         /// Only show a summary of the test results
         #[arg(short, long)]
@@ -60,7 +62,7 @@ enum Commands {
         yaml_files: Vec<PathBuf>,
     },
     /// Find braille tables based on a metadata query. The tables are
-    /// searched in the the search path `LOUIS_TABLE_PATH`
+    /// searched in the the search path `LOUIS_TABLE_PATH`.
     Query {
         /// Metadata search query <key=value,...>
         query: String,

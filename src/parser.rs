@@ -1,3 +1,5 @@
+//! A parser for [liblouis](https://liblouis.io) braille tables
+
 use std::{
     collections::HashSet,
     ffi::OsStr,
@@ -27,10 +29,17 @@ mod braille;
 mod match_rule;
 mod multipass;
 
+/// A restriction that applies to a [`Rule`].
+///
+/// Rules can have optional restrictions, for example they could only
+/// apply in forward translation.
 #[derive(EnumSetType, Debug)]
 pub enum Constraint {
+    /// Not applied when translating text to braille
     Nofor,
+    /// Not applied when translating braille to text
     Noback,
+    /// Not applied when the translation crosses a sylable boundary
     Nocross,
 }
 
@@ -44,6 +53,9 @@ impl std::fmt::Display for Constraint {
     }
 }
 
+/// A set of [`Constraint`]s.
+///
+/// A tiny facade around an [`EnumSet`] of [`Constraint`].
 #[derive(Debug, PartialEq, Clone, Copy)]
 struct Constraints(EnumSet<Constraint>);
 
@@ -73,6 +85,10 @@ impl Constraints {
     }
 }
 
+/// Creates a [`Constraints`] facade wrapper around an [`EnumSet`].
+///
+/// This is a convenience macro that wraps the [`enum_set!`] macro
+/// to create constraint sets more concisely.
 macro_rules! constraint_set {
     ($($args:tt)*) => {
         Constraints(enum_set!($($args)*))
@@ -93,6 +109,11 @@ impl std::fmt::Display for Constraints {
 /// A set of [`Constraints`](Constraint) that contains both directions
 const ANY_DIRECTION: Constraints = constraint_set!(Constraint::Nofor | Constraint::Noback);
 
+/// A direction for a [`Rule`].
+///
+/// Rules always have at least one direction. They are used for
+/// forward translation, for backward translation or for both
+/// directions. The concept of direction is related to [`Constraint`].
 #[derive(EnumSetType, Debug, clap::ValueEnum)]
 pub enum Direction {
     Forward,
@@ -746,36 +767,58 @@ impl std::fmt::Display for Rule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Rule::Undefined { dots } => write!(f, "undefined {}", dots_to_unicode(dots)),
-            Rule::Space { character, dots, .. } => {
+            Rule::Space {
+                character, dots, ..
+            } => {
                 write!(f, "space {} {}", character, dots_to_unicode(dots))
-            },
-            Rule::Punctuation { character, dots, .. } => {
+            }
+            Rule::Punctuation {
+                character, dots, ..
+            } => {
                 write!(f, "punctuation {} {}", character, dots_to_unicode(dots))
-            },
-            Rule::Digit { character, dots, .. } => {
+            }
+            Rule::Digit {
+                character, dots, ..
+            } => {
                 write!(f, "digit {} {}", character, dots_to_unicode(dots))
-            },
-            Rule::Letter { character, dots, .. } => {
+            }
+            Rule::Letter {
+                character, dots, ..
+            } => {
                 write!(f, "letter {} {}", character, dots_to_unicode(dots))
-            },
-            Rule::Base { name, derived, base } => {
+            }
+            Rule::Base {
+                name,
+                derived,
+                base,
+            } => {
                 write!(f, "base {} {} {}", name, derived, base)
-            },
-            Rule::Lowercase { character, dots, .. } => {
+            }
+            Rule::Lowercase {
+                character, dots, ..
+            } => {
                 write!(f, "lowercase {} {}", character, dots_to_unicode(dots))
-            },
-            Rule::Uppercase { character, dots, .. } => {
+            }
+            Rule::Uppercase {
+                character, dots, ..
+            } => {
                 write!(f, "uppercase {} {}", character, dots_to_unicode(dots))
-            },
-            Rule::Litdigit { character, dots, .. } => {
+            }
+            Rule::Litdigit {
+                character, dots, ..
+            } => {
                 write!(f, "litdigit {} {}", character, dots_to_unicode(dots))
-            },
-            Rule::Sign { character, dots, .. } => {
+            }
+            Rule::Sign {
+                character, dots, ..
+            } => {
                 write!(f, "sign {} {}", character, dots_to_unicode(dots))
-            },
-            Rule::Math { character, dots, .. } => {
+            }
+            Rule::Math {
+                character, dots, ..
+            } => {
                 write!(f, "math {} {}", character, dots_to_unicode(dots))
-            },
+            }
             Rule::Letsign { dots } => write!(f, "letsign {}", dots_to_unicode(dots)),
             Rule::Noletsign { chars } => write!(f, "noletsign {}", chars),
             Rule::Numsign { dots } => write!(f, "numsign {}", dots_to_unicode(dots)),
@@ -783,7 +826,9 @@ impl std::fmt::Display for Rule {
             Rule::Compbrl { chars, .. } => write!(f, "compbrl {}", chars),
             Rule::Comp6 { chars, dots } => write!(f, "comp6 {} {}", chars, dots),
             Rule::Always { chars, dots, .. } => write!(f, "always {} {}", chars, dots),
-            Rule::Largesign { chars, dots } => write!(f, "largesign {} {}", chars, dots_to_unicode(dots)),
+            Rule::Largesign { chars, dots } => {
+                write!(f, "largesign {} {}", chars, dots_to_unicode(dots))
+            }
             Rule::Word { chars, dots, .. } => write!(f, "word {} {}", chars, dots),
             Rule::Contraction { chars } => write!(f, "contraction {}", chars),
             Rule::Begword { chars, dots, .. } => write!(f, "begword {} {}", chars, dots),
@@ -792,16 +837,18 @@ impl std::fmt::Display for Rule {
             Rule::Midendword { chars, dots, .. } => write!(f, "midendword {} {}", chars, dots),
             Rule::Endword { chars, dots, .. } => write!(f, "endword {} {}", chars, dots),
             Rule::Partword { chars, dots, .. } => write!(f, "partword {} {}", chars, dots),
-	    Rule::Endnum { chars, dots, .. } => write!(f, "endnum {} {}", chars, dots),
-	    _ => todo!()
-	}
+            Rule::Endnum { chars, dots, .. } => write!(f, "endnum {} {}", chars, dots),
+            _ => todo!(),
+        }
     }
 }
 
+/// A trait to query the direction of a [`Rule`].
 pub trait HasDirection {
+    /// Returns the set of directions associated with this Rule.
     fn directions(&self) -> EnumSet<Direction>;
 
-    // Convenience method
+    /// Checks if this Rule has the specified direction.
     fn is_direction(&self, direction: Direction) -> bool {
         self.directions().contains(direction)
     }
@@ -869,13 +916,17 @@ impl HasDirection for Rule {
     }
 }
 
+/// Defines precedence levels for [`Rules`](Rule).
 #[derive(Debug, Default, Clone, PartialEq, PartialOrd)]
 pub enum Precedence {
     #[default]
     Default,
     Translation,
 }
+
+/// A trait to query the precedence of a [`Rule`].
 pub trait HasPrecedence {
+    /// Returns the precedence level of this Rule.
     fn precedence(&self) -> Precedence;
 }
 
@@ -978,7 +1029,7 @@ pub fn unescape(s: &str, context: EscapingContext) -> Result<String, ParseError>
     Ok(new)
 }
 
-/// Return an error if actual contains more constraints than expected
+/// Return an error if `actual` contains more constraints than `expected`
 fn fail_if_invalid_constraints(
     expected: Constraints,
     actual: Constraints,
@@ -2106,6 +2157,7 @@ pub enum TableError {
     FormatNotSupported(PathBuf),
 }
 
+/// A [`Rule`] combined with information about which table file it originated from.
 #[derive(PartialEq, Debug, Clone)]
 pub struct AnchoredRule {
     pub rule: Rule,
