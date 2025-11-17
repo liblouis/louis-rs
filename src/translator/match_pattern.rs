@@ -1,3 +1,5 @@
+//! Store and find match rules using a simple regexp engine ([`nfa`](crate::translator::nfa))
+
 use std::collections::HashSet;
 
 use crate::parser::{AnchoredRule, Attribute, Pattern, Patterns};

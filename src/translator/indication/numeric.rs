@@ -6,10 +6,10 @@
 //! [`Indicator::numeric_chars`] nor in [`Indicator::extra_numeric_chars`] the state is changed back
 //! to [`State::Default`]
 //!
-//! An indication for a start is only emitted if there is a [`Indicator::start_indicator`] and the
+//! An indication for a start is only emitted if there is a [`Indicator::start_translation`] and the
 //! state is changed to `State::Numeric`.
 //!
-//! Indication for the end is only emitted if there is a [`Indicator::end_indicator`], the state is
+//! Indication for the end is only emitted if there is a [`Indicator::end_translation`], the state is
 //! changed to `State::Default` and the character encountered is in the set of
 //! [`Indicator::terminating_chars`].
 

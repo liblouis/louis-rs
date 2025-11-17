@@ -1,3 +1,5 @@
+//! Store and find simple translation rules using a prefix tree ([Trie](https://en.wikipedia.org/wiki/Trie))
+
 use std::collections::HashMap;
 
 use crate::{

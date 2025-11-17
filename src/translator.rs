@@ -1,3 +1,5 @@
+//! A braille translator that uses [liblouis](https://liblouis.io) braille tables
+
 use std::collections::{HashMap, HashSet};
 
 use match_pattern::MatchPatterns;

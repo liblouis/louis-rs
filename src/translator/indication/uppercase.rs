@@ -2,8 +2,9 @@
 //!
 //! [`Indicator`] is a simple state machine to keep track of the state of a translation. As soon as
 //! a character is encountered that is in the set of [`Indicator::uppercase_chars`] the state is
-//! changed to [`State::Uppercase`]. When a character is encountered that is not in
-//! [`Indicator::uppercase_chars`] the state is changed back to [`State::Default`].
+//! changed to [`State::UppercaseSingle`] or [`State::UppercaseMulti`]. When a character is
+//! encountered that is not in [`Indicator::uppercase_chars`] the state is changed back to
+//! [`State::Default`].
 //!
 //! An indication for a start is only emitted if there is a [`Indicator::start_indicator`] and the
 //! state is changed to `State::Uppercase`.
