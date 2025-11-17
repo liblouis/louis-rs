@@ -90,7 +90,8 @@ impl std::fmt::Display for Constraints {
     }
 }
 
-const DIRECTIONS: Constraints = constraint_set!(Constraint::Nofor | Constraint::Noback);
+/// A set of [`Constraints`](Constraint) that contains both directions
+const ANY_DIRECTION: Constraints = constraint_set!(Constraint::Nofor | Constraint::Noback);
 
 #[derive(EnumSetType, Debug, clap::ValueEnum)]
 pub enum Direction {
@@ -1400,7 +1401,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Display => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Display {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1408,7 +1409,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Multind => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Multind {
                     dots: self.explicit_dots()?,
                     names: self.many_names()?,
@@ -1416,7 +1417,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Space => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Space {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1424,7 +1425,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Punctuation => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Punctuation {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1432,7 +1433,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Digit => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Digit {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1440,7 +1441,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Grouping => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Grouping {
                     name: self.name()?,
                     chars: self.chars()?,
@@ -1448,7 +1449,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Letter => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Letter {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1464,7 +1465,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Lowercase => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Lowercase {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1472,7 +1473,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Uppercase => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Uppercase {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1480,7 +1481,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Litdigit => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Litdigit {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1488,7 +1489,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Sign => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Sign {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1496,7 +1497,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Math => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Math {
                     character: self.one_char()?,
                     dots: self.explicit_dots()?,
@@ -1505,7 +1506,7 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Modeletter => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Modeletter {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
@@ -1513,14 +1514,14 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Capsletter => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Capsletter {
                     dots: self.explicit_dots()?,
                     constraints,
                 }
             }
             Opcode::Begmodeword => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Begmodeword {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
@@ -1528,14 +1529,14 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Begcapsword => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Begcapsword {
                     dots: self.explicit_dots()?,
                     constraints,
                 }
             }
             Opcode::Endcapsword => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Endcapsword {
                     dots: self.explicit_dots()?,
                     constraints,
@@ -1705,7 +1706,7 @@ impl<'a> RuleParser<'a> {
                 Rule::Emphclass { name: self.name()? }
             }
             Opcode::Begemph => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Begemph {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
@@ -1713,7 +1714,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Endemph => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Endemph {
                     name: self.name()?,
                     dots: self.explicit_dots()?,
@@ -1779,14 +1780,14 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Begcomp => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Begcomp {
                     dots: self.explicit_dots()?,
                     constraints,
                 }
             }
             Opcode::Endcomp => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Endcomp {
                     dots: self.explicit_dots()?,
                     constraints,
@@ -1801,7 +1802,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Hyphen => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Hyphen {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
@@ -1815,7 +1816,7 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Compbrl => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Compbrl {
                     chars: self.chars()?,
                     constraints,
@@ -1847,7 +1848,7 @@ impl<'a> RuleParser<'a> {
                 constraints,
             },
             Opcode::Repeated => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Repeated {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
@@ -1881,7 +1882,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Word => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Word {
                     chars: self.chars()?,
                     dots: self.dots()?,
@@ -1903,7 +1904,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Lowword => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Lowword {
                     chars: self.chars()?,
                     dots: self.explicit_dots()?,
@@ -2027,7 +2028,7 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Context => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Context {
                     test: self.multipass_test()?,
                     action: self.multipass_action()?,
@@ -2035,7 +2036,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Pass2 => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Pass2 {
                     test: self.multipass_test()?,
                     action: self.multipass_action()?,
@@ -2043,7 +2044,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Pass3 => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Pass3 {
                     test: self.multipass_test()?,
                     action: self.multipass_action()?,
@@ -2051,7 +2052,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Pass4 => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Pass4 {
                     test: self.multipass_test()?,
                     action: self.multipass_action()?,
@@ -2059,7 +2060,7 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Correct => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Correct {
                     test: self.multipass_test()?,
                     action: self.multipass_action()?,
@@ -2068,7 +2069,7 @@ impl<'a> RuleParser<'a> {
             }
 
             Opcode::Match => {
-                fail_if_invalid_constraints(DIRECTIONS, constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Match {
                     pre: self.match_pre()?,
                     chars: self.chars()?,
