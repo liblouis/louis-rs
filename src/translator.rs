@@ -11,7 +11,7 @@ use crate::parser::Precedence;
 use crate::parser::{AnchoredRule, Attribute, Braille, Direction, Rule, dots_to_unicode, fallback};
 
 use self::trie::Boundary;
-use indication::{Indication, numeric, uppercase};
+use indication::{Indication, lettersign, numeric, uppercase};
 
 mod boundaries;
 mod indication;
@@ -227,6 +227,7 @@ pub struct TranslationTable {
     match_patterns: MatchPatterns,
     numeric_indicator: numeric::Indicator,
     uppercase_indicator: uppercase::Indicator,
+    lettersign_indicator: lettersign::Indicator,
     direction: Direction,
 }
 
@@ -243,6 +244,7 @@ impl TranslationTable {
         let mut match_patterns = MatchPatterns::new();
         let mut numeric_indicator_builder = numeric::IndicatorBuilder::new();
         let mut uppercase_indicator_builder = uppercase::IndicatorBuilder::new();
+        let mut lettersign_indicator_builder = lettersign::IndicatorBuilder::new();
 
         let rules: Vec<AnchoredRule> = rules
             .into_iter()
@@ -430,6 +432,14 @@ impl TranslationTable {
                 }
                 Rule::Capsmodechars { chars } => {
                     uppercase_indicator_builder = uppercase_indicator_builder.capsmodechars(&chars);
+                }
+                Rule::Letsign { dots } => {
+                    lettersign_indicator_builder =
+                        lettersign_indicator_builder.letsign(&dots_to_unicode(dots), rule);
+                }
+                Rule::Contraction { chars } => {
+                    lettersign_indicator_builder =
+                        lettersign_indicator_builder.contraction(&chars, rule);
                 }
                 // display rules are ignored for translation tables
                 Rule::Display { .. } => (),
@@ -644,6 +654,7 @@ impl TranslationTable {
             match_patterns,
             numeric_indicator: numeric_indicator_builder.build(),
             uppercase_indicator: uppercase_indicator_builder.build(),
+            lettersign_indicator: lettersign_indicator_builder.build(),
         })
     }
 
@@ -709,6 +720,9 @@ impl TranslationTable {
 
         loop {
             // Check if there is a need for an indication
+            if let Some(translation) = self.lettersign_indicator.next(chars.as_str(), prev) {
+                translations.push(translation);
+            }
             if let Some(translation) =
                 self.numeric_indication(chars.as_str(), &mut numeric_indicator)
             {
@@ -1121,6 +1135,32 @@ mod tests {
         assert_eq!(table.translate("Abc"), "⠨⠁⠃⠉");
         assert_eq!(table.translate("ABC"), "⠠⠠⠁⠃⠉");
     }
+
+    #[test]
+    fn lettersign_indication() {
+        let rules = vec![
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 12"),
+            parse_rule("lowercase c 14"),
+            parse_rule("lowercase d 145"),
+            parse_rule("lowercase e 15"),
+            parse_rule("lowercase f 124"),
+            parse_rule("lowercase o 135"),
+            parse_rule("lowercase u 136"),
+            parse_rule("lowercase t 2345"),
+            parse_rule("letsign 6"),
+            parse_rule("word about 1-12"),
+            parse_rule("contraction ab"),
+            parse_rule("contraction cd"),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
+        assert_eq!(table.translate("about"), "⠁⠃");
+        assert_eq!(table.translate("ab"), "⠠⠁⠃");
+        assert_eq!(table.translate("cd"), "⠠⠉⠙");
+        assert_eq!(table.translate("abcd"), "⠁⠃⠉⠙");
+        assert_eq!(table.translate("ef"), "⠑⠋");
+    }
+
     #[test]
     fn backtranslation() {
         let rules = vec![

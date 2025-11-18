@@ -16,6 +16,7 @@
 //! * [`numeric::Indicator`]: knowns whether the translation is in numeric mode
 //! * [`uppercase::Indicator`]: knowns whether the translation is in uppercase mode
 
+pub mod lettersign;
 pub mod numeric;
 pub mod uppercase;
 
@@ -31,4 +32,5 @@ pub enum Indication {
     UppercaseEnd,
     EmphasisStart,
     EmphasisEnd,
+    LetterSign,
 }
