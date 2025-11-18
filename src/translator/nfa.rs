@@ -27,8 +27,6 @@ enum Transition {
     Character(char),
     /// A transition that accepts any character
     Any,
-    /// An epsilon transition that accepts the empty string
-    Epsilon,
     /// An Offset transition is essentially an epsilon transition that marks the end of a
     /// non-capturing group. It is used to mark the end of the pre pattern in match rules
     Offset,
@@ -411,7 +409,6 @@ pub fn nfa_dot(nfa: &NFA) -> String {
             Transition::Offset => {
                 dot.push_str(&format!("\t{} -> {} [label=\"{}\"]\n", from, to, "Offset"))
             }
-            Transition::Epsilon => unreachable!(),
         }
     }
     for (from, tos) in nfa.epsilon_transitions.iter() {

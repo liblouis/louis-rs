@@ -57,7 +57,7 @@ impl std::fmt::Display for Constraint {
 ///
 /// A tiny facade around an [`EnumSet`] of [`Constraint`].
 #[derive(Debug, PartialEq, Clone, Copy)]
-struct Constraints(EnumSet<Constraint>);
+pub struct Constraints(EnumSet<Constraint>);
 
 impl Constraints {
     fn contains(&self, value: Constraint) -> bool {
@@ -837,7 +837,6 @@ impl std::fmt::Display for Rule {
             Rule::Midendword { chars, dots, .. } => write!(f, "midendword {} {}", chars, dots),
             Rule::Endword { chars, dots, .. } => write!(f, "endword {} {}", chars, dots),
             Rule::Partword { chars, dots, .. } => write!(f, "partword {} {}", chars, dots),
-            Rule::Endnum { chars, dots, .. } => write!(f, "endnum {} {}", chars, dots),
             Rule::Endnum { chars, dots, .. } => write!(f, "endnum {} {}", chars, dots),
             Rule::Capsletter { dots, .. } => write!(f, "capsletter {}", dots_to_unicode(dots)),
             Rule::Begcapsword { dots, .. } => write!(f, "begcapsword {}", dots_to_unicode(dots)),
