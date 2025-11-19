@@ -201,12 +201,7 @@ mod tests {
         let mut indicator = builder.build();
         assert_eq!(
             indicator.next("Abc ".into()),
-            Some(Translation::new(
-                "".to_string(),
-                "⠇".to_string(),
-                1,
-                Some(rule)
-            ))
+            Some(Translation::new("".to_string(), "⠇".to_string(), 1, rule,))
         );
         assert_eq!(indicator.next("bc ".into()), None);
         assert_eq!(indicator.next("c ".into()), None);
@@ -232,7 +227,7 @@ mod tests {
                 "".to_string(),
                 "⠇".to_string(),
                 1,
-                Some(begcapsword_rule)
+                begcapsword_rule,
             ))
         );
         assert_eq!(indicator.next("BCa".into()), None);
@@ -243,7 +238,7 @@ mod tests {
                 "".to_string(),
                 "⠠".to_string(),
                 1,
-                Some(endcapsword_rule)
+                endcapsword_rule,
             ))
         );
         assert_eq!(indicator.next("".into()), None);
