@@ -6,11 +6,11 @@
 //! character is encountered that is not in [`Indicator::uppercase_chars`] the state is changed back
 //! to [`State::Default`].
 //!
-//! An indication for a start is only emitted if there is a [`Indicator::start_indicator`] and the
-//! state is changed to `State::Uppercase`.
+//! An indication for a start is only emitted if there is any indicators listed in the braille table
+//! [`Indicator::is_indicating`] and the state is changed to `State::Uppercase`.
 //!
-//! Indication for the end is only emitted if there is a [`Indicator::end_indicator`] and the state
-//! is changed to `State::Default`.
+//! An indication for the end is only emitted if there is any indicators listed in the braille table
+//! [`Indicator::is_indicating`] and the state is changed to `State::Default`.
 
 use crate::{
     parser::AnchoredRule,

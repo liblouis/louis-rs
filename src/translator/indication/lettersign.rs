@@ -1,9 +1,12 @@
-//! Letter sign braille indication
+//! Lettersign braille indication
 //!
-//! [`Indicator`] keeps a list of contractions in a prefix tree. If the input string contains any of
-//! these contractions a [`Translation`] is emitted containing the associated indicator.
-
-// FIXME: should the returned translation contain the letsign or the contraction rule?
+//! Sometimes a sequence of letters happens to be the same as a braille contraction. In that case an
+//! indication is needed to clarify the meaning. The lettersign indicator indicates that the
+//! following braille cells are not a contraction.
+//!
+//! Other than the rest of the indicators this [`Indicator`] is not a state machine. It keeps a list
+//! of contractions and matches the input against it. If a contraction appears in the input an
+//! indication is emitted.
 
 use log::warn;
 
