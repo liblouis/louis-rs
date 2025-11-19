@@ -10,7 +10,8 @@
 //!
 //! # FIXME:
 //!
-//! This indicator is basically the same as [`lettersign:Indicator`]. In liblouis they do not seem
+//! This indicator is basically the same as the [lettersign
+//! indicator](crate::translator::indication::lettersign::Indicator). In liblouis they do not seem
 //! to have exactly the same behaviour. Find a way to merge them.
 
 use crate::translator::trie::Boundary;
