@@ -17,9 +17,9 @@ using only character and most translation opcodes basically works.
 The original YAML test suite is supported and can be used to test the
 re-implementation.
 
-Currently, the re-implementation passes around 80% of the liblouis
+Currently, the re-implementation passes around 84% of the liblouis
 test suite for forward translation successfully. If you consider both
-forward and backward translation the success rate is less, namely 52%.
+forward and backward translation the success rate is less, namely 55%.
 
 * Relation to liblouis
 
