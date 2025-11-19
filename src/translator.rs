@@ -11,7 +11,7 @@ use crate::parser::Precedence;
 use crate::parser::{AnchoredRule, Attribute, Braille, Direction, Rule, dots_to_unicode, fallback};
 
 use self::trie::Boundary;
-use indication::{Indication, lettersign, numeric, uppercase};
+use indication::{lettersign, numeric, uppercase};
 
 mod boundaries;
 mod indication;
@@ -665,22 +665,6 @@ impl TranslationTable {
             .collect()
     }
 
-    fn numeric_indication(
-        &self,
-        input: &str,
-        indicator: &mut numeric::Indicator,
-    ) -> Option<Translation> {
-        if let Some(indication) = indicator.next(input) {
-            match indication {
-                Indication::NumericStart => indicator.start_translation(),
-                Indication::NumericEnd => indicator.end_translation(),
-                _ => unreachable!(),
-            }
-        } else {
-            None
-        }
-    }
-
     pub fn translate(&self, input: &str) -> String {
         self.trace(input)
             .iter()
@@ -704,9 +688,7 @@ impl TranslationTable {
             if let Some(translation) = self.lettersign_indicator.next(chars.as_str(), prev) {
                 translations.push(translation);
             }
-            if let Some(translation) =
-                self.numeric_indication(chars.as_str(), &mut numeric_indicator)
-            {
+            if let Some(translation) = numeric_indicator.next(chars.as_str()) {
                 translations.push(translation);
             }
             if let Some(translation) = uppercase_indicator.next(chars.as_str()) {
