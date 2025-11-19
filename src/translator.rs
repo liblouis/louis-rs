@@ -515,18 +515,6 @@ impl TranslationTable {
                         rule,
                     )
                 }
-                Rule::Sufword { chars, dots, .. } => {
-                    let dots = character_definitions.braille_to_unicode(dots, chars)?;
-                    trie.insert(
-                        chars.to_string(),
-                        dots,
-                        Boundary::Word,
-                        Boundary::None,
-                        direction,
-                        rule.precedence(),
-                        rule,
-                    );
-                }
                 Rule::Midword { chars, dots, .. } | Rule::Partword { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
                     trie.insert(
@@ -551,13 +539,59 @@ impl TranslationTable {
                         rule,
                     );
                 }
-                Rule::Endword { chars, dots, .. } | Rule::Prfword { chars, dots, .. } => {
+                Rule::Endword { chars, dots, .. } => {
                     let dots = character_definitions.braille_to_unicode(dots, chars)?;
                     trie.insert(
                         chars.to_string(),
                         dots,
                         Boundary::None,
                         Boundary::Word,
+                        direction,
+                        rule.precedence(),
+                        rule,
+                    );
+                }
+                Rule::Prfword { chars, dots, .. } => {
+                    let dots = character_definitions.braille_to_unicode(dots, chars)?;
+                    // a prfword is basically syntactic sugar for a word rule combined with an
+                    // endword rule. So just make the two appropriate insertions in the trie
+                    trie.insert(
+                        chars.to_string(),
+                        dots.clone(),
+                        Boundary::Word,
+                        Boundary::Word,
+                        direction,
+                        rule.precedence(),
+                        rule,
+                    );
+                    trie.insert(
+                        chars.to_string(),
+                        dots,
+                        Boundary::None,
+                        Boundary::Word,
+                        direction,
+                        rule.precedence(),
+                        rule,
+                    );
+                }
+                Rule::Sufword { chars, dots, .. } => {
+                    let dots = character_definitions.braille_to_unicode(dots, chars)?;
+                    // a sufword is basically syntactic sugar for a word rule combined with an
+                    // begword rule. So just make the two appropriate insertions in the trie
+                    trie.insert(
+                        chars.to_string(),
+                        dots.clone(),
+                        Boundary::Word,
+                        Boundary::Word,
+                        direction,
+                        rule.precedence(),
+                        rule,
+                    );
+                    trie.insert(
+                        chars.to_string(),
+                        dots,
+                        Boundary::Word,
+                        Boundary::None,
                         direction,
                         rule.precedence(),
                         rule,
@@ -947,6 +981,54 @@ mod tests {
         assert_eq!(table.translate("foobar foo"), "⠉⠂⠁⠐⠀⠉"); // bar should not be contracted
         assert_eq!(table.translate("foobar. foo"), "⠉⠂⠁⠐⠠⠀⠉"); // bar should not be contracted
         assert_eq!(table.translate("foo bar foo"), "⠉⠀⠂⠁⠐⠀⠉"); // bar should not be contracted
+    }
+
+    #[test]
+    fn sufword() {
+        let rules = vec![
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 2"),
+            parse_rule("lowercase f 3"),
+            parse_rule("lowercase o 4"),
+            parse_rule("lowercase r 5"),
+            parse_rule("punctuation . 6"),
+            parse_rule("always foo 14"),
+            parse_rule("sufword bar 15"),
+            parse_rule("space \\s 0"),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
+        assert_eq!(table.translate("bar"), "⠑"); // bar should be contracted
+        assert_eq!(table.translate("foobar"), "⠉⠂⠁⠐"); // bar should not be contracted
+        assert_eq!(table.translate("barfoo"), "⠑⠉"); // bar should be contracted
+        assert_eq!(table.translate("foobar."), "⠉⠂⠁⠐⠠"); // bar should not be contracted
+        assert_eq!(table.translate("foobarfoo"), "⠉⠂⠁⠐⠉"); // bar should not be contracted
+        assert_eq!(table.translate("foobar foo"), "⠉⠂⠁⠐⠀⠉"); // bar should not be contracted
+        assert_eq!(table.translate("foobar. foo"), "⠉⠂⠁⠐⠠⠀⠉"); // bar should not be contracted
+        assert_eq!(table.translate("foo bar foo"), "⠉⠀⠑⠀⠉"); // bar should be contracted
+    }
+
+    #[test]
+    fn prfword() {
+        let rules = vec![
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 2"),
+            parse_rule("lowercase f 3"),
+            parse_rule("lowercase o 4"),
+            parse_rule("lowercase r 5"),
+            parse_rule("punctuation . 6"),
+            parse_rule("always foo 14"),
+            parse_rule("prfword bar 15"),
+            parse_rule("space \\s 0"),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
+        assert_eq!(table.translate("bar"), "⠑"); // bar should be contracted
+        assert_eq!(table.translate("foobar"), "⠉⠑"); // bar should be contracted
+        assert_eq!(table.translate("barfoo"), "⠂⠁⠐⠉"); // bar should be not contracted
+        assert_eq!(table.translate("foobar."), "⠉⠑⠠"); // bar should be contracted
+        assert_eq!(table.translate("foobarfoo"), "⠉⠂⠁⠐⠉"); // bar should not be contracted
+        assert_eq!(table.translate("foobar foo"), "⠉⠑⠀⠉"); // bar should be contracted
+        assert_eq!(table.translate("foobar. foo"), "⠉⠑⠠⠀⠉"); // bar should be contracted
+        assert_eq!(table.translate("foo bar foo"), "⠉⠀⠑⠀⠉"); // bar should be contracted
     }
 
     #[test]
