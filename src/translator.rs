@@ -681,25 +681,6 @@ impl TranslationTable {
         }
     }
 
-    fn uppercase_indication(
-        &self,
-        input: &str,
-        indicator: &mut uppercase::Indicator,
-    ) -> Option<Translation> {
-        if let Some(indication) = indicator.next(input) {
-            match indication {
-                Indication::UppercaseStart => indicator.start_translation(),
-                Indication::UppercaseEnd => indicator.end_translation(),
-                Indication::UppercaseStartLetter => indicator.start_letter_translation(),
-                Indication::UppercaseStartWord => indicator.start_word_translation(),
-                Indication::UppercaseEndWord => indicator.end_word_translation(),
-                _ => unreachable!(),
-            }
-        } else {
-            None
-        }
-    }
-
     pub fn translate(&self, input: &str) -> String {
         self.trace(input)
             .iter()
@@ -728,9 +709,7 @@ impl TranslationTable {
             {
                 translations.push(translation);
             }
-            if let Some(translation) =
-                self.uppercase_indication(chars.as_str(), &mut uppercase_indicator)
-            {
+            if let Some(translation) = uppercase_indicator.next(chars.as_str()) {
                 translations.push(translation);
             }
             // given an input query the trie for matching translations. Then split off the

@@ -12,10 +12,7 @@
 //! An indication for the end is only emitted if there is any indicators listed in the braille table
 //! [`Indicator::is_indicating`] and the state is changed to `State::Default`.
 
-use crate::{
-    parser::AnchoredRule,
-    translator::{Translation, indication::Indication},
-};
+use crate::{parser::AnchoredRule, translator::Translation};
 
 use std::collections::HashSet;
 
@@ -136,10 +133,7 @@ impl Indicator {
     /// indicator only looks at the next character, but there are cases where
     /// the indicator wants a bigger look-ahead, so we take a `&str` as input
     /// instead of just a `char`.
-    ///
-    /// # Arguments
-    /// * `s` - A string slice containing the character(s) to process
-    pub fn next(&mut self, s: &str) -> Option<Indication> {
+    pub fn next(&mut self, s: &str) -> Option<Translation> {
         let mut chars = s.chars();
         let c = chars.next();
         if !self.is_indicating() || c.is_none() {
@@ -156,21 +150,13 @@ impl Indicator {
                     // FIXME: Not sure if we can deduce that the whole word is
                     // uppercase by just looking at the first two characters
                     self.state = State::UppercaseMulti;
-                    if self.start_word_translation.is_some() {
-                        Some(Indication::UppercaseStartWord)
-                    } else if self.start_letter_translation.is_some() {
-                        Some(Indication::UppercaseStartLetter)
-                    } else {
-                        None
-                    }
+                    self.start_word_translation
+                        .clone()
+                        .or(self.start_letter_translation.clone())
                 } else {
                     // looks like it was just a single uppercase letter
                     self.state = State::UppercaseSingle;
-                    if self.start_letter_translation.is_some() {
-                        Some(Indication::UppercaseStartLetter)
-                    } else {
-                        None
-                    }
+                    self.start_letter_translation.clone()
                 }
             }
             (State::UppercaseSingle, false) => {
@@ -182,10 +168,8 @@ impl Indicator {
                 self.state = State::Default;
                 // only indicate the end of uppercase if there is an end_indicator and the next char
                 // is a letter
-                if self.end_word_translation.is_some()
-                    && self.terminating_chars.contains(&c.unwrap())
-                {
-                    Some(Indication::UppercaseEndWord)
+                if self.terminating_chars.contains(&c.unwrap()) {
+                    self.end_word_translation.clone()
                 } else {
                     None
                 }
@@ -199,22 +183,6 @@ impl Indicator {
             || self.start_word_translation.is_some()
             || self.start_translation.is_some()
     }
-
-    pub fn start_translation(&self) -> Option<Translation> {
-        self.start_translation.clone()
-    }
-    pub fn end_translation(&self) -> Option<Translation> {
-        self.end_translation.clone()
-    }
-    pub fn start_letter_translation(&self) -> Option<Translation> {
-        self.start_letter_translation.clone()
-    }
-    pub fn start_word_translation(&self) -> Option<Translation> {
-        self.start_word_translation.clone()
-    }
-    pub fn end_word_translation(&self) -> Option<Translation> {
-        self.end_word_translation.clone()
-    }
 }
 
 #[cfg(test)]
@@ -222,22 +190,23 @@ mod tests {
     use super::*;
     use crate::parser::RuleParser;
 
-    // just create some fake anchored rule for testing purposes
-    fn fake_rule() -> AnchoredRule {
-        let rule = RuleParser::new("always foo 1").rule().unwrap();
-        AnchoredRule::new(rule, None, 0)
-    }
-
     #[test]
     fn indicator() {
+        let rule = RuleParser::new("capsletter 123").rule().unwrap();
+        let rule = AnchoredRule::new(rule, None, 0);
         let builder = IndicatorBuilder::new()
-            .capsletter("⠸", &fake_rule())
+            .capsletter("⠇", &rule)
             .uppercase_characters(HashSet::from(['A', 'B', 'C']))
             .letter_characters(HashSet::from(['a', 'b', 'c']));
         let mut indicator = builder.build();
         assert_eq!(
             indicator.next("Abc ".into()),
-            Some(Indication::UppercaseStartLetter)
+            Some(Translation::new(
+                "".to_string(),
+                "⠇".to_string(),
+                1,
+                Some(rule)
+            ))
         );
         assert_eq!(indicator.next("bc ".into()), None);
         assert_eq!(indicator.next("c ".into()), None);
@@ -247,21 +216,35 @@ mod tests {
 
     #[test]
     fn end_indication() {
+        let rule = RuleParser::new("begcapsword 123").rule().unwrap();
+        let begcapsword_rule = AnchoredRule::new(rule, None, 0);
+        let rule = RuleParser::new("endcapsword 6").rule().unwrap();
+        let endcapsword_rule = AnchoredRule::new(rule, None, 0);
         let builder = IndicatorBuilder::new()
-            .begcapsword("⠸", &fake_rule())
-            .endcapsword("⠠", &fake_rule())
+            .begcapsword("⠇", &begcapsword_rule)
+            .endcapsword("⠠", &endcapsword_rule)
             .uppercase_characters(HashSet::from(['A', 'B', 'C']))
             .letter_characters(HashSet::from(['a', 'b', 'c']));
         let mut indicator = builder.build();
         assert_eq!(
             indicator.next("ABCa".into()),
-            Some(Indication::UppercaseStartWord)
+            Some(Translation::new(
+                "".to_string(),
+                "⠇".to_string(),
+                1,
+                Some(begcapsword_rule)
+            ))
         );
         assert_eq!(indicator.next("BCa".into()), None);
         assert_eq!(indicator.next("Ca".into()), None);
         assert_eq!(
             indicator.next("a".into()),
-            Some(Indication::UppercaseEndWord)
+            Some(Translation::new(
+                "".to_string(),
+                "⠠".to_string(),
+                1,
+                Some(endcapsword_rule)
+            ))
         );
         assert_eq!(indicator.next("".into()), None);
     }
