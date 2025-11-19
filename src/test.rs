@@ -154,11 +154,14 @@ impl<'a> TestMatrix<'a> {
                 }
             }
             TestMode::Backward => {
-                let display_table = self.display_table(Direction::Backward)?;
-                for table in self.tables {
-                    let table = self.translation_table(table, Direction::Backward)?;
-                    for test in self.tests {
-                        results.push(test.check(&table, &display_table, Direction::Backward));
+                // ignore the backward test if LOUIS_TEST_FOWARD_ONLY is defined
+                if option_env!("LOUIS_TEST_FORWARD_ONLY").is_none() {
+                    let display_table = self.display_table(Direction::Backward)?;
+                    for table in self.tables {
+                        let table = self.translation_table(table, Direction::Backward)?;
+                        for test in self.tests {
+                            results.push(test.check(&table, &display_table, Direction::Backward));
+                        }
                     }
                 }
             }
@@ -170,12 +173,15 @@ impl<'a> TestMatrix<'a> {
                         results.push(test.check(&table, &display_table, Direction::Forward));
                     }
                 }
-                let display_table = self.display_table(Direction::Backward)?;
-                for table in self.tables {
-                    let table = self.translation_table(table, Direction::Backward)?;
-                    // reverse the tests, i.e. swap `input` and `expected`
-                    for test in self.tests.iter().cloned().map(|t| t.reverse()) {
-                        results.push(test.check(&table, &display_table, Direction::Backward));
+                // ignore the backward test if LOUIS_TEST_FOWARD_ONLY is defined
+                if option_env!("LOUIS_TEST_FORWARD_ONLY").is_none() {
+                    let display_table = self.display_table(Direction::Backward)?;
+                    for table in self.tables {
+                        let table = self.translation_table(table, Direction::Backward)?;
+                        // reverse the tests, i.e. swap `input` and `expected`
+                        for test in self.tests.iter().cloned().map(|t| t.reverse()) {
+                            results.push(test.check(&table, &display_table, Direction::Backward));
+                        }
                     }
                 }
             }
