@@ -18,5 +18,6 @@
 //! * [`lettersign::Indicator`]: indicates that the following braille cells are not to be read as a contraction
 
 pub mod lettersign;
+pub mod nocontract;
 pub mod numeric;
 pub mod uppercase;

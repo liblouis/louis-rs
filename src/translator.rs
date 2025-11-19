@@ -11,7 +11,7 @@ use crate::parser::Precedence;
 use crate::parser::{AnchoredRule, Attribute, Braille, Direction, Rule, dots_to_unicode, fallback};
 
 use self::trie::Boundary;
-use indication::{lettersign, numeric, uppercase};
+use indication::{lettersign, nocontract, numeric, uppercase};
 
 mod boundaries;
 mod indication;
@@ -33,8 +33,6 @@ pub enum TranslationError {
     },
     #[error("Attribute {0:?} has not been defined")]
     AttributeNotDefined(String),
-    #[error(transparent)]
-    IndicationError(#[from] indication::lettersign::IndicationError),
 }
 
 #[derive(Debug, PartialEq, Clone, Default)]
@@ -230,6 +228,7 @@ pub struct TranslationTable {
     numeric_indicator: numeric::Indicator,
     uppercase_indicator: uppercase::Indicator,
     lettersign_indicator: lettersign::Indicator,
+    nocontract_indicator: nocontract::Indicator,
     direction: Direction,
 }
 
@@ -247,6 +246,7 @@ impl TranslationTable {
         let mut numeric_indicator_builder = numeric::IndicatorBuilder::new();
         let mut uppercase_indicator_builder = uppercase::IndicatorBuilder::new();
         let mut lettersign_indicator_builder = lettersign::IndicatorBuilder::new();
+        let mut nocontract_indicator_builder = nocontract::IndicatorBuilder::new();
 
         let rules: Vec<AnchoredRule> = rules
             .into_iter()
@@ -442,6 +442,12 @@ impl TranslationTable {
                 Rule::Contraction { chars } => {
                     lettersign_indicator_builder =
                         lettersign_indicator_builder.contraction(&chars, rule);
+                    nocontract_indicator_builder =
+                        nocontract_indicator_builder.contraction(&chars, rule);
+                }
+                Rule::Nocontractsign { dots } => {
+                    nocontract_indicator_builder =
+                        nocontract_indicator_builder.nocontractsign(&dots_to_unicode(dots), rule);
                 }
                 // display rules are ignored for translation tables
                 Rule::Display { .. } => (),
@@ -690,7 +696,8 @@ impl TranslationTable {
             match_patterns,
             numeric_indicator: numeric_indicator_builder.build(),
             uppercase_indicator: uppercase_indicator_builder.build(),
-            lettersign_indicator: lettersign_indicator_builder.build()?,
+            lettersign_indicator: lettersign_indicator_builder.build(),
+            nocontract_indicator: nocontract_indicator_builder.build(),
         })
     }
 
@@ -722,6 +729,9 @@ impl TranslationTable {
         loop {
             // Check if there is a need for an indication
             if let Some(translation) = self.lettersign_indicator.next(chars.as_str(), prev) {
+                translations.push(translation);
+            }
+            if let Some(translation) = self.nocontract_indicator.next(chars.as_str(), prev) {
                 translations.push(translation);
             }
             if let Some(translation) = numeric_indicator.next(chars.as_str()) {
@@ -1207,17 +1217,28 @@ mod tests {
     }
 
     #[test]
-    /// Expect an error if there is a table with contractions but no lettersign
-    fn lettersign_indication_without_lettersign() {
-        let rules = vec![parse_rule("contraction cd")];
-        assert_eq!(
-            TranslationTable::compile(rules, Direction::Forward)
-                .err()
-                .unwrap(),
-            TranslationError::IndicationError(
-                lettersign::IndicationError::ContractionsWithoutLettersign
-            )
-        );
+    fn nocontractsign_indication() {
+        let rules = vec![
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 12"),
+            parse_rule("lowercase c 14"),
+            parse_rule("lowercase d 145"),
+            parse_rule("lowercase e 15"),
+            parse_rule("lowercase f 124"),
+            parse_rule("lowercase o 135"),
+            parse_rule("lowercase u 136"),
+            parse_rule("lowercase t 2345"),
+            parse_rule("nocontractsign 6"),
+            parse_rule("word about 1-12"),
+            parse_rule("contraction ab"),
+            parse_rule("contraction cd"),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
+        assert_eq!(table.translate("about"), "⠁⠃");
+        assert_eq!(table.translate("ab"), "⠠⠁⠃");
+        assert_eq!(table.translate("cd"), "⠠⠉⠙");
+        assert_eq!(table.translate("abcd"), "⠁⠃⠉⠙");
+        assert_eq!(table.translate("ef"), "⠑⠋");
     }
 
     #[test]
