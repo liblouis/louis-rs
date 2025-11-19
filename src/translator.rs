@@ -33,6 +33,8 @@ pub enum TranslationError {
     },
     #[error("Attribute {0:?} has not been defined")]
     AttributeNotDefined(String),
+    #[error(transparent)]
+    IndicationError(#[from] indication::lettersign::IndicationError),
 }
 
 #[derive(Debug, PartialEq, Clone, Default)]
@@ -654,7 +656,7 @@ impl TranslationTable {
             match_patterns,
             numeric_indicator: numeric_indicator_builder.build(),
             uppercase_indicator: uppercase_indicator_builder.build(),
-            lettersign_indicator: lettersign_indicator_builder.build(),
+            lettersign_indicator: lettersign_indicator_builder.build()?,
         })
     }
 
@@ -1120,6 +1122,20 @@ mod tests {
         assert_eq!(table.translate("cd"), "⠠⠉⠙");
         assert_eq!(table.translate("abcd"), "⠁⠃⠉⠙");
         assert_eq!(table.translate("ef"), "⠑⠋");
+    }
+
+    #[test]
+    /// Expect an error if there is a table with contractions but no lettersign
+    fn lettersign_indication_without_lettersign() {
+        let rules = vec![parse_rule("contraction cd")];
+        assert_eq!(
+            TranslationTable::compile(rules, Direction::Forward)
+                .err()
+                .unwrap(),
+            TranslationError::IndicationError(
+                lettersign::IndicationError::ContractionsWithoutLettersign
+            )
+        );
     }
 
     #[test]

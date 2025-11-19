@@ -8,8 +8,6 @@
 //! of contractions and matches the input against it. If a contraction appears in the input an
 //! indication is emitted.
 
-use log::warn;
-
 use crate::translator::trie::Boundary;
 use crate::{
     parser::{AnchoredRule, Direction, Precedence},
@@ -17,6 +15,12 @@ use crate::{
 };
 
 use std::collections::HashMap;
+
+#[derive(thiserror::Error, Debug, PartialEq)]
+pub enum IndicationError {
+    #[error("Contractions defined without lettersign rule")]
+    ContractionsWithoutLettersign,
+}
 
 /// A builder for [`Indicator`]
 #[derive(Debug)]
@@ -33,25 +37,32 @@ impl IndicatorBuilder {
         }
     }
 
-    pub fn build(self) -> Indicator {
+    /// Build an [`Indicator`]
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`IndicationError`] if the table contains contractions but no indicator sign is
+    /// defined
+    pub fn build(self) -> Result<Indicator, IndicationError> {
         let mut trie = Trie::new();
         if self.lettersign.is_none() && !self.contractions.is_empty() {
-            warn!("Contractions defined without lettersign rule");
-        }
-        if let Some((lettersign, origin)) = self.lettersign {
-            for (contraction, _origin) in self.contractions {
-                trie.insert(
-                    contraction,
-                    lettersign.to_string(),
-                    Boundary::Word,
-                    Boundary::Word,
-                    Direction::Forward,
-                    Precedence::Default,
-                    &origin,
-                );
+            Err(IndicationError::ContractionsWithoutLettersign)
+        } else {
+            if let Some((lettersign, origin)) = self.lettersign {
+                for (contraction, _origin) in self.contractions {
+                    trie.insert(
+                        contraction,
+                        lettersign.to_string(),
+                        Boundary::Word,
+                        Boundary::Word,
+                        Direction::Forward,
+                        Precedence::Default,
+                        &origin,
+                    );
+                }
             }
+            Ok(Indicator { contractions: trie })
         }
-        Indicator { contractions: trie }
     }
 
     pub fn letsign(mut self, s: &str, origin: &AnchoredRule) -> Self {
@@ -103,7 +114,7 @@ mod tests {
         builder = builder.letsign("⠠", &rule("letsign 6"));
         builder = builder.contraction("ab", &rule("contraction ab"));
         builder = builder.contraction("cd", &rule("contraction cd"));
-        let indicator = builder.build();
+        let indicator = builder.build().unwrap();
         assert_eq!(indicator.next("aa".into(), None), None);
         assert_eq!(
             indicator.next("ab".into(), None),
