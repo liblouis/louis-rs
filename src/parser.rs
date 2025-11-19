@@ -79,10 +79,6 @@ impl Constraints {
     fn insert(&mut self, value: Constraint) -> bool {
         self.0.insert(value)
     }
-
-    fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
 }
 
 /// Creates a [`Constraints`] facade wrapper around an [`EnumSet`].

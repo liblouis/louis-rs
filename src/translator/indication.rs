@@ -5,11 +5,11 @@
 //! etc.
 //!
 //! Braille indication is handled with the help of a number of simple
-//! state machines that keep track in which state a translation
-//! currently is. When given the next pending character(s) to
-//! translate, they keep track of state changes and will notify the
-//! caller whether an indication is required by optionally returning
-//! an [`Indication`].
+//! state machines that keep track which state a translation currently
+//! is in. When given the next pending character(s) to translate, they
+//! keep track of state changes and will notify the caller whether an
+//! indication is required by optionally returning a
+//! [`Translation`](crate::translator::Translation).
 //!
 //! There are multiple state machines to keep track of different indication
 //! requirements:
@@ -20,18 +20,3 @@
 pub mod lettersign;
 pub mod numeric;
 pub mod uppercase;
-
-/// Possible indication events that the indicator state machine(s) support
-#[derive(Debug, PartialEq, Eq, Hash)]
-pub enum Indication {
-    NumericStart,
-    NumericEnd,
-    UppercaseStartLetter,
-    UppercaseStartWord,
-    UppercaseEndWord,
-    UppercaseStart,
-    UppercaseEnd,
-    EmphasisStart,
-    EmphasisEnd,
-    LetterSign,
-}
