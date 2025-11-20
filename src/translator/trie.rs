@@ -89,13 +89,13 @@ impl Trie {
     pub fn insert_char(
         &mut self,
         from: char,
-        to: String,
+        to: &str,
         direction: Direction,
         precedence: Precedence,
         origin: &AnchoredRule,
     ) {
         self.insert(
-            from.to_string(),
+            &from.to_string(),
             to,
             Boundary::None,
             Boundary::None,
@@ -107,8 +107,8 @@ impl Trie {
 
     pub fn insert(
         &mut self,
-        from: String,
-        to: String,
+        from: &str,
+        to: &str,
         before: Boundary,
         after: Boundary,
         direction: Direction,
@@ -151,8 +151,8 @@ impl Trie {
             if precedence > translation.precedence {
                 let length = from.chars().count();
                 current_node.translation = Some(Translation {
-                    input: from,
-                    output: to,
+                    input: from.to_string(),
+                    output: to.to_string(),
                     length,
                     weight: length,
                     offset: 0,
@@ -163,10 +163,11 @@ impl Trie {
                 // first rule wins, so nothing to insert
             } else {
                 // last rule wins
-                current_node.translation = Some(Translation::new(from, to, length, origin.clone()));
+                current_node.translation =
+                    Some(Translation::new(&from, &to, length, origin.clone()));
             }
         } else {
-            current_node.translation = Some(Translation::new(from, to, length, origin.clone()));
+            current_node.translation = Some(Translation::new(&from, &to, length, origin.clone()));
         }
     }
 

@@ -145,14 +145,14 @@ impl MatchPatterns {
     pub fn insert(
         &mut self,
         pre: &Patterns,
-        chars: String,
+        chars: &str,
         post: &Patterns,
-        to: String,
+        to: &str,
         origin: &AnchoredRule,
     ) {
-        let translation = Translation::new(chars.clone(), to, 0, origin.clone());
+        let translation = Translation::new(&chars, &to, 0, origin.clone());
         let ctx = CharacterAttributes::new();
-        let ast = AST::from_match_rule(pre, chars, post, &ctx);
+        let ast = AST::from_match_rule(pre, chars.to_string(), post, &ctx);
         self.nfa.merge_accepting_fragment(&ast, translation);
     }
 

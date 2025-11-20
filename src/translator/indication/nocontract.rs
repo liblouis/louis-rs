@@ -48,8 +48,8 @@ impl IndicatorBuilder {
         if let Some((nocontractsign, origin)) = self.nocontractsign {
             for (contraction, _origin) in self.contractions {
                 trie.insert(
-                    contraction,
-                    nocontractsign.to_string(),
+                    &contraction,
+                    &nocontractsign,
                     Boundary::Word,
                     Boundary::Word,
                     Direction::Forward,

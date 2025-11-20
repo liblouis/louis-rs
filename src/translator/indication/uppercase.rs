@@ -48,52 +48,27 @@ impl IndicatorBuilder {
     }
 
     pub fn capsletter(mut self, s: &str, origin: &AnchoredRule) -> Self {
-        self.0.start_letter_translation = Some(Translation::new(
-            "".to_string(),
-            s.to_string(),
-            1,
-            origin.clone(),
-        ));
+        self.0.start_letter_translation = Some(Translation::new("", s, 1, origin.clone()));
         self
     }
 
     pub fn begcapsword(mut self, s: &str, origin: &AnchoredRule) -> Self {
-        self.0.start_word_translation = Some(Translation::new(
-            "".to_string(),
-            s.to_string(),
-            1,
-            origin.clone(),
-        ));
+        self.0.start_word_translation = Some(Translation::new("", s, 1, origin.clone()));
         self
     }
 
     pub fn endcapsword(mut self, s: &str, origin: &AnchoredRule) -> Self {
-        self.0.end_word_translation = Some(Translation::new(
-            "".to_string(),
-            s.to_string(),
-            1,
-            origin.clone(),
-        ));
+        self.0.end_word_translation = Some(Translation::new("", s, 1, origin.clone()));
         self
     }
 
     pub fn begcaps(mut self, s: &str, origin: &AnchoredRule) -> Self {
-        self.0.start_translation = Some(Translation::new(
-            "".to_string(),
-            s.to_string(),
-            1,
-            origin.clone(),
-        ));
+        self.0.start_translation = Some(Translation::new("", s, 1, origin.clone()));
         self
     }
 
     pub fn endcaps(mut self, s: &str, origin: &AnchoredRule) -> Self {
-        self.0.end_translation = Some(Translation::new(
-            "".to_string(),
-            s.to_string(),
-            1,
-            origin.clone(),
-        ));
+        self.0.end_translation = Some(Translation::new("", s, 1, origin.clone()));
         self
     }
 
@@ -201,7 +176,7 @@ mod tests {
         let mut indicator = builder.build();
         assert_eq!(
             indicator.next("Abc ".into()),
-            Some(Translation::new("".to_string(), "⠇".to_string(), 1, rule,))
+            Some(Translation::new("", "⠇", 1, rule,))
         );
         assert_eq!(indicator.next("bc ".into()), None);
         assert_eq!(indicator.next("c ".into()), None);
@@ -223,23 +198,13 @@ mod tests {
         let mut indicator = builder.build();
         assert_eq!(
             indicator.next("ABCa".into()),
-            Some(Translation::new(
-                "".to_string(),
-                "⠇".to_string(),
-                1,
-                begcapsword_rule,
-            ))
+            Some(Translation::new("", "⠇", 1, begcapsword_rule,))
         );
         assert_eq!(indicator.next("BCa".into()), None);
         assert_eq!(indicator.next("Ca".into()), None);
         assert_eq!(
             indicator.next("a".into()),
-            Some(Translation::new(
-                "".to_string(),
-                "⠠".to_string(),
-                1,
-                endcapsword_rule,
-            ))
+            Some(Translation::new("", "⠠", 1, endcapsword_rule,))
         );
         assert_eq!(indicator.next("".into()), None);
     }

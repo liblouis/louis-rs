@@ -42,8 +42,8 @@ impl IndicatorBuilder {
         if let Some((lettersign, origin)) = self.lettersign {
             for (contraction, _origin) in self.contractions {
                 trie.insert(
-                    contraction,
-                    lettersign.to_string(),
+                    &contraction,
+                    &lettersign,
                     Boundary::Word,
                     Boundary::Word,
                     Direction::Forward,
