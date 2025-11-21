@@ -328,7 +328,7 @@ pub enum Rule {
     /// There is no specific opcode for this but we make this an extra rule to separate the
     /// inclusion of braille tables vs hyphenation pattern
     IncludeHyphenation {
-        file: PathBuf,
+        path: PathBuf,
     },
     Undefined {
         dots: BrailleChars,
@@ -2199,8 +2199,8 @@ pub enum TableError {
     TableNotReadable(#[from] io::Error),
     #[error("Cannot find table {0:?}")]
     TableNotFound(PathBuf),
-    #[error("Table format not supported {0:?}")]
-    FormatNotSupported(PathBuf),
+    #[error("Hyphenation table {0} not found")]
+    HyphenationTableNotFound(PathBuf),
 }
 
 /// A [`Rule`] combined with information about which table file it originated from.
@@ -2300,10 +2300,15 @@ fn expand_include(rule: AnchoredRule) -> Result<Vec<AnchoredRule>, Vec<TableErro
         Rule::Include { ref file } => {
             let path = Path::new(file);
             if path.extension().and_then(OsStr::to_str) == Some("dic") {
-                // including hyphenation dictionaries needs to be handled differently. Just return a
-                // Rule that contains the dictionary and let the translation deal with it
+                // including hyphenation dictionaries needs to be handled differently. Try to find a
+                // bincode file with the same name in the search path
+                let mut path = path.to_path_buf();
+                path.set_extension("bincode");
+                let path = search_path
+                    .find_file(&path)
+                    .ok_or(vec![TableError::HyphenationTableNotFound(path)])?;
                 return Ok(vec![AnchoredRule::new(
-                    Rule::IncludeHyphenation { file: path.into() },
+                    Rule::IncludeHyphenation { path: path.into() },
                     rule.path,
                     rule.line,
                 )]);
