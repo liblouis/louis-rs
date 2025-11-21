@@ -1,7 +1,11 @@
 //! A braille translator that uses [liblouis](https://liblouis.io) braille tables
 
 use std::collections::{HashMap, HashSet};
+use std::fs::File;
+use std::io;
 
+use hyphenation::Standard;
+use hyphenation::{Hyphenator, Load};
 use match_pattern::MatchPatterns;
 use trie::Trie;
 
@@ -20,7 +24,7 @@ mod match_pattern;
 mod nfa;
 mod trie;
 
-#[derive(thiserror::Error, Debug, PartialEq)]
+#[derive(thiserror::Error, Debug)]
 pub enum TranslationError {
     #[error("Implicit character {0:?} not defined")]
     ImplicitCharacterNotDefined(char),
@@ -34,6 +38,10 @@ pub enum TranslationError {
     },
     #[error("Attribute {0:?} has not been defined")]
     AttributeNotDefined(String),
+    #[error(transparent)]
+    HyphenationTableIoError(#[from] io::Error),
+    #[error(transparent)]
+    HyphenationTableLoadError(#[from] hyphenation::load::Error),
 }
 
 #[derive(Debug, PartialEq, Clone, Default)]
@@ -229,6 +237,7 @@ pub struct TranslationTable {
     match_patterns: MatchPatterns,
     /// All the nocross translation rules are stored in a separate trie
     nocross_trie: Trie,
+    hyphenator: Option<Standard>,
     numeric_indicator: numeric::Indicator,
     uppercase_indicator: uppercase::Indicator,
     lettersign_indicator: lettersign::Indicator,
@@ -245,6 +254,7 @@ struct TranslationTableBuilder {
     attributes: AttributeMapping,
     trie: Trie,
     nocross_trie: Trie,
+    hyphenator: Option<Standard>,
     match_patterns: MatchPatterns,
     numeric_indicator: numeric::IndicatorBuilder,
     uppercase_indicator: uppercase::IndicatorBuilder,
@@ -261,6 +271,7 @@ impl TranslationTableBuilder {
             attributes: AttributeMapping::new(),
             trie: Trie::new(),
             nocross_trie: Trie::new(),
+            hyphenator: None,
             match_patterns: MatchPatterns::new(),
             numeric_indicator: numeric::IndicatorBuilder::new(),
             uppercase_indicator: uppercase::IndicatorBuilder::new(),
@@ -304,6 +315,7 @@ impl TranslationTableBuilder {
             attributes: self.attributes,
             trie: self.trie,
             nocross_trie: self.nocross_trie,
+            hyphenator: self.hyphenator,
             match_patterns: self.match_patterns,
             numeric_indicator: self.numeric_indicator.build(),
             uppercase_indicator: self.uppercase_indicator.build(),
@@ -757,6 +769,11 @@ impl TranslationTable {
                         .braille_to_unicode(dots, chars)?;
                     builder.match_patterns.insert(pre, chars, post, &dots, rule);
                 }
+                Rule::IncludeHyphenation { path } => {
+                    let file = File::open(path)?;
+                    let mut reader = io::BufReader::new(file);
+                    builder.hyphenator = Some(Standard::any_from_reader(&mut reader)?);
+                }
 
                 _ => (),
             }
@@ -813,8 +830,21 @@ impl TranslationTable {
             .partition(|t| t.offset == 0)
     }
 
+    fn word_hyphenates(&self, input: &str) -> bool {
+        match &self.hyphenator {
+            Some(hyphenator) => !hyphenator.opportunities(&input.to_lowercase()).is_empty(),
+            // if there is no hyphenator claim that the word hyphenates. Then it will not be used as
+            // a nocross candidate
+            _ => true,
+        }
+    }
+
     fn nocross_candidates(&self, input: &str, prev: Option<char>) -> Vec<Translation> {
-        self.nocross_trie.find_translations(input, prev)
+        self.nocross_trie
+            .find_translations(input, prev)
+            .into_iter()
+            .filter(|t| !self.word_hyphenates(&t.input))
+            .collect()
     }
 
     fn match_candidates(&self, input: &str) -> (Vec<Translation>, Vec<Translation>) {
@@ -822,6 +852,13 @@ impl TranslationTable {
             .find_translations(input)
             .into_iter()
             .partition(|t| t.offset == 0)
+    }
+
+    fn partition_delayed_translations(
+        &self,
+        delayed: Vec<Translation>,
+    ) -> (Vec<Translation>, Vec<Translation>) {
+        delayed.into_iter().partition(|t| t.offset == 0)
     }
 
     pub fn trace(&self, input: &str) -> Vec<Translation> {
@@ -850,7 +887,11 @@ impl TranslationTable {
                 translations.push(translation);
             }
             // First check for nocross candidates
-            let mut nocross_candidates = self.nocross_candidates(chars.as_str(), prev);
+            let nocross_candidate = self
+                .nocross_candidates(chars.as_str(), prev)
+                .into_iter()
+                .max_by_key(|t| t.weight);
+
             // given an input query the trie for matching translations. Then split off the
             // translations that are delayed, i.e. have an offset because they have a pre-pattern
             let (mut candidates, delayed) = self.translation_candidates(chars.as_str(), prev);
@@ -861,23 +902,36 @@ impl TranslationTable {
             delayed_translations.extend(match_delayed);
             // merge the candidates from the match patters with the candidates from the plain translations
             candidates.extend(match_candidates);
+
             // move delayed_translations with zero offset into candidates
-            let (current, delayed): (Vec<Translation>, Vec<Translation>) = delayed_translations
-                .into_iter()
-                .partition(|t| t.offset == 0);
+            let (current, delayed) = self.partition_delayed_translations(delayed_translations);
             delayed_translations = delayed;
             candidates.extend(current);
-            if let Some(t) = candidates
+
+            // use the longest translation
+            let candidate = candidates
                 .iter()
-                .max_by_key(|translation| translation.weight)
-            {
-                // there is a matching translation rule
-                let translation = t.clone();
-                // move the iterator forward by the number of characters in the translation
-                chars.nth(t.length - 1);
-                prev = translation.input.chars().last();
-                translations.push(translation);
-                delayed_translations = self.update_offsets(delayed_translations, t.length);
+                .max_by_key(|translation| translation.weight);
+            if let Some(t) = candidate {
+                if let Some(nocross) = nocross_candidate
+                    && nocross.weight >= t.weight
+                {
+                    // Use the nocross translation if it is at least as long as the normal translation
+                    let translation = nocross.clone();
+                    // move the iterator forward by the number of characters in the translation
+                    chars.nth(nocross.length - 1);
+                    prev = translation.input.chars().last();
+                    translations.push(translation);
+                    delayed_translations = self.update_offsets(delayed_translations, t.length);
+                } else {
+                    // there is a matching translation rule
+                    let translation = t.clone();
+                    // move the iterator forward by the number of characters in the translation
+                    chars.nth(t.length - 1);
+                    prev = translation.input.chars().last();
+                    translations.push(translation);
+                    delayed_translations = self.update_offsets(delayed_translations, t.length);
+                }
             } else if let Some(next_char) = chars.next() {
                 prev = Some(next_char);
                 // no translation rule found
@@ -984,14 +1038,11 @@ mod tests {
     #[test]
     fn resolve_implicit_dots() {
         let char_defs = CharacterDefinition::new();
-        assert_eq!(
-            char_defs.resolve_implicit_dots("xs"),
-            Err(TranslationError::ImplicitCharacterNotDefined('x'))
-        );
+        assert!(char_defs.resolve_implicit_dots("xs").is_err());
         let mut char_defs = CharacterDefinition::new();
         char_defs.insert('a', "A");
         char_defs.insert('h', "H");
-        assert_eq!(char_defs.resolve_implicit_dots("haha"), Ok("HAHA".into()));
+        assert_eq!(char_defs.resolve_implicit_dots("haha").unwrap(), "HAHA");
     }
 
     #[test]
