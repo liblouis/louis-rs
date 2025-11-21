@@ -1970,6 +1970,8 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Word => {
+                // FIXME: in theory nocross would be allowed for this opcode, so no need to check
+                // for invalid contraints
                 fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Word {
                     chars: self.chars()?,
