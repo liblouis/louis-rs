@@ -799,6 +799,31 @@ impl TranslationTable {
             .collect()
     }
 
+    fn translation_candidates(
+        &self,
+        input: &str,
+        prev: Option<char>,
+    ) -> (Vec<Translation>, Vec<Translation>) {
+        self.trie
+            .find_translations(input, prev)
+            .into_iter()
+            // TODO: figure out what to do with delayed rules that have a negative offset, i.e.
+            // if there was a matching rule that consumed so much input that the delayed rule is
+            // no longer applicable
+            .partition(|t| t.offset == 0)
+    }
+
+    fn nocross_candidates(&self, input: &str, prev: Option<char>) -> Vec<Translation> {
+        self.nocross_trie.find_translations(input, prev)
+    }
+
+    fn match_candidates(&self, input: &str) -> (Vec<Translation>, Vec<Translation>) {
+        self.match_patterns
+            .find_translations(input)
+            .into_iter()
+            .partition(|t| t.offset == 0)
+    }
+
     pub fn trace(&self, input: &str) -> Vec<Translation> {
         let mut translations: Vec<Translation> = Vec::new();
         let mut delayed_translations: Vec<Translation> = Vec::new();
@@ -824,24 +849,15 @@ impl TranslationTable {
             if let Some(translation) = uppercase_indicator.next(chars.as_str()) {
                 translations.push(translation);
             }
+            // First check for nocross candidates
+            let mut nocross_candidates = self.nocross_candidates(chars.as_str(), prev);
             // given an input query the trie for matching translations. Then split off the
             // translations that are delayed, i.e. have an offset because they have a pre-pattern
-            let (mut candidates, delayed): (Vec<Translation>, Vec<Translation>) = self
-                .trie
-                .find_translations(chars.as_str(), prev)
-                .into_iter()
-                // TODO: figure out what to do with delayed rules that have a negative offset, i.e.
-                // if there was a matching rule that consumed so much input that the delayed rule is
-                // no longer applicable
-                .partition(|t| t.offset == 0);
+            let (mut candidates, delayed) = self.translation_candidates(chars.as_str(), prev);
             delayed_translations.extend(delayed);
             // then search for matching match patterns. Unless they have empty pre patterns they will all have
             // an offset. Split those off.
-            let (match_candidates, match_delayed): (Vec<Translation>, Vec<Translation>) = self
-                .match_patterns
-                .find_translations(chars.as_str())
-                .into_iter()
-                .partition(|t| t.offset == 0);
+            let (match_candidates, match_delayed) = self.match_candidates(chars.as_str());
             delayed_translations.extend(match_delayed);
             // merge the candidates from the match patters with the candidates from the plain translations
             candidates.extend(match_candidates);
