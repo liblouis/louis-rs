@@ -917,6 +917,42 @@ impl HasDirection for Rule {
     }
 }
 
+/// A trait to query whether a [`Rule`] has a nocross contraint.
+pub trait HasNocross {
+    /// Returns the set of contraints associated with this Rule.
+    fn constraints(&self) -> Constraints;
+
+    /// Checks if this Rule has the nocross contraint.
+    fn is_nocross(&self) -> bool {
+        self.constraints().contains(Constraint::Nocross)
+    }
+}
+
+impl HasNocross for Rule {
+    fn constraints(&self) -> Constraints {
+        match self {
+            Rule::Always { constraints, .. }
+            | Rule::Word { constraints, .. }
+            | Rule::Lowword { constraints, .. }
+            | Rule::Sufword { constraints, .. }
+            | Rule::Prfword { constraints, .. }
+            | Rule::Begword { constraints, .. }
+            | Rule::Begmidword { constraints, .. }
+            | Rule::Midword { constraints, .. }
+            | Rule::Midendword { constraints, .. }
+            | Rule::Endword { constraints, .. }
+            | Rule::Partword { constraints, .. }
+            | Rule::Prepunc { constraints, .. }
+            | Rule::Postpunc { constraints, .. }
+            | Rule::Begnum { constraints, .. }
+            | Rule::Midnum { constraints, .. }
+            | Rule::Endnum { constraints, .. }
+            | Rule::Joinnum { constraints, .. } => constraints.clone(),
+            _ => constraint_set!(),
+        }
+    }
+}
+
 /// Defines precedence levels for [`Rules`](Rule).
 #[derive(Debug, Default, Clone, PartialEq, PartialOrd)]
 pub enum Precedence {
@@ -2181,6 +2217,12 @@ impl HasDirection for AnchoredRule {
 impl HasPrecedence for AnchoredRule {
     fn precedence(&self) -> Precedence {
         self.rule.precedence()
+    }
+}
+
+impl HasNocross for AnchoredRule {
+    fn constraints(&self) -> Constraints {
+        self.rule.constraints()
     }
 }
 
