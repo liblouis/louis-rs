@@ -323,6 +323,13 @@ pub enum Rule {
     Include {
         file: String,
     },
+    /// A rule for including a hyphenation table.
+    ///
+    /// There is no specific opcode for this but we make this an extra rule to separate the
+    /// inclusion of braille tables vs hyphenation pattern
+    IncludeHyphenation {
+        file: PathBuf,
+    },
     Undefined {
         dots: BrailleChars,
     },
@@ -2293,7 +2300,13 @@ fn expand_include(rule: AnchoredRule) -> Result<Vec<AnchoredRule>, Vec<TableErro
         Rule::Include { ref file } => {
             let path = Path::new(file);
             if path.extension().and_then(OsStr::to_str) == Some("dic") {
-                return Err(vec![TableError::FormatNotSupported(path.into())]);
+                // including hyphenation dictionaries needs to be handled differently. Just return a
+                // Rule that contains the dictionary and let the translation deal with it
+                return Ok(vec![AnchoredRule::new(
+                    Rule::IncludeHyphenation { file: path.into() },
+                    rule.path,
+                    rule.line,
+                )]);
             }
             let path = search_path
                 .find_file(path)
