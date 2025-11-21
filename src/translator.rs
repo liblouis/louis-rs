@@ -1029,7 +1029,7 @@ impl DisplayTable {
 mod tests {
     use super::*;
 
-    use crate::RuleParser;
+    use crate::{parser::expand_includes, RuleParser};
 
     fn parse_rule(source: &str) -> AnchoredRule {
         RuleParser::new(source).rule().unwrap().into()
@@ -1390,6 +1390,31 @@ mod tests {
         assert_eq!(table.translate("cd"), "⠠⠉⠙");
         assert_eq!(table.translate("abcd"), "⠁⠃⠉⠙");
         assert_eq!(table.translate("ef"), "⠑⠋");
+    }
+
+    #[test]
+    #[ignore = "Doesn't seem to work at the moment"]
+    fn nocross() {
+        let rules = vec![
+            parse_rule("include dictionaries/de-g1-core-patterns.dic"),
+	    parse_rule("lowercase a 1"),
+	    parse_rule("lowercase b 12"),
+	    parse_rule("lowercase h 125"),
+	    parse_rule("lowercase o 135"),
+	    parse_rule("lowercase s 234"),
+	    parse_rule("lowercase t 2345"),
+	    parse_rule("lowercase u 136"),
+            parse_rule("always hausboot 123"),
+            parse_rule("nocross always hausboot 456"),
+            parse_rule("always fff 123"),
+            parse_rule("nocross always fff 456"),
+            parse_rule("space \\s 0"),
+        ];
+	let rules = expand_includes(rules).unwrap();
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
+        assert_eq!(table.translate("hausboot"), "⠇");
+        assert_eq!(table.translate("fff"), "⠸");
+
     }
 
     #[test]
