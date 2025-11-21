@@ -6,6 +6,7 @@ use match_pattern::MatchPatterns;
 use trie::Trie;
 
 use crate::parser::HasDirection;
+use crate::parser::HasNocross;
 use crate::parser::HasPrecedence;
 use crate::parser::Precedence;
 use crate::parser::{AnchoredRule, Attribute, Braille, Direction, Rule, dots_to_unicode, fallback};
@@ -223,8 +224,11 @@ pub struct TranslationTable {
     character_definitions: CharacterDefinition,
     character_attributes: CharacterAttributes,
     attributes: AttributeMapping,
+    /// A prefix tree that contains all the translation rules and their [`Translations`](Translation)
     trie: Trie,
     match_patterns: MatchPatterns,
+    /// All the nocross translation rules are stored in a separate trie
+    nocross_trie: Trie,
     numeric_indicator: numeric::Indicator,
     uppercase_indicator: uppercase::Indicator,
     lettersign_indicator: lettersign::Indicator,
