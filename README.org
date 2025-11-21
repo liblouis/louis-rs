@@ -310,7 +310,7 @@ The parser is built from the grammar used in [[https://github.com/liblouis/tree-
 which is a port of the [[https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form][EBNF grammar]] in [[https://github.com/liblouis/rewrite-louis][rewrite-louis]], which in turn is
 a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][Parsing expression grammar]] from [[https://github.com/liblouis/louis-parser][louis-parser]].
 
-* Todo [7/15]
+* Todo [8/16]
 - [X] Parse with context
   - currently tables are parsed line by line. Opcodes have no idea
     whether a character or a class has been defined before
@@ -319,6 +319,7 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
   - this is solved with a two-pass compilation now. The first pass
     collects all relevant information and the second pass consequently
     uses that.
+- [X] Support for nocross
 - [-] Indication [2/3]
   - presumably this could be done independently of translation, i.e.
     find indication locations and put them in the typeform array
