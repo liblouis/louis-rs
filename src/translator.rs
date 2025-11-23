@@ -464,63 +464,60 @@ impl TranslationTable {
                     );
                 }
                 Rule::Numsign { dots } => {
-                    builder.numeric_indicator = builder
+                    builder
                         .numeric_indicator
                         .numsign(&dots_to_unicode(dots), rule);
                 }
                 Rule::Nonumsign { dots } => {
-                    builder.numeric_indicator = builder
+                    builder
                         .numeric_indicator
                         .nonumsign(&dots_to_unicode(dots), rule);
                 }
                 Rule::Numericnocontchars { chars } => {
-                    builder.numeric_indicator =
-                        builder.numeric_indicator.numericnocontchars(&chars);
+                    builder.numeric_indicator.numericnocontchars(&chars);
                 }
                 Rule::Numericmodechars { chars } => {
-                    builder.numeric_indicator = builder.numeric_indicator.numericmodechars(&chars);
+                    builder.numeric_indicator.numericmodechars(&chars);
                 }
                 Rule::Capsletter { dots, .. } => {
-                    builder.uppercase_indicator = builder
+                    builder
                         .uppercase_indicator
                         .capsletter(&dots_to_unicode(dots), rule);
                 }
                 Rule::Begcapsword { dots, .. } => {
-                    builder.uppercase_indicator = builder
+                    builder
                         .uppercase_indicator
                         .begcapsword(&dots_to_unicode(dots), rule);
                 }
                 Rule::Endcapsword { dots, .. } => {
-                    builder.uppercase_indicator = builder
+                    builder
                         .uppercase_indicator
                         .endcapsword(&dots_to_unicode(dots), rule);
                 }
                 Rule::Begcaps { dots } => {
-                    builder.uppercase_indicator = builder
+                    builder
                         .uppercase_indicator
                         .begcaps(&dots_to_unicode(dots), rule);
                 }
                 Rule::Endcaps { dots } => {
-                    builder.uppercase_indicator = builder
+                    builder
                         .uppercase_indicator
                         .endcaps(&dots_to_unicode(dots), rule);
                 }
                 Rule::Capsmodechars { chars } => {
-                    builder.uppercase_indicator = builder.uppercase_indicator.capsmodechars(&chars);
+                    builder.uppercase_indicator.capsmodechars(&chars);
                 }
                 Rule::Letsign { dots } => {
-                    builder.lettersign_indicator = builder
+                    builder
                         .lettersign_indicator
                         .letsign(&dots_to_unicode(dots), rule);
                 }
                 Rule::Contraction { chars } => {
-                    builder.lettersign_indicator =
-                        builder.lettersign_indicator.contraction(&chars, rule);
-                    builder.nocontract_indicator =
-                        builder.nocontract_indicator.contraction(&chars, rule);
+                    builder.lettersign_indicator.contraction(&chars, rule);
+                    builder.nocontract_indicator.contraction(&chars, rule);
                 }
                 Rule::Nocontractsign { dots } => {
-                    builder.nocontract_indicator = builder
+                    builder
                         .nocontract_indicator
                         .nocontractsign(&dots_to_unicode(dots), rule);
                 }
@@ -779,26 +776,24 @@ impl TranslationTable {
             }
         }
 
-        builder.numeric_indicator = builder.numeric_indicator.numeric_characters(
+        builder.numeric_indicator.numeric_characters(
             builder
                 .character_attributes
                 .get(Attribute::Digit)
                 .unwrap_or(HashSet::default()),
         );
-        builder.uppercase_indicator = builder
-            .uppercase_indicator
-            .uppercase_characters(
-                builder
-                    .character_attributes
-                    .get(Attribute::Uppercase)
-                    .unwrap_or(HashSet::default()),
-            )
-            .letter_characters(
-                builder
-                    .character_attributes
-                    .get(Attribute::Letter)
-                    .unwrap_or(HashSet::default()),
-            );
+        builder.uppercase_indicator.uppercase_characters(
+            builder
+                .character_attributes
+                .get(Attribute::Uppercase)
+                .unwrap_or(HashSet::default()),
+        );
+        builder.uppercase_indicator.letter_characters(
+            builder
+                .character_attributes
+                .get(Attribute::Letter)
+                .unwrap_or(HashSet::default()),
+        );
         Ok(builder.build(direction))
     }
 

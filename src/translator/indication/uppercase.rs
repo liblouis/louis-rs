@@ -47,44 +47,36 @@ impl IndicatorBuilder {
         self.0
     }
 
-    pub fn capsletter(mut self, s: &str, origin: &AnchoredRule) -> Self {
+    pub fn capsletter(&mut self, s: &str, origin: &AnchoredRule) {
         self.0.start_letter_translation = Some(Translation::new("", s, 1, origin.clone()));
-        self
     }
 
-    pub fn begcapsword(mut self, s: &str, origin: &AnchoredRule) -> Self {
+    pub fn begcapsword(&mut self, s: &str, origin: &AnchoredRule) {
         self.0.start_word_translation = Some(Translation::new("", s, 1, origin.clone()));
-        self
     }
 
-    pub fn endcapsword(mut self, s: &str, origin: &AnchoredRule) -> Self {
+    pub fn endcapsword(&mut self, s: &str, origin: &AnchoredRule) {
         self.0.end_word_translation = Some(Translation::new("", s, 1, origin.clone()));
-        self
     }
 
-    pub fn begcaps(mut self, s: &str, origin: &AnchoredRule) -> Self {
+    pub fn begcaps(&mut self, s: &str, origin: &AnchoredRule) {
         self.0.start_translation = Some(Translation::new("", s, 1, origin.clone()));
-        self
     }
 
-    pub fn endcaps(mut self, s: &str, origin: &AnchoredRule) -> Self {
+    pub fn endcaps(&mut self, s: &str, origin: &AnchoredRule) {
         self.0.end_translation = Some(Translation::new("", s, 1, origin.clone()));
-        self
     }
 
-    pub fn capsmodechars(mut self, s: &str) -> Self {
+    pub fn capsmodechars(&mut self, s: &str) {
         self.0.extra_uppercase_chars = HashSet::from_iter(s.chars());
-        self
     }
 
-    pub fn uppercase_characters(mut self, chars: HashSet<char>) -> Self {
+    pub fn uppercase_characters(&mut self, chars: HashSet<char>) {
         self.0.uppercase_chars = chars;
-        self
     }
 
-    pub fn letter_characters(mut self, chars: HashSet<char>) -> Self {
+    pub fn letter_characters(&mut self, chars: HashSet<char>) {
         self.0.terminating_chars = chars;
-        self
     }
 }
 
@@ -169,10 +161,10 @@ mod tests {
     fn indicator() {
         let rule = RuleParser::new("capsletter 123").rule().unwrap();
         let rule = AnchoredRule::new(rule, None, 0);
-        let builder = IndicatorBuilder::new()
-            .capsletter("⠇", &rule)
-            .uppercase_characters(HashSet::from(['A', 'B', 'C']))
-            .letter_characters(HashSet::from(['a', 'b', 'c']));
+        let mut builder = IndicatorBuilder::new();
+        builder.capsletter("⠇", &rule);
+        builder.uppercase_characters(HashSet::from(['A', 'B', 'C']));
+        builder.letter_characters(HashSet::from(['a', 'b', 'c']));
         let mut indicator = builder.build();
         assert_eq!(
             indicator.next("Abc ".into()),
@@ -190,11 +182,11 @@ mod tests {
         let begcapsword_rule = AnchoredRule::new(rule, None, 0);
         let rule = RuleParser::new("endcapsword 6").rule().unwrap();
         let endcapsword_rule = AnchoredRule::new(rule, None, 0);
-        let builder = IndicatorBuilder::new()
-            .begcapsword("⠇", &begcapsword_rule)
-            .endcapsword("⠠", &endcapsword_rule)
-            .uppercase_characters(HashSet::from(['A', 'B', 'C']))
-            .letter_characters(HashSet::from(['a', 'b', 'c']));
+        let mut builder = IndicatorBuilder::new();
+        builder.begcapsword("⠇", &begcapsword_rule);
+        builder.endcapsword("⠠", &endcapsword_rule);
+        builder.uppercase_characters(HashSet::from(['A', 'B', 'C']));
+        builder.letter_characters(HashSet::from(['a', 'b', 'c']));
         let mut indicator = builder.build();
         assert_eq!(
             indicator.next("ABCa".into()),

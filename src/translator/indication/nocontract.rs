@@ -61,14 +61,12 @@ impl IndicatorBuilder {
         Indicator { contractions: trie }
     }
 
-    pub fn nocontractsign(mut self, s: &str, origin: &AnchoredRule) -> Self {
+    pub fn nocontractsign(&mut self, s: &str, origin: &AnchoredRule) {
         self.nocontractsign = Some((s.to_string(), origin.clone()));
-        self
     }
 
-    pub fn contraction(mut self, s: &str, origin: &AnchoredRule) -> Self {
+    pub fn contraction(&mut self, s: &str, origin: &AnchoredRule) {
         self.contractions.insert(s.to_string(), origin.clone());
-        self
     }
 }
 
@@ -107,9 +105,9 @@ mod tests {
     #[test]
     fn indicator() {
         let mut builder = IndicatorBuilder::new();
-        builder = builder.nocontractsign("⡀", &rule("nocontractsign 7"));
-        builder = builder.contraction("ab", &rule("contraction ab"));
-        builder = builder.contraction("cd", &rule("contraction cd"));
+        builder.nocontractsign("⡀", &rule("nocontractsign 7"));
+        builder.contraction("ab", &rule("contraction ab"));
+        builder.contraction("cd", &rule("contraction cd"));
         let indicator = builder.build();
         assert_eq!(indicator.next("aa".into(), None), None);
         assert_eq!(

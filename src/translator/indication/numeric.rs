@@ -44,29 +44,24 @@ impl IndicatorBuilder {
         self.0
     }
 
-    pub fn numsign(mut self, s: &str, origin: &AnchoredRule) -> Self {
+    pub fn numsign(&mut self, s: &str, origin: &AnchoredRule) {
         self.0.start_translation = Some(Translation::new("", s, 1, origin.clone()));
-        self
     }
 
-    pub fn nonumsign(mut self, s: &str, origin: &AnchoredRule) -> Self {
+    pub fn nonumsign(&mut self, s: &str, origin: &AnchoredRule) {
         self.0.end_translation = Some(Translation::new("", s, 1, origin.clone()));
-        self
     }
 
-    pub fn numericnocontchars(mut self, s: &str) -> Self {
+    pub fn numericnocontchars(&mut self, s: &str) {
         self.0.terminating_chars = HashSet::from_iter(s.chars());
-        self
     }
 
-    pub fn numericmodechars(mut self, s: &str) -> Self {
+    pub fn numericmodechars(&mut self, s: &str) {
         self.0.extra_numeric_chars = HashSet::from_iter(s.chars());
-        self
     }
 
-    pub fn numeric_characters(mut self, chars: HashSet<char>) -> Self {
+    pub fn numeric_characters(&mut self, chars: HashSet<char>) {
         self.0.numeric_chars = chars;
-        self
     }
 }
 
@@ -148,11 +143,11 @@ mod tests {
         let rule = RuleParser::new("numsign 3456").rule().unwrap();
         let rule = AnchoredRule::new(rule, None, 0);
         let numeric_chars: HashSet<char> = HashSet::from(['1', '2', '3']);
-        let builder = IndicatorBuilder::new()
-            .numeric_characters(numeric_chars)
-            .numsign("⠼", &rule)
-            .nonumsign("⠰", &rule)
-            .numericnocontchars("abc");
+        let mut builder = IndicatorBuilder::new();
+        builder.numeric_characters(numeric_chars);
+        builder.numsign("⠼", &rule);
+        builder.nonumsign("⠰", &rule);
+        builder.numericnocontchars("abc");
         let mut indicator = builder.build();
         assert_eq!(indicator.next("ab12 a".into()), None);
         assert_eq!(indicator.next("b12 a".into()), None);
@@ -173,11 +168,11 @@ mod tests {
         let rule = RuleParser::new("nonumsign 56").rule().unwrap();
         let nonumsign_rule = AnchoredRule::new(rule, None, 0);
         let numeric_chars: HashSet<char> = HashSet::from(['1', '2', '3']);
-        let builder = IndicatorBuilder::new()
-            .numeric_characters(numeric_chars)
-            .numsign("⠼", &numsign_rule)
-            .nonumsign("⠰", &nonumsign_rule)
-            .numericnocontchars("abc");
+        let mut builder = IndicatorBuilder::new();
+        builder.numeric_characters(numeric_chars);
+        builder.numsign("⠼", &numsign_rule);
+        builder.nonumsign("⠰", &nonumsign_rule);
+        builder.numericnocontchars("abc");
         let mut indicator = builder.build();
         assert_eq!(indicator.next("ab12a".into()), None);
         assert_eq!(indicator.next("b12a".into()), None);
