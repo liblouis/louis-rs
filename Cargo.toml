@@ -23,3 +23,6 @@ hyphenation = "0.8.3"
 [features]
 default = ["backwards_compatibility"]
 backwards_compatibility = []
+
+# a temporary feature to limit the yaml test cases to forward only
+forward_only = []
