@@ -111,8 +111,9 @@ const ANY_DIRECTION: Constraints = constraint_set!(Constraint::Nofor | Constrain
 /// Rules always have at least one direction. They are used for
 /// forward translation, for backward translation or for both
 /// directions. The concept of direction is related to [`Constraint`].
-#[derive(EnumSetType, Debug, clap::ValueEnum)]
+#[derive(EnumSetType, Debug, Default, clap::ValueEnum)]
 pub enum Direction {
+    #[default]
     Forward,
     Backward,
 }

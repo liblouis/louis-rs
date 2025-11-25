@@ -233,6 +233,7 @@ pub struct TranslationTable {
     character_definitions: CharacterDefinition,
     character_attributes: CharacterAttributes,
     attributes: AttributeMapping,
+    pre_translation: Option<pre_translation::TranslationTable>,
     /// A prefix tree that contains all the translation rules and their [`Translations`](Translation)
     trie: Trie,
     match_patterns: MatchPatterns,
@@ -253,6 +254,7 @@ struct TranslationTableBuilder {
     character_definitions: CharacterDefinition,
     character_attributes: CharacterAttributes,
     attributes: AttributeMapping,
+    pre_translation: pre_translation::TranslationTable,
     trie: Trie,
     nocross_trie: Trie,
     hyphenator: Option<Standard>,
@@ -270,6 +272,7 @@ impl TranslationTableBuilder {
             character_definitions: CharacterDefinition::new(),
             character_attributes: CharacterAttributes::new(),
             attributes: AttributeMapping::new(),
+	    pre_translation: pre_translation::TranslationTable::default(),
             trie: Trie::new(),
             nocross_trie: Trie::new(),
             hyphenator: None,
@@ -314,6 +317,7 @@ impl TranslationTableBuilder {
             character_definitions: self.character_definitions,
             character_attributes: self.character_attributes,
             attributes: self.attributes,
+	    pre_translation: (!self.pre_translation.is_empty()).then_some(self.pre_translation),
             trie: self.trie,
             nocross_trie: self.nocross_trie,
             hyphenator: self.hyphenator,
@@ -333,10 +337,14 @@ impl TranslationTable {
     ) -> Result<Self, TranslationError> {
         let mut builder = TranslationTableBuilder::new();
 
-        let rules: Vec<AnchoredRule> = rules
+        let rules: Vec<_> = rules
             .into_iter()
             .filter(|r| r.is_direction(direction))
             .collect();
+
+	// First use the pre translation rules to create a translation table for the pre translation
+	// pass
+	builder.pre_translation = pre_translation::TranslationTable::compile(&rules, direction)?;
 
         // FIXME: For some unknown reason the litdigit rule seems to have precedence over the digit
         // rule. Since they both want to define digits in the same character_definitions slot we
@@ -857,11 +865,24 @@ impl TranslationTable {
         delayed.into_iter().partition(|t| t.offset == 0)
     }
 
+    fn pre_translation(&self, input: &str) -> String {
+	if let Some(pre_translation) = &self.pre_translation {
+	    pre_translation.translate(input)
+	} else {
+	    input.to_string()
+	}
+    }
+
     pub fn trace(&self, input: &str) -> Vec<Translation> {
         let mut translations: Vec<Translation> = Vec::new();
         let mut delayed_translations: Vec<Translation> = Vec::new();
-        let mut chars = input.chars();
+
+	// First do the pre translation pass
+	let corrected = self.pre_translation(input);
+
+	let mut chars = corrected.chars();
         let mut prev: Option<char> = None;
+
         // FIXME: the following seems weird, but the indicator is a mutable state machine. Since
         // self (the translation table) is immutable we build a mutable copy of the indicator for
         // each translation
@@ -1425,5 +1446,21 @@ mod tests {
         assert_eq!(table.translate("⠇⠸"), "foobar");
         assert_eq!(table.translate("⠀⠀"), "  ");
         assert_eq!(table.translate("⠄⠈⠈"), "foo");
+    }
+
+    #[test]
+    fn pre_translate() {
+        let rules = vec![
+            parse_rule("always foo 123"),
+            parse_rule("always bar 456"),
+            parse_rule("correct \"baz\" \"bar\""),
+            parse_rule("space \\s 0"),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
+        assert_eq!(table.translate("baz"), "⠸");
+        assert_eq!(table.translate("foobaz"), "⠇⠸");
+        assert_eq!(table.translate("foobar"), "⠇⠸");
+        assert_eq!(table.translate("  "), "⠀⠀");
+        assert_eq!(table.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
     }
 }
