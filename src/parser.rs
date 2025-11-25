@@ -18,12 +18,13 @@ use search_path::SearchPath;
 
 use self::{
     braille::{BrailleChars, braille_chars, chars_to_dots},
-    multipass::Test,
+    multipass::{Action, Test},
 };
 
 pub use braille::dots_to_unicode;
 pub use braille::fallback;
 pub use match_rule::{Attribute, Pattern, PatternParser, Patterns};
+pub use multipass::IsLiteral;
 
 mod braille;
 mod match_rule;
@@ -174,8 +175,8 @@ pub enum ParseError {
     MultipassTestExpected,
     #[error("Multipass action expected")]
     MultipassActionExpected,
-    #[error("Invalid multipass test: {0}")]
-    InvalidMultipassTest(#[from] multipass::ParseError),
+    #[error("Invalid multipass operand: {0}")]
+    InvalidMultipassOperand(#[from] multipass::ParseError),
     #[error("Invalid match pattern: {0}")]
     InvalidMatchPattern(#[from] match_rule::ParseError),
     #[error("Match pre-pattern expected")]
@@ -729,27 +730,27 @@ pub enum Rule {
     },
     Context {
         test: multipass::Test,
-        action: String,
+        action: Action,
         constraints: Constraints,
     },
     Pass2 {
         test: multipass::Test,
-        action: String,
+        action: Action,
         constraints: Constraints,
     },
     Pass3 {
         test: multipass::Test,
-        action: String,
+        action: Action,
         constraints: Constraints,
     },
     Pass4 {
         test: multipass::Test,
-        action: String,
+        action: Action,
         constraints: Constraints,
     },
     Correct {
         test: multipass::Test,
-        action: String,
+        action: Action,
         constraints: Constraints,
     },
 
@@ -1440,19 +1441,22 @@ impl<'a> RuleParser<'a> {
         self.tokens
             .next()
             .ok_or(ParseError::MultipassTestExpected)
-            .map(|s| s.to_string())
             .map(|s| {
-                multipass::TestParser::new(&s)
+                multipass::test::Parser::new(&s)
                     .tests()
-                    .map_err(ParseError::InvalidMultipassTest)
+                    .map_err(|e| ParseError::InvalidMultipassOperand(e))
             })?
     }
 
-    fn multipass_action(&mut self) -> Result<String, ParseError> {
+    fn multipass_action(&mut self) -> Result<Action, ParseError> {
         self.tokens
             .next()
             .ok_or(ParseError::MultipassActionExpected)
-            .map(|s| s.to_string())
+            .map(|s| {
+                multipass::action::Parser::new(&s)
+                    .actions()
+                    .map_err(|e| ParseError::InvalidMultipassOperand(e))
+            })?
     }
 
     fn match_pre(&mut self) -> Result<Patterns, ParseError> {
@@ -2339,6 +2343,8 @@ pub fn expand_includes(rules: Vec<AnchoredRule>) -> Result<Vec<AnchoredRule>, Ve
 
 #[cfg(test)]
 mod tests {
+    use crate::parser::multipass::{action, test};
+
     use super::*;
     use enumset::enum_set;
 
@@ -2520,6 +2526,22 @@ mod tests {
                 constraints: Constraints::empty()
             }),
             RuleParser::new(&"display a 1").rule()
+        );
+    }
+
+    #[test]
+    fn correct() {
+        assert_eq!(
+            Ok(Rule::Correct {
+                test: Test::new(
+                    false,
+                    false,
+                    vec![test::Instruction::String { s: "a".into() }]
+                ),
+                action: Action::new(vec![action::Instruction::String { s: "b".into() }]),
+                constraints: constraint_set!(Constraint::Noback)
+            }),
+            RuleParser::new(&"noback correct \"a\" \"b\"").rule()
         );
     }
 }
