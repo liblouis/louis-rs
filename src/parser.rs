@@ -8,7 +8,7 @@ use std::{
     iter::Peekable,
     num::ParseIntError,
     path::{Path, PathBuf},
-    str::{Chars, SplitWhitespace},
+    str::{Chars, SplitAsciiWhitespace},
 };
 
 use enumset::enum_set;
@@ -1091,13 +1091,13 @@ fn fail_if_invalid_constraints(
 }
 
 pub struct RuleParser<'a> {
-    tokens: Peekable<SplitWhitespace<'a>>,
+    tokens: Peekable<SplitAsciiWhitespace<'a>>,
 }
 
 impl<'a> RuleParser<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
-            tokens: source.split_whitespace().peekable(),
+            tokens: source.split_ascii_whitespace().peekable(),
         }
     }
 
