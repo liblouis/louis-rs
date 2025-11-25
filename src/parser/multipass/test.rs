@@ -399,22 +399,22 @@ impl<'a> Parser<'a> {
         while self.chars.peek().filter(|&c| is_test(c)).is_some() {
             tests.push(self.test()?);
         }
-        if tests.is_empty() {
-            Err(ParseError::EmptyTest)
-        } else {
-            Ok(tests)
-        }
+        Ok(tests)
     }
 
     pub fn tests(&mut self) -> Result<Test, ParseError> {
         let at_beginning = self.chars.next_if_eq(&'`').is_some();
         let tests = self.many_tests()?;
         let at_end = self.chars.next_if_eq(&'~').is_some();
-        Ok(Test {
-            at_beginning,
-            at_end,
-            tests,
-        })
+        if tests.is_empty() {
+            Err(ParseError::EmptyTest)
+        } else {
+            Ok(Test {
+		at_beginning,
+		at_end,
+		tests,
+            })
+        }
     }
 }
 

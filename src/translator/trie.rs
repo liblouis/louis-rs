@@ -86,6 +86,10 @@ impl Trie {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.root.transitions.is_empty()
+    }
+
     pub fn insert_char(
         &mut self,
         from: char,
