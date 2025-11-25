@@ -53,7 +53,8 @@ pub enum Instruction {
 impl IsLiteral for Instruction {
     fn is_literal(&self) -> bool {
         match self {
-            &Instruction::String { .. } => true,
+            Instruction::String { .. } => true,
+	    Instruction::Ignore => true,
             _ => false,
         }
     }
@@ -65,6 +66,7 @@ impl TryFrom<&Instruction> for String {
     fn try_from(instruction: &Instruction) -> Result<String, Self::Error> {
         match instruction {
             Instruction::String { s } => Ok(s.clone()),
+            Instruction::Ignore => Ok("".to_string()),
             _ => Err(ConversionError::ActionNotLiteral),
         }
     }
