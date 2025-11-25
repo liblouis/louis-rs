@@ -22,6 +22,7 @@ mod boundaries;
 mod indication;
 mod match_pattern;
 mod nfa;
+mod pre_translation;
 mod trie;
 
 #[derive(thiserror::Error, Debug)]
