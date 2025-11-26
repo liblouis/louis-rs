@@ -1,9 +1,12 @@
 [package]
-name = "liblouis"
+name = "louis-rs"
 version = "0.2.0"
 edition = "2024"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "A pure Rust re-implementation of the liblouis braille translator and back-translator"
+repository = "https://github.com/liblouis/louis-rs"
+license = "LGPL-2.1-or-later"
+keywords = ["braille"]
+exclude = ["dictionaries"]
 
 [[bin]]
 name = "louis"
