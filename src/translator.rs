@@ -720,6 +720,24 @@ impl TranslationTable {
                         rule,
                     );
                 }
+		// Treat a contraction rule similarly to a word rule. Pretend the dots have been
+		// defined implicitely
+                Rule::Contraction { chars } => {
+                    let dots = builder
+                        .character_definitions
+                        .braille_to_unicode(&Braille::Implicit, chars)?;
+                    builder.get_trie_mut(rule).insert(
+                        chars,
+                        &dots,
+                        Boundary::Word,
+                        Boundary::Word,
+                        direction,
+                        rule.precedence(),
+                        rule,
+                    );
+                    builder.lettersign_indicator.contraction(&chars, rule);
+                    builder.nocontract_indicator.contraction(&chars, rule);
+                }
                 Rule::Joinword { chars, dots, .. } | Rule::Lowword { chars, dots, .. } => {
                     builder.get_trie_mut(rule).insert(
                         chars,
