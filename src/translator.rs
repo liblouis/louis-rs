@@ -1064,7 +1064,7 @@ impl DisplayTable {
 mod tests {
     use super::*;
 
-    use crate::{RuleParser, parser::expand_includes};
+    use crate::parser::{RuleParser, expand_includes};
 
     fn parse_rule(source: &str) -> AnchoredRule {
         RuleParser::new(source).rule().unwrap().into()

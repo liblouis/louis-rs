@@ -124,7 +124,7 @@ impl TranslationTable {
 mod tests {
     use super::*;
 
-    use crate::RuleParser;
+    use crate::parser::RuleParser;
 
     fn parse_rule(source: &str) -> AnchoredRule {
         RuleParser::new(source).rule().unwrap().into()
