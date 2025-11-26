@@ -9,6 +9,10 @@ edition = "2024"
 name = "louis"
 path = "src/main.rs"
 
+[lib]
+name = "louis"
+path = "src/lib.rs"
+
 [dependencies]
 thiserror = "2"
 search_path = "0.1.4"
