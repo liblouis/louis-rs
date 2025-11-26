@@ -1453,7 +1453,7 @@ mod tests {
         let rules = vec![
             parse_rule("always foo 123"),
             parse_rule("always bar 456"),
-            parse_rule("correct \"baz\" \"bar\""),
+            parse_rule("noback correct \"baz\" \"bar\""),
             parse_rule("space \\s 0"),
         ];
         let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
