@@ -6,7 +6,7 @@ description = "A pure Rust re-implementation of the liblouis braille translator 
 repository = "https://github.com/liblouis/louis-rs"
 license = "LGPL-2.1-or-later"
 keywords = ["braille"]
-exclude = ["dictionaries"]
+exclude = ["dictionaries", "doc/Architecture_Decision_Records.org"]
 
 [[bin]]
 name = "louis"
