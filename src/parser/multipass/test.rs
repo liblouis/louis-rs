@@ -418,6 +418,7 @@ impl<'a> Parser<'a> {
     }
 }
 
+/// `Display` implementation for [`Test`]
 mod display {
     use super::*;
     use crate::parser::dots_to_unicode;
