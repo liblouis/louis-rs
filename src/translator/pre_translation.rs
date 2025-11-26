@@ -43,15 +43,13 @@ impl TranslationTable {
     ) -> Result<Self, TranslationError> {
         let mut builder = TranslationTableBuilder::new();
 
-        let rules = rules
-             .into_iter()
-             .filter(|r| r.is_direction(direction));
+        let rules = rules.into_iter().filter(|r| r.is_direction(direction));
 
         for rule in rules {
             match &rule.rule {
                 Rule::Correct { test, action, .. } => {
-		    // FIXME: For now we just use the correct rules that use literal regexps since we do not really support the whole range of weirdness that liblouis
-		    // regexps encompass
+                    // FIXME: For now we just use the correct rules that use literal regexps since we do not really support the whole range of weirdness that liblouis
+                    // regexps encompass
                     if test.is_literal() && action.is_literal() {
                         let from: String = test.try_into().unwrap();
                         let to: String = action.try_into().unwrap();
@@ -120,7 +118,6 @@ impl TranslationTable {
         }
         translations
     }
-
 }
 
 #[cfg(test)]

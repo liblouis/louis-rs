@@ -2219,9 +2219,9 @@ pub struct AnchoredRule {
 
 impl std::fmt::Display for AnchoredRule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-	if let Some(path) = &self.path {
+        if let Some(path) = &self.path {
             write!(f, "{:?}:{} ", path.as_os_str(), self.line)?;
-	}
+        }
         write!(f, "{}", self.rule)
     }
 }
