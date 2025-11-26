@@ -1,3 +1,4 @@
+//! A Parser for the action operand of context and multipass opcodes
 use std::{iter::Peekable, str::Chars};
 
 use crate::parser::multipass::ConversionError;

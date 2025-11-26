@@ -134,6 +134,7 @@ pub enum WithMatch {
 
 type WithMatches = HashSet<WithMatch>;
 
+/// An error that occurred during parsing of a [liblouis](https://liblouis.io) braille table
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum ParseError {
     #[error("Expected {expected:?}, got {found:?}")]
@@ -188,6 +189,7 @@ pub enum ParseError {
     SingleCharExpected { found: Option<String> },
 }
 
+/// A translation command
 #[derive(PartialEq, Debug)]
 pub enum Opcode {
     Include,
@@ -320,6 +322,10 @@ pub enum Opcode {
     Literal,
 }
 
+/// A translation rule
+///
+/// A translation rule is often composed of three parts: the translation command ([`Opcode`]), the
+/// character(s) and the corresponding braille dots ([`BrailleChars`]).
 #[derive(PartialEq, Debug, Clone)]
 pub enum Rule {
     Include {
@@ -2193,6 +2199,7 @@ impl<'a> RuleParser<'a> {
     }
 }
 
+/// An error that occurred during reading of a [liblouis](https://liblouis.io) braille table
 #[derive(thiserror::Error, Debug)]
 pub enum TableError {
     #[error("Parse error {error:?} on line {line:?}")]

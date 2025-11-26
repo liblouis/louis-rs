@@ -1,3 +1,4 @@
+//! A Parser for the test operand of context and multipass opcodes
 use std::{collections::HashSet, iter::Peekable, str::Chars};
 
 use crate::parser::multipass::{ConversionError, IsLiteral, ParseError};
@@ -151,6 +152,7 @@ fn is_class_digit(c: &char) -> bool {
     matches!(c, '1'..='7')
 }
 
+/// A Parser for the test operand of context and multipass opcodes
 pub struct Parser<'a> {
     chars: Peekable<Chars<'a>>,
 }
@@ -402,6 +404,7 @@ impl<'a> Parser<'a> {
         Ok(tests)
     }
 
+    /// Parse the test operand.
     pub fn tests(&mut self) -> Result<Test, ParseError> {
         let at_beginning = self.chars.next_if_eq(&'`').is_some();
         let tests = self.many_tests()?;

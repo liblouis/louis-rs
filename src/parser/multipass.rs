@@ -1,3 +1,4 @@
+//! Parsers for the test and action operands of context and multipass opcodes
 use std::num::ParseIntError;
 
 use super::braille;
@@ -8,6 +9,7 @@ pub use test::Test;
 pub mod action;
 pub mod test;
 
+/// An error that occurred during parsing of a multipass or context rule
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum ParseError {
     #[error("Expected {expected:?}, got {found:?}")]
