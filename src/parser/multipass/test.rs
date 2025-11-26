@@ -410,10 +410,124 @@ impl<'a> Parser<'a> {
             Err(ParseError::EmptyTest)
         } else {
             Ok(Test {
-		at_beginning,
-		at_end,
-		tests,
+                at_beginning,
+                at_end,
+                tests,
             })
+        }
+    }
+}
+
+mod display {
+    use super::*;
+    use crate::parser::dots_to_unicode;
+
+    impl std::fmt::Display for Test {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            if self.at_beginning {
+                write!(f, "`")?;
+            }
+
+            for instruction in &self.tests {
+                write!(f, "{}", instruction)?;
+            }
+
+            if self.at_end {
+                write!(f, "~")?;
+            }
+
+            Ok(())
+        }
+    }
+
+    impl std::fmt::Display for Attribute {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let attr = match self {
+                Attribute::Digit => "d",
+                Attribute::Litdigit => "D",
+                Attribute::Letter => "l",
+                Attribute::Sign => "S",
+                Attribute::Space => "s",
+                Attribute::Math => "m",
+                Attribute::Punctuation => "punctuation",
+                Attribute::Uppercase => "U",
+                Attribute::Lowercase => "u",
+                Attribute::Class1 => "w",
+                Attribute::Class2 => "x",
+                Attribute::Class3 => "y",
+                Attribute::Class4 => "z",
+                Attribute::Any => "a",
+            };
+            write!(f, "{}", attr)
+        }
+    }
+
+    impl std::fmt::Display for Operator {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let op = match self {
+                Operator::Eq => "=",
+                Operator::Gt => ">",
+                Operator::Lt => "<",
+                Operator::GtEq => ">=",
+                Operator::LtEq => "<=",
+            };
+            write!(f, "{}", op)
+        }
+    }
+
+    impl std::fmt::Display for Quantifier {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Quantifier::Number(number) => write!(f, "{}", number),
+                Quantifier::Range(from, to) => write!(f, "{}-{}", from, to),
+                Quantifier::Any => write!(f, "."),
+            }
+        }
+    }
+
+    impl std::fmt::Display for Instruction {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Instruction::Lookback { len } => {
+                    write!(f, "_{}", len)
+                }
+                Instruction::Variable { var, op, operand } => {
+                    write!(f, "#{}{}{}", var, op, operand)
+                }
+                Instruction::String { s } => {
+                    write!(f, "\"{}\"", s)
+                }
+                Instruction::Dots { dots } => {
+                    write!(f, "@{}", dots_to_unicode(dots))
+                }
+                Instruction::Attributes { attrs, quantifier } => {
+                    write!(f, "$")?;
+                    for attr in attrs {
+                        write!(f, "{}", attr)?;
+                    }
+                    if let Some(q) = quantifier {
+                        write!(f, "{}", q)?;
+                    }
+                    Ok(())
+                }
+                Instruction::Class { name, quantifier } => {
+                    write!(f, "%{}", name)?;
+                    if let Some(q) = quantifier {
+                        write!(f, "{}", q)?;
+                    }
+                    Ok(())
+                }
+                Instruction::Negate { test } => {
+                    write!(f, "!{}", test)
+                }
+                Instruction::Replace { tests } => {
+                    write!(f, "[")?;
+                    for test in tests {
+                        write!(f, "{}", test)?;
+                    }
+                    write!(f, "]")
+                }
+            }
         }
     }
 }

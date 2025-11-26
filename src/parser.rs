@@ -848,6 +848,7 @@ impl std::fmt::Display for Rule {
             Rule::Endcapsword { dots, .. } => write!(f, "endcapsword {}", dots_to_unicode(dots)),
             Rule::Begcaps { dots } => write!(f, "begcaps {}", dots_to_unicode(dots)),
             Rule::Endcaps { dots } => write!(f, "endcaps {}", dots_to_unicode(dots)),
+            Rule::Correct { test, action, .. } => write!(f, "correct {} {}", test, action),
             _ => todo!(),
         }
     }
@@ -2214,6 +2215,15 @@ pub struct AnchoredRule {
     pub rule: Rule,
     path: Option<PathBuf>,
     line: usize,
+}
+
+impl std::fmt::Display for AnchoredRule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	if let Some(path) = &self.path {
+            write!(f, "{:?}:{} ", path.as_os_str(), self.line)?;
+	}
+        write!(f, "{}", self.rule)
+    }
 }
 
 impl AnchoredRule {

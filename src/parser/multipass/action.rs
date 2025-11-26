@@ -54,7 +54,7 @@ impl IsLiteral for Instruction {
     fn is_literal(&self) -> bool {
         match self {
             Instruction::String { .. } => true,
-	    Instruction::Ignore => true,
+            Instruction::Ignore => true,
             _ => false,
         }
     }
@@ -188,6 +188,31 @@ impl<'a> Parser<'a> {
     pub fn actions(&mut self) -> Result<Action, ParseError> {
         let actions = self.many_actions()?;
         Ok(Action { actions })
+    }
+}
+
+mod display {
+    use super::*;
+    use crate::parser::dots_to_unicode;
+
+    impl std::fmt::Display for Action {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            for instruction in &self.actions {
+                write!(f, "{}", instruction)?;
+            }
+            Ok(())
+        }
+    }
+
+    impl std::fmt::Display for Instruction {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Instruction::String { s } => write!(f, "{}", s),
+                Instruction::Dots { dots } => write!(f, "{}", dots_to_unicode(dots)),
+                Instruction::Replace => write!(f, "*"),
+                Instruction::Ignore => write!(f, "?"),
+            }
+        }
     }
 }
 
