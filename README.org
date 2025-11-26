@@ -365,7 +365,7 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
 
 * License
 
-Copyright (C) 2023-2024 Swiss Library for the Blind, Visually Impaired
+Copyright (C) 2023-2025 Swiss Library for the Blind, Visually Impaired
 and Print Disabled
 
 This program is free software: you can redistribute it and/or modify
