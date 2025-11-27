@@ -720,8 +720,8 @@ impl TranslationTable {
                         rule,
                     );
                 }
-		// Treat a contraction rule similarly to a word rule. Pretend the dots have been
-		// defined implicitely
+                // Treat a contraction rule similarly to a word rule. Pretend the dots have been
+                // defined implicitely
                 Rule::Contraction { chars } => {
                     let dots = builder
                         .character_definitions

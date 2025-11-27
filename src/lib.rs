@@ -26,5 +26,5 @@ assert_eq!(braille, "⠓⠑⠇⠇⠕⠀⠺⠕⠗⠇⠙");
 pub mod parser;
 pub mod translator;
 
-pub use translator::TranslationTable;
 pub use parser::Direction;
+pub use translator::TranslationTable;
