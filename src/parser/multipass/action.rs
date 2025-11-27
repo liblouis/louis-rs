@@ -29,9 +29,9 @@ impl IsLiteral for Action {
 impl TryFrom<&Action> for String {
     type Error = ConversionError;
 
-    fn try_from(test: &Action) -> Result<String, Self::Error> {
-        if test.is_literal() {
-            Ok(test
+    fn try_from(action: &Action) -> Result<String, Self::Error> {
+        if action.is_literal() {
+            Ok(action
                 .actions
                 .iter()
                 .map(|instruction| instruction.try_into().unwrap())
@@ -174,16 +174,20 @@ impl<'a> Parser<'a> {
             Some('*') => Ok(self.replace()?),
             Some('?') => Ok(self.ignore()?),
             Some(c) => Err(ParseError::InvalidAction { found: Some(*c) }),
-            _ => Err(ParseError::InvalidTest { found: None }),
+            _ => Err(ParseError::InvalidAction { found: None }),
         }
     }
 
     fn many_actions(&mut self) -> Result<Vec<Instruction>, ParseError> {
-        let mut tests: Vec<Instruction> = Vec::new();
+        let mut actions: Vec<Instruction> = Vec::new();
         while self.chars.peek().filter(|&c| is_action(c)).is_some() {
-            tests.push(self.action()?);
+            actions.push(self.action()?);
         }
-        Ok(tests)
+        if actions.is_empty() {
+            Err(ParseError::EmptyAction)
+        } else {
+            Ok(actions)
+        }
     }
 
     pub fn actions(&mut self) -> Result<Action, ParseError> {
