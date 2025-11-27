@@ -1,11 +1,10 @@
 //! A Parser for the action operand of context and multipass opcodes
 use std::{iter::Peekable, str::Chars};
 
+use super::braille::{self, BrailleChars, braille_chars, is_braille_dot};
 use crate::parser::multipass::ConversionError;
 use crate::parser::multipass::IsLiteral;
 use crate::parser::multipass::ParseError;
-
-use super::braille::{self, BrailleChars, braille_chars, is_braille_dot};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Action {
@@ -47,6 +46,11 @@ impl TryFrom<&Action> for String {
 pub enum Instruction {
     String { s: String },
     Dots { dots: BrailleChars },
+    // FIXME: This seems weird. What is the meaning of a class in the action part of a context rule?
+    Class { name: String },
+    Assignment { variable: u8, value: u8 },
+    Increment { variable: u8 },
+    Decrement { variable: u8 },
     Replace,
     Ignore,
 }
@@ -74,7 +78,7 @@ impl TryFrom<&Instruction> for String {
 }
 
 fn is_action(c: &char) -> bool {
-    matches!(c, '@' | '"' | '*' | '?')
+    matches!(c, '@' | '"' | '%' | '#' | '*' | '?')
 }
 
 pub struct Parser<'a> {
@@ -167,12 +171,60 @@ impl<'a> Parser<'a> {
         Ok(Instruction::Ignore)
     }
 
+    fn ascii_number(&mut self) -> Result<u8, ParseError> {
+        let mut s = String::new();
+        while self.chars.peek().filter(|c| c.is_ascii_digit()).is_some() {
+            s.push(self.chars.next().unwrap());
+        }
+        let number = s.parse::<u8>()?;
+        Ok(number)
+    }
+
+    fn variable(&mut self) -> Result<Instruction, ParseError> {
+        self.consume('#')?;
+        let variable = self
+            .ascii_number()
+            .map_err(|_| ParseError::InvalidVariableName)?;
+        match self.chars.peek() {
+            Some('=') => {
+                self.consume('=')?;
+                Ok(Instruction::Assignment {
+                    variable,
+                    value: self.ascii_number()?,
+                })
+            }
+            Some('+') => Ok(Instruction::Increment { variable }),
+            Some('-') => Ok(Instruction::Decrement { variable }),
+            c => Err(ParseError::InvalidOperator { found: c.copied() }),
+        }
+    }
+
+    fn class(&mut self) -> Result<Instruction, ParseError> {
+        self.consume('%')?;
+        let mut name = String::new();
+        while self
+            .chars
+            .peek()
+            .filter(|c| c.is_ascii_alphabetic())
+            .is_some()
+        {
+            name.push(self.chars.next().unwrap());
+        }
+        if name.is_empty() {
+            Err(ParseError::InvalidClass)
+        } else {
+            Ok(Instruction::Class { name })
+        }
+    }
+
     fn action(&mut self) -> Result<Instruction, ParseError> {
         match self.chars.peek() {
             Some('@') => Ok(self.dots()?),
             Some('"') => Ok(self.string()?),
             Some('*') => Ok(self.replace()?),
             Some('?') => Ok(self.ignore()?),
+            Some('#') => Ok(self.variable()?),
+            Some('%') => Ok(self.class()?),
             Some(c) => Err(ParseError::InvalidAction { found: Some(*c) }),
             _ => Err(ParseError::InvalidAction { found: None }),
         }
@@ -217,6 +269,10 @@ mod display {
                 Instruction::Dots { dots } => write!(f, "{}", dots_to_unicode(dots)),
                 Instruction::Replace => write!(f, "*"),
                 Instruction::Ignore => write!(f, "?"),
+                Instruction::Class { name } => write!(f, "%{}", name),
+                Instruction::Assignment { variable, value } => write!(f, "#{}={}", variable, value),
+                Instruction::Increment { variable } => write!(f, "#{}+", variable),
+                Instruction::Decrement { variable } => write!(f, "#{}-", variable),
             }
         }
     }
@@ -291,6 +347,64 @@ mod tests {
     #[test]
     fn ignore() {
         assert_eq!(Parser::new("?").ignore(), Ok(Instruction::Ignore));
+    }
+
+    #[test]
+    fn variable() {
+        assert_eq!(
+            Parser::new("#1=42").action(),
+            Ok(Instruction::Assignment {
+                variable: 1,
+                value: 42
+            })
+        );
+        assert_eq!(
+            Parser::new("#42=1").action(),
+            Ok(Instruction::Assignment {
+                variable: 42,
+                value: 1
+            })
+        );
+        assert_eq!(
+            Parser::new("#5+").action(),
+            Ok(Instruction::Increment { variable: 5 })
+        );
+        assert_eq!(
+            Parser::new("#5-").action(),
+            Ok(Instruction::Decrement { variable: 5 })
+        );
+        assert_ne!(
+            Parser::new("#1=").action(),
+            //Err(ParseError::InvalidNumber(ParseIntError { kind: Empty })),
+            Ok(Instruction::Assignment {
+                variable: 1,
+                value: 42
+            })
+        );
+        assert_eq!(
+            Parser::new("#5<").action(),
+            Err(ParseError::InvalidOperator { found: Some('<') }),
+        );
+        assert_eq!(
+            Parser::new("#a=1").action(),
+            Err(ParseError::InvalidVariableName),
+        );
+    }
+
+    #[test]
+    fn class() {
+        assert_eq!(
+            Parser::new("%foo").action(),
+            Ok(Instruction::Class { name: "foo".into() })
+        );
+        assert_ne!(
+            Parser::new("%hallöchen").action(),
+            Ok(Instruction::Class {
+                name: "hallöchen".into()
+            })
+        );
+        assert_eq!(Parser::new("%京").action(), Err(ParseError::InvalidClass));
+        assert_eq!(Parser::new("%42").action(), Err(ParseError::InvalidClass));
     }
 
     #[test]
