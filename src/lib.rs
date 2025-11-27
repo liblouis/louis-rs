@@ -2,6 +2,11 @@
 
 This library is a rust-only implementation of [liblouis](https://liblouis.io).
 
+## Status
+
+The API of this library is not stable yet. Breaking changes may occur
+in any version.
+
 ## Usage
 
 ```no_run
