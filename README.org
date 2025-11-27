@@ -1,8 +1,12 @@
+#+options: title:t toc:nil
 #+title: louis-rs: a liblouis re-implementation in Rust
+#+language: en
+
+* louis-rs: a liblouis re-implementation in Rust
 
 This is the reduced-to-the-max re-write of liblouis in Rust.
 
-* Rationale
+** Rationale
 Many if not most of the CVEs of liblouis are rooted in the manual
 memory management in the C version of liblouis.
 
@@ -10,7 +14,7 @@ Moving to Rust is of tremendous help not only for the solid memory
 management to avoid buffer overflow problems, but also to bring joy
 back into liblouis maintenance.
 
-* Status
+** Status
 With the some small exceptions the parser is complete. Translation
 using only character and most translation opcodes basically works.
 
@@ -21,7 +25,7 @@ Currently, the re-implementation passes around 84% of the liblouis
 test suite for forward translation successfully. If you consider both
 forward and backward translation the success rate is less, namely 55%.
 
-* Relation to liblouis
+** Relation to liblouis
 
 louis-rs is *not* a direct port of the liblouis C code to Rust. It
 uses the same tables and the same YAML tests but other than that it is
@@ -31,7 +35,7 @@ translation using a different algorithm.
 The goal is to be as compatible as possible with liblouis, when it
 makes sense.
 
-* Usage
+** Usage
 
 Get help:
 
@@ -290,15 +294,15 @@ Test the table query functionality:
   {"[...]/liblouis/tables/de-g2-detailed.ctb", "[...]/liblouis/tables/de-g2.ctb"}
 #+END_SRC
 
-* Prerequisites
+** Prerequisites
 
 - You need the [[https://www.rust-lang.org/][Rust tool chain]].
 
-* Contributing
+** Contributing
 If you have any improvements or comments please feel free to file a
 pull request or an issue.
 
-* Acknowledgments
+** Acknowledgments
 
 A lot of inspiration for the hand-rolled parser comes from the
 absolutely fantastic book [[https://craftinginterpreters.com/][Crafting Interpreters]] by Robert Nystrom.
@@ -310,7 +314,7 @@ The parser is built from the grammar used in [[https://github.com/liblouis/tree-
 which is a port of the [[https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form][EBNF grammar]] in [[https://github.com/liblouis/rewrite-louis][rewrite-louis]], which in turn is
 a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][Parsing expression grammar]] from [[https://github.com/liblouis/louis-parser][louis-parser]].
 
-* Todo [8/16]
+** Todo [8/16]
 - [X] Parse with context
   - currently tables are parsed line by line. Opcodes have no idea
     whether a character or a class has been defined before
@@ -363,7 +367,7 @@ a just port of the [[https://en.wikipedia.org/wiki/Parsing_expression_grammar][P
 - [ ] Instead of hand-rolling an finite state machine to implement
   regular expressions we should use [[https://docs.rs/regex-automata/latest/regex_automata/][regex_automata]].
 
-* License
+** License
 
 Copyright (C) 2023-2025 Swiss Library for the Blind, Visually Impaired
 and Print Disabled
