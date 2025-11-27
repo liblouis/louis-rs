@@ -171,8 +171,8 @@ impl CharacterDefinition {
     /// could not be converted.
     fn braille_to_unicode(&self, dots: &Braille, chars: &str) -> Result<String, TranslationError> {
         let dots = match dots {
-            Braille::Implicit => self.resolve_implicit_dots(&chars)?,
-            Braille::Explicit(dots) => dots_to_unicode(&dots),
+            Braille::Implicit => self.resolve_implicit_dots(chars)?,
+            Braille::Explicit(dots) => dots_to_unicode(dots),
         };
         Ok(dots)
     }
@@ -483,10 +483,10 @@ impl TranslationTable {
                         .nonumsign(&dots_to_unicode(dots), rule);
                 }
                 Rule::Numericnocontchars { chars } => {
-                    builder.numeric_indicator.numericnocontchars(&chars);
+                    builder.numeric_indicator.numericnocontchars(chars);
                 }
                 Rule::Numericmodechars { chars } => {
-                    builder.numeric_indicator.numericmodechars(&chars);
+                    builder.numeric_indicator.numericmodechars(chars);
                 }
                 Rule::Capsletter { dots, .. } => {
                     builder
@@ -514,7 +514,7 @@ impl TranslationTable {
                         .endcaps(&dots_to_unicode(dots), rule);
                 }
                 Rule::Capsmodechars { chars } => {
-                    builder.uppercase_indicator.capsmodechars(&chars);
+                    builder.uppercase_indicator.capsmodechars(chars);
                 }
                 Rule::Letsign { dots } => {
                     builder
@@ -522,8 +522,8 @@ impl TranslationTable {
                         .letsign(&dots_to_unicode(dots), rule);
                 }
                 Rule::Contraction { chars } => {
-                    builder.lettersign_indicator.contraction(&chars, rule);
-                    builder.nocontract_indicator.contraction(&chars, rule);
+                    builder.lettersign_indicator.contraction(chars, rule);
+                    builder.nocontract_indicator.contraction(chars, rule);
                 }
                 Rule::Nocontractsign { dots } => {
                     builder
@@ -735,8 +735,8 @@ impl TranslationTable {
                         rule.precedence(),
                         rule,
                     );
-                    builder.lettersign_indicator.contraction(&chars, rule);
-                    builder.nocontract_indicator.contraction(&chars, rule);
+                    builder.lettersign_indicator.contraction(chars, rule);
+                    builder.nocontract_indicator.contraction(chars, rule);
                 }
                 Rule::Joinword { chars, dots, .. } | Rule::Lowword { chars, dots, .. } => {
                     builder.get_trie_mut(rule).insert(
@@ -807,19 +807,19 @@ impl TranslationTable {
             builder
                 .character_attributes
                 .get(Attribute::Digit)
-                .unwrap_or(HashSet::default()),
+                .unwrap_or_default(),
         );
         builder.uppercase_indicator.uppercase_characters(
             builder
                 .character_attributes
                 .get(Attribute::Uppercase)
-                .unwrap_or(HashSet::default()),
+                .unwrap_or_default(),
         );
         builder.uppercase_indicator.letter_characters(
             builder
                 .character_attributes
                 .get(Attribute::Letter)
-                .unwrap_or(HashSet::default()),
+                .unwrap_or_default(),
         );
         Ok(builder.build(direction))
     }

@@ -167,11 +167,10 @@ impl Trie {
                 // first rule wins, so nothing to insert
             } else {
                 // last rule wins
-                current_node.translation =
-                    Some(Translation::new(&from, &to, length, origin.clone()));
+                current_node.translation = Some(Translation::new(from, to, length, origin.clone()));
             }
         } else {
-            current_node.translation = Some(Translation::new(&from, &to, length, origin.clone()));
+            current_node.translation = Some(Translation::new(from, to, length, origin.clone()));
         }
     }
 
@@ -216,65 +215,65 @@ impl Trie {
                 ));
             }
         }
-        if let Some(node) = node.word_start_transition() {
-            if word_start(prev, c) {
-                matching_rules.extend(self.find_translations_from_node(
-                    &input[..],
-                    prev,
-                    node,
-                    match_length,
-                ));
-            }
+        if let Some(node) = node.word_start_transition()
+            && word_start(prev, c)
+        {
+            matching_rules.extend(self.find_translations_from_node(
+                input,
+                prev,
+                node,
+                match_length,
+            ));
         }
-        if let Some(node) = node.not_word_start_transition() {
-            if !word_start(prev, c) {
-                matching_rules.extend(self.find_translations_from_node(
-                    &input[..],
-                    prev,
-                    node,
-                    match_length,
-                ));
-            }
+        if let Some(node) = node.not_word_start_transition()
+            && !word_start(prev, c)
+        {
+            matching_rules.extend(self.find_translations_from_node(
+                input,
+                prev,
+                node,
+                match_length,
+            ));
         }
-        if let Some(node) = node.word_end_transition() {
-            if word_end(prev, c) {
-                matching_rules.extend(self.find_translations_from_node(
-                    &input[..],
-                    prev,
-                    node,
-                    match_length,
-                ));
-            }
+        if let Some(node) = node.word_end_transition()
+            && word_end(prev, c)
+        {
+            matching_rules.extend(self.find_translations_from_node(
+                input,
+                prev,
+                node,
+                match_length,
+            ));
         }
-        if let Some(node) = node.not_word_end_transition() {
-            if !word_end(prev, c) {
-                matching_rules.extend(self.find_translations_from_node(
-                    &input[..],
-                    prev,
-                    node,
-                    match_length,
-                ));
-            }
+        if let Some(node) = node.not_word_end_transition()
+            && !word_end(prev, c)
+        {
+            matching_rules.extend(self.find_translations_from_node(
+                input,
+                prev,
+                node,
+                match_length,
+            ));
         }
-        if let Some(node) = node.word_num_transition() {
-            if word_number(prev, c) {
-                matching_rules.extend(self.find_translations_from_node(
-                    &input[..],
-                    prev,
-                    node,
-                    match_length,
-                ));
-            }
+        if let Some(node) = node.word_num_transition()
+            && word_number(prev, c)
+        {
+            matching_rules.extend(self.find_translations_from_node(
+                input,
+                prev,
+                node,
+                match_length,
+            ));
         }
-        if let Some(node) = node.num_word_transition() {
-            if number_word(prev, c) {
-                matching_rules.extend(self.find_translations_from_node(
-                    &input[..],
-                    prev,
-                    node,
-                    match_length,
-                ));
-            }
+        if let Some(node) = node.num_word_transition()
+            && number_word(prev, c)
+        {
+            matching_rules.extend(self.find_translations_from_node(
+                input,
+                prev,
+                node,
+                match_length,
+            ));
         }
         matching_rules
     }

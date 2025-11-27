@@ -127,7 +127,7 @@ impl Trace {
     }
 }
 
-fn print_trace(translations: &Vec<Translation>) {
+fn print_trace(translations: &[Translation]) {
     let mut traces: Vec<Trace> = Vec::new();
     for (id, translation) in translations.iter().enumerate() {
         traces.push(Trace {
@@ -148,8 +148,8 @@ fn trace(table: &Path, direction: Direction, input: &str) {
         Ok(rules) => {
             match TranslationTable::compile(rules, direction) {
                 Ok(table) => {
-                    println!("{}", table.translate(&input));
-                    print_trace(&table.trace(&input));
+                    println!("{}", table.translate(input));
+                    print_trace(&table.trace(input));
                 }
                 Err(e) => eprintln!("Could not compile table: {:?}", e),
             };

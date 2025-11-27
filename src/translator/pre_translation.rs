@@ -37,13 +37,10 @@ impl TranslationTable {
         self.trie.is_empty()
     }
 
-    pub fn compile(
-        rules: &Vec<AnchoredRule>,
-        direction: Direction,
-    ) -> Result<Self, TranslationError> {
+    pub fn compile(rules: &[AnchoredRule], direction: Direction) -> Result<Self, TranslationError> {
         let mut builder = TranslationTableBuilder::new();
 
-        let rules = rules.into_iter().filter(|r| r.is_direction(direction));
+        let rules = rules.iter().filter(|r| r.is_direction(direction));
 
         for rule in rules {
             match &rule.rule {
@@ -60,7 +57,7 @@ impl TranslationTable {
                             Boundary::None,
                             direction,
                             Precedence::Default,
-                            &rule,
+                            rule,
                         );
                     }
                 }

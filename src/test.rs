@@ -58,7 +58,7 @@ pub enum TestResult {
 
 impl TestResult {
     pub fn is_success(&self) -> bool {
-        matches!(self, TestResult::Success { .. })
+        matches!(self, TestResult::Success)
     }
     pub fn is_failure(&self) -> bool {
         matches!(self, TestResult::Failure { .. })

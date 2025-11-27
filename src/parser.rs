@@ -963,7 +963,7 @@ impl HasNocross for Rule {
             | Rule::Begnum { constraints, .. }
             | Rule::Midnum { constraints, .. }
             | Rule::Endnum { constraints, .. }
-            | Rule::Joinnum { constraints, .. } => constraints.clone(),
+            | Rule::Joinnum { constraints, .. } => *constraints,
             _ => constraint_set!(),
         }
     }
@@ -1041,10 +1041,10 @@ fn unescape_unicode(chars: &mut Chars, len: u8) -> Result<char, ParseError> {
         }
     }
 
-    if let Ok(n) = u32::from_str_radix(&s, 16) {
-        if let Some(c) = char::from_u32(n) {
-            return Ok(c);
-        }
+    if let Ok(n) = u32::from_str_radix(&s, 16)
+        && let Some(c) = char::from_u32(n)
+    {
+        return Ok(c);
     }
     Err(ParseError::InvalidUnicodeLiteral { found: Some(s) })
 }
@@ -1450,9 +1450,9 @@ impl<'a> RuleParser<'a> {
             .next()
             .ok_or(ParseError::MultipassTestExpected)
             .map(|s| {
-                multipass::test::Parser::new(&s)
+                multipass::test::Parser::new(s)
                     .tests()
-                    .map_err(|e| ParseError::InvalidMultipassOperand(e))
+                    .map_err(ParseError::InvalidMultipassOperand)
             })?
     }
 
@@ -1461,9 +1461,9 @@ impl<'a> RuleParser<'a> {
             .next()
             .ok_or(ParseError::MultipassActionExpected)
             .map(|s| {
-                multipass::action::Parser::new(&s)
+                multipass::action::Parser::new(s)
                     .actions()
-                    .map_err(|e| ParseError::InvalidMultipassOperand(e))
+                    .map_err(ParseError::InvalidMultipassOperand)
             })?
     }
 
@@ -2330,7 +2330,7 @@ fn expand_include(rule: AnchoredRule) -> Result<Vec<AnchoredRule>, Vec<TableErro
                     .find_file(&path)
                     .ok_or(vec![TableError::HyphenationTableNotFound(path)])?;
                 return Ok(vec![AnchoredRule::new(
-                    Rule::IncludeHyphenation { path: path.into() },
+                    Rule::IncludeHyphenation { path },
                     rule.path,
                     rule.line,
                 )]);

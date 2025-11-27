@@ -42,20 +42,20 @@ pub fn index() -> Result<Index, MetaDataError> {
 
             if let Ok(content) = fs::read_to_string(&path) {
                 for line in content.lines() {
-                    if let Some(line) = line.strip_prefix("#+") {
-                        if let Some((key, value)) = line.split_once(':') {
-                            let k = key.trim();
-                            let v = value.trim();
-                            if !k.is_empty()
-                                && !v.is_empty()
-                                && k.chars().all(|c| c.is_ascii_alphanumeric())
-                                && v.chars().all(|c| c.is_ascii_graphic())
-                            {
-                                index
-                                    .entry((k.into(), v.into()))
-                                    .or_default()
-                                    .insert(path.clone());
-                            }
+                    if let Some(line) = line.strip_prefix("#+")
+                        && let Some((key, value)) = line.split_once(':')
+                    {
+                        let k = key.trim();
+                        let v = value.trim();
+                        if !k.is_empty()
+                            && !v.is_empty()
+                            && k.chars().all(|c| c.is_ascii_alphanumeric())
+                            && v.chars().all(|c| c.is_ascii_graphic())
+                        {
+                            index
+                                .entry((k.into(), v.into()))
+                                .or_default()
+                                .insert(path.clone());
                         }
                     }
                 }
