@@ -2,7 +2,7 @@
 
 # louis-rs: a liblouis re-implementation in Rust
 
-This is the reduced-to-the-max re-write of liblouis in Rust.
+This is the reduced-to-the-max re-write of [liblouis](https://liblouis.io/) in Rust.
 
 
 ## Rationale
@@ -17,15 +17,15 @@ back into liblouis maintenance.
 
 ## Status
 
-With the some small exceptions the parser is complete. Translation
-using only character and most translation opcodes basically works.
+The re-implementation is in alpha state.
 
-The original YAML test suite is supported and can be used to test the
-re-implementation.
+That said, the `louis` binary currently, passes around 84% of the
+liblouis test suite for forward translation successfully. Backward
+translation works in principle but not much of it has been
+implemented, so the success rate for both forward and backward
+translation is much less, namely 55%.
 
-Currently, the re-implementation passes around 84% of the liblouis
-test suite for forward translation successfully. If you consider both
-forward and backward translation the success rate is less, namely 55%.
+The library and its API has not been worked out and is not stable.
 
 
 ## Relation to liblouis
@@ -47,13 +47,13 @@ Get help:
 
 Translate some text:
 
+    $ export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
     $ cargo run -- translate ~/src/liblouis/tables/de-comp6.utb 
     > Guten Tag
     ⠈⠛⠥⠞⠑⠝⠀⠈⠞⠁⠛⠀
 
 Trace a translation:
 
-    $ export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
     $ cargo run -- translate --tracing ~/src/liblouis/tables/en-us-g2.ctb
     > It's about the blind
     ⠠⠊⠞⠄⠎⠀⠁⠃⠀⠹⠑⠀⠃⠇
@@ -92,19 +92,18 @@ Trace a translation:
     └───┴───────┴────┴───────────────┘
     > ab
     ⠰⠁⠃
-    ┌───┬──────┬────┬───────────────┐
-    │   │ From │ To │ Rule          │
-    ├───┼──────┼────┼───────────────┤
-    │ 0 │      │ ⠰  │ letsign ⠰     │
-    │ 1 │ a    │ ⠁  │ lowercase a ⠁ │
-    │ 2 │ b    │ ⠃  │ lowercase b ⠃ │
-    └───┴──────┴────┴───────────────┘
+    ┌───┬──────┬────┬────────────────┐
+    │   │ From │ To │ Rule           │
+    ├───┼──────┼────┼────────────────┤
+    │ 0 │      │ ⠰  │ letsign ⠰      │
+    │ 1 │ ab   │ ⠁⠃ │ contraction ab │
+    └───┴──────┴────┴────────────────┘
 
 Test the parser:
 
     $ cargo run -- parse
     > nofor letter e 123-1
-    Letter { character: 'e', dots: Explicit([{Dot2, Dot1, Dot3}, {Dot1}]), constraints: EnumSet(Nofor) }
+    Letter { character: 'e', dots: [EnumSet(Dot1 | Dot2 | Dot3), EnumSet(Dot1)], constraints: Constraints(EnumSet(Nofor)) }
 
 Build a release version:
 
@@ -112,13 +111,15 @@ Build a release version:
 
 Run the tests in a YAML file:
 
-    $ LOUIS_TABLE_PATH=~/src/liblouis/tables cargo run -- check ~/src/liblouis/tests/braille-specs/de-de-comp8.yaml 2> /dev/null
-    ================================================================================
-    8 tests run:
-    8 successes [100%]
-    0 failures [0%]
-    0 expected failures [0%]
-    0 unexpected successes [0%]
+    $ LOUIS_TABLE_PATH=~/src/liblouis/tables cargo run -- check --summary ~/src/liblouis/tests/braille-specs/de-de-comp8.yaml
+    ┌──────────────────┬───────┬───────────┬──────────┬──────────┬────────────┐
+    │ YAML File        │ Tests │ Successes │ Failures │ Expected │ Unexpected │
+    │                  │       │           │          │ Failures │ Successes  │
+    ├──────────────────┼───────┼───────────┼──────────┼──────────┼────────────┤
+    │ de-de-comp8.yaml │ 8     │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
+    ┌──────────────────┌───────┌───────────┌──────────┌──────────┌────────────┐
+    │ Total            │ 8     │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
+    └──────────────────└───────└───────────└──────────└──────────└────────────┘
 
 Run all YAML tests:
 
@@ -305,61 +306,6 @@ Wirth ("as simple as possible but not simpler").
 The parser is built from the grammar used in [tree-sitter-liblouis](https://github.com/liblouis/tree-sitter-liblouis),
 which is a port of the [EBNF grammar](https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form) in [rewrite-louis](https://github.com/liblouis/rewrite-louis), which in turn is
 a just port of the [Parsing expression grammar](https://en.wikipedia.org/wiki/Parsing_expression_grammar) from [louis-parser](https://github.com/liblouis/louis-parser).
-
-
-## Todo <code>[8/16]</code>
-
--   [X] Parse with context
-    -   currently tables are parsed line by line. Opcodes have no idea
-        whether a character or a class has been defined before
-    -   Probably need to pass some context to the rule parser where
-        character definitions and class names are kept
-    -   this is solved with a two-pass compilation now. The first pass
-        collects all relevant information and the second pass consequently
-        uses that.
--   [X] Support for nocross
--   [-] Indication <code>[2/3]</code>
-    -   presumably this could be done independently of translation, i.e.
-        find indication locations and put them in the typeform array
-        before even translating.
-    -   [X] Numeric indication
-    -   [X] Caps indication
-    -   [ ] Emphasis indication
--   [X] Add support for virtual dots
-    -   Virtual dots are supported and are converted to Unicode Supplementary Private Use Area-A
--   [-] The correct, multipass and match opcodes <code>[1/3]</code>
-    -   [X] Match opcode
-        -   A basic regexp engine has been implemented and aside from
-            negation the match opcode basically works
-    -   [ ] Correct opcode
-    -   [ ] Multipass opcode
--   [X] Currently the matching of input text against the rules is case
-    sensitive.
-    -   [X] Make it case insensitive.
-    -   [X] Now everything is case insensitive, even character
-        definitions. This is probably not what we want. We might have to
-        move the character definitions out of the trie into a separate
-        structure.
--   [X] Word boundaries so we could support beg- and endword.
-    -   the [unicode<sub>segmentation</sub>](https://docs.rs/unicode-segmentation/latest/unicode_segmentation/) crate would probably help. It has
-        functions like [split<sub>word</sub><sub>bound</sub><sub>indices</sub>](https://docs.rs/unicode-segmentation/latest/unicode_segmentation/trait.UnicodeSegmentation.html#tymethod.split_word_bound_indices), that give you word bounds
-        based on the Unicode standard.
--   [X] Handle implicit braille definitions, i.e. '='
--   [ ] Typeforms
--   [ ] Cursor handling
--   [ ] Hyphenation
-    -   will probably be delegated to the [hyphenation crate](https://docs.rs/hyphenation/latest/hyphenation/)
--   [ ] Add an API so that the functionality can be used as a library
-    -   end expose it as a C ABI so that it can be used from other
-        languages (see also [cbindgen](https://github.com/mozilla/cbindgen) or even better [Diplomat](https://github.com/rust-diplomat/diplomat))
--   [X] Table resolution based on metadata
--   [ ] Display tables
-    -   When testing the YAML files the display tables are used.
-    -   However normal translation has currently no way to specify a
-        display table
--   [X] Handle undefined characters similarly to liblouis
--   [ ] Instead of hand-rolling an finite state machine to implement
-    regular expressions we should use [regex<sub>automata</sub>](https://docs.rs/regex-automata/latest/regex_automata/).
 
 
 ## License
