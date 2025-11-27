@@ -214,7 +214,12 @@ impl<'a> Parser<'a> {
     fn class(&mut self) -> Result<Instruction, ParseError> {
         self.consume('%')?;
         let mut name = String::new();
-        while self.chars.peek().filter(|c| c.is_alphabetic()).is_some() {
+        while self
+            .chars
+            .peek()
+            .filter(|c| c.is_ascii_alphabetic())
+            .is_some()
+        {
             name.push(self.chars.next().unwrap());
         }
         if self.chars.peek().filter(|c| is_class_digit(c)).is_some() {
