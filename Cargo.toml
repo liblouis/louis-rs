@@ -7,7 +7,7 @@ repository = "https://github.com/liblouis/louis-rs"
 readme = "README.md"
 license = "LGPL-2.1-or-later"
 keywords = ["braille"]
-exclude = ["dictionaries", "doc/Architecture_Decision_Records.org"]
+include = ["src/**/*.rs", "README.md"]
 
 [[bin]]
 name = "louis"
