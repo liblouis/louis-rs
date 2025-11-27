@@ -4,7 +4,7 @@
 
 * louis-rs: a liblouis re-implementation in Rust
 
-This is the reduced-to-the-max re-write of liblouis in Rust.
+This is the reduced-to-the-max re-write of [[https://liblouis.io/][liblouis]] in Rust.
 
 ** Rationale
 Many if not most of the CVEs of liblouis are rooted in the manual
