@@ -16,6 +16,8 @@ pub enum ParseError {
     CharExpected { expected: char, found: Option<char> },
     #[error("Invalid number")]
     InvalidNumber(#[from] ParseIntError),
+    #[error("Invalid range: min ({min}) >= max ({max})")]
+    InvalidRange { min: u8, max: u8 },
     #[error("Invalid braille")]
     InvalidBraille(#[from] braille::ParseError),
     #[error("Invalid test")]

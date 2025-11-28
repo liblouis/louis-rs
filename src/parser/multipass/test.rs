@@ -202,7 +202,11 @@ impl<'a> Parser<'a> {
                             return Err(ParseError::InvalidQuantifier);
                         }
                     };
-                    Ok(Some(Quantifier::Range(min, max)))
+                    if min >= max {
+                        Err(ParseError::InvalidRange { min, max })
+                    } else {
+                        Ok(Some(Quantifier::Range(min, max)))
+                    }
                 } else {
                     Ok(Some(Quantifier::Number(min)))
                 }
@@ -214,24 +218,31 @@ impl<'a> Parser<'a> {
     fn class(&mut self) -> Result<Instruction, ParseError> {
         self.consume('%')?;
         let mut name = String::new();
-        while self
-            .chars
-            .peek()
-            .filter(|c| c.is_ascii_alphabetic())
-            .is_some()
-        {
-            name.push(self.chars.next().unwrap());
-        }
+        // for some stupid reason classes can be just a number
         if self.chars.peek().filter(|c| is_class_digit(c)).is_some() {
             name.push(self.chars.next().unwrap());
-        }
-        if name.is_empty() {
-            Err(ParseError::InvalidClass)
-        } else {
             Ok(Instruction::Class {
                 name,
-                quantifier: self.maybe_quantifier()?,
+                quantifier: None,
             })
+        } else {
+            // but usually they are just ascii identifiers
+            while self
+                .chars
+                .peek()
+                .filter(|c| c.is_ascii_alphabetic())
+                .is_some()
+            {
+                name.push(self.chars.next().unwrap());
+            }
+            if name.is_empty() {
+                Err(ParseError::InvalidClass)
+            } else {
+                Ok(Instruction::Class {
+                    name,
+                    quantifier: self.maybe_quantifier()?,
+                })
+            }
         }
     }
 
@@ -416,6 +427,9 @@ impl<'a> Parser<'a> {
         let at_end = self.chars.next_if_eq(&'~').is_some();
         if tests.is_empty() {
             Err(ParseError::EmptyTest)
+        } else if let Some(c) = self.chars.next() {
+            // we haven't consumed all the input. There are some invalid chars
+            Err(ParseError::InvalidTest { found: Some(c) })
         } else {
             Ok(Test {
                 at_beginning,
@@ -692,6 +706,42 @@ mod tests {
     }
 
     #[test]
+    fn class_with_quantifier() {
+        assert_eq!(
+            Parser::new("%foo.").class(),
+            Ok(Instruction::Class {
+                name: "foo".into(),
+                quantifier: Some(Quantifier::Any)
+            })
+        );
+        assert_eq!(
+            Parser::new("%foo20").class(),
+            Ok(Instruction::Class {
+                name: "foo".into(),
+                quantifier: Some(Quantifier::Number(20))
+            })
+        );
+        assert_eq!(
+            Parser::new("%foo1-20").class(),
+            Ok(Instruction::Class {
+                name: "foo".into(),
+                quantifier: Some(Quantifier::Range(1, 20))
+            })
+        );
+        assert_eq!(
+            Parser::new("%foo20-200").class(),
+            Ok(Instruction::Class {
+                name: "foo".into(),
+                quantifier: Some(Quantifier::Range(20, 200))
+            })
+        );
+        assert_eq!(
+            Parser::new("%foo200-20").class(),
+            Err(ParseError::InvalidRange { min: 200, max: 20 }),
+        );
+    }
+
+    #[test]
     fn quantifier() {
         assert_eq!(
             Parser::new("$a ").attributes(),
@@ -808,6 +858,13 @@ mod tests {
                 }]
             })
         );
+        assert_eq!(
+            Parser::new("[,,,]").replacement(),
+            Err(ParseError::CharExpected {
+                expected: ']',
+                found: Some(',')
+            }),
+        );
     }
 
     #[test]
@@ -831,6 +888,14 @@ mod tests {
                     }
                 ]
             })
+        );
+    }
+
+    #[test]
+    fn consume_all() {
+        assert_eq!(
+            Parser::new("@123#1=0&too much input").tests(),
+            Err(ParseError::InvalidTest { found: Some('&') }),
         );
     }
 }

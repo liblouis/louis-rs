@@ -237,6 +237,9 @@ impl<'a> Parser<'a> {
         }
         if actions.is_empty() {
             Err(ParseError::EmptyAction)
+        } else if let Some(c) = self.chars.next() {
+            // we haven't consumed all the input. There are some invalid chars
+            Err(ParseError::InvalidAction { found: Some(c) })
         } else {
             Ok(actions)
         }
@@ -419,6 +422,14 @@ mod tests {
                     }
                 ]
             })
+        );
+    }
+
+    #[test]
+    fn consume_all() {
+        assert_eq!(
+            Parser::new("@123#1=0_too much input").actions(),
+            Err(ParseError::InvalidAction { found: Some('_') }),
         );
     }
 }
