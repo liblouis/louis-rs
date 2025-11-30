@@ -8,7 +8,7 @@ readme = "README.md"
 license = "LGPL-2.1-or-later"
 keywords = ["braille", "liblouis", "accessibility"]
 categories = ["command-line-utilities", "accessibility", "text-processing"]
-include = ["src/**/*.rs", "README.md"]
+include = ["src/**/*.rs", "README.md", "CHANGELOG.md"]
 
 [[bin]]
 name = "louis"
