@@ -124,6 +124,17 @@ impl Trie {
             Direction::Forward => (from, to),
             Direction::Backward => (to, from),
         };
+        // FIXME: if `from` is an empty string (or `to` in case of Direction::Backward) there will
+        // be an infinite loop in the translation as the returned Translation will not consume any
+        // input. So for now just panic if that is the case. You could argue that it is a programmer
+        // error to call `insert` with an empty string. OTOH a Result might be more adequate as a
+        // user could indeed define a correct for example with an empty from. That should result in
+        // an error.
+        assert!(
+            !from.is_empty(),
+            "Cannot insert empty `from` string (or `to` string in case of backward translation) - this causes infinite loops when translating"
+        );
+
         let mut current_node = &mut self.root;
         let mut length = from.chars().count();
 
