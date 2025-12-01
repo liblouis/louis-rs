@@ -3,27 +3,12 @@
 # Changelog
 
 
-## Unreleased
-
-
-### Added
-
-
-### Changed
-
-
-### Deprecated
-
-
-### Removed
+## 0.2.2 - 2025-12-01
 
 
 ### Fixed
 
 -   Fix an infinite loop when backtranslating `correct` rules
-
-
-### Security
 
 
 ## 0.2.1
