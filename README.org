@@ -40,14 +40,14 @@ makes sense.
 Get help:
 
 #+BEGIN_SRC shell
-  $ cargo run -- help
+  $ louis help
 #+END_SRC
 
 Translate some text:
 
 #+BEGIN_SRC shell
   $ export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
-  $ cargo run -- translate ~/src/liblouis/tables/de-comp6.utb 
+  $ louis translate ~/src/liblouis/tables/de-comp6.utb
   > Guten Tag
   ⠈⠛⠥⠞⠑⠝⠀⠈⠞⠁⠛⠀
 #+END_SRC
@@ -55,7 +55,7 @@ Translate some text:
 Trace a translation:
 
 #+BEGIN_SRC shell
-  $ cargo run -- translate --tracing ~/src/liblouis/tables/en-us-g2.ctb
+  $ louis translate --tracing ~/src/liblouis/tables/en-us-g2.ctb
   > It's about the blind
   ⠠⠊⠞⠄⠎⠀⠁⠃⠀⠹⠑⠀⠃⠇
   ┌────┬───────┬────┬────────────────────┐
@@ -104,7 +104,7 @@ Trace a translation:
 Test the parser:
 
 #+BEGIN_SRC shell
-  $ cargo run -- parse
+  $ louis parse
   > nofor letter e 123-1
   Letter { character: 'e', dots: [EnumSet(Dot1 | Dot2 | Dot3), EnumSet(Dot1)], constraints: Constraints(EnumSet(Nofor)) }
 #+END_SRC
@@ -118,7 +118,7 @@ Build a release version:
 Run the tests in a YAML file:
 
 #+begin_src shell
-  $ LOUIS_TABLE_PATH=~/src/liblouis/tables cargo run -- check --summary ~/src/liblouis/tests/braille-specs/de-de-comp8.yaml
+  $ LOUIS_TABLE_PATH=~/src/liblouis/tables louis check --summary ~/src/liblouis/tests/braille-specs/de-de-comp8.yaml
   ┌──────────────────┬───────┬───────────┬──────────┬──────────┬────────────┐
   │ YAML File        │ Tests │ Successes │ Failures │ Expected │ Unexpected │
   │                  │       │           │          │ Failures │ Successes  │
@@ -132,7 +132,7 @@ Run the tests in a YAML file:
 Run all YAML tests:
 
 #+BEGIN_SRC shell
-  $ LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis ./target/release/louis check --summary ~/src/liblouis/tests/braille-specs/*.yaml ~/src/liblouis/tests/yaml/*.yaml 2> /dev/null
+  $ LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis louis check --summary ~/src/liblouis/tests/braille-specs/*.yaml ~/src/liblouis/tests/yaml/*.yaml 2> /dev/null
   ┌─────────────────────────────────────────────┬────────┬───────────┬──────────┬──────────┬────────────┐
   │ YAML File                                   │ Tests  │ Successes │ Failures │ Expected │ Unexpected │
   │                                             │        │           │          │ Failures │ Successes  │
@@ -291,7 +291,7 @@ Run all YAML tests:
 Test the table query functionality:
 
 #+BEGIN_SRC shell
-  $ LOUIS_TABLE_PATH=~/src/liblouis/tables cargo run -- query language=de,contraction=full
+  $ LOUIS_TABLE_PATH=~/src/liblouis/tables louis query language=de,contraction=full
   {"[...]/liblouis/tables/de-g2-detailed.ctb", "[...]/liblouis/tables/de-g2.ctb"}
 #+END_SRC
 
