@@ -2,7 +2,7 @@ use crate::translator::trie::{Boundary, Trie};
 
 use crate::parser::{AnchoredRule, Direction, Rule};
 use crate::parser::{HasDirection, Precedence};
-use crate::translator::{Translation, TranslationError};
+use crate::translator::{Translation, TranslationError, TranslationStage};
 
 use crate::parser::IsLiteral;
 
@@ -52,9 +52,9 @@ impl TranslationTable {
                         let from: String = test.try_into().unwrap();
                         let to: String = action.try_into().unwrap();
                         if direction == Direction::Backward && to.is_empty() {
-			    // Correct rules can map to an empty string, i.e. to drop some
-			    // characters. Such rules cannot be used for backtranslation (you cannot
-			    // translate the empty string to something)
+                            // Correct rules can map to an empty string, i.e. to drop some
+                            // characters. Such rules cannot be used for backtranslation (you cannot
+                            // translate the empty string to something)
                             continue;
                         }
                         builder.trie.insert(
@@ -64,6 +64,7 @@ impl TranslationTable {
                             Boundary::None,
                             direction,
                             Precedence::Default,
+                            TranslationStage::Pre,
                             rule,
                         );
                     }

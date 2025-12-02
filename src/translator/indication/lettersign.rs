@@ -8,6 +8,7 @@
 //! of contractions and matches the input against it. If a contraction appears in the input an
 //! indication is emitted.
 
+use crate::translator::TranslationStage;
 use crate::translator::trie::Boundary;
 use crate::{
     parser::{AnchoredRule, Direction, Precedence},
@@ -48,6 +49,7 @@ impl IndicatorBuilder {
                     Boundary::Word,
                     Direction::Forward,
                     Precedence::Default,
+                    TranslationStage::Main,
                     &origin,
                 );
             }
@@ -89,7 +91,7 @@ impl Indicator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::RuleParser;
+    use crate::{parser::RuleParser, translator::TranslationStage};
 
     fn rule(rule: &str) -> AnchoredRule {
         let rule = RuleParser::new(rule).rule().unwrap();
@@ -113,6 +115,7 @@ mod tests {
                 weight: 1,
                 offset: 0,
                 precedence: Precedence::Default,
+                stage: TranslationStage::Main,
                 origin: Some(rule("letsign 6")),
             })
         );
@@ -125,6 +128,7 @@ mod tests {
                 weight: 1,
                 offset: 0,
                 precedence: Precedence::Default,
+                stage: TranslationStage::Main,
                 origin: Some(rule("letsign 6")),
             })
         );

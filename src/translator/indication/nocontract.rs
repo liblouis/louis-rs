@@ -14,6 +14,7 @@
 //! indicator](crate::translator::indication::lettersign::Indicator). In liblouis they do not seem
 //! to have exactly the same behaviour. Find a way to merge them.
 
+use crate::translator::TranslationStage;
 use crate::translator::trie::Boundary;
 use crate::{
     parser::{AnchoredRule, Direction, Precedence},
@@ -54,6 +55,7 @@ impl IndicatorBuilder {
                     Boundary::Word,
                     Direction::Forward,
                     Precedence::Default,
+                    TranslationStage::Main,
                     &origin,
                 );
             }
@@ -95,7 +97,7 @@ impl Indicator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::RuleParser;
+    use crate::{parser::RuleParser, translator::TranslationStage};
 
     fn rule(rule: &str) -> AnchoredRule {
         let rule = RuleParser::new(rule).rule().unwrap();
@@ -119,6 +121,7 @@ mod tests {
                 weight: 1,
                 offset: 0,
                 precedence: Precedence::Default,
+                stage: TranslationStage::Main,
                 origin: Some(rule("nocontractsign 7")),
             })
         );
@@ -131,6 +134,7 @@ mod tests {
                 weight: 1,
                 offset: 0,
                 precedence: Precedence::Default,
+                stage: TranslationStage::Main,
                 origin: Some(rule("nocontractsign 7")),
             })
         );

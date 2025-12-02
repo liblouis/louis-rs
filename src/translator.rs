@@ -45,6 +45,27 @@ pub enum TranslationError {
     HyphenationTableLoadError(#[from] hyphenation::load::Error),
 }
 
+/// A translation can have multiple stages.
+///
+/// The `Main` translation is always done. The others are only done if
+/// specific rules are present in a translation table
+#[derive(Debug, PartialEq, Clone, Default)]
+pub enum TranslationStage {
+    /// Pre-translation stage where the `correct` rules are applied
+    Pre,
+    /// Main translation stage
+    #[default]
+    Main,
+    /// The first post-translation stage where the `context` rules are applied
+    Post1,
+    /// The second post-translation stage where the `pass2` rules are applied
+    Post2,
+    /// The third post-translation stage where the `pass3` rules are applied
+    Post3,
+    /// The fourth post-translation stage where the `pass4` rules are applied
+    Post4,
+}
+
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct Translation {
     /// Input string to be translated
@@ -64,6 +85,7 @@ pub struct Translation {
     /// can be applied later in the input string, when the pre-pattern has been consumed.
     offset: usize,
     precedence: Precedence,
+    stage: TranslationStage,
     origin: Option<AnchoredRule>,
 }
 
@@ -86,6 +108,7 @@ impl Translation {
             length,
             offset: 0,
             precedence: Precedence::Default,
+            stage: TranslationStage::default(),
             origin: origin.into(),
         }
     }
@@ -304,10 +327,22 @@ impl TranslationTableBuilder {
         for attribute in attributes {
             self.character_attributes.insert(attribute, *c);
         }
-        self.trie
-            .insert_char(*c, dots, direction, rule.precedence(), rule);
-        self.nocross_trie
-            .insert_char(*c, dots, direction, rule.precedence(), rule);
+        self.trie.insert_char(
+            *c,
+            dots,
+            direction,
+            rule.precedence(),
+            TranslationStage::Main,
+            rule,
+        );
+        self.nocross_trie.insert_char(
+            *c,
+            dots,
+            direction,
+            rule.precedence(),
+            TranslationStage::Main,
+            rule,
+        );
     }
 
     fn build(self, direction: Direction) -> TranslationTable {
@@ -469,6 +504,7 @@ impl TranslationTable {
                         &dots_to_unicode(dots),
                         direction,
                         rule.precedence(),
+                        TranslationStage::Main,
                         rule,
                     );
                 }
@@ -552,6 +588,7 @@ impl TranslationTable {
                             &translation,
                             direction,
                             rule.precedence(),
+                            TranslationStage::Main,
                             rule,
                         );
                         if let Some(attribute) = builder.attributes.get(name) {
@@ -583,6 +620,7 @@ impl TranslationTable {
                         Boundary::None,
                         direction,
                         rule.precedence(),
+                        TranslationStage::Main,
                         rule,
                     );
                 }
@@ -597,6 +635,7 @@ impl TranslationTable {
                         Boundary::Word,
                         direction,
                         rule.precedence(),
+                        TranslationStage::Main,
                         rule,
                     );
                 }
@@ -611,6 +650,7 @@ impl TranslationTable {
                         Boundary::NotWord,
                         direction,
                         rule.precedence(),
+                        TranslationStage::Main,
                         rule,
                     )
                 }
@@ -625,6 +665,7 @@ impl TranslationTable {
                         Boundary::NotWord,
                         direction,
                         rule.precedence(),
+                        TranslationStage::Main,
                         rule,
                     )
                 }
@@ -639,6 +680,7 @@ impl TranslationTable {
                         Boundary::None,
                         direction,
                         rule.precedence(),
+                        TranslationStage::Main,
                         rule,
                     );
                 }
@@ -653,6 +695,7 @@ impl TranslationTable {
                         Boundary::Word,
                         direction,
                         rule.precedence(),
+                        TranslationStage::Main,
                         rule,
                     );
                 }
@@ -669,6 +712,7 @@ impl TranslationTable {
                         Boundary::Word,
                         direction,
                         rule.precedence(),
+                        TranslationStage::Main,
                         rule,
                     );
                     builder.get_trie_mut(rule).insert(
@@ -678,6 +722,7 @@ impl TranslationTable {
                         Boundary::Word,
                         direction,
                         rule.precedence(),
+                        TranslationStage::Main,
                         rule,
                     );
                 }
@@ -694,6 +739,7 @@ impl TranslationTable {
                         Boundary::Word,
                         direction,
                         rule.precedence(),
+                        TranslationStage::Main,
                         rule,
                     );
                     builder.get_trie_mut(rule).insert(
@@ -703,6 +749,7 @@ impl TranslationTable {
                         Boundary::None,
                         direction,
                         rule.precedence(),
+                        TranslationStage::Main,
                         rule,
                     );
                 }
@@ -717,6 +764,7 @@ impl TranslationTable {
                         Boundary::NotWord,
                         direction,
                         rule.precedence(),
+                        TranslationStage::Main,
                         rule,
                     );
                 }
@@ -733,6 +781,7 @@ impl TranslationTable {
                         Boundary::Word,
                         direction,
                         rule.precedence(),
+                        TranslationStage::Main,
                         rule,
                     );
                     builder.lettersign_indicator.contraction(chars, rule);
@@ -746,6 +795,7 @@ impl TranslationTable {
                         Boundary::Word,
                         direction,
                         rule.precedence(),
+                        TranslationStage::Main,
                         rule,
                     )
                 }
@@ -756,6 +806,7 @@ impl TranslationTable {
                     Boundary::WordNumber,
                     direction,
                     rule.precedence(),
+                    TranslationStage::Main,
                     rule,
                 ),
                 Rule::Midnum { chars, dots, .. } => builder.get_trie_mut(rule).insert(
@@ -765,6 +816,7 @@ impl TranslationTable {
                     Boundary::Number,
                     direction,
                     rule.precedence(),
+                    TranslationStage::Main,
                     rule,
                 ),
                 Rule::Endnum { chars, dots, .. } => {
@@ -778,6 +830,7 @@ impl TranslationTable {
                         Boundary::Word,
                         direction,
                         rule.precedence(),
+                        TranslationStage::Main,
                         rule,
                     );
                 }

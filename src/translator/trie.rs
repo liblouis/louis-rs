@@ -4,7 +4,10 @@ use std::collections::HashMap;
 
 use crate::{
     parser::{AnchoredRule, Direction, Precedence},
-    translator::boundaries::{number_word, word_end, word_number, word_start},
+    translator::{
+        TranslationStage,
+        boundaries::{number_word, word_end, word_number, word_start},
+    },
 };
 
 use super::Translation;
@@ -96,6 +99,7 @@ impl Trie {
         to: &str,
         direction: Direction,
         precedence: Precedence,
+        stage: TranslationStage,
         origin: &AnchoredRule,
     ) {
         self.insert(
@@ -105,6 +109,7 @@ impl Trie {
             Boundary::None,
             direction,
             precedence,
+            stage,
             origin,
         );
     }
@@ -117,6 +122,7 @@ impl Trie {
         after: Boundary,
         direction: Direction,
         precedence: Precedence,
+        stage: TranslationStage,
         origin: &AnchoredRule,
     ) {
         // swap `from` and `to` for backwards translation
@@ -172,6 +178,7 @@ impl Trie {
                     weight: length,
                     offset: 0,
                     precedence,
+                    stage,
                     origin: Some(origin.clone()),
                 });
             } else if cfg!(feature = "backwards_compatibility") {
@@ -336,6 +343,7 @@ mod tests {
             Boundary::None,
             Direction::Forward,
             Precedence::Default,
+            TranslationStage::Main,
             &rule,
         );
         trie.insert(
@@ -345,6 +353,7 @@ mod tests {
             Boundary::None,
             Direction::Forward,
             Precedence::Default,
+            TranslationStage::Main,
             &rule,
         );
         trie.insert(
@@ -354,6 +363,7 @@ mod tests {
             Boundary::None,
             Direction::Forward,
             Precedence::Default,
+            TranslationStage::Main,
             &rule,
         );
         trie.insert(
@@ -363,6 +373,7 @@ mod tests {
             Boundary::None,
             Direction::Forward,
             Precedence::Default,
+            TranslationStage::Main,
             &rule,
         );
         trie.insert(
@@ -372,6 +383,7 @@ mod tests {
             Boundary::None,
             Direction::Forward,
             Precedence::Default,
+            TranslationStage::Main,
             &rule,
         );
         assert_eq!(trie.find_translations("a", None), vec![a]);
@@ -413,6 +425,7 @@ mod tests {
             Boundary::Word,
             Direction::Forward,
             Precedence::Default,
+            TranslationStage::Main,
             &rule,
         );
         assert_eq!(trie.find_translations("a", None), vec![a]);
@@ -432,6 +445,7 @@ mod tests {
             Boundary::NotWord,
             Direction::Forward,
             Precedence::Default,
+            TranslationStage::Main,
             &rule,
         );
         assert_eq!(trie.find_translations("foo", None), empty);
@@ -453,6 +467,7 @@ mod tests {
             Boundary::None,
             Direction::Forward,
             Precedence::Default,
+            TranslationStage::Main,
             &rule,
         );
         assert_eq!(trie.find_translations("foo", None), empty);
@@ -474,6 +489,7 @@ mod tests {
             Boundary::NotWord,
             Direction::Forward,
             Precedence::Default,
+            TranslationStage::Main,
             &rule,
         );
         assert_eq!(trie.find_translations("foo", None), empty);
@@ -496,6 +512,7 @@ mod tests {
             Boundary::WordNumber,
             Direction::Forward,
             Precedence::Default,
+            TranslationStage::Main,
             &rule,
         );
         assert_eq!(trie.find_translations("aaa", None), empty);
@@ -517,6 +534,7 @@ mod tests {
             Boundary::Word,
             Direction::Forward,
             Precedence::Default,
+            TranslationStage::Main,
             &rule,
         );
         assert_eq!(trie.find_translations("st", None), empty);
@@ -538,6 +556,7 @@ mod tests {
             Boundary::None,
             Direction::Forward,
             Precedence::Default,
+            TranslationStage::Main,
             &rule,
         );
         assert_eq!(trie.find_translations("foo", None), vec![foo.clone()]);
