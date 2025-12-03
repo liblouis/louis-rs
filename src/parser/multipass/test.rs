@@ -1,7 +1,10 @@
 //! A Parser for the test operand of context and multipass opcodes
 use std::{collections::HashSet, iter::Peekable, str::Chars};
 
-use crate::parser::multipass::{ConversionError, IsLiteral, ParseError};
+use crate::parser::{
+    dots_to_unicode,
+    multipass::{ConversionError, IsLiteral, ParseError},
+};
 
 use super::braille::{self, BrailleChars, braille_chars, is_braille_dot};
 
@@ -121,6 +124,7 @@ impl IsLiteral for Instruction {
     fn is_literal(&self) -> bool {
         match self {
             Instruction::String { .. } => true,
+            Instruction::Dots { .. } => true,
             _ => false,
         }
     }
@@ -132,6 +136,7 @@ impl TryFrom<&Instruction> for String {
     fn try_from(instruction: &Instruction) -> Result<String, Self::Error> {
         match instruction {
             Instruction::String { s } => Ok(s.clone()),
+            Instruction::Dots { dots } => Ok(dots_to_unicode(dots)),
             _ => Err(ConversionError::TestNotLiteral),
         }
     }

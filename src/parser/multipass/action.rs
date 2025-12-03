@@ -2,6 +2,7 @@
 use std::{iter::Peekable, str::Chars};
 
 use super::braille::{self, BrailleChars, braille_chars, is_braille_dot};
+use crate::parser::dots_to_unicode;
 use crate::parser::multipass::ConversionError;
 use crate::parser::multipass::IsLiteral;
 use crate::parser::multipass::ParseError;
@@ -59,6 +60,7 @@ impl IsLiteral for Instruction {
     fn is_literal(&self) -> bool {
         match self {
             Instruction::String { .. } => true,
+            Instruction::Dots { .. } => true,
             Instruction::Ignore => true,
             _ => false,
         }
@@ -71,6 +73,7 @@ impl TryFrom<&Instruction> for String {
     fn try_from(instruction: &Instruction) -> Result<String, Self::Error> {
         match instruction {
             Instruction::String { s } => Ok(s.clone()),
+            Instruction::Dots { dots } => Ok(dots_to_unicode(dots)),
             Instruction::Ignore => Ok("".to_string()),
             _ => Err(ConversionError::ActionNotLiteral),
         }
