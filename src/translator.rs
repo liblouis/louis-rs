@@ -14,6 +14,7 @@ use crate::parser::HasNocross;
 use crate::parser::HasPrecedence;
 use crate::parser::Precedence;
 use crate::parser::{AnchoredRule, Attribute, Braille, Direction, Rule, dots_to_unicode, fallback};
+use crate::translator::transforms::TransformationTable;
 
 use self::trie::Boundary;
 use indication::{lettersign, nocontract, numeric, uppercase};
@@ -22,7 +23,7 @@ mod boundaries;
 mod indication;
 mod match_pattern;
 mod nfa;
-mod pre_translation;
+mod transforms;
 mod trie;
 
 #[derive(thiserror::Error, Debug)]
@@ -53,17 +54,16 @@ pub enum TranslationError {
 pub enum TranslationStage {
     /// Pre-translation stage where the `correct` rules are applied
     Pre,
-    /// Main translation stage
+    /// Main translation stage where all the translation and the
+    /// context rules are applied
     #[default]
     Main,
-    /// The first post-translation stage where the `context` rules are applied
-    Post1,
     /// The second post-translation stage where the `pass2` rules are applied
-    Post2,
+    Post1,
     /// The third post-translation stage where the `pass3` rules are applied
-    Post3,
+    Post2,
     /// The fourth post-translation stage where the `pass4` rules are applied
-    Post4,
+    Post3,
 }
 
 #[derive(Debug, PartialEq, Clone, Default)]
@@ -256,12 +256,19 @@ pub struct TranslationTable {
     character_definitions: CharacterDefinition,
     character_attributes: CharacterAttributes,
     attributes: AttributeMapping,
-    pre_translation: Option<pre_translation::TranslationTable>,
     /// A prefix tree that contains all the translation rules and their [`Translations`](Translation)
     trie: Trie,
     match_patterns: MatchPatterns,
     /// All the nocross translation rules are stored in a separate trie
     nocross_trie: Trie,
+    // Correct transform before the translation step
+    correct_transform: Option<TransformationTable>,
+    // Pass2 transform after the translation step
+    pass2_transform: Option<TransformationTable>,
+    // Pass3 transform after the translation step
+    pass3_transform: Option<TransformationTable>,
+    // Pass4 transform after the translation step
+    pass4_transform: Option<TransformationTable>,
     hyphenator: Option<Standard>,
     numeric_indicator: numeric::Indicator,
     uppercase_indicator: uppercase::Indicator,
@@ -277,9 +284,12 @@ struct TranslationTableBuilder {
     character_definitions: CharacterDefinition,
     character_attributes: CharacterAttributes,
     attributes: AttributeMapping,
-    pre_translation: pre_translation::TranslationTable,
     trie: Trie,
     nocross_trie: Trie,
+    correct_transform: TransformationTable,
+    pass2_transform: TransformationTable,
+    pass3_transform: TransformationTable,
+    pass4_transform: TransformationTable,
     hyphenator: Option<Standard>,
     match_patterns: MatchPatterns,
     numeric_indicator: numeric::IndicatorBuilder,
@@ -295,9 +305,12 @@ impl TranslationTableBuilder {
             character_definitions: CharacterDefinition::new(),
             character_attributes: CharacterAttributes::new(),
             attributes: AttributeMapping::new(),
-            pre_translation: pre_translation::TranslationTable::default(),
             trie: Trie::new(),
             nocross_trie: Trie::new(),
+            correct_transform: TransformationTable::default(),
+            pass2_transform: TransformationTable::default(),
+            pass3_transform: TransformationTable::default(),
+            pass4_transform: TransformationTable::default(),
             hyphenator: None,
             match_patterns: MatchPatterns::new(),
             numeric_indicator: numeric::IndicatorBuilder::new(),
@@ -352,9 +365,13 @@ impl TranslationTableBuilder {
             character_definitions: self.character_definitions,
             character_attributes: self.character_attributes,
             attributes: self.attributes,
-            pre_translation: (!self.pre_translation.is_empty()).then_some(self.pre_translation),
             trie: self.trie,
             nocross_trie: self.nocross_trie,
+            correct_transform: (!self.correct_transform.is_empty())
+                .then_some(self.correct_transform),
+            pass2_transform: (!self.pass2_transform.is_empty()).then_some(self.pass2_transform),
+            pass3_transform: (!self.pass3_transform.is_empty()).then_some(self.pass3_transform),
+            pass4_transform: (!self.pass4_transform.is_empty()).then_some(self.pass4_transform),
             hyphenator: self.hyphenator,
             match_patterns: self.match_patterns,
             numeric_indicator: self.numeric_indicator.build(),
@@ -379,7 +396,28 @@ impl TranslationTable {
 
         // First use the pre translation rules to create a translation table for the pre translation
         // pass
-        builder.pre_translation = pre_translation::TranslationTable::compile(&rules, direction)?;
+        let correct_rules: &Vec<&AnchoredRule> = &rules
+            .iter()
+            .filter(|r| matches!(r.rule, Rule::Correct { .. }))
+            .collect();
+        builder.correct_transform = TransformationTable::compile(&correct_rules, direction)?;
+
+        // then use the multipass rules to create translation tables for the post translation passes
+        let pass2_rules: &Vec<&AnchoredRule> = &rules
+            .iter()
+            .filter(|r| matches!(r.rule, Rule::Pass2 { .. }))
+            .collect();
+        let pass3_rules: &Vec<&AnchoredRule> = &rules
+            .iter()
+            .filter(|r| matches!(r.rule, Rule::Pass3 { .. }))
+            .collect();
+        let pass4_rules: &Vec<&AnchoredRule> = &rules
+            .iter()
+            .filter(|r| matches!(r.rule, Rule::Pass4 { .. }))
+            .collect();
+        builder.pass2_transform = TransformationTable::compile(&pass2_rules, direction)?;
+        builder.pass3_transform = TransformationTable::compile(&pass3_rules, direction)?;
+        builder.pass4_transform = TransformationTable::compile(&pass4_rules, direction)?;
 
         // FIXME: For some unknown reason the litdigit rule seems to have precedence over the digit
         // rule. Since they both want to define digits in the same character_definitions slot we
@@ -936,11 +974,37 @@ impl TranslationTable {
         delayed.into_iter().partition(|t| t.offset == 0)
     }
 
-    fn pre_translation(&self, input: &str) -> String {
-        if let Some(pre_translation) = &self.pre_translation {
-            pre_translation.translate(input)
+    fn correct_transform(&self, input: &str) -> String {
+        if let Some(correct_transform) = &self.correct_transform {
+            correct_transform.translate(input)
         } else {
             input.to_string()
+        }
+    }
+
+    fn pass2_transform(&self, input: Vec<Translation>) -> Vec<Translation> {
+        if let Some(pass2_transform) = &self.pass2_transform {
+            let input: String = input.iter().map(|t| t.output.as_str()).collect();
+            pass2_transform.trace(&*input)
+        } else {
+            input
+        }
+    }
+
+    fn pass3_transform(&self, input: Vec<Translation>) -> Vec<Translation> {
+        if let Some(pass3_transform) = &self.pass3_transform {
+            let input: String = input.iter().map(|t| t.output.as_str()).collect();
+            pass3_transform.trace(&*input)
+        } else {
+            input
+        }
+    }
+    fn pass4_transform(&self, input: Vec<Translation>) -> Vec<Translation> {
+        if let Some(pass4_transform) = &self.pass4_transform {
+            let input: String = input.iter().map(|t| t.output.as_str()).collect();
+            pass4_transform.trace(&*input)
+        } else {
+            input
         }
     }
 
@@ -949,7 +1013,7 @@ impl TranslationTable {
         let mut delayed_translations: Vec<Translation> = Vec::new();
 
         // First do the pre translation pass
-        let corrected = self.pre_translation(input);
+        let corrected = self.correct_transform(input);
 
         let mut chars = corrected.chars();
         let mut prev: Option<char> = None;
@@ -1045,6 +1109,10 @@ impl TranslationTable {
                 break;
             }
         }
+        // Finally do the post translation passes
+        let translations = self.pass2_transform(translations);
+        let translations = self.pass3_transform(translations);
+        let translations = self.pass4_transform(translations);
         translations
     }
 
@@ -1520,7 +1588,7 @@ mod tests {
     }
 
     #[test]
-    fn pre_translate() {
+    fn correct() {
         let rules = vec![
             parse_rule("always foo 123"),
             parse_rule("always bar 456"),
@@ -1531,6 +1599,53 @@ mod tests {
         assert_eq!(table.translate("baz"), "⠸");
         assert_eq!(table.translate("foobaz"), "⠇⠸");
         assert_eq!(table.translate("foobar"), "⠇⠸");
+        assert_eq!(table.translate("  "), "⠀⠀");
+        assert_eq!(table.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
+    }
+
+    #[test]
+    fn pass2() {
+        let rules = vec![
+            parse_rule("always foo 123"),
+            parse_rule("always bar 456"),
+            parse_rule("noback pass2 @123 @1"),
+            parse_rule("space \\s 0"),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
+        assert_eq!(table.translate("foo"), "⠁");
+        assert_eq!(table.translate("foobar"), "⠁⠸");
+        assert_eq!(table.translate("  "), "⠀⠀");
+        assert_eq!(table.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
+    }
+
+    #[test]
+    fn pass3() {
+        let rules = vec![
+            parse_rule("always foo 123"),
+            parse_rule("always bar 456"),
+            parse_rule("noback pass2 @123 @78"),
+            parse_rule("noback pass3 @78 @1"),
+            parse_rule("space \\s 0"),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
+        assert_eq!(table.translate("foo"), "⠁");
+        assert_eq!(table.translate("foobar"), "⠁⠸");
+        assert_eq!(table.translate("  "), "⠀⠀");
+        assert_eq!(table.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
+    }
+    #[test]
+    fn pass4() {
+        let rules = vec![
+            parse_rule("always foo 123"),
+            parse_rule("always bar 456"),
+            parse_rule("noback pass2 @123 @67"),
+            parse_rule("noback pass3 @67 @78"),
+            parse_rule("noback pass4 @78 @1"),
+            parse_rule("space \\s 0"),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
+        assert_eq!(table.translate("foo"), "⠁");
+        assert_eq!(table.translate("foobar"), "⠁⠸");
         assert_eq!(table.translate("  "), "⠀⠀");
         assert_eq!(table.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
     }
