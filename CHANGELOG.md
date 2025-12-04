@@ -3,6 +3,34 @@
 # Changelog
 
 
+## Unreleased
+
+
+### Added
+
+-   Implement support for the multipass opcodes, at least for the ones
+    that do not require regular expressions, e.g. rules like
+    
+        pass2 @123 @15
+    
+    should work now.
+
+
+### Changed
+
+
+### Deprecated
+
+
+### Removed
+
+
+### Fixed
+
+
+### Security
+
+
 ## 0.2.2 - 2025-12-01
 
 

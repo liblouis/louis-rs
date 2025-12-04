@@ -6,6 +6,12 @@
 
 ** Unreleased
 *** Added
+- Implement support for the multipass opcodes, at least for the ones
+  that do not require regular expressions, e.g. rules like
+   #+begin_src
+     pass2 @123 @15
+   #+end_src
+  should work now.
 *** Changed
 *** Deprecated
 *** Removed
