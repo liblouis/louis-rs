@@ -58,47 +58,47 @@ Trace a translation:
   $ louis translate --tracing ~/src/liblouis/tables/en-us-g2.ctb
   > It's about the blind
   ⠠⠊⠞⠄⠎⠀⠁⠃⠀⠹⠑⠀⠃⠇
-  ┌────┬───────┬────┬────────────────────┐
-  │    │ From  │ To │ Rule               │
-  ├────┼───────┼────┼────────────────────┤
-  │ 0  │       │ ⠠  │ capsletter ⠠       │
-  │ 1  │ I     │ ⠊  │ base uppercase I i │
-  │ 2  │ t     │ ⠞  │ lowercase t ⠞      │
-  │ 3  │ 's    │ ⠄⠎ │ endword 's ⠄⠎      │
-  │ 4  │       │ ⠀  │ space   ⠀          │
-  │ 5  │ about │ ⠁⠃ │ word about ⠁⠃      │
-  │ 6  │       │ ⠀  │ space   ⠀          │
-  │ 7  │ th    │ ⠹  │ always th ⠹        │
-  │ 8  │ e     │ ⠑  │ lowercase e ⠑      │
-  │ 9  │       │ ⠀  │ space   ⠀          │
-  │ 10 │ blind │ ⠃⠇ │ word blind ⠃⠇      │
-  └────┴───────┴────┴────────────────────┘
+  ┌────┬───────┬────┬────────────────────┬───────┐
+  │    │ From  │ To │ Rule               │ Stage │
+  ├────┼───────┼────┼────────────────────┼───────┤
+  │ 0  │       │ ⠠  │ capsletter ⠠       │ Main  │
+  │ 1  │ I     │ ⠊  │ base uppercase I i │ Main  │
+  │ 2  │ t     │ ⠞  │ lowercase t ⠞      │ Main  │
+  │ 3  │ 's    │ ⠄⠎ │ endword 's ⠄⠎      │ Main  │
+  │ 4  │       │ ⠀  │ space   ⠀          │ Main  │
+  │ 5  │ about │ ⠁⠃ │ word about ⠁⠃      │ Main  │
+  │ 6  │       │ ⠀  │ space   ⠀          │ Main  │
+  │ 7  │ th    │ ⠹  │ always th ⠹        │ Main  │
+  │ 8  │ e     │ ⠑  │ lowercase e ⠑      │ Main  │
+  │ 9  │       │ ⠀  │ space   ⠀          │ Main  │
+  │ 10 │ blind │ ⠃⠇ │ word blind ⠃⠇      │ Main  │
+  └────┴───────┴────┴────────────────────┴───────┘
   > 123st
   ⠼⠁⠃⠉⠌
-  ┌───┬──────┬────┬──────────────┐
-  │   │ From │ To │ Rule         │
-  ├───┼──────┼────┼──────────────┤
-  │ 0 │      │ ⠼  │ numsign ⠼    │
-  │ 1 │ 1    │ ⠁  │ litdigit 1 ⠁ │
-  │ 2 │ 2    │ ⠃  │ litdigit 2 ⠃ │
-  │ 3 │ 3    │ ⠉  │ litdigit 3 ⠉ │
-  │ 4 │ st   │ ⠌  │ endnum st ⠌  │
-  └───┴──────┴────┴──────────────┘
+  ┌───┬──────┬────┬──────────────┬───────┐
+  │   │ From │ To │ Rule         │ Stage │
+  ├───┼──────┼────┼──────────────┼───────┤
+  │ 0 │      │ ⠼  │ numsign ⠼    │ Main  │
+  │ 1 │ 1    │ ⠁  │ litdigit 1 ⠁ │ Main  │
+  │ 2 │ 2    │ ⠃  │ litdigit 2 ⠃ │ Main  │
+  │ 3 │ 3    │ ⠉  │ litdigit 3 ⠉ │ Main  │
+  │ 4 │ st   │ ⠌  │ endnum st ⠌  │ Main  │
+  └───┴──────┴────┴──────────────┴───────┘
   > about
   ⠁⠃
-  ┌───┬───────┬────┬───────────────┐
-  │   │ From  │ To │ Rule          │
-  ├───┼───────┼────┼───────────────┤
-  │ 0 │ about │ ⠁⠃ │ word about ⠁⠃ │
-  └───┴───────┴────┴───────────────┘
+  ┌───┬───────┬────┬───────────────┬───────┐
+  │   │ From  │ To │ Rule          │ Stage │
+  ├───┼───────┼────┼───────────────┼───────┤
+  │ 0 │ about │ ⠁⠃ │ word about ⠁⠃ │ Main  │
+  └───┴───────┴────┴───────────────┴───────┘
   > ab
   ⠰⠁⠃
-  ┌───┬──────┬────┬────────────────┐
-  │   │ From │ To │ Rule           │
-  ├───┼──────┼────┼────────────────┤
-  │ 0 │      │ ⠰  │ letsign ⠰      │
-  │ 1 │ ab   │ ⠁⠃ │ contraction ab │
-  └───┴──────┴────┴────────────────┘
+  ┌───┬──────┬────┬────────────────┬───────┐
+  │   │ From │ To │ Rule           │ Stage │
+  ├───┼──────┼────┼────────────────┼───────┤
+  │ 0 │      │ ⠰  │ letsign ⠰      │ Main  │
+  │ 1 │ ab   │ ⠁⠃ │ contraction ab │ Main  │
+  └───┴──────┴────┴────────────────┴───────┘
 #+END_SRC
 
 Trace a translation with a pre-translation rule:
