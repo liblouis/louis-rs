@@ -14,6 +14,9 @@
         pass2 @123 @15
     
     should work now.
+-   Tracing now works across all translation stages. If any rules for
+    pre and post translations are defined these translations are also
+    shown.
 
 
 ### Changed

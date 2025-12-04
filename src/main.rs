@@ -15,6 +15,7 @@ use parser::TableError;
 use crate::parser::AnchoredRule;
 use crate::parser::Direction;
 use crate::translator::Translation;
+use crate::translator::TranslationStage;
 use crate::translator::TranslationTable;
 
 mod metadata;
@@ -112,6 +113,7 @@ struct Trace {
     to: String,
     #[tabled(display_with("Self::display_origin", self))]
     rule: Option<AnchoredRule>,
+    stage: TranslationStage,
 }
 
 impl Trace {
@@ -127,19 +129,22 @@ impl Trace {
     }
 }
 
-fn print_trace(translations: &[Translation]) {
-    let mut traces: Vec<Trace> = Vec::new();
-    for (id, translation) in translations.iter().enumerate() {
-        traces.push(Trace {
-            sequence_id: id,
-            rule: translation.origin(),
-            from: translation.input(),
-            to: translation.output(),
-        });
+fn print_trace(all_translations: &Vec<Vec<Translation>>) {
+    for translations in all_translations {
+        let mut traces: Vec<Trace> = Vec::new();
+        for (id, translation) in translations.iter().enumerate() {
+            traces.push(Trace {
+                sequence_id: id,
+                rule: translation.origin(),
+                from: translation.input(),
+                to: translation.output(),
+                stage: translation.stage(),
+            });
+        }
+        let mut table = Table::new(traces);
+        table.with(Style::sharp());
+        println!("{}", table);
     }
-    let mut table = Table::new(traces);
-    table.with(Style::sharp());
-    println!("{}", table);
 }
 
 fn trace(table: &Path, direction: Direction, input: &str) {
@@ -162,7 +167,7 @@ fn trace(table: &Path, direction: Direction, input: &str) {
 
 fn translate(table: &Path, direction: Direction, input: &str) {
     let rules = parser::table_expanded(table);
-    match dbg!(rules) {
+    match rules {
         Ok(rules) => {
             match TranslationTable::compile(rules, direction) {
                 Ok(table) => println!("{}", table.translate(input)),

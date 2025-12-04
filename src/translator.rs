@@ -66,6 +66,18 @@ pub enum TranslationStage {
     Post3,
 }
 
+impl std::fmt::Display for TranslationStage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TranslationStage::Pre => write!(f, "Pre"),
+            TranslationStage::Main => write!(f, "Main"),
+            TranslationStage::Post1 => write!(f, "Pass2"),
+            TranslationStage::Post2 => write!(f, "Pass3"),
+            TranslationStage::Post3 => write!(f, "Pass4"),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct Translation {
     /// Input string to be translated
@@ -123,6 +135,10 @@ impl Translation {
 
     pub fn origin(&self) -> Option<AnchoredRule> {
         self.origin.clone()
+    }
+
+    pub fn stage(&self) -> TranslationStage {
+        self.stage.clone()
     }
 
     /// Set the `offset` of a translation.
@@ -924,6 +940,8 @@ impl TranslationTable {
 
     pub fn translate(&self, input: &str) -> String {
         self.trace(input)
+            .last() // the last set of translations is from the last pass
+            .unwrap() // there is always at least one element in the list
             .iter()
             .map(|t| t.output.as_str())
             .collect()
@@ -974,46 +992,52 @@ impl TranslationTable {
         delayed.into_iter().partition(|t| t.offset == 0)
     }
 
-    fn correct_transform(&self, input: &str) -> String {
-        if let Some(correct_transform) = &self.correct_transform {
-            correct_transform.translate(input)
+    fn correct_transform(&self, input: &str) -> Option<Vec<Translation>> {
+        if let Some(transform) = &self.correct_transform {
+            Some(transform.trace(&input))
         } else {
-            input.to_string()
+            None
         }
     }
 
-    fn pass2_transform(&self, input: Vec<Translation>) -> Vec<Translation> {
-        if let Some(pass2_transform) = &self.pass2_transform {
+    fn pass2_transform(&self, input: &Vec<Translation>) -> Option<Vec<Translation>> {
+        if let Some(transform) = &self.pass2_transform {
             let input: String = input.iter().map(|t| t.output.as_str()).collect();
-            pass2_transform.trace(&*input)
+            Some(transform.trace(&input))
         } else {
-            input
+            None
         }
     }
 
-    fn pass3_transform(&self, input: Vec<Translation>) -> Vec<Translation> {
-        if let Some(pass3_transform) = &self.pass3_transform {
+    fn pass3_transform(&self, input: &Vec<Translation>) -> Option<Vec<Translation>> {
+        if let Some(transform) = &self.pass3_transform {
             let input: String = input.iter().map(|t| t.output.as_str()).collect();
-            pass3_transform.trace(&*input)
+            Some(transform.trace(&input))
         } else {
-            input
+            None
         }
     }
-    fn pass4_transform(&self, input: Vec<Translation>) -> Vec<Translation> {
-        if let Some(pass4_transform) = &self.pass4_transform {
+    fn pass4_transform(&self, input: &Vec<Translation>) -> Option<Vec<Translation>> {
+        if let Some(transform) = &self.pass4_transform {
             let input: String = input.iter().map(|t| t.output.as_str()).collect();
-            pass4_transform.trace(&*input)
+            Some(transform.trace(&input))
         } else {
-            input
+            None
         }
     }
 
-    pub fn trace(&self, input: &str) -> Vec<Translation> {
+    pub fn trace(&self, input: &str) -> Vec<Vec<Translation>> {
         let mut translations: Vec<Translation> = Vec::new();
+        let mut aggregated: Vec<Vec<Translation>> = Vec::new();
         let mut delayed_translations: Vec<Translation> = Vec::new();
 
         // First do the pre translation pass
-        let corrected = self.correct_transform(input);
+        let corrected = if let Some(translations) = self.correct_transform(input) {
+            aggregated.push(translations.clone());
+            translations.iter().map(|t| t.output.as_str()).collect()
+        } else {
+            input.to_string()
+        };
 
         let mut chars = corrected.chars();
         let mut prev: Option<char> = None;
@@ -1109,11 +1133,25 @@ impl TranslationTable {
                 break;
             }
         }
+        aggregated.push(translations.clone());
+
         // Finally do the post translation passes
-        let translations = self.pass2_transform(translations);
-        let translations = self.pass3_transform(translations);
-        let translations = self.pass4_transform(translations);
-        translations
+        let translations = if let Some(pass2) = self.pass2_transform(&translations) {
+            aggregated.push(pass2.clone());
+            pass2
+        } else {
+            translations
+        };
+        let translations = if let Some(pass3) = self.pass3_transform(&translations) {
+            aggregated.push(pass3.clone());
+            pass3
+        } else {
+            translations
+        };
+        if let Some(pass4) = self.pass4_transform(&translations) {
+            aggregated.push(pass4.clone());
+        }
+        aggregated
     }
 
     fn handle_undefined_char(&self, ch: char) -> String {
