@@ -101,6 +101,29 @@ Trace a translation:
   └───┴──────┴────┴────────────────┘
 #+END_SRC
 
+Trace a translation with a pre-translation rule:
+
+#+BEGIN_SRC shell
+  $ louis translate --tracing ~/src/liblouis/tables/en-us-mathtext.ctb
+  > cornf abc
+  ⠤⠋⠀⠁⠃⠉
+  ┌───┬───────┬──────┬──────────────────────┬───────┐
+  │   │ From  │ To   │ Rule                 │ Stage │
+  ├───┼───────┼──────┼──────────────────────┼───────┤
+  │ 0 │ cornf │ comf │ correct "cornf" comf │ Pre   │
+  └───┴───────┴──────┴──────────────────────┴───────┘
+  ┌───┬──────┬────┬───────────────┬───────┐
+  │   │ From │ To │ Rule          │ Stage │
+  ├───┼──────┼────┼───────────────┼───────┤
+  │ 0 │ com  │ ⠤  │ begword com ⠤ │ Main  │
+  │ 1 │ f    │ ⠋  │ lowercase f ⠋ │ Main  │
+  │ 2 │      │ ⠀  │ space   ⠀     │ Main  │
+  │ 3 │ a    │ ⠁  │ lowercase a ⠁ │ Main  │
+  │ 4 │ b    │ ⠃  │ lowercase b ⠃ │ Main  │
+  │ 5 │ c    │ ⠉  │ lowercase c ⠉ │ Main  │
+  └───┴──────┴────┴───────────────┴───────┘
+#+END_SRC
+
 Test the parser:
 
 #+BEGIN_SRC shell

@@ -43,18 +43,18 @@ makes sense.
 
 Get help:
 
-    $ cargo run -- help
+    $ louis help
 
 Translate some text:
 
     $ export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
-    $ cargo run -- translate ~/src/liblouis/tables/de-comp6.utb 
+    $ louis translate ~/src/liblouis/tables/de-comp6.utb
     > Guten Tag
     ⠈⠛⠥⠞⠑⠝⠀⠈⠞⠁⠛⠀
 
 Trace a translation:
 
-    $ cargo run -- translate --tracing ~/src/liblouis/tables/en-us-g2.ctb
+    $ louis translate --tracing ~/src/liblouis/tables/en-us-g2.ctb
     > It's about the blind
     ⠠⠊⠞⠄⠎⠀⠁⠃⠀⠹⠑⠀⠃⠇
     ┌────┬───────┬────┬────────────────────┐
@@ -99,9 +99,30 @@ Trace a translation:
     │ 1 │ ab   │ ⠁⠃ │ contraction ab │
     └───┴──────┴────┴────────────────┘
 
+Trace a translation with a pre-translation rule:
+
+    $ louis translate --tracing ~/src/liblouis/tables/en-us-mathtext.ctb
+    > cornf abc
+    ⠤⠋⠀⠁⠃⠉
+    ┌───┬───────┬──────┬──────────────────────┬───────┐
+    │   │ From  │ To   │ Rule                 │ Stage │
+    ├───┼───────┼──────┼──────────────────────┼───────┤
+    │ 0 │ cornf │ comf │ correct "cornf" comf │ Pre   │
+    └───┴───────┴──────┴──────────────────────┴───────┘
+    ┌───┬──────┬────┬───────────────┬───────┐
+    │   │ From │ To │ Rule          │ Stage │
+    ├───┼──────┼────┼───────────────┼───────┤
+    │ 0 │ com  │ ⠤  │ begword com ⠤ │ Main  │
+    │ 1 │ f    │ ⠋  │ lowercase f ⠋ │ Main  │
+    │ 2 │      │ ⠀  │ space   ⠀     │ Main  │
+    │ 3 │ a    │ ⠁  │ lowercase a ⠁ │ Main  │
+    │ 4 │ b    │ ⠃  │ lowercase b ⠃ │ Main  │
+    │ 5 │ c    │ ⠉  │ lowercase c ⠉ │ Main  │
+    └───┴──────┴────┴───────────────┴───────┘
+
 Test the parser:
 
-    $ cargo run -- parse
+    $ louis parse
     > nofor letter e 123-1
     Letter { character: 'e', dots: [EnumSet(Dot1 | Dot2 | Dot3), EnumSet(Dot1)], constraints: Constraints(EnumSet(Nofor)) }
 
@@ -111,7 +132,7 @@ Build a release version:
 
 Run the tests in a YAML file:
 
-    $ LOUIS_TABLE_PATH=~/src/liblouis/tables cargo run -- check --summary ~/src/liblouis/tests/braille-specs/de-de-comp8.yaml
+    $ LOUIS_TABLE_PATH=~/src/liblouis/tables louis check --summary ~/src/liblouis/tests/braille-specs/de-de-comp8.yaml
     ┌──────────────────┬───────┬───────────┬──────────┬──────────┬────────────┐
     │ YAML File        │ Tests │ Successes │ Failures │ Expected │ Unexpected │
     │                  │       │           │          │ Failures │ Successes  │
@@ -123,7 +144,7 @@ Run the tests in a YAML file:
 
 Run all YAML tests:
 
-    $ LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis ./target/release/louis check --summary ~/src/liblouis/tests/braille-specs/*.yaml ~/src/liblouis/tests/yaml/*.yaml 2> /dev/null
+    $ LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis louis check --summary ~/src/liblouis/tests/braille-specs/*.yaml ~/src/liblouis/tests/yaml/*.yaml 2> /dev/null
     ┌─────────────────────────────────────────────┬────────┬───────────┬──────────┬──────────┬────────────┐
     │ YAML File                                   │ Tests  │ Successes │ Failures │ Expected │ Unexpected │
     │                                             │        │           │          │ Failures │ Successes  │
@@ -280,7 +301,7 @@ Run all YAML tests:
 
 Test the table query functionality:
 
-    $ LOUIS_TABLE_PATH=~/src/liblouis/tables cargo run -- query language=de,contraction=full
+    $ LOUIS_TABLE_PATH=~/src/liblouis/tables louis query language=de,contraction=full
     {"[...]/liblouis/tables/de-g2-detailed.ctb", "[...]/liblouis/tables/de-g2.ctb"}
 
 
