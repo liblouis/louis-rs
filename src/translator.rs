@@ -106,7 +106,7 @@ impl Translation {
         input: &str,
         output: &str,
         weight: usize,
-	stage: TranslationStage,
+        stage: TranslationStage,
         // FIXME: this is some weird thing recommended by Claude: apparently the `impl
         // Into<Option<T>>` trait bound automatically converts `T` to `Some(T)` and `None` to
         // `None`, giving you the overloaded behavior you want with a single function. This is more
@@ -417,7 +417,8 @@ impl TranslationTable {
             .iter()
             .filter(|r| matches!(r.rule, Rule::Correct { .. }))
             .collect();
-        builder.correct_transform = TransformationTable::compile(&correct_rules, direction, TranslationStage::Pre)?;
+        builder.correct_transform =
+            TransformationTable::compile(&correct_rules, direction, TranslationStage::Pre)?;
 
         // then use the multipass rules to create translation tables for the post translation passes
         let pass2_rules: &Vec<&AnchoredRule> = &rules
@@ -432,9 +433,12 @@ impl TranslationTable {
             .iter()
             .filter(|r| matches!(r.rule, Rule::Pass4 { .. }))
             .collect();
-        builder.pass2_transform = TransformationTable::compile(&pass2_rules, direction, TranslationStage::Post1)?;
-        builder.pass3_transform = TransformationTable::compile(&pass3_rules, direction, TranslationStage::Post2)?;
-        builder.pass4_transform = TransformationTable::compile(&pass4_rules, direction, TranslationStage::Post3)?;
+        builder.pass2_transform =
+            TransformationTable::compile(&pass2_rules, direction, TranslationStage::Post1)?;
+        builder.pass3_transform =
+            TransformationTable::compile(&pass3_rules, direction, TranslationStage::Post2)?;
+        builder.pass4_transform =
+            TransformationTable::compile(&pass4_rules, direction, TranslationStage::Post3)?;
 
         // FIXME: For some unknown reason the litdigit rule seems to have precedence over the digit
         // rule. Since they both want to define digits in the same character_definitions slot we
@@ -1114,8 +1118,13 @@ impl TranslationTable {
                 // no translation rule found
                 if let Some(ref replacement) = self.undefined {
                     // there is a rule for undefined characters
-                    let translation =
-                        Translation::new(&next_char.to_string(), replacement, 1, TranslationStage::Main, None); // FIXME: add the undefined rule here
+                    let translation = Translation::new(
+                        &next_char.to_string(),
+                        replacement,
+                        1,
+                        TranslationStage::Main,
+                        None, // FIXME: add the undefined rule here
+                    );
                     translations.push(translation);
                     delayed_translations = self.update_offsets(delayed_translations, 1);
                 } else {
@@ -1125,7 +1134,7 @@ impl TranslationTable {
                         &self.handle_undefined_char(next_char),
                         1,
                         TranslationStage::Main,
-			None,
+                        None,
                     );
                     translations.push(translation);
                     delayed_translations = self.update_offsets(delayed_translations, 1);

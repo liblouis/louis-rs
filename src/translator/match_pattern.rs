@@ -4,8 +4,8 @@ use std::collections::HashSet;
 
 use crate::parser::{AnchoredRule, Attribute, Pattern, Patterns};
 
-use crate::translator::{Translation, TranslationStage};
 use crate::translator::nfa::{AST, NFA};
+use crate::translator::{Translation, TranslationStage};
 
 use super::CharacterAttributes;
 
@@ -231,7 +231,14 @@ mod tests {
         let rule = fake_rule();
         let mut matcher = MatchPatterns::new();
         matcher.insert(&pre, "foo".into(), &post, "".into(), &rule);
-        let translation = Translation::new("foo".into(), "".into(), 5, TranslationStage::Main, rule.clone()).with_offset(1);
+        let translation = Translation::new(
+            "foo".into(),
+            "".into(),
+            5,
+            TranslationStage::Main,
+            rule.clone(),
+        )
+        .with_offset(1);
         assert_eq!(
             matcher.find_translations("afoo1"),
             vec![translation.clone()]
@@ -241,9 +248,30 @@ mod tests {
             vec![translation.clone()]
         );
         let translations = vec![
-            Translation::new("foo".into(), "".into(), 9, TranslationStage::Main, rule.clone()).with_offset(3),
-            Translation::new("foo".into(), "".into(), 8, TranslationStage::Main, rule.clone()).with_offset(3),
-            Translation::new("foo".into(), "".into(), 7, TranslationStage::Main, rule.clone()).with_offset(3),
+            Translation::new(
+                "foo".into(),
+                "".into(),
+                9,
+                TranslationStage::Main,
+                rule.clone(),
+            )
+            .with_offset(3),
+            Translation::new(
+                "foo".into(),
+                "".into(),
+                8,
+                TranslationStage::Main,
+                rule.clone(),
+            )
+            .with_offset(3),
+            Translation::new(
+                "foo".into(),
+                "".into(),
+                7,
+                TranslationStage::Main,
+                rule.clone(),
+            )
+            .with_offset(3),
         ];
         assert_eq!(matcher.find_translations("cccfoo333"), translations);
         assert!(matcher.find_translations("def").is_empty());
@@ -257,11 +285,27 @@ mod tests {
         let mut match_patterns = MatchPatterns::new();
         match_patterns.insert(&pre, "foo".into(), &post, "FOO".into(), &rule);
         match_patterns.insert(&pre, "bar".into(), &post, "BAR".into(), &rule);
-        let translation =
-            vec![Translation::new("foo".into(), "FOO".into(), 7, TranslationStage::Main, rule.clone()).with_offset(3)];
+        let translation = vec![
+            Translation::new(
+                "foo".into(),
+                "FOO".into(),
+                7,
+                TranslationStage::Main,
+                rule.clone(),
+            )
+            .with_offset(3),
+        ];
         assert_eq!(match_patterns.find_translations("aaafoo333"), translation);
-        let translation =
-            vec![Translation::new("bar".into(), "BAR".into(), 7, TranslationStage::Main, rule.clone()).with_offset(3)];
+        let translation = vec![
+            Translation::new(
+                "bar".into(),
+                "BAR".into(),
+                7,
+                TranslationStage::Main,
+                rule.clone(),
+            )
+            .with_offset(3),
+        ];
         assert_eq!(match_patterns.find_translations("aaabar333"), translation);
         assert_ne!(match_patterns.find_translations("aaabaz333"), translation);
     }

@@ -696,7 +696,8 @@ mod tests {
 
     #[test]
     fn find_with_offset() {
-        let translation = Translation::new("".into(), "".into(), 7, TranslationStage::Main, None).with_offset(4);
+        let translation =
+            Translation::new("".into(), "".into(), 7, TranslationStage::Main, None).with_offset(4);
         let ast = AST::Concat(
             Box::new(AST::Concat(
                 Box::new(AST::OneOrMore(Box::new(AST::Any))),

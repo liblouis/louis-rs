@@ -12,7 +12,10 @@
 //! An indication for the end is only emitted if there is any indicators listed in the braille table
 //! [`Indicator::is_indicating`] and the state is changed to `State::Default`.
 
-use crate::{parser::AnchoredRule, translator::{Translation, TranslationStage}};
+use crate::{
+    parser::AnchoredRule,
+    translator::{Translation, TranslationStage},
+};
 
 use std::collections::HashSet;
 
@@ -48,23 +51,53 @@ impl IndicatorBuilder {
     }
 
     pub fn capsletter(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.start_letter_translation = Some(Translation::new("", s, 1, TranslationStage::Main, origin.clone()));
+        self.0.start_letter_translation = Some(Translation::new(
+            "",
+            s,
+            1,
+            TranslationStage::Main,
+            origin.clone(),
+        ));
     }
 
     pub fn begcapsword(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.start_word_translation = Some(Translation::new("", s, 1, TranslationStage::Main, origin.clone()));
+        self.0.start_word_translation = Some(Translation::new(
+            "",
+            s,
+            1,
+            TranslationStage::Main,
+            origin.clone(),
+        ));
     }
 
     pub fn endcapsword(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.end_word_translation = Some(Translation::new("", s, 1, TranslationStage::Main, origin.clone()));
+        self.0.end_word_translation = Some(Translation::new(
+            "",
+            s,
+            1,
+            TranslationStage::Main,
+            origin.clone(),
+        ));
     }
 
     pub fn begcaps(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.start_translation = Some(Translation::new("", s, 1, TranslationStage::Main, origin.clone()));
+        self.0.start_translation = Some(Translation::new(
+            "",
+            s,
+            1,
+            TranslationStage::Main,
+            origin.clone(),
+        ));
     }
 
     pub fn endcaps(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.end_translation = Some(Translation::new("", s, 1, TranslationStage::Main, origin.clone()));
+        self.0.end_translation = Some(Translation::new(
+            "",
+            s,
+            1,
+            TranslationStage::Main,
+            origin.clone(),
+        ));
     }
 
     pub fn capsmodechars(&mut self, s: &str) {
@@ -190,13 +223,25 @@ mod tests {
         let mut indicator = builder.build();
         assert_eq!(
             indicator.next("ABCa".into()),
-            Some(Translation::new("", "⠇", 1, TranslationStage::Main, begcapsword_rule,))
+            Some(Translation::new(
+                "",
+                "⠇",
+                1,
+                TranslationStage::Main,
+                begcapsword_rule,
+            ))
         );
         assert_eq!(indicator.next("BCa".into()), None);
         assert_eq!(indicator.next("Ca".into()), None);
         assert_eq!(
             indicator.next("a".into()),
-            Some(Translation::new("", "⠠", 1, TranslationStage::Main, endcapsword_rule,))
+            Some(Translation::new(
+                "",
+                "⠠",
+                1,
+                TranslationStage::Main,
+                endcapsword_rule,
+            ))
         );
         assert_eq!(indicator.next("".into()), None);
     }

@@ -185,10 +185,12 @@ impl Trie {
                 // first rule wins, so nothing to insert
             } else {
                 // last rule wins
-                current_node.translation = Some(Translation::new(from, to, length, stage, origin.clone()));
+                current_node.translation =
+                    Some(Translation::new(from, to, length, stage, origin.clone()));
             }
         } else {
-            current_node.translation = Some(Translation::new(from, to, length, stage, origin.clone()));
+            current_node.translation =
+                Some(Translation::new(from, to, length, stage, origin.clone()));
         }
     }
 
@@ -331,11 +333,41 @@ mod tests {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
         let rule = fake_rule();
-        let a = Translation::new("a".into(), "A".into(), 1, TranslationStage::Main, rule.clone());
-        let f = Translation::new("f".into(), "F".into(), 1, TranslationStage::Main, rule.clone());
-        let fo = Translation::new("fo".into(), "FO".into(), 2, TranslationStage::Main, rule.clone());
-        let foo = Translation::new("foo".into(), "FOO".into(), 3, TranslationStage::Main, rule.clone());
-        let foobar = Translation::new("foobar".into(), "FOOBAR".into(), 6, TranslationStage::Main, rule.clone());
+        let a = Translation::new(
+            "a".into(),
+            "A".into(),
+            1,
+            TranslationStage::Main,
+            rule.clone(),
+        );
+        let f = Translation::new(
+            "f".into(),
+            "F".into(),
+            1,
+            TranslationStage::Main,
+            rule.clone(),
+        );
+        let fo = Translation::new(
+            "fo".into(),
+            "FO".into(),
+            2,
+            TranslationStage::Main,
+            rule.clone(),
+        );
+        let foo = Translation::new(
+            "foo".into(),
+            "FOO".into(),
+            3,
+            TranslationStage::Main,
+            rule.clone(),
+        );
+        let foobar = Translation::new(
+            "foobar".into(),
+            "FOOBAR".into(),
+            6,
+            TranslationStage::Main,
+            rule.clone(),
+        );
         trie.insert(
             "a".into(),
             "A".into(),
@@ -417,7 +449,13 @@ mod tests {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
         let rule = fake_rule();
-        let a = Translation::new("a".into(), "A".into(), 3, TranslationStage::Main, rule.clone());
+        let a = Translation::new(
+            "a".into(),
+            "A".into(),
+            3,
+            TranslationStage::Main,
+            rule.clone(),
+        );
         trie.insert(
             "a".into(),
             "A".into(),
@@ -437,7 +475,13 @@ mod tests {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
         let rule = fake_rule();
-        let foo = Translation::new("foo".into(), "FOO".into(), 5, TranslationStage::Main, rule.clone());
+        let foo = Translation::new(
+            "foo".into(),
+            "FOO".into(),
+            5,
+            TranslationStage::Main,
+            rule.clone(),
+        );
         trie.insert(
             "foo".into(),
             "FOO".into(),
@@ -459,7 +503,13 @@ mod tests {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
         let rule = fake_rule();
-        let foo = Translation::new("foo".into(), "FOO".into(), 4, TranslationStage::Main, rule.clone());
+        let foo = Translation::new(
+            "foo".into(),
+            "FOO".into(),
+            4,
+            TranslationStage::Main,
+            rule.clone(),
+        );
         trie.insert(
             "foo".into(),
             "FOO".into(),
@@ -481,7 +531,13 @@ mod tests {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
         let rule = fake_rule();
-        let foo = Translation::new("foo".into(), "FOO".into(), 5, TranslationStage::Main, rule.clone());
+        let foo = Translation::new(
+            "foo".into(),
+            "FOO".into(),
+            5,
+            TranslationStage::Main,
+            rule.clone(),
+        );
         trie.insert(
             "foo".into(),
             "FOO".into(),
@@ -504,7 +560,13 @@ mod tests {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
         let rule = fake_rule();
-        let foo = Translation::new("aaa".into(), "A".into(), 5, TranslationStage::Main, rule.clone());
+        let foo = Translation::new(
+            "aaa".into(),
+            "A".into(),
+            5,
+            TranslationStage::Main,
+            rule.clone(),
+        );
         trie.insert(
             "aaa".into(),
             "A".into(),
@@ -526,7 +588,13 @@ mod tests {
         let mut trie = Trie::new();
         let empty = Vec::<Translation>::new();
         let rule = fake_rule();
-        let foo = Translation::new("st".into(), "S".into(), 4, TranslationStage::Main, rule.clone());
+        let foo = Translation::new(
+            "st".into(),
+            "S".into(),
+            4,
+            TranslationStage::Main,
+            rule.clone(),
+        );
         trie.insert(
             "st".into(),
             "S".into(),
@@ -548,7 +616,13 @@ mod tests {
     fn find_translations_case_insensitive() {
         let mut trie = Trie::new();
         let rule = fake_rule();
-        let foo = Translation::new("foo".into(), "FOO".into(), 3, TranslationStage::Main, rule.clone());
+        let foo = Translation::new(
+            "foo".into(),
+            "FOO".into(),
+            3,
+            TranslationStage::Main,
+            rule.clone(),
+        );
         trie.insert(
             "foo".into(),
             "FOO".into(),
