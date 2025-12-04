@@ -3,7 +3,7 @@
 # Changelog
 
 
-## Unreleased
+## 0.2.3 - 2025-12-04
 
 
 ### Added
@@ -17,21 +17,6 @@
 -   Tracing now works across all translation stages. If any rules for
     pre and post translations are defined these translations are also
     shown.
-
-
-### Changed
-
-
-### Deprecated
-
-
-### Removed
-
-
-### Fixed
-
-
-### Security
 
 
 ## 0.2.2 - 2025-12-01
