@@ -13,7 +13,7 @@
 //! changed to `State::Default` and the character encountered is in the set of
 //! [`Indicator::terminating_chars`].
 
-use crate::{parser::AnchoredRule, translator::Translation};
+use crate::{parser::AnchoredRule, translator::{Translation, TranslationStage}};
 
 use std::collections::HashSet;
 
@@ -45,11 +45,11 @@ impl IndicatorBuilder {
     }
 
     pub fn numsign(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.start_translation = Some(Translation::new("", s, 1, origin.clone()));
+        self.0.start_translation = Some(Translation::new("", s, 1, TranslationStage::Main, origin.clone()));
     }
 
     pub fn nonumsign(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.end_translation = Some(Translation::new("", s, 1, origin.clone()));
+        self.0.end_translation = Some(Translation::new("", s, 1, TranslationStage::Main, origin.clone()));
     }
 
     pub fn numericnocontchars(&mut self, s: &str) {
@@ -153,7 +153,7 @@ mod tests {
         assert_eq!(indicator.next("b12 a".into()), None);
         assert_eq!(
             indicator.next("12 a".into()),
-            Some(Translation::new("", "⠼", 1, rule))
+            Some(Translation::new("", "⠼", 1, TranslationStage::Main, rule))
         );
         assert_eq!(indicator.next("2 a".into()), None);
         assert_eq!(indicator.next(" a".into()), None);
@@ -178,12 +178,12 @@ mod tests {
         assert_eq!(indicator.next("b12a".into()), None);
         assert_eq!(
             indicator.next("12a".into()),
-            Some(Translation::new("", "⠼", 1, numsign_rule))
+            Some(Translation::new("", "⠼", 1, TranslationStage::Main, numsign_rule))
         );
         assert_eq!(indicator.next("2a".into()), None);
         assert_eq!(
             indicator.next("a".into()),
-            Some(Translation::new("", "⠰", 1, nonumsign_rule))
+            Some(Translation::new("", "⠰", 1, TranslationStage::Main, nonumsign_rule))
         );
         assert_eq!(indicator.next("".into()), None);
     }

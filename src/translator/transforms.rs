@@ -13,6 +13,7 @@ use crate::{
 pub struct TransformationTable {
     /// A prefix tree that contains all the translation rules and their [`Translations`](Translation)
     trie: Trie,
+    stage: TranslationStage,
     direction: Direction,
 }
 
@@ -27,9 +28,10 @@ impl TransformationTableBuilder {
         Self { trie: Trie::new() }
     }
 
-    fn build(self, direction: Direction) -> TransformationTable {
+    fn build(self, direction: Direction, stage: TranslationStage) -> TransformationTable {
         TransformationTable {
             direction,
+	    stage,
             trie: self.trie,
         }
     }
@@ -43,6 +45,7 @@ impl TransformationTable {
     pub fn compile(
         rules: &[&AnchoredRule],
         direction: Direction,
+	stage: TranslationStage,
     ) -> Result<Self, TranslationError> {
         let mut builder = TransformationTableBuilder::new();
 
@@ -68,7 +71,7 @@ impl TransformationTable {
                             Boundary::None,
                             direction,
                             Precedence::Default,
-                            TranslationStage::Post1,
+                            stage,
                             rule,
                         );
                     }
@@ -90,7 +93,7 @@ impl TransformationTable {
                             Boundary::None,
                             direction,
                             Precedence::Default,
-                            TranslationStage::Post1,
+                            stage,
                             rule,
                         );
                     }
@@ -112,7 +115,7 @@ impl TransformationTable {
                             Boundary::None,
                             direction,
                             Precedence::Default,
-                            TranslationStage::Post2,
+                            stage,
                             rule,
                         );
                     }
@@ -134,7 +137,7 @@ impl TransformationTable {
                             Boundary::None,
                             direction,
                             Precedence::Default,
-                            TranslationStage::Post3,
+                            stage,
                             rule,
                         );
                     }
@@ -143,7 +146,7 @@ impl TransformationTable {
             }
         }
 
-        Ok(builder.build(direction))
+        Ok(builder.build(direction, stage))
     }
 
     pub fn translate(&self, input: &str) -> String {
@@ -184,7 +187,7 @@ impl TransformationTable {
                 prev = Some(next_char);
                 // no translation rule found, just pass the character through
                 let translation =
-                    Translation::new(&next_char.to_string(), &next_char.to_string(), 1, None);
+                    Translation::new(&next_char.to_string(), &next_char.to_string(), 1, self.stage, None);
                 translations.push(translation);
             } else {
                 // the chars iterator is exhausted
@@ -208,7 +211,7 @@ mod tests {
     #[test]
     fn correct() {
         let rules = [&parse_rule("correct \"corect\" \"correct\"")];
-        let table = TransformationTable::compile(&rules, Direction::Forward).unwrap();
+        let table = TransformationTable::compile(&rules, Direction::Forward, TranslationStage::Pre).unwrap();
         assert_eq!(table.translate("foobar"), "foobar");
         assert_eq!(table.translate("corect"), "correct");
         assert_eq!(table.translate("🐂"), "🐂");
@@ -217,7 +220,7 @@ mod tests {
     #[test]
     fn pass2() {
         let rules = [&parse_rule("pass2 @123 @12")];
-        let table = TransformationTable::compile(&rules, Direction::Forward).unwrap();
+        let table = TransformationTable::compile(&rules, Direction::Forward, TranslationStage::Post1).unwrap();
         assert_eq!(dbg!(&table).translate("⠇"), "⠃");
         assert_eq!(table.translate("⠙"), "⠙");
         assert_eq!(table.translate("🐂"), "🐂");
@@ -226,7 +229,7 @@ mod tests {
     #[test]
     fn pass3() {
         let rules = [&parse_rule("pass3 @123 @12")];
-        let table = TransformationTable::compile(&rules, Direction::Forward).unwrap();
+        let table = TransformationTable::compile(&rules, Direction::Forward, TranslationStage::Post2).unwrap();
         assert_eq!(dbg!(&table).translate("⠇"), "⠃");
         assert_eq!(table.translate("⠙"), "⠙");
         assert_eq!(table.translate("🐂"), "🐂");
@@ -235,7 +238,7 @@ mod tests {
     #[test]
     fn pass4() {
         let rules = [&parse_rule("pass4 @123 @12")];
-        let table = TransformationTable::compile(&rules, Direction::Forward).unwrap();
+        let table = TransformationTable::compile(&rules, Direction::Forward, TranslationStage::Post3).unwrap();
         assert_eq!(dbg!(&table).translate("⠇"), "⠃");
         assert_eq!(table.translate("⠙"), "⠙");
         assert_eq!(table.translate("🐂"), "🐂");

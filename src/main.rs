@@ -123,7 +123,7 @@ impl Trace {
                 format!("{}", rule)
             }
             None => {
-                format!("No rule found")
+                format!("")
             }
         }
     }

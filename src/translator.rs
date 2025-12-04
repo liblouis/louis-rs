@@ -50,7 +50,7 @@ pub enum TranslationError {
 ///
 /// The `Main` translation is always done. The others are only done if
 /// specific rules are present in a translation table
-#[derive(Debug, PartialEq, Clone, Default)]
+#[derive(Debug, PartialEq, Clone, Default, Copy)]
 pub enum TranslationStage {
     /// Pre-translation stage where the `correct` rules are applied
     Pre,
@@ -106,6 +106,7 @@ impl Translation {
         input: &str,
         output: &str,
         weight: usize,
+	stage: TranslationStage,
         // FIXME: this is some weird thing recommended by Claude: apparently the `impl
         // Into<Option<T>>` trait bound automatically converts `T` to `Some(T)` and `None` to
         // `None`, giving you the overloaded behavior you want with a single function. This is more
@@ -120,7 +121,7 @@ impl Translation {
             length,
             offset: 0,
             precedence: Precedence::Default,
-            stage: TranslationStage::default(),
+            stage,
             origin: origin.into(),
         }
     }
@@ -138,7 +139,7 @@ impl Translation {
     }
 
     pub fn stage(&self) -> TranslationStage {
-        self.stage.clone()
+        self.stage
     }
 
     /// Set the `offset` of a translation.
@@ -416,7 +417,7 @@ impl TranslationTable {
             .iter()
             .filter(|r| matches!(r.rule, Rule::Correct { .. }))
             .collect();
-        builder.correct_transform = TransformationTable::compile(&correct_rules, direction)?;
+        builder.correct_transform = TransformationTable::compile(&correct_rules, direction, TranslationStage::Pre)?;
 
         // then use the multipass rules to create translation tables for the post translation passes
         let pass2_rules: &Vec<&AnchoredRule> = &rules
@@ -431,9 +432,9 @@ impl TranslationTable {
             .iter()
             .filter(|r| matches!(r.rule, Rule::Pass4 { .. }))
             .collect();
-        builder.pass2_transform = TransformationTable::compile(&pass2_rules, direction)?;
-        builder.pass3_transform = TransformationTable::compile(&pass3_rules, direction)?;
-        builder.pass4_transform = TransformationTable::compile(&pass4_rules, direction)?;
+        builder.pass2_transform = TransformationTable::compile(&pass2_rules, direction, TranslationStage::Post1)?;
+        builder.pass3_transform = TransformationTable::compile(&pass3_rules, direction, TranslationStage::Post2)?;
+        builder.pass4_transform = TransformationTable::compile(&pass4_rules, direction, TranslationStage::Post3)?;
 
         // FIXME: For some unknown reason the litdigit rule seems to have precedence over the digit
         // rule. Since they both want to define digits in the same character_definitions slot we
@@ -1114,7 +1115,7 @@ impl TranslationTable {
                 if let Some(ref replacement) = self.undefined {
                     // there is a rule for undefined characters
                     let translation =
-                        Translation::new(&next_char.to_string(), replacement, 1, None); // FIXME: add the undefined rule here
+                        Translation::new(&next_char.to_string(), replacement, 1, TranslationStage::Main, None); // FIXME: add the undefined rule here
                     translations.push(translation);
                     delayed_translations = self.update_offsets(delayed_translations, 1);
                 } else {
@@ -1123,7 +1124,8 @@ impl TranslationTable {
                         &next_char.to_string(),
                         &self.handle_undefined_char(next_char),
                         1,
-                        None,
+                        TranslationStage::Main,
+			None,
                     );
                     translations.push(translation);
                     delayed_translations = self.update_offsets(delayed_translations, 1);

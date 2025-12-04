@@ -422,6 +422,8 @@ pub fn nfa_dot(nfa: &NFA) -> String {
 
 #[cfg(test)]
 mod tests {
+    use crate::translator::TranslationStage;
+
     use super::*;
 
     /// Create an NFA from an abstract syntax tree `ast`
@@ -694,7 +696,7 @@ mod tests {
 
     #[test]
     fn find_with_offset() {
-        let translation = Translation::new("".into(), "".into(), 7, None).with_offset(4);
+        let translation = Translation::new("".into(), "".into(), 7, TranslationStage::Main, None).with_offset(4);
         let ast = AST::Concat(
             Box::new(AST::Concat(
                 Box::new(AST::OneOrMore(Box::new(AST::Any))),
