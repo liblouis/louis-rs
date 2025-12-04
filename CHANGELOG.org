@@ -4,6 +4,14 @@
 
 * Changelog
 
+** Unreleased
+*** Added
+*** Changed
+*** Deprecated
+*** Removed
+*** Fixed
+*** Security
+
 ** 0.2.3 - 2025-12-04
 *** Added
 - Implement support for the multipass opcodes, at least for the ones
