@@ -4,13 +4,12 @@ use std::collections::HashSet;
 
 use crate::parser::{AnchoredRule, Attribute, Pattern, Patterns};
 
+use crate::translator::character_classes::{CharacterClass, CharacterClasses};
 use crate::translator::nfa::{AST, NFA};
 use crate::translator::{Translation, TranslationStage};
 
-use super::CharacterAttributes;
-
 impl AST {
-    fn from_pattern(item: &Pattern, ctx: &CharacterAttributes) -> Self {
+    fn from_pattern(item: &Pattern, ctx: &CharacterClasses) -> Self {
         match item {
             Pattern::Empty => AST::NotImplemented,
             Pattern::Characters(s) => AST::String(s.to_string()),
@@ -34,7 +33,7 @@ impl AST {
         }
     }
 
-    fn from_patterns(patterns: &Patterns, ctx: &CharacterAttributes) -> Self {
+    fn from_patterns(patterns: &Patterns, ctx: &CharacterClasses) -> Self {
         match patterns.len() {
             0 => todo!(),
             1 => AST::from_pattern(&patterns[0], ctx),
@@ -49,61 +48,61 @@ impl AST {
         }
     }
 
-    fn from_attributes(attributes: &HashSet<Attribute>, ctx: &CharacterAttributes) -> Self {
+    fn from_attributes(attributes: &HashSet<Attribute>, ctx: &CharacterClasses) -> Self {
         let mut characters = HashSet::new();
         for attr in attributes {
             match attr {
                 Attribute::Space => {
-                    if let Some(chars) = ctx.get(Attribute::Space) {
+                    if let Some(chars) = ctx.get(&CharacterClass::Space) {
                         characters.extend(chars);
                     }
                 }
                 Attribute::Digit => {
-                    if let Some(chars) = ctx.get(Attribute::Digit) {
+                    if let Some(chars) = ctx.get(&CharacterClass::Digit) {
                         characters.extend(chars);
                     }
                 }
                 Attribute::Letter => {
-                    if let Some(chars) = ctx.get(Attribute::Letter) {
+                    if let Some(chars) = ctx.get(&CharacterClass::Letter) {
                         characters.extend(chars);
                     }
                 }
-                Attribute::Uppercase => (), // TODO: implement
+                Attribute::Uppercase => {
+                    if let Some(chars) = ctx.get(&CharacterClass::Uppercase) {
+                        characters.extend(chars);
+                    }
+                }
                 Attribute::Lowercase => {
-                    if let Some(chars) = ctx.get(Attribute::Letter) {
+                    if let Some(chars) = ctx.get(&CharacterClass::Lowercase) {
                         characters.extend(chars);
                     }
                 }
                 Attribute::Punctuation => {
-                    if let Some(chars) = ctx.get(Attribute::Punctuation) {
+                    if let Some(chars) = ctx.get(&CharacterClass::Punctuation) {
                         characters.extend(chars);
                     }
                 }
                 Attribute::Sign => {
-                    if let Some(chars) = ctx.get(Attribute::Sign) {
+                    if let Some(chars) = ctx.get(&CharacterClass::Sign) {
                         characters.extend(chars);
                     }
                 }
                 Attribute::Seqdelimiter => {
-                    if let Some(chars) = ctx.get(Attribute::Seqdelimiter) {
+                    if let Some(chars) = ctx.get(&CharacterClass::Seqdelimiter) {
                         characters.extend(chars);
                     }
                 }
                 Attribute::Seqbeforechars => {
-                    if let Some(chars) = ctx.get(Attribute::Seqbeforechars) {
+                    if let Some(chars) = ctx.get(&CharacterClass::Seqbeforechars) {
                         characters.extend(chars);
                     }
                 }
                 Attribute::Seqafterchars => {
-                    if let Some(chars) = ctx.get(Attribute::Seqafterchars) {
+                    if let Some(chars) = ctx.get(&CharacterClass::Seqafterchars) {
                         characters.extend(chars);
                     }
                 }
-                Attribute::Boundary => {
-                    if let Some(chars) = ctx.get(Attribute::Boundary) {
-                        characters.extend(chars);
-                    }
-                }
+                Attribute::Boundary => (),       // TODO: implement
                 Attribute::UserDefined(_) => (), // TODO: implement
             }
         }
@@ -115,7 +114,7 @@ impl AST {
         pre: &Patterns,
         chars: String,
         post: &Patterns,
-        ctx: &CharacterAttributes,
+        ctx: &CharacterClasses,
     ) -> Self {
         AST::Concat(
             Box::new(AST::Concat(
@@ -151,7 +150,7 @@ impl MatchPatterns {
         origin: &AnchoredRule,
     ) {
         let translation = Translation::new(chars, to, 0, TranslationStage::Main, origin.clone());
-        let ctx = CharacterAttributes::new();
+        let ctx = CharacterClasses::new();
         let ast = AST::from_match_rule(pre, chars.to_string(), post, &ctx);
         self.nfa.merge_accepting_fragment(&ast, translation);
     }
@@ -178,7 +177,7 @@ mod tests {
     fn find_pattern() {
         let patterns = PatternParser::new("abc").pattern().unwrap();
         let translation = Translation::default();
-        let ctx = CharacterAttributes::new();
+        let ctx = CharacterClasses::new();
         let ast = AST::from_patterns(&patterns, &ctx);
         let nfa = NFA::from(&ast);
         assert_eq!(nfa.find_translations("abc"), vec![translation]);
@@ -189,7 +188,7 @@ mod tests {
     fn find_either() {
         let patterns = PatternParser::new("a|b").pattern().unwrap();
         let translation = Translation::default();
-        let ctx = CharacterAttributes::new();
+        let ctx = CharacterClasses::new();
         let ast = AST::from_patterns(&patterns, &ctx);
         let nfa = NFA::from(&ast);
         assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);
@@ -202,7 +201,7 @@ mod tests {
     fn find_character_class() {
         let patterns = PatternParser::new("[abc]").pattern().unwrap();
         let translation = Translation::default();
-        let ctx = CharacterAttributes::new();
+        let ctx = CharacterClasses::new();
         let ast = AST::from_patterns(&patterns, &ctx);
         let nfa = NFA::from(&ast);
         assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);
@@ -215,7 +214,7 @@ mod tests {
     fn find_character_class_one_or_more() {
         let patterns = PatternParser::new("[abc]+").pattern().unwrap();
         let translation = Translation::default();
-        let ctx = CharacterAttributes::new();
+        let ctx = CharacterClasses::new();
         let ast = AST::from_patterns(&patterns, &ctx);
         let nfa = NFA::from(&ast);
         assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);

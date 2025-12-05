@@ -14,12 +14,14 @@ use crate::parser::HasNocross;
 use crate::parser::HasPrecedence;
 use crate::parser::Precedence;
 use crate::parser::{AnchoredRule, Attribute, Braille, Direction, Rule, dots_to_unicode, fallback};
+use crate::translator::character_classes::{CharacterClass, CharacterClasses};
 use crate::translator::transforms::TransformationTable;
 
 use self::trie::Boundary;
 use indication::{lettersign, nocontract, numeric, uppercase};
 
 mod boundaries;
+mod character_classes;
 mod indication;
 mod match_pattern;
 mod nfa;
@@ -38,12 +40,12 @@ pub enum TranslationError {
         derived: char,
         direction: Direction,
     },
-    #[error("Attribute {0:?} has not been defined")]
-    AttributeNotDefined(String),
     #[error(transparent)]
     HyphenationTableIoError(#[from] io::Error),
     #[error(transparent)]
     HyphenationTableLoadError(#[from] hyphenation::load::Error),
+    #[error(transparent)]
+    CharacterClassError(#[from] character_classes::CharacterClassError),
 }
 
 /// A translation can have multiple stages.
@@ -218,61 +220,13 @@ impl CharacterDefinition {
     }
 }
 
-/// A mapping between a character [Attribute] and the associated set
-/// of characters
-#[derive(Debug, Default)]
-struct CharacterAttributes(HashMap<Attribute, HashSet<char>>);
-
-impl CharacterAttributes {
-    fn new() -> Self {
-        Self(HashMap::new())
-    }
-
-    fn insert(&mut self, attribute: Attribute, c: char) {
-        self.0.entry(attribute).or_default().insert(c);
-    }
-
-    fn get(&self, attribute: Attribute) -> Option<HashSet<char>> {
-        self.0.get(&attribute).cloned()
-    }
-}
-
-/// A mapping between a name of an attribute and it's enum
-#[derive(Debug, Default)]
-struct AttributeMapping(HashMap<String, Attribute>);
-
-impl AttributeMapping {
-    fn new() -> Self {
-        Self(HashMap::from([
-            ("space".to_string(), Attribute::Space),
-            ("digit".to_string(), Attribute::Digit),
-            ("letter".to_string(), Attribute::Letter),
-            ("lowercase".to_string(), Attribute::Lowercase),
-            ("uppercase".to_string(), Attribute::Uppercase),
-            ("punctuation".to_string(), Attribute::Punctuation),
-            ("sign".to_string(), Attribute::Sign),
-            //("math".to_string(), Attribute::Math),
-            //("litdigit".to_string(), Attribute::LitDigit),
-        ]))
-    }
-
-    fn insert(&mut self, name: &str, attribute: Attribute) {
-        self.0.entry(name.to_string()).or_insert(attribute);
-    }
-
-    fn get(&self, name: &str) -> Option<Attribute> {
-        self.0.get(name).cloned()
-    }
-}
-
 #[derive(Debug)]
 pub struct TranslationTable {
     undefined: Option<String>,
     /// Defines a mapping between characters and a string to translate to. Not used for translation,
     /// only to resolve implicit braille
     character_definitions: CharacterDefinition,
-    character_attributes: CharacterAttributes,
-    attributes: AttributeMapping,
+    character_classes: CharacterClasses,
     /// A prefix tree that contains all the translation rules and their [`Translations`](Translation)
     trie: Trie,
     match_patterns: MatchPatterns,
@@ -299,8 +253,7 @@ pub struct TranslationTable {
 struct TranslationTableBuilder {
     undefined: Option<String>,
     character_definitions: CharacterDefinition,
-    character_attributes: CharacterAttributes,
-    attributes: AttributeMapping,
+    character_classes: CharacterClasses,
     trie: Trie,
     nocross_trie: Trie,
     correct_transform: TransformationTable,
@@ -320,8 +273,7 @@ impl TranslationTableBuilder {
         Self {
             undefined: None,
             character_definitions: CharacterDefinition::new(),
-            character_attributes: CharacterAttributes::new(),
-            attributes: AttributeMapping::new(),
+            character_classes: CharacterClasses::new(),
             trie: Trie::new(),
             nocross_trie: Trie::new(),
             correct_transform: TransformationTable::default(),
@@ -349,13 +301,13 @@ impl TranslationTableBuilder {
         &mut self,
         c: &char,
         dots: &str,
-        attributes: Vec<Attribute>,
+        classes: Vec<CharacterClass>,
         direction: Direction,
         rule: &AnchoredRule,
-    ) {
+    ) -> Result<(), TranslationError> {
         self.character_definitions.insert(*c, dots);
-        for attribute in attributes {
-            self.character_attributes.insert(attribute, *c);
+        for class in classes {
+            self.character_classes.insert(class, *c)?;
         }
         self.trie.insert_char(
             *c,
@@ -373,6 +325,7 @@ impl TranslationTableBuilder {
             TranslationStage::Main,
             rule,
         );
+        Ok(())
     }
 
     fn build(self, direction: Direction) -> TranslationTable {
@@ -380,8 +333,7 @@ impl TranslationTableBuilder {
             undefined: self.undefined,
             direction,
             character_definitions: self.character_definitions,
-            character_attributes: self.character_attributes,
-            attributes: self.attributes,
+            character_classes: self.character_classes,
             trie: self.trie,
             nocross_trie: self.nocross_trie,
             correct_transform: (!self.correct_transform.is_empty())
@@ -454,10 +406,10 @@ impl TranslationTable {
                     builder.insert_character_definition(
                         character,
                         &dots_to_unicode(dots),
-                        vec![Attribute::Digit],
+                        vec![CharacterClass::Digit],
                         direction,
                         rule,
-                    );
+                    )?;
                 }
                 _ => (),
             }
@@ -477,10 +429,10 @@ impl TranslationTable {
                     builder.insert_character_definition(
                         character,
                         &dots_to_unicode(dots),
-                        vec![Attribute::Space],
+                        vec![CharacterClass::Space],
                         direction,
                         rule,
-                    );
+                    )?;
                 }
                 Rule::Punctuation {
                     character, dots, ..
@@ -488,10 +440,10 @@ impl TranslationTable {
                     builder.insert_character_definition(
                         character,
                         &dots_to_unicode(dots),
-                        vec![Attribute::Punctuation],
+                        vec![CharacterClass::Punctuation],
                         direction,
                         rule,
-                    );
+                    )?;
                 }
                 Rule::Digit {
                     character, dots, ..
@@ -502,10 +454,10 @@ impl TranslationTable {
                     builder.insert_character_definition(
                         character,
                         &dots_to_unicode(dots),
-                        vec![Attribute::Digit],
+                        vec![CharacterClass::Digit],
                         direction,
                         rule,
-                    );
+                    )?;
                 }
                 Rule::Letter {
                     character, dots, ..
@@ -513,10 +465,10 @@ impl TranslationTable {
                     builder.insert_character_definition(
                         character,
                         &dots_to_unicode(dots),
-                        vec![Attribute::Letter],
+                        vec![CharacterClass::Letter],
                         direction,
                         rule,
-                    );
+                    )?;
                 }
                 Rule::Lowercase {
                     character, dots, ..
@@ -524,10 +476,10 @@ impl TranslationTable {
                     builder.insert_character_definition(
                         character,
                         &dots_to_unicode(dots),
-                        vec![Attribute::Lowercase, Attribute::Letter],
+                        vec![CharacterClass::Lowercase, CharacterClass::Letter],
                         direction,
                         rule,
-                    );
+                    )?;
                 }
                 Rule::Uppercase {
                     character, dots, ..
@@ -535,10 +487,10 @@ impl TranslationTable {
                     builder.insert_character_definition(
                         character,
                         &dots_to_unicode(dots),
-                        vec![Attribute::Uppercase, Attribute::Letter],
+                        vec![CharacterClass::Uppercase, CharacterClass::Letter],
                         direction,
                         rule,
-                    );
+                    )?;
                 }
                 Rule::Sign {
                     character, dots, ..
@@ -546,10 +498,10 @@ impl TranslationTable {
                     builder.insert_character_definition(
                         character,
                         &dots_to_unicode(dots),
-                        vec![Attribute::Sign],
+                        vec![CharacterClass::Sign],
                         direction,
                         rule,
-                    );
+                    )?;
                 }
                 Rule::Math {
                     character, dots, ..
@@ -650,11 +602,9 @@ impl TranslationTable {
                             TranslationStage::Main,
                             rule,
                         );
-                        if let Some(attribute) = builder.attributes.get(name) {
-                            builder.character_attributes.insert(attribute, *derived)
-                        } else {
-                            return Err(TranslationError::AttributeNotDefined(name.to_string()));
-                        }
+                        builder
+                            .character_classes
+                            .insert(CharacterClass::from(&name[..]), *derived)?;
                     } else {
                         // hm, there is no character definition for the base character.
                         // If we are backwards compatible ignore the problem, otherwise
@@ -917,20 +867,20 @@ impl TranslationTable {
 
         builder.numeric_indicator.numeric_characters(
             builder
-                .character_attributes
-                .get(Attribute::Digit)
+                .character_classes
+                .get(&CharacterClass::Digit)
                 .unwrap_or_default(),
         );
         builder.uppercase_indicator.uppercase_characters(
             builder
-                .character_attributes
-                .get(Attribute::Uppercase)
+                .character_classes
+                .get(&CharacterClass::Uppercase)
                 .unwrap_or_default(),
         );
         builder.uppercase_indicator.letter_characters(
             builder
-                .character_attributes
-                .get(Attribute::Letter)
+                .character_classes
+                .get(&CharacterClass::Letter)
                 .unwrap_or_default(),
         );
         Ok(builder.build(direction))
