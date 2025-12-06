@@ -1,6 +1,6 @@
 //! A braille translator that uses [liblouis](https://liblouis.io) braille tables
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io;
 
@@ -13,7 +13,7 @@ use crate::parser::HasDirection;
 use crate::parser::HasNocross;
 use crate::parser::HasPrecedence;
 use crate::parser::Precedence;
-use crate::parser::{AnchoredRule, Attribute, Braille, Direction, Rule, dots_to_unicode, fallback};
+use crate::parser::{AnchoredRule, Braille, Direction, Rule, dots_to_unicode, fallback};
 use crate::translator::character_classes::{CharacterClass, CharacterClasses};
 use crate::translator::transforms::TransformationTable;
 
@@ -44,8 +44,6 @@ pub enum TranslationError {
     HyphenationTableIoError(#[from] io::Error),
     #[error(transparent)]
     HyphenationTableLoadError(#[from] hyphenation::load::Error),
-    #[error(transparent)]
-    CharacterClassError(#[from] character_classes::CharacterClassError),
 }
 
 /// A translation can have multiple stages.
@@ -273,7 +271,7 @@ impl TranslationTableBuilder {
         Self {
             undefined: None,
             character_definitions: CharacterDefinition::new(),
-            character_classes: CharacterClasses::new(),
+            character_classes: CharacterClasses::default(),
             trie: Trie::new(),
             nocross_trie: Trie::new(),
             correct_transform: TransformationTable::default(),
@@ -307,7 +305,7 @@ impl TranslationTableBuilder {
     ) -> Result<(), TranslationError> {
         self.character_definitions.insert(*c, dots);
         for class in classes {
-            self.character_classes.insert(class, *c)?;
+            self.character_classes.insert(class, *c);
         }
         self.trie.insert_char(
             *c,
@@ -604,7 +602,7 @@ impl TranslationTable {
                         );
                         builder
                             .character_classes
-                            .insert(CharacterClass::from(&name[..]), *derived)?;
+                            .insert(CharacterClass::from(&name[..]), *derived);
                     } else {
                         // hm, there is no character definition for the base character.
                         // If we are backwards compatible ignore the problem, otherwise

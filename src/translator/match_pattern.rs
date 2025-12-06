@@ -150,7 +150,7 @@ impl MatchPatterns {
         origin: &AnchoredRule,
     ) {
         let translation = Translation::new(chars, to, 0, TranslationStage::Main, origin.clone());
-        let ctx = CharacterClasses::new();
+        let ctx = CharacterClasses::default();
         let ast = AST::from_match_rule(pre, chars.to_string(), post, &ctx);
         self.nfa.merge_accepting_fragment(&ast, translation);
     }
@@ -177,7 +177,7 @@ mod tests {
     fn find_pattern() {
         let patterns = PatternParser::new("abc").pattern().unwrap();
         let translation = Translation::default();
-        let ctx = CharacterClasses::new();
+        let ctx = CharacterClasses::default();
         let ast = AST::from_patterns(&patterns, &ctx);
         let nfa = NFA::from(&ast);
         assert_eq!(nfa.find_translations("abc"), vec![translation]);
@@ -188,7 +188,7 @@ mod tests {
     fn find_either() {
         let patterns = PatternParser::new("a|b").pattern().unwrap();
         let translation = Translation::default();
-        let ctx = CharacterClasses::new();
+        let ctx = CharacterClasses::default();
         let ast = AST::from_patterns(&patterns, &ctx);
         let nfa = NFA::from(&ast);
         assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);
@@ -201,7 +201,7 @@ mod tests {
     fn find_character_class() {
         let patterns = PatternParser::new("[abc]").pattern().unwrap();
         let translation = Translation::default();
-        let ctx = CharacterClasses::new();
+        let ctx = CharacterClasses::default();
         let ast = AST::from_patterns(&patterns, &ctx);
         let nfa = NFA::from(&ast);
         assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);
@@ -214,7 +214,7 @@ mod tests {
     fn find_character_class_one_or_more() {
         let patterns = PatternParser::new("[abc]+").pattern().unwrap();
         let translation = Translation::default();
-        let ctx = CharacterClasses::new();
+        let ctx = CharacterClasses::default();
         let ast = AST::from_patterns(&patterns, &ctx);
         let nfa = NFA::from(&ast);
         assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);
