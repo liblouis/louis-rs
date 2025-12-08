@@ -18,10 +18,6 @@ pub enum CharacterClass {
     Seqbeforechars,
     Seqafterchars,
     UserDefined(String),
-    /// For historical reasons character classes can also be refered to by the number in which the
-    /// appear in the source file. This really brittle and the feature should die.
-    #[cfg(feature = "backwards_compatibility")]
-    InOrderOfAppearance(u8),
 }
 
 impl From<&str> for CharacterClass {
@@ -39,12 +35,6 @@ impl From<&str> for CharacterClass {
             "seqafterchars" => CharacterClass::Seqafterchars,
             class => Self::UserDefined(class.to_string()),
         }
-    }
-}
-
-impl From<u8> for CharacterClass {
-    fn from(value: u8) -> Self {
-        CharacterClass::InOrderOfAppearance(value)
     }
 }
 
