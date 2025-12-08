@@ -302,7 +302,7 @@ impl TranslationTableBuilder {
         classes: Vec<CharacterClass>,
         direction: Direction,
         rule: &AnchoredRule,
-    ) -> Result<(), TranslationError> {
+    ) {
         self.character_definitions.insert(*c, dots);
         for class in classes {
             self.character_classes.insert(class, *c);
@@ -323,7 +323,6 @@ impl TranslationTableBuilder {
             TranslationStage::Main,
             rule,
         );
-        Ok(())
     }
 
     fn build(self, direction: Direction) -> TranslationTable {
@@ -407,7 +406,7 @@ impl TranslationTable {
                         vec![CharacterClass::Digit],
                         direction,
                         rule,
-                    )?;
+                    );
                 }
                 _ => (),
             }
@@ -430,7 +429,7 @@ impl TranslationTable {
                         vec![CharacterClass::Space],
                         direction,
                         rule,
-                    )?;
+                    );
                 }
                 Rule::Punctuation {
                     character, dots, ..
@@ -441,7 +440,7 @@ impl TranslationTable {
                         vec![CharacterClass::Punctuation],
                         direction,
                         rule,
-                    )?;
+                    );
                 }
                 Rule::Digit {
                     character, dots, ..
@@ -455,7 +454,7 @@ impl TranslationTable {
                         vec![CharacterClass::Digit],
                         direction,
                         rule,
-                    )?;
+                    );
                 }
                 Rule::Letter {
                     character, dots, ..
@@ -466,7 +465,7 @@ impl TranslationTable {
                         vec![CharacterClass::Letter],
                         direction,
                         rule,
-                    )?;
+                    );
                 }
                 Rule::Lowercase {
                     character, dots, ..
@@ -477,7 +476,7 @@ impl TranslationTable {
                         vec![CharacterClass::Lowercase, CharacterClass::Letter],
                         direction,
                         rule,
-                    )?;
+                    );
                 }
                 Rule::Uppercase {
                     character, dots, ..
@@ -488,7 +487,7 @@ impl TranslationTable {
                         vec![CharacterClass::Uppercase, CharacterClass::Letter],
                         direction,
                         rule,
-                    )?;
+                    );
                 }
                 Rule::Sign {
                     character, dots, ..
@@ -499,7 +498,7 @@ impl TranslationTable {
                         vec![CharacterClass::Sign],
                         direction,
                         rule,
-                    )?;
+                    );
                 }
                 Rule::Math {
                     character, dots, ..
