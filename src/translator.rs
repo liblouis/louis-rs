@@ -403,7 +403,7 @@ impl TranslationTable {
                     builder.insert_character_definition(
                         character,
                         &dots_to_unicode(dots),
-                        vec![CharacterClass::Digit],
+                        vec![CharacterClass::Litdigit],
                         direction,
                         rule,
                     );
@@ -444,14 +444,22 @@ impl TranslationTable {
                 }
                 Rule::Digit {
                     character, dots, ..
-                }
-                | Rule::Litdigit {
-                    character, dots, ..
                 } => {
                     builder.insert_character_definition(
                         character,
                         &dots_to_unicode(dots),
                         vec![CharacterClass::Digit],
+                        direction,
+                        rule,
+                    );
+                }
+                Rule::Litdigit {
+                    character, dots, ..
+                } => {
+                    builder.insert_character_definition(
+                        character,
+                        &dots_to_unicode(dots),
+                        vec![CharacterClass::Litdigit],
                         direction,
                         rule,
                     );

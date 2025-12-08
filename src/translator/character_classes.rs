@@ -9,6 +9,7 @@ use std::collections::{HashMap, HashSet};
 pub enum CharacterClass {
     Space,
     Digit,
+    Litdigit,
     Letter,
     Uppercase,
     Lowercase,
