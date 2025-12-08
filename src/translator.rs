@@ -582,6 +582,34 @@ impl TranslationTable {
                         .nocontract_indicator
                         .nocontractsign(&dots_to_unicode(dots), rule);
                 }
+                // character classes
+                Rule::Attribute { name, chars } => {
+                    let class = CharacterClass::from(&name[..]);
+                    for c in chars.chars() {
+                        builder.character_classes.insert(class.clone(), c);
+                    }
+                }
+                Rule::Seqdelimiter { chars } => {
+                    for c in chars.chars() {
+                        builder
+                            .character_classes
+                            .insert(CharacterClass::Seqdelimiter, c);
+                    }
+                }
+                Rule::Seqbeforechars { chars } => {
+                    for c in chars.chars() {
+                        builder
+                            .character_classes
+                            .insert(CharacterClass::Seqbeforechars, c);
+                    }
+                }
+                Rule::Seqafterchars { chars } => {
+                    for c in chars.chars() {
+                        builder
+                            .character_classes
+                            .insert(CharacterClass::Seqafterchars, c);
+                    }
+                }
                 // display rules are ignored for translation tables
                 Rule::Display { .. } => (),
                 _ => (),
@@ -1187,6 +1215,8 @@ impl DisplayTable {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
 
     use crate::parser::{RuleParser, expand_includes};
@@ -1637,6 +1667,7 @@ mod tests {
         assert_eq!(table.translate("  "), "⠀⠀");
         assert_eq!(table.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
     }
+
     #[test]
     fn pass4() {
         let rules = vec![
@@ -1652,5 +1683,52 @@ mod tests {
         assert_eq!(table.translate("foobar"), "⠁⠸");
         assert_eq!(table.translate("  "), "⠀⠀");
         assert_eq!(table.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
+    }
+
+    #[test]
+    fn character_classes() {
+        let rules = vec![
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 12"),
+            parse_rule("lowercase c 14"),
+            parse_rule("base uppercase A a"),
+            parse_rule("base uppercase B b"),
+            parse_rule("space \\s 0"),
+            parse_rule("litdigit 1 1"),
+            parse_rule("attribute foo abc"),
+            parse_rule("seqbeforechars xyz"),
+        ];
+        let table = TranslationTable::compile(rules, Direction::Forward).unwrap();
+
+        assert_eq!(
+            table.character_classes.get(&CharacterClass::Letter),
+            Some(HashSet::from(['a', 'b', 'c']))
+        );
+        assert_eq!(
+            table.character_classes.get(&CharacterClass::Lowercase),
+            Some(HashSet::from(['a', 'b', 'c']))
+        );
+        assert_eq!(
+            table.character_classes.get(&CharacterClass::Uppercase),
+            Some(HashSet::from(['A', 'B']))
+        );
+        assert_eq!(
+            table.character_classes.get(&CharacterClass::Space),
+            Some(HashSet::from([' ']))
+        );
+        assert_eq!(
+            table.character_classes.get(&CharacterClass::Litdigit),
+            Some(HashSet::from(['1']))
+        );
+        assert_eq!(
+            table.character_classes.get(&CharacterClass::Seqbeforechars),
+            Some(HashSet::from(['x', 'y', 'z']))
+        );
+        assert_eq!(
+            table
+                .character_classes
+                .get(&CharacterClass::UserDefined("foo".to_string())),
+            Some(HashSet::from(['a', 'b', 'c']))
+        );
     }
 }
