@@ -886,7 +886,14 @@ impl TranslationTable {
                     let dots = builder
                         .character_definitions
                         .braille_to_unicode(dots, chars)?;
-                    builder.match_patterns.insert(pre, chars, post, &dots, rule);
+                    builder.match_patterns.insert(
+                        pre,
+                        chars,
+                        post,
+                        &dots,
+                        rule,
+                        &builder.character_classes,
+                    );
                 }
                 Rule::IncludeHyphenation { path } => {
                     let file = File::open(path)?;
@@ -897,7 +904,6 @@ impl TranslationTable {
                 _ => (),
             }
         }
-
         builder.numeric_indicator.numeric_characters(
             builder
                 .character_classes

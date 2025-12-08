@@ -44,6 +44,7 @@ impl From<&str> for CharacterClass {
 pub struct CharacterClasses(HashMap<CharacterClass, HashSet<char>>);
 
 impl CharacterClasses {
+
     pub fn insert(&mut self, class: CharacterClass, c: char) -> bool {
         self.0.entry(class).or_default().insert(c)
     }

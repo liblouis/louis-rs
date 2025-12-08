@@ -148,9 +148,9 @@ impl MatchPatterns {
         post: &Patterns,
         to: &str,
         origin: &AnchoredRule,
+        ctx: &CharacterClasses,
     ) {
         let translation = Translation::new(chars, to, 0, TranslationStage::Main, origin.clone());
-        let ctx = CharacterClasses::default();
         let ast = AST::from_match_rule(pre, chars.to_string(), post, &ctx);
         self.nfa.merge_accepting_fragment(&ast, translation);
     }
@@ -162,6 +162,8 @@ impl MatchPatterns {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
     use crate::parser::PatternParser;
     use crate::parser::RuleParser;
@@ -198,6 +200,60 @@ mod tests {
     }
 
     #[test]
+    fn find_attribute_digit() {
+        let patterns = PatternParser::new("%[#]").pattern().unwrap();
+        let translation = Translation::default();
+        let mut ctx = CharacterClasses::default();
+        for digit in ['1', '2', '3'] {
+            ctx.insert(CharacterClass::Digit, digit);
+        }
+        let ast = AST::from_patterns(&patterns, &ctx);
+        let nfa = NFA::from(&ast);
+        assert_eq!(nfa.find_translations("1"), vec![translation.clone()]);
+        assert_eq!(nfa.find_translations("2"), vec![translation.clone()]);
+        assert_eq!(nfa.find_translations("3"), vec![translation]);
+        assert!(nfa.find_translations("def").is_empty());
+    }
+
+    #[test]
+    fn find_attribute_uppercase() {
+        let patterns = PatternParser::new("%[u]").pattern().unwrap();
+        let translation = Translation::default();
+        let mut ctx = CharacterClasses::default();
+        for c in ['A', 'B', 'C'] {
+            ctx.insert(CharacterClass::Uppercase, c);
+        }
+        let ast = AST::from_patterns(&patterns, &ctx);
+        let nfa = NFA::from(&ast);
+        assert_eq!(nfa.find_translations("A"), vec![translation.clone()]);
+        assert_eq!(nfa.find_translations("A"), vec![translation.clone()]);
+        assert_eq!(nfa.find_translations("C"), vec![translation]);
+        assert!(nfa.find_translations("def").is_empty());
+    }
+
+    #[test]
+    fn find_attribute_uppercase_punctuation_or_sign() {
+        let patterns = PatternParser::new("%[.$u]").pattern().unwrap();
+        let translation = Translation::default();
+        let mut ctx = CharacterClasses::default();
+        for c in ['A', 'B', 'C'] {
+            ctx.insert(CharacterClass::Uppercase, c);
+        }
+        for c in ['.', ',', '!'] {
+            ctx.insert(CharacterClass::Punctuation, c);
+        }
+        for c in ['%', '&', '/'] {
+            ctx.insert(CharacterClass::Sign, c);
+        }
+        let ast = AST::from_patterns(&patterns, &ctx);
+        let nfa = NFA::from(&ast);
+        assert_eq!(nfa.find_translations("%"), vec![translation.clone()]);
+        assert_eq!(nfa.find_translations("."), vec![translation.clone()]);
+        assert_eq!(nfa.find_translations("A"), vec![translation]);
+        assert!(nfa.find_translations("def").is_empty());
+    }
+
+    #[test]
     fn find_character_class() {
         let patterns = PatternParser::new("[abc]").pattern().unwrap();
         let translation = Translation::default();
@@ -227,9 +283,10 @@ mod tests {
     fn find_match() {
         let pre = PatternParser::new("[abc]+").pattern().unwrap();
         let post = PatternParser::new("[123]+").pattern().unwrap();
+        let ctx = CharacterClasses::default();
         let rule = fake_rule();
         let mut matcher = MatchPatterns::new();
-        matcher.insert(&pre, "foo".into(), &post, "".into(), &rule);
+        matcher.insert(&pre, "foo".into(), &post, "".into(), &rule, &ctx);
         let translation = Translation::new(
             "foo".into(),
             "".into(),
@@ -280,10 +337,11 @@ mod tests {
     fn find_multiple_match() {
         let pre = PatternParser::new("[abc]+").pattern().unwrap();
         let post = PatternParser::new("[1234567890]").pattern().unwrap();
+        let ctx = CharacterClasses::default();
         let rule = fake_rule();
         let mut match_patterns = MatchPatterns::new();
-        match_patterns.insert(&pre, "foo".into(), &post, "FOO".into(), &rule);
-        match_patterns.insert(&pre, "bar".into(), &post, "BAR".into(), &rule);
+        match_patterns.insert(&pre, "foo".into(), &post, "FOO".into(), &rule, &ctx);
+        match_patterns.insert(&pre, "bar".into(), &post, "BAR".into(), &rule, &ctx);
         let translation = vec![
             Translation::new(
                 "foo".into(),
