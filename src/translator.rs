@@ -873,7 +873,7 @@ impl TranslationTable {
         builder.numeric_indicator.numeric_characters(
             builder
                 .character_classes
-                .get(&CharacterClass::Digit)
+                .get(&CharacterClass::Litdigit)
                 .unwrap_or_default(),
         );
         builder.uppercase_indicator.uppercase_characters(
