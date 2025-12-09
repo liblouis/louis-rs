@@ -24,6 +24,10 @@ impl Test {
             tests,
         }
     }
+
+    pub fn tests(&self) -> &Vec<Instruction> {
+        &self.tests
+    }
 }
 
 impl IsLiteral for Test {

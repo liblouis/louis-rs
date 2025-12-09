@@ -58,6 +58,7 @@ pub struct Fragment {
 }
 
 /// An abstract syntax tree
+#[derive(Debug)]
 pub enum AST {
     Character(char),
     String(String),

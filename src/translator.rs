@@ -24,6 +24,7 @@ use self::trie::Boundary;
 use indication::{lettersign, nocontract, numeric, uppercase};
 
 mod boundaries;
+mod context_pattern;
 mod indication;
 mod match_pattern;
 mod nfa;
