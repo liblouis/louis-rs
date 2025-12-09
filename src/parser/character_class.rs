@@ -5,6 +5,14 @@
 
 use std::collections::{HashMap, HashSet};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CharacterClassReference {
+    Class(CharacterClass),
+    ByOrder(u8),
+    Boundary,
+    Any,
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum CharacterClass {
     Space,
@@ -15,6 +23,7 @@ pub enum CharacterClass {
     Lowercase,
     Punctuation,
     Sign,
+    Math,
     Seqdelimiter,
     Seqbeforechars,
     Seqafterchars,
@@ -44,7 +53,6 @@ impl From<&str> for CharacterClass {
 pub struct CharacterClasses(HashMap<CharacterClass, HashSet<char>>);
 
 impl CharacterClasses {
-
     pub fn insert(&mut self, class: CharacterClass, c: char) -> bool {
         self.0.entry(class).or_default().insert(c)
     }

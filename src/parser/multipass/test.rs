@@ -1,4 +1,5 @@
 //! A Parser for the test operand of context and multipass opcodes
+use crate::parser::{Attribute, CharacterClass};
 use std::{collections::HashSet, iter::Peekable, str::Chars};
 
 use crate::parser::{
@@ -52,24 +53,6 @@ impl TryFrom<&Test> for String {
             Err(ConversionError::TestNotLiteral)
         }
     }
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub enum Attribute {
-    Digit,
-    Litdigit,
-    Letter,
-    Sign,
-    Space,
-    Math,
-    Punctuation,
-    Uppercase,
-    Lowercase,
-    Class1,
-    Class2,
-    Class3,
-    Class4,
-    Any,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -318,19 +301,19 @@ impl<'a> Parser<'a> {
     fn attribute(&mut self) -> Result<Attribute, ParseError> {
         match self.chars.next() {
             Some('a') => Ok(Attribute::Any),
-            Some('d') => Ok(Attribute::Digit),
-            Some('D') => Ok(Attribute::Litdigit),
-            Some('l') => Ok(Attribute::Letter),
-            Some('m') => Ok(Attribute::Math),
-            Some('p') => Ok(Attribute::Punctuation),
-            Some('S') => Ok(Attribute::Sign),
-            Some('s') => Ok(Attribute::Space),
-            Some('U') => Ok(Attribute::Uppercase),
-            Some('u') => Ok(Attribute::Lowercase),
-            Some('w') => Ok(Attribute::Class1),
-            Some('x') => Ok(Attribute::Class2),
-            Some('y') => Ok(Attribute::Class3),
-            Some('z') => Ok(Attribute::Class4),
+            Some('d') => Ok(Attribute::Class(CharacterClass::Digit)),
+            Some('D') => Ok(Attribute::Class(CharacterClass::Litdigit)),
+            Some('l') => Ok(Attribute::Class(CharacterClass::Letter)),
+            Some('m') => Ok(Attribute::Class(CharacterClass::Math)),
+            Some('p') => Ok(Attribute::Class(CharacterClass::Punctuation)),
+            Some('S') => Ok(Attribute::Class(CharacterClass::Sign)),
+            Some('s') => Ok(Attribute::Class(CharacterClass::Space)),
+            Some('U') => Ok(Attribute::Class(CharacterClass::Uppercase)),
+            Some('u') => Ok(Attribute::Class(CharacterClass::Lowercase)),
+            Some('w') => Ok(Attribute::ByOrder(1)),
+            Some('x') => Ok(Attribute::ByOrder(2)),
+            Some('y') => Ok(Attribute::ByOrder(3)),
+            Some('z') => Ok(Attribute::ByOrder(4)),
             Some(c) => Err(ParseError::InvalidAttribute { found: Some(c) }),
             _ => Err(ParseError::InvalidAttribute { found: None }),
         }
@@ -471,20 +454,30 @@ mod display {
     impl std::fmt::Display for Attribute {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             let attr = match self {
-                Attribute::Digit => "d",
-                Attribute::Litdigit => "D",
-                Attribute::Letter => "l",
-                Attribute::Sign => "S",
-                Attribute::Space => "s",
-                Attribute::Math => "m",
-                Attribute::Punctuation => "punctuation",
-                Attribute::Uppercase => "U",
-                Attribute::Lowercase => "u",
-                Attribute::Class1 => "w",
-                Attribute::Class2 => "x",
-                Attribute::Class3 => "y",
-                Attribute::Class4 => "z",
+                Attribute::Class(class) => match class {
+                    CharacterClass::Space => "s",
+                    CharacterClass::Digit => "d",
+                    CharacterClass::Litdigit => "D",
+                    CharacterClass::Letter => "l",
+                    CharacterClass::Uppercase => "U",
+                    CharacterClass::Lowercase => "u",
+                    CharacterClass::Punctuation => "p",
+                    CharacterClass::Sign => "S",
+                    CharacterClass::Math => "m",
+                    CharacterClass::Seqdelimiter => todo!(),
+                    CharacterClass::Seqbeforechars => todo!(),
+                    CharacterClass::Seqafterchars => todo!(),
+                    CharacterClass::UserDefined(_) => todo!(),
+                },
+                Attribute::ByOrder(order) => match order {
+                    1 => "w",
+                    2 => "x",
+                    3 => "y",
+                    4 => "z",
+                    _ => todo!(),
+                },
                 Attribute::Any => "a",
+                Attribute::Boundary => "^",
             };
             write!(f, "{}", attr)
         }
@@ -674,7 +667,7 @@ mod tests {
         assert_eq!(
             Parser::new("$ay").attributes(),
             Ok(Instruction::Attributes {
-                attrs: HashSet::from([Attribute::Any, Attribute::Class3]),
+                attrs: HashSet::from([Attribute::Any, Attribute::ByOrder(3)]),
                 quantifier: None
             })
         );
@@ -849,7 +842,7 @@ mod tests {
             Parser::new("[$d]").replacement(),
             Ok(Instruction::Replace {
                 tests: vec![Instruction::Attributes {
-                    attrs: HashSet::from([Attribute::Digit]),
+                    attrs: HashSet::from([Attribute::Class(CharacterClass::Digit)]),
                     quantifier: None
                 }]
             })
@@ -881,7 +874,7 @@ mod tests {
                 at_end: false,
                 tests: vec![
                     Instruction::Attributes {
-                        attrs: HashSet::from([Attribute::Digit]),
+                        attrs: HashSet::from([Attribute::Class(CharacterClass::Digit)]),
                         quantifier: None
                     },
                     Instruction::Replace {

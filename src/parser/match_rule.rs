@@ -1,3 +1,4 @@
+use crate::parser::{Attribute, CharacterClass};
 use std::{collections::HashSet, iter::Peekable, str::Chars};
 
 #[derive(thiserror::Error, Debug, PartialEq)]
@@ -14,22 +15,6 @@ pub enum ParseError {
     EmptyGroup,
     #[error("invalid escape sequence")]
     InvalidEscape,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Attribute {
-    Space,
-    Digit,
-    Letter,
-    Uppercase,
-    Lowercase,
-    Punctuation,
-    Sign,
-    Seqdelimiter,
-    Seqbeforechars,
-    Seqafterchars,
-    Boundary,
-    UserDefined(u8),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -81,25 +66,25 @@ impl<'a> PatternParser<'a> {
 
     fn attribute(&mut self) -> Result<Attribute, ParseError> {
         match self.chars.next() {
-            Some('_') => Ok(Attribute::Space),
-            Some('#') => Ok(Attribute::Digit),
-            Some('a') => Ok(Attribute::Letter),
-            Some('u') => Ok(Attribute::Uppercase),
-            Some('l') => Ok(Attribute::Lowercase),
-            Some('.') => Ok(Attribute::Punctuation),
-            Some('$') => Ok(Attribute::Sign),
-            Some('~') => Ok(Attribute::Seqdelimiter),
-            Some('<') => Ok(Attribute::Seqbeforechars),
-            Some('>') => Ok(Attribute::Seqafterchars),
+            Some('_') => Ok(Attribute::Class(CharacterClass::Space)),
+            Some('#') => Ok(Attribute::Class(CharacterClass::Digit)),
+            Some('a') => Ok(Attribute::Class(CharacterClass::Letter)),
+            Some('u') => Ok(Attribute::Class(CharacterClass::Uppercase)),
+            Some('l') => Ok(Attribute::Class(CharacterClass::Lowercase)),
+            Some('.') => Ok(Attribute::Class(CharacterClass::Punctuation)),
+            Some('$') => Ok(Attribute::Class(CharacterClass::Sign)),
+            Some('~') => Ok(Attribute::Class(CharacterClass::Seqdelimiter)),
+            Some('<') => Ok(Attribute::Class(CharacterClass::Seqbeforechars)),
+            Some('>') => Ok(Attribute::Class(CharacterClass::Seqafterchars)),
             Some('^') => Ok(Attribute::Boundary),
-            Some('0') => Ok(Attribute::UserDefined(0)),
-            Some('1') => Ok(Attribute::UserDefined(1)),
-            Some('2') => Ok(Attribute::UserDefined(2)),
-            Some('3') => Ok(Attribute::UserDefined(3)),
-            Some('4') => Ok(Attribute::UserDefined(4)),
-            Some('5') => Ok(Attribute::UserDefined(5)),
-            Some('6') => Ok(Attribute::UserDefined(6)),
-            Some('7') => Ok(Attribute::UserDefined(7)),
+            Some('0') => Ok(Attribute::ByOrder(0)),
+            Some('1') => Ok(Attribute::ByOrder(1)),
+            Some('2') => Ok(Attribute::ByOrder(2)),
+            Some('3') => Ok(Attribute::ByOrder(3)),
+            Some('4') => Ok(Attribute::ByOrder(4)),
+            Some('5') => Ok(Attribute::ByOrder(5)),
+            Some('6') => Ok(Attribute::ByOrder(6)),
+            Some('7') => Ok(Attribute::ByOrder(7)),
             Some(c) => Err(ParseError::InvalidAttribute(Some(c))),
             _ => Err(ParseError::InvalidAttribute(None)),
         }
@@ -258,14 +243,16 @@ mod tests {
         assert_eq!(
             PatternParser::new("%[al.]").attributes(),
             Ok(Pattern::Attributes(HashSet::from([
-                Attribute::Letter,
-                Attribute::Lowercase,
-                Attribute::Punctuation
+                Attribute::Class(CharacterClass::Letter),
+                Attribute::Class(CharacterClass::Lowercase),
+                Attribute::Class(CharacterClass::Punctuation)
             ])))
         );
         assert_eq!(
             PatternParser::new("%[a]").attributes(),
-            Ok(Pattern::Attributes(HashSet::from([Attribute::Letter,])))
+            Ok(Pattern::Attributes(HashSet::from([Attribute::Class(
+                CharacterClass::Letter
+            ),])))
         );
         assert_eq!(
             PatternParser::new("%[]").attributes(),
@@ -281,7 +268,9 @@ mod tests {
         );
         assert_eq!(
             PatternParser::new("%a").attributes(),
-            Ok(Pattern::Attributes(HashSet::from([Attribute::Letter,])))
+            Ok(Pattern::Attributes(HashSet::from([Attribute::Class(
+                CharacterClass::Letter
+            ),])))
         );
     }
 

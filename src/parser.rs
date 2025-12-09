@@ -18,15 +18,21 @@ use search_path::SearchPath;
 
 use self::{
     braille::{BrailleChars, braille_chars, chars_to_dots},
-    multipass::{Action, Test},
+    multipass::Action,
 };
 
+pub use attribute::Attribute;
 pub use braille::dots_to_unicode;
 pub use braille::fallback;
-pub use match_rule::{Attribute, Pattern, PatternParser, Patterns};
+pub use character_class::{CharacterClass, CharacterClasses};
+pub use match_rule::{Pattern, PatternParser, Patterns};
 pub use multipass::IsLiteral;
+pub use multipass::test;
+pub use multipass::test::{Instruction, Quantifier, Test};
 
+mod attribute;
 mod braille;
+mod character_class;
 mod match_rule;
 mod multipass;
 

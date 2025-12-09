@@ -13,15 +13,17 @@ use crate::parser::HasDirection;
 use crate::parser::HasNocross;
 use crate::parser::HasPrecedence;
 use crate::parser::Precedence;
-use crate::parser::{AnchoredRule, Braille, Direction, Rule, dots_to_unicode, fallback};
-use crate::translator::character_classes::{CharacterClass, CharacterClasses};
+use crate::parser::{
+    AnchoredRule, Braille, CharacterClass, CharacterClasses, Direction, Rule, dots_to_unicode,
+    fallback,
+};
+
 use crate::translator::transforms::TransformationTable;
 
 use self::trie::Boundary;
 use indication::{lettersign, nocontract, numeric, uppercase};
 
 mod boundaries;
-mod character_classes;
 mod indication;
 mod match_pattern;
 mod nfa;

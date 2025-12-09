@@ -2,9 +2,8 @@
 
 use std::collections::HashSet;
 
-use crate::parser::{AnchoredRule, Attribute, Pattern, Patterns};
+use crate::parser::{AnchoredRule, Attribute, CharacterClasses, Pattern, Patterns};
 
-use crate::translator::character_classes::{CharacterClass, CharacterClasses};
 use crate::translator::nfa::{AST, NFA};
 use crate::translator::{Translation, TranslationStage};
 
@@ -52,58 +51,14 @@ impl AST {
         let mut characters = HashSet::new();
         for attr in attributes {
             match attr {
-                Attribute::Space => {
-                    if let Some(chars) = ctx.get(&CharacterClass::Space) {
+                Attribute::Class(class) => {
+                    if let Some(chars) = ctx.get(&class) {
                         characters.extend(chars);
                     }
                 }
-                Attribute::Digit => {
-                    if let Some(chars) = ctx.get(&CharacterClass::Digit) {
-                        characters.extend(chars);
-                    }
-                }
-                Attribute::Letter => {
-                    if let Some(chars) = ctx.get(&CharacterClass::Letter) {
-                        characters.extend(chars);
-                    }
-                }
-                Attribute::Uppercase => {
-                    if let Some(chars) = ctx.get(&CharacterClass::Uppercase) {
-                        characters.extend(chars);
-                    }
-                }
-                Attribute::Lowercase => {
-                    if let Some(chars) = ctx.get(&CharacterClass::Lowercase) {
-                        characters.extend(chars);
-                    }
-                }
-                Attribute::Punctuation => {
-                    if let Some(chars) = ctx.get(&CharacterClass::Punctuation) {
-                        characters.extend(chars);
-                    }
-                }
-                Attribute::Sign => {
-                    if let Some(chars) = ctx.get(&CharacterClass::Sign) {
-                        characters.extend(chars);
-                    }
-                }
-                Attribute::Seqdelimiter => {
-                    if let Some(chars) = ctx.get(&CharacterClass::Seqdelimiter) {
-                        characters.extend(chars);
-                    }
-                }
-                Attribute::Seqbeforechars => {
-                    if let Some(chars) = ctx.get(&CharacterClass::Seqbeforechars) {
-                        characters.extend(chars);
-                    }
-                }
-                Attribute::Seqafterchars => {
-                    if let Some(chars) = ctx.get(&CharacterClass::Seqafterchars) {
-                        characters.extend(chars);
-                    }
-                }
-                Attribute::Boundary => (),       // TODO: implement
-                Attribute::UserDefined(_) => (), // TODO: implement
+                Attribute::Boundary => (),
+                Attribute::ByOrder(_) => (),
+                Attribute::Any => (), // TODO
             }
         }
         AST::Set(characters)
@@ -162,11 +117,9 @@ impl MatchPatterns {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use super::*;
-    use crate::parser::PatternParser;
     use crate::parser::RuleParser;
+    use crate::parser::{CharacterClass, PatternParser};
     use crate::translator::TranslationStage;
 
     // just create some fake anchored rule for testing purposes
