@@ -67,6 +67,9 @@ pub enum AST {
     ZeroOrMore(Box<AST>),
     Optional(Box<AST>),
     OneOrMore(Box<AST>),
+    RepeatExactly(u8, Box<AST>),
+    RepeatAtLeast(u8, Box<AST>),
+    RepeatAtLeastAtMost(u8, u8, Box<AST>),
     Either(Box<AST>, Box<AST>),
     Offset,
     /// Stop-gap blanket "implementation" for things that might be needed but are not yet
@@ -237,6 +240,37 @@ impl NFA {
                 let r1 = self.add_fragment(ast1);
                 let r2 = self.add_fragment(ast2);
                 self.add_union(&r1, &r2)
+            }
+            AST::RepeatExactly(n, ast) => {
+                let mut concatenation = self.add_fragment(ast);
+                for _ in 1..*n {
+                    let repeat = self.add_fragment(ast);
+                    concatenation = self.add_concatenation(&concatenation, &repeat);
+                }
+                concatenation
+            }
+            AST::RepeatAtLeast(n, ast) => {
+                let mut concatenation = self.add_fragment(ast);
+                for _ in 1..*n {
+                    let repeat = self.add_fragment(ast);
+                    concatenation = self.add_concatenation(&concatenation, &repeat);
+                }
+                let fragment = self.add_fragment(ast);
+                let kleene = self.add_kleene(&fragment);
+                self.add_concatenation(&concatenation, &kleene)
+            }
+            AST::RepeatAtLeastAtMost(min, max, ast) => {
+                let mut concatenation = self.add_fragment(ast);
+                for _ in 1..*min {
+                    let repeat = self.add_fragment(ast);
+                    concatenation = self.add_concatenation(&concatenation, &repeat);
+                }
+                for _ in *min..*max {
+                    let fragment = self.add_fragment(ast);
+                    let optional = self.add_optional(&fragment);
+                    concatenation = self.add_concatenation(&concatenation, &optional);
+                }
+                concatenation
             }
             AST::Offset => self.add_offset(),
             AST::NotImplemented => self.add_noop(),
@@ -712,5 +746,90 @@ mod tests {
         assert_eq!(nfa.find_translations("fooofoo"), vec![translation.clone()]);
         assert_ne!(nfa.find_translations("foo"), vec![translation.clone()]);
         assert_ne!(nfa.find_translations("foofoo"), vec![translation.clone()]);
+    }
+
+    #[test]
+    fn repeat_exactly() {
+        let ast = AST::RepeatExactly(1, Box::new(AST::Character('a')));
+        let nfa = NFA::from(&ast);
+        assert!(nfa.accepts("a"));
+        assert!(!nfa.accepts("c"));
+        assert!(!nfa.accepts("bbb"));
+        assert!(!nfa.accepts(""));
+        assert!(!nfa.accepts("aa"));
+        assert!(!nfa.accepts("aaaa"));
+
+        let ast = AST::RepeatExactly(2, Box::new(AST::Character('a')));
+        let nfa = NFA::from(&ast);
+        assert!(nfa.accepts("aa"));
+        assert!(!nfa.accepts("c"));
+        assert!(!nfa.accepts("bbb"));
+        assert!(!nfa.accepts(""));
+        assert!(!nfa.accepts("a"));
+        assert!(!nfa.accepts("aaa"));
+        assert!(!nfa.accepts("aaaa"));
+
+        let ast = AST::RepeatExactly(3, Box::new(AST::Character('a')));
+        let nfa = NFA::from(&ast);
+        assert!(nfa.accepts("aaa"));
+        assert!(!nfa.accepts("c"));
+        assert!(!nfa.accepts("bbb"));
+        assert!(!nfa.accepts("a"));
+        assert!(!nfa.accepts("aa"));
+        assert!(!nfa.accepts("aaaa"));
+    }
+
+    #[test]
+    fn repeat_at_least() {
+        let ast = AST::RepeatAtLeast(1, Box::new(AST::Character('a')));
+        let nfa = NFA::from(&ast);
+        assert!(nfa.accepts("a"));
+        assert!(nfa.accepts("aa"));
+        assert!(nfa.accepts("aaa"));
+        assert!(nfa.accepts("aaaaaaaaaaaaaaaaaaaaaa"));
+        assert!(!nfa.accepts("aaab"));
+        assert!(!nfa.accepts("c"));
+        assert!(!nfa.accepts("bbb"));
+        assert!(!nfa.accepts(""));
+
+        let ast = AST::RepeatAtLeast(2, Box::new(AST::Character('a')));
+        let nfa = NFA::from(&ast);
+        assert!(nfa.accepts("aa"));
+        assert!(nfa.accepts("aaa"));
+        assert!(nfa.accepts("aaaa"));
+        assert!(nfa.accepts("aaaaaaaaaaaaaaaaaaaaa"));
+        assert!(!nfa.accepts("aaab"));
+        assert!(!nfa.accepts("c"));
+        assert!(!nfa.accepts("bbb"));
+        assert!(!nfa.accepts(""));
+        assert!(!nfa.accepts("a"));
+
+        let ast = AST::RepeatAtLeast(3, Box::new(AST::Character('a')));
+        let nfa = NFA::from(&ast);
+        assert!(nfa.accepts("aaa"));
+        assert!(nfa.accepts("aaaa"));
+        assert!(nfa.accepts("aaaaa"));
+        assert!(nfa.accepts("aaaaaaaaaaaaaaaaaaaaaa"));
+        assert!(!nfa.accepts("aaab"));
+        assert!(!nfa.accepts("c"));
+        assert!(!nfa.accepts("bbb"));
+        assert!(!nfa.accepts("a"));
+        assert!(!nfa.accepts("aa"));
+    }
+
+    #[test]
+    fn repeat_at_least_at_most() {
+        let ast = AST::RepeatAtLeastAtMost(3, 5, Box::new(AST::Character('a')));
+        let nfa = NFA::from(&ast);
+        assert!(!nfa.accepts("a"));
+        assert!(!nfa.accepts("aa"));
+        assert!(nfa.accepts("aaa"));
+        assert!(nfa.accepts("aaaa"));
+        assert!(nfa.accepts("aaaaa"));
+        assert!(!nfa.accepts("aaaaaa"));
+        assert!(!nfa.accepts("aaaaaaaaaaaaaaaaaaaaaa"));
+        assert!(!nfa.accepts("aaab"));
+        assert!(!nfa.accepts("c"));
+        assert!(!nfa.accepts("bbb"));
     }
 }
