@@ -10,12 +10,16 @@ use crate::translator::{Translation, TranslationStage};
 
 impl AST {
     fn from_test(test: &Test, ctx: &CharacterClasses) -> Self {
-        match test.tests().len() {
+	AST::from_instructions(test.tests(), ctx)
+    }
+
+    fn from_instructions(instructions: &Vec<Instruction>, ctx: &CharacterClasses) -> Self {
+        match instructions.len() {
             0 => todo!(),
-            1 => AST::from_instruction(&test.tests().first().unwrap(), ctx),
+            1 => AST::from_instruction(&instructions[0], ctx),
             _ => {
-                let mut ast = AST::from_instruction(&test.tests().first().unwrap(), ctx);
-                for instruction in test.tests().iter().skip(1) {
+                let mut ast = AST::from_instruction(&instructions[0], ctx);
+                for instruction in &instructions[1..] {
                     let other = AST::from_instruction(instruction, ctx);
                     ast = AST::Concat(Box::new(ast), Box::new(other));
                 }
@@ -35,7 +39,7 @@ impl AST {
             }
             Instruction::Class { name, quantifier } => AST::from_class(name, quantifier, ctx),
             Instruction::Negate { .. } => AST::NotImplemented,
-            Instruction::Replace { .. } => AST::NotImplemented,
+            Instruction::Replace { tests } => AST::Capture(Box::new(AST::from_instructions(tests, ctx))),
         }
     }
 
@@ -222,5 +226,71 @@ mod tests {
         assert!(nfa.find_translations("a").is_empty());
         assert!(nfa.find_translations("aa").is_empty());
         assert!(nfa.find_translations("def").is_empty());
+    }
+
+    #[test]
+    fn find_capture_with_character_class() {
+        let tests = test::Parser::new("\"a\"[%digit]\"b\"").tests().unwrap();
+        let translation = Translation::new("", "", 3, TranslationStage::Main, None);
+        let ctx = context(CharacterClass::Digit, &['1', '2', '3']);
+        let ast = AST::from_test(&tests, &ctx);
+        let nfa = NFA::from(&ast);
+        assert_eq!(nfa.find_translations("a1b"), [translation.clone().with_offset(1).with_capture("1".to_string())]);
+        assert_eq!(nfa.find_translations("a2b"), [translation.clone().with_offset(1).with_capture("2".to_string())]);
+        assert_eq!(nfa.find_translations("a3b"), [translation.clone().with_offset(1).with_capture("3".to_string())]);
+        assert_eq!(nfa.find_translations("bbb"), []);
+        assert_eq!(nfa.find_translations("ccc"), []);
+        assert_eq!(nfa.find_translations("a"), []);
+        assert_eq!(nfa.find_translations("aa"), []);
+        assert_eq!(nfa.find_translations("def"), []);
+    }
+
+    #[test]
+    fn find_capture_with_attribute() {
+        let tests = test::Parser::new("\"a\"[$dU]\"b\"").tests().unwrap();
+        let translation = Translation::new("", "", 3, TranslationStage::Main, None);
+        let mut ctx = context(CharacterClass::Digit, &['1', '2', '3']);
+        for c in ['A', 'B', 'C'] {
+            ctx.insert(CharacterClass::Uppercase, c);
+        }
+        let ast = AST::from_test(&tests, &ctx);
+        let nfa = NFA::from(&ast);
+        assert_eq!(nfa.find_translations("a1b"), [translation.clone().with_offset(1).with_capture("1".to_string())]);
+        assert_eq!(nfa.find_translations("a2b"), [translation.clone().with_offset(1).with_capture("2".to_string())]);
+        assert_eq!(nfa.find_translations("a3b"), [translation.clone().with_offset(1).with_capture("3".to_string())]);
+        assert_eq!(nfa.find_translations("aAb"), [translation.clone().with_offset(1).with_capture("A".to_string())]);
+        assert_eq!(nfa.find_translations("aBb"), [translation.clone().with_offset(1).with_capture("B".to_string())]);
+        assert_eq!(nfa.find_translations("aCb"), [translation.clone().with_offset(1).with_capture("C".to_string())]);
+        assert_eq!(nfa.find_translations("bbb"), []);
+        assert_eq!(nfa.find_translations("ccc"), []);
+        assert_eq!(nfa.find_translations("a"), []);
+        assert_eq!(nfa.find_translations("aa"), []);
+        assert_eq!(nfa.find_translations("def"), []);
+    }
+
+    #[test]
+    fn find_capture_with_attribute_and_quantifier() {
+        let tests = test::Parser::new("\"a\"[$dU3]\"b\"").tests().unwrap();
+        let translation = Translation::new("", "", 5, TranslationStage::Main, None);
+        let mut ctx = context(CharacterClass::Digit, &['1', '2', '3']);
+        for c in ['A', 'B', 'C'] {
+            ctx.insert(CharacterClass::Uppercase, c);
+        }
+        let ast = AST::from_test(&tests, &ctx);
+        let nfa = NFA::from(&ast);
+        assert_eq!(nfa.find_translations("a1b"), []);
+        assert_eq!(nfa.find_translations("a22b"), []);
+        assert_eq!(nfa.find_translations("a31b"), []);
+        assert_eq!(nfa.find_translations("a123b"), [translation.clone().with_offset(1).with_capture("123".to_string())]);
+        assert_eq!(nfa.find_translations("a222b"), [translation.clone().with_offset(1).with_capture("222".to_string())]);
+        assert_eq!(nfa.find_translations("a321b"), [translation.clone().with_offset(1).with_capture("321".to_string())]);
+        assert_eq!(nfa.find_translations("aABCb"), [translation.clone().with_offset(1).with_capture("ABC".to_string())]);
+        assert_eq!(nfa.find_translations("aBBBb"), [translation.clone().with_offset(1).with_capture("BBB".to_string())]);
+        assert_eq!(nfa.find_translations("aCBAb"), [translation.clone().with_offset(1).with_capture("CBA".to_string())]);
+        assert_eq!(nfa.find_translations("bbb"), []);
+        assert_eq!(nfa.find_translations("ccc"), []);
+        assert_eq!(nfa.find_translations("a"), []);
+        assert_eq!(nfa.find_translations("aa"), []);
+        assert_eq!(nfa.find_translations("def"), []);
     }
 }
