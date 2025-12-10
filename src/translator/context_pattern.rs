@@ -26,16 +26,16 @@ impl AST {
 
     fn from_instruction(instruction: &Instruction, ctx: &CharacterClasses) -> Self {
         match instruction {
-            Instruction::Lookback { len } => AST::NotImplemented, // ignore
-            Instruction::Variable { var, op, operand } => AST::NotImplemented, // TODO
+            Instruction::Lookback { .. } => AST::NotImplemented, // ignore
+            Instruction::Variable { .. } => AST::NotImplemented, // TODO
             Instruction::String { s } => AST::String(s.to_string()),
             Instruction::Dots { dots } => AST::String(dots_to_unicode(dots)),
             Instruction::Attributes { attrs, quantifier } => {
                 AST::from_multipass_attributes(attrs, quantifier, ctx)
             }
             Instruction::Class { name, quantifier } => AST::from_class(name, quantifier, ctx),
-            Instruction::Negate { test } => AST::NotImplemented,
-            Instruction::Replace { tests } => AST::NotImplemented,
+            Instruction::Negate { .. } => AST::NotImplemented,
+            Instruction::Replace { .. } => AST::NotImplemented,
         }
     }
 
