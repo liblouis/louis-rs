@@ -160,6 +160,21 @@ impl Translation {
         }
     }
 
+    /// Adapt a translation based on a captured string if it is not empty.
+    ///
+    /// Typically this means setting the `input` of the translation to the `capture`. The `output`
+    /// can also be set if it has references to the capture.
+    fn with_capture(self, capture: String) -> Self {
+        if !capture.is_empty() {
+            Self {
+                input: capture,
+                ..self
+            }
+        } else {
+            self
+        }
+    }
+
     /// Decrement the `offset` of a translation.
     fn decrement_offset(self, decrement: usize) -> Self {
         Self {

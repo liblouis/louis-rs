@@ -30,6 +30,8 @@ enum Transition {
     /// An Offset transition is essentially an epsilon transition that marks the end of a
     /// non-capturing group. It is used to mark the end of the pre pattern in match rules
     Offset,
+    CaptureStart,
+    CaptureEnd,
 }
 
 /// An NFA consisting of a set of states and transitions between them
@@ -73,6 +75,7 @@ pub enum AST {
     RepeatAtLeastAtMost(u8, u8, Box<AST>),
     Either(Box<AST>, Box<AST>),
     Offset,
+    Capture(Box<AST>),
     /// Stop-gap blanket "implementation" for things that might be needed but are not yet
     /// implemented
     NotImplemented,
@@ -147,6 +150,17 @@ impl NFA {
         let start = self.add_state(State::default());
         let end = self.add_state(State::default());
         self.transitions.insert((start, Transition::Offset), end);
+        Fragment { start, end }
+    }
+
+    /// Add a Capture transitions around a fragment to the NFA
+    fn add_capture(&mut self, fragment: &Fragment) -> Fragment {
+        let start = self.add_state(State::default());
+        let end = self.add_state(State::default());
+        self.transitions
+            .insert((start, Transition::CaptureStart), fragment.start);
+        self.transitions
+            .insert((fragment.end, Transition::CaptureEnd), end);
         Fragment { start, end }
     }
 
@@ -273,6 +287,10 @@ impl NFA {
                 }
                 concatenation
             }
+            AST::Capture(ast) => {
+                let fragment = self.add_fragment(ast);
+                self.add_capture(&fragment)
+            }
             AST::Offset => self.add_offset(),
             AST::NotImplemented => self.add_noop(),
         }
@@ -292,7 +310,7 @@ impl NFA {
     }
 
     /// Return all states that are reachable from a set of `states`
-    /// via epsilon stransitions
+    /// via epsilon transitions
     fn epsilon_closure(&self, states: &HashSet<StateId>) -> HashSet<StateId> {
         let mut closure: HashSet<StateId> = states.clone();
         let mut queue = VecDeque::from(states.iter().cloned().collect::<Vec<_>>());
@@ -348,6 +366,8 @@ impl NFA {
         input: &str,
         match_length: usize,
         offset: usize,
+        capturing: bool,
+        capture: String,
     ) -> Vec<Translation> {
         let mut matching_rules = Vec::new();
 
@@ -371,6 +391,7 @@ impl NFA {
                         // if there is an offset, the weight needs to be calculated at run-time.
                         // The weight is the actual length of match.
                         .with_weight_if_offset(match_length, offset)
+                        .with_capture(capture.clone())
                 }),
         );
 
@@ -383,7 +404,39 @@ impl NFA {
                 state,
                 input,
                 match_length,
-                offset + match_length,
+                match_length,
+                capturing,
+                capture.clone(),
+            ));
+        }
+
+        // traverse all states that are reachable via a CaptureStart transition (an epsilon
+        // transition that marks the start of a capture group)
+        let reachable_via_capture_start = self.move_state(&next_states, Transition::CaptureStart);
+        let next_states_with_offset = self.epsilon_closure(&reachable_via_capture_start);
+        for state in next_states_with_offset {
+            matching_rules.extend(self.find_translations_from_state(
+                state,
+                input,
+                match_length,
+                match_length,
+                true,
+                capture.clone(),
+            ));
+        }
+
+        // traverse all states that are reachable via a CaptureEnd transition (an epsilon transition
+        // that marks the end of a capture group)
+        let reachable_via_capture_end = self.move_state(&next_states, Transition::CaptureEnd);
+        let next_states_with_offset = self.epsilon_closure(&reachable_via_capture_end);
+        for state in next_states_with_offset {
+            matching_rules.extend(self.find_translations_from_state(
+                state,
+                input,
+                match_length,
+                offset,
+                false,
+                capture.clone(),
             ));
         }
 
@@ -395,6 +448,10 @@ impl NFA {
                 .cloned()
                 .collect();
             next_states = self.epsilon_closure(&next_states);
+            let mut capture = capture.clone();
+            if capturing {
+                capture.push(c);
+            };
             for state in next_states {
                 let bytes = c.len_utf8();
                 matching_rules.extend(self.find_translations_from_state(
@@ -402,6 +459,8 @@ impl NFA {
                     &input[bytes..],
                     match_length + 1,
                     offset,
+                    capturing,
+                    capture.clone(),
                 ));
             }
         }
@@ -410,7 +469,8 @@ impl NFA {
     }
 
     pub fn find_translations(&self, input: &str) -> Vec<Translation> {
-        let mut translations = self.find_translations_from_state(self.start, input, 0, 0);
+        let mut translations =
+            self.find_translations_from_state(self.start, input, 0, 0, false, "".to_string());
         translations.sort_by(|a, b| b.weight.cmp(&a.weight));
         // FIXME: It feels a bit smelly to have to dedup the list of translations. Maybe
         // there is something wrong how we traverse the NFA or even how we build it?
@@ -444,6 +504,14 @@ pub fn nfa_dot(nfa: &NFA) -> String {
             Transition::Offset => {
                 dot.push_str(&format!("\t{} -> {} [label=\"{}\"]\n", from, to, "Offset"))
             }
+            Transition::CaptureStart => dot.push_str(&format!(
+                "\t{} -> {} [label=\"{}\"]\n",
+                from, to, "Capture start"
+            )),
+            Transition::CaptureEnd => dot.push_str(&format!(
+                "\t{} -> {} [label=\"{}\"]\n",
+                from, to, "Capture end"
+            )),
         }
     }
     for (from, tos) in nfa.epsilon_transitions.iter() {
@@ -832,5 +900,52 @@ mod tests {
         assert!(!nfa.accepts("aaab"));
         assert!(!nfa.accepts("c"));
         assert!(!nfa.accepts("bbb"));
+    }
+
+    #[test]
+    fn capture() {
+        let ast = AST::Concat(
+            Box::new(AST::Concat(
+                Box::new(AST::Character('a')),
+                Box::new(AST::Capture(Box::new(AST::OneOrMore(Box::new(
+                    AST::Character('b'),
+                ))))),
+            )),
+            Box::new(AST::Character('c')),
+        );
+        let nfa = NFA::from(&ast);
+        let translation =
+            Translation::new("".into(), "".into(), 0, TranslationStage::Main, None).with_offset(1);
+        assert_eq!(nfa.find_translations("a"), []);
+        assert_eq!(nfa.find_translations("ab"), []);
+        assert_eq!(
+            nfa.find_translations("abc"),
+            [translation
+                .clone()
+                .with_weight_if_offset(3, 1)
+                .with_capture("b".to_string())]
+        );
+        assert_eq!(
+            nfa.find_translations("abbc"),
+            [translation
+                .clone()
+                .with_weight_if_offset(4, 1)
+                .with_capture("bb".to_string())]
+        );
+        assert_eq!(
+            nfa.find_translations("abbbbbc"),
+            [translation
+                .with_weight_if_offset(7, 1)
+                .with_capture("bbbbb".to_string())]
+        );
+        assert_eq!(nfa.find_translations("aabbbbbc"), []);
+        assert_eq!(nfa.find_translations("abb"), []);
+        assert_eq!(nfa.find_translations("abbbb"), []);
+        assert_eq!(nfa.find_translations("abbbbbbbbbb"), []);
+        assert_eq!(nfa.find_translations("aaaaaa"), []);
+        assert_eq!(nfa.find_translations("aaaaaaaaaaaaaaaaaaaaaa"), []);
+        assert_eq!(nfa.find_translations("aaab"), []);
+        assert_eq!(nfa.find_translations("c"), []);
+        assert_eq!(nfa.find_translations("bbb"), []);
     }
 }
