@@ -1,4 +1,7 @@
-use crate::parser::{AnchoredRule, Precedence};
+use crate::{
+    parser::{AnchoredRule, Precedence},
+    translator::swap::Swapper,
+};
 
 /// A translation can have multiple stages.
 ///
@@ -32,13 +35,64 @@ impl std::fmt::Display for TranslationStage {
     }
 }
 
+/// Wrapper type to handle different kinds of translation targets.
+///
+/// In most case a translation just translates to a literal string. However in some cases the output
+/// depends on a capture from the input or even some modified (_swapped_) version of the capture
+#[derive(Debug, PartialEq, Clone)]
+pub enum TranslateTo {
+    /// Translate to a literal string
+    Literal(String),
+    /// Translate to the result of a capture
+    Capture { before: String, after: String },
+    /// Translate to the result of a capture but also apply the mapping defined in the Swappery
+    Swap {
+        before: String,
+        after: String,
+        swapper: Swapper,
+    },
+}
+
+impl Default for TranslateTo {
+    fn default() -> Self {
+        TranslateTo::Literal("".to_string())
+    }
+}
+
+impl std::fmt::Display for TranslateTo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TranslateTo::Literal(s) => write!(f, "{}", s),
+            _ => todo!(),
+        }
+    }
+}
+
+impl TranslateTo {
+    pub fn resolve(self, capture: &str) -> Self {
+        match self {
+            TranslateTo::Literal(_) => self,
+            TranslateTo::Capture { before, after } => {
+                TranslateTo::Literal(format!("{}{}{}", before, capture, after))
+            }
+            TranslateTo::Swap {
+                before,
+                after,
+                swapper,
+            } => TranslateTo::Literal(format!("{}{}{}", before, swapper.swap(capture), after)),
+        }
+    }
+}
+
+/// The basic unit of a translation. Maps an `input` string to an `output` which is typically also a
+/// string.
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct Translation {
     /// Input string to be translated
     input: String,
     /// The translation of `input`, typically Unicode braille. In the case of back-translation the
     /// `input` contains Unicode braille and the output plain text.
-    output: String,
+    output: TranslateTo,
     /// Number of chars in `input`
     length: usize,
     /// Weight of a translation. Typically this is the length of the input, but often it includes
@@ -50,8 +104,11 @@ pub struct Translation {
     /// `offset` is the length of this pre-pattern (calculated at run-time) so that the translation
     /// can be applied later in the input string, when the pre-pattern has been consumed.
     offset: usize,
+    /// The precedence of a translation based on the precedence of the originating translation rule
     precedence: Precedence,
+    /// The stage in which this translation is applied
     stage: TranslationStage,
+    /// Which translation rule was the cause for this translation
     origin: Option<AnchoredRule>,
 }
 
@@ -69,7 +126,7 @@ impl Translation {
     ) -> Self {
         Self {
             input: input.to_string(),
-            output: output.to_string(),
+            output: TranslateTo::Literal(output.to_string()),
             weight,
             length: input.chars().count(),
             offset: 0,
@@ -84,7 +141,7 @@ impl Translation {
     }
 
     pub fn output(&self) -> String {
-        self.output.clone()
+        self.output.to_string()
     }
 
     pub fn length(&self) -> usize {

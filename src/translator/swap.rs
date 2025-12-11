@@ -97,5 +97,4 @@ mod tests {
         let classes = SwapClasses::default();
         assert!(classes.get("nonexistent").is_none());
     }
-
 }
