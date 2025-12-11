@@ -154,6 +154,8 @@ pub enum ParseError {
     DotsExpected,
     #[error("Comma separated tuple of Braille expected")]
     DotsTupleExpected,
+    #[error("Same number of replacements in swap opcode expected ({0} vs {1})")]
+    SameNumberOfSwapReplacementsExpected(usize, usize),
     #[error("invalid unicode literal {found:?}")]
     InvalidUnicodeLiteral { found: Option<String> },
     #[error("invalid number")]
@@ -1104,6 +1106,20 @@ fn fail_if_invalid_constraints(
     }
 }
 
+/// Return an error if `actual` contains more constraints than `expected`
+fn fail_if_differing_number_of_replacements(
+    length1: usize,
+    length2: usize,
+) -> Result<(), ParseError> {
+    if length1 != length2 {
+        Err(ParseError::SameNumberOfSwapReplacementsExpected(
+            length1, length2,
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 pub struct RuleParser<'a> {
     tokens: Peekable<SplitAsciiWhitespace<'a>>,
 }
@@ -1456,8 +1472,8 @@ impl<'a> RuleParser<'a> {
         self.tokens
             .next()
             .ok_or(ParseError::DotsExpected)?
-            .split(',')
-            .map(|chars| chars_to_dots(chars).map_err(ParseError::InvalidBraille))
+            .chars()
+            .map(|c| chars_to_dots(&c.to_string()).map_err(ParseError::InvalidBraille))
             .collect()
     }
 
@@ -2129,26 +2145,38 @@ impl<'a> RuleParser<'a> {
 
             Opcode::Swapcd => {
                 fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
+                let chars = self.chars()?;
+                let dots = self.many_braillechars()?;
+                fail_if_differing_number_of_replacements(chars.chars().count(), dots.len())?;
                 Rule::Swapcd {
                     name: self.name()?,
-                    chars: self.chars()?,
-                    dots: self.many_braillechars()?,
+                    chars,
+                    dots,
                 }
             }
             Opcode::Swapdd => {
                 fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
+                let dots = self.many_braillechar()?;
+                let replacement = self.many_braillechars()?;
+                fail_if_differing_number_of_replacements(dots.len(), replacement.len())?;
                 Rule::Swapdd {
                     name: self.name()?,
-                    dots: self.many_braillechar()?,
-                    replacement: self.many_braillechars()?,
+                    dots,
+                    replacement,
                 }
             }
             Opcode::Swapcc => {
                 fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
+                let chars = self.chars()?;
+                let replacement = self.chars()?;
+                fail_if_differing_number_of_replacements(
+                    chars.chars().count(),
+                    replacement.chars().count(),
+                )?;
                 Rule::Swapcc {
                     name: self.name()?,
-                    chars: self.chars()?,
-                    replacement: self.chars()?,
+                    chars,
+                    replacement,
                 }
             }
 
