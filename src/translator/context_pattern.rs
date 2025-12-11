@@ -126,14 +126,7 @@ impl ContextPatterns {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::RuleParser;
     use crate::parser::test;
-
-    // just create some fake anchored rule for testing purposes
-    fn fake_rule() -> AnchoredRule {
-        let rule = RuleParser::new("always foo 1").rule().unwrap();
-        AnchoredRule::new(rule, None, 0)
-    }
 
     fn context(class: CharacterClass, chars: &[char]) -> CharacterClasses {
         let mut ctx = CharacterClasses::default();
