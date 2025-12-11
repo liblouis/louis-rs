@@ -18,6 +18,7 @@ use crate::parser::{
     fallback,
 };
 
+pub use swap::{SwapClasses, Swapper};
 pub use translation::{Translation, TranslationStage};
 
 use crate::translator::transforms::TransformationTable;
@@ -29,6 +30,7 @@ mod context_pattern;
 mod indication;
 mod match_pattern;
 mod nfa;
+mod swap;
 mod transforms;
 mod translation;
 mod trie;
