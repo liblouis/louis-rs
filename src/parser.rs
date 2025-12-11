@@ -17,13 +17,13 @@ use enumset::{EnumSet, EnumSetType};
 use search_path::SearchPath;
 
 use self::{
-    braille::{BrailleChars, braille_chars, chars_to_dots},
+    braille::{BrailleChar, BrailleChars, braille_chars, chars_to_dots},
     multipass::Action,
 };
 
 pub use attribute::Attribute;
-pub use braille::dots_to_unicode;
 pub use braille::fallback;
+pub use braille::{dot_to_unicode, dots_to_unicode};
 pub use character_class::{CharacterClass, CharacterClasses};
 pub use match_rule::{Pattern, PatternParser, Patterns};
 pub use multipass::IsLiteral;
@@ -728,7 +728,7 @@ pub enum Rule {
     },
     Swapdd {
         name: String,
-        dots: Vec<BrailleChars>,
+        dots: Vec<BrailleChar>,
         replacement: Vec<BrailleChars>,
     },
     Swapcc {
@@ -1434,7 +1434,7 @@ impl<'a> RuleParser<'a> {
             .collect()
     }
 
-    fn many_dots(&mut self) -> Result<Vec<BrailleChars>, ParseError> {
+    fn many_braillechars(&mut self) -> Result<Vec<BrailleChars>, ParseError> {
         self.tokens
             .next()
             .ok_or(ParseError::DotsExpected)?
@@ -1448,6 +1448,16 @@ impl<'a> RuleParser<'a> {
                     .map(|r| r.map_err(ParseError::InvalidBraille))
                     .collect()
             })
+            .collect()
+    }
+
+    /// Parse many single cell braille chars separated by ','
+    fn many_braillechar(&mut self) -> Result<Vec<BrailleChar>, ParseError> {
+        self.tokens
+            .next()
+            .ok_or(ParseError::DotsExpected)?
+            .split(',')
+            .map(|chars| chars_to_dots(chars).map_err(ParseError::InvalidBraille))
             .collect()
     }
 
@@ -1978,7 +1988,7 @@ impl<'a> RuleParser<'a> {
             Opcode::Rependword => {
                 fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 let chars = self.chars()?;
-                let many_dots = self.many_dots()?;
+                let many_dots = self.many_braillechars()?;
                 if many_dots.len() != 2 {
                     return Err(ParseError::DotsTupleExpected);
                 }
@@ -2122,15 +2132,15 @@ impl<'a> RuleParser<'a> {
                 Rule::Swapcd {
                     name: self.name()?,
                     chars: self.chars()?,
-                    dots: self.many_dots()?,
+                    dots: self.many_braillechars()?,
                 }
             }
             Opcode::Swapdd => {
                 fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Swapdd {
                     name: self.name()?,
-                    dots: self.many_dots()?,
-                    replacement: self.many_dots()?,
+                    dots: self.many_braillechar()?,
+                    replacement: self.many_braillechars()?,
                 }
             }
             Opcode::Swapcc => {

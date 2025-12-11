@@ -14,11 +14,11 @@ use crate::parser::HasDirection;
 use crate::parser::HasNocross;
 use crate::parser::HasPrecedence;
 use crate::parser::{
-    AnchoredRule, Braille, CharacterClass, CharacterClasses, Direction, Rule, dots_to_unicode,
-    fallback,
+    AnchoredRule, Braille, CharacterClass, CharacterClasses, Direction, Rule, dot_to_unicode,
+    dots_to_unicode, fallback,
 };
 
-use swap::{SwapClasses, Swapper};
+use swap::SwapClasses;
 pub use translation::{Translation, TranslationStage};
 
 use crate::translator::transforms::TransformationTable;
@@ -160,7 +160,7 @@ impl TranslationTableBuilder {
             undefined: None,
             character_definitions: CharacterDefinition::new(),
             character_classes: CharacterClasses::default(),
-	    swap_classes: SwapClasses::default(),
+            swap_classes: SwapClasses::default(),
             trie: Trie::new(),
             nocross_trie: Trie::new(),
             correct_transform: TransformationTable::default(),
@@ -499,34 +499,48 @@ impl TranslationTable {
                             .insert(CharacterClass::Seqafterchars, c);
                     }
                 }
-                Rule::Swapcc { name, chars, replacement  } => {
-                    let class = CharacterClass::from(&name[..]);
+                Rule::Swapcc {
+                    name,
+                    chars,
+                    replacement,
+                } => {
+                    let class = CharacterClass::from(name.as_str());
                     for c in chars.chars() {
                         builder.character_classes.insert(class.clone(), c);
                     }
-		    let mapping: Vec<(char, String)> = chars.chars()
-			.zip(replacement.chars().map(|c| c.to_string()))
-			.collect();
-		    builder.swap_classes.insert(name, &mapping);
+                    let mapping: Vec<(char, String)> = chars
+                        .chars()
+                        .zip(replacement.chars().map(|c| c.to_string()))
+                        .collect();
+                    builder.swap_classes.insert(name, &mapping);
                 }
-		Rule::Swapcd { name, chars, dots } => {
-                    let class = CharacterClass::from(&name[..]);
+                Rule::Swapcd { name, chars, dots } => {
+                    let class = CharacterClass::from(name.as_str());
                     for c in chars.chars() {
                         builder.character_classes.insert(class.clone(), c);
                     }
-		    let mapping: Vec<(char, String)> = chars.chars()
-			.zip(dots.iter().map(|braille| dots_to_unicode(braille)))
-			.collect();
-		    builder.swap_classes.insert(name, &mapping);
+                    let mapping: Vec<(char, String)> = chars
+                        .chars()
+                        .zip(dots.iter().map(|braille| dots_to_unicode(braille)))
+                        .collect();
+                    builder.swap_classes.insert(name, &mapping);
                 }
-                // Rule::Swapdd { name, dots, .. } => {
-                //     let class = CharacterClass::from(&name[..]);
-                //     for c in dots_to_unicode(dots).chars() {
-                //         builder
-                //             .character_classes
-                //             .insert(class.clone(), c);
-                //     }
-                // }
+                Rule::Swapdd {
+                    name,
+                    dots,
+                    replacement,
+                } => {
+                    let class = CharacterClass::from(name.as_str());
+                    for c in dots_to_unicode(dots).chars() {
+                        builder.character_classes.insert(class.clone(), c);
+                    }
+                    let mapping: Vec<(char, String)> = dots
+                        .iter()
+                        .map(|cell| dot_to_unicode(cell))
+                        .zip(replacement.iter().map(|cells| dots_to_unicode(cells)))
+                        .collect();
+                    builder.swap_classes.insert(name, &mapping);
+                }
                 // display rules are ignored for translation tables
                 Rule::Display { .. } => (),
                 _ => (),

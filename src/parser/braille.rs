@@ -113,7 +113,7 @@ fn has_virtual_dots(char: &BrailleChar) -> bool {
 // implementation of the From trait. Both solutions would probably
 // require the newtype pattern as we do not own these types, see
 // https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#using-the-newtype-pattern-to-implement-external-traits-on-external-types
-fn dot_to_unicode(dot: &BrailleChar) -> char {
+pub fn dot_to_unicode(dot: &BrailleChar) -> char {
     let unicode_plane = if has_virtual_dots(dot) {
         0xF0000 // Unicode Supplementary Private Use Area-A
     } else {
