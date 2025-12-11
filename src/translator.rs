@@ -504,9 +504,8 @@ impl TranslationTable {
                     for c in chars.chars() {
                         builder.character_classes.insert(class.clone(), c);
                     }
-		    let replacements: Vec<String> = replacement.chars().map(|c| c.to_string()).collect();
-		    let mapping: Vec<(char, &str)> = chars.chars()
-			.zip(replacements.iter().map(|s| s.as_str()))
+		    let mapping: Vec<(char, String)> = chars.chars()
+			.zip(replacement.chars().map(|c| c.to_string()))
 			.collect();
 		    builder.swap_classes.insert(name, &mapping);
                 }
@@ -515,9 +514,8 @@ impl TranslationTable {
                     for c in chars.chars() {
                         builder.character_classes.insert(class.clone(), c);
                     }
-		    let dots: Vec<String> = dots.iter().map(|braille| dots_to_unicode(braille)).collect();
-		    let mapping: Vec<(char, &str)> = chars.chars()
-			.zip(dots.iter().map(|s| s.as_str()))
+		    let mapping: Vec<(char, String)> = chars.chars()
+			.zip(dots.iter().map(|braille| dots_to_unicode(braille)))
 			.collect();
 		    builder.swap_classes.insert(name, &mapping);
                 }

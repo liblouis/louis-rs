@@ -31,7 +31,7 @@ pub struct SwapClasses(HashMap<String, Swapper>);
 
 impl SwapClasses {
     /// Insert a list of `mappings` under the given `name`
-    pub fn insert(&mut self, name: &str, mappings: &[(char, &str)]) {
+    pub fn insert(&mut self, name: &str, mappings: &[(char, String)]) {
         for (from, to) in mappings {
             self.0
                 .entry(name.to_string())
@@ -78,7 +78,7 @@ mod tests {
     #[test]
     fn swap_classes_insert_and_get() {
         let mut classes = SwapClasses::default();
-        classes.insert("test", &[('a', "⠁"), ('b', "⠉")]);
+        classes.insert("test", &[('a', "⠁".into()), ('b', "⠉".into())]);
 
         assert_eq!(classes.get("test").unwrap().swap("ab"), "⠁⠉");
     }
@@ -86,8 +86,8 @@ mod tests {
     #[test]
     fn swap_classes_multiple_inserts() {
         let mut classes = SwapClasses::default();
-        classes.insert("test", &[('a', "⠁")]);
-        classes.insert("test", &[('b', "⠉")]);
+        classes.insert("test", &[('a', "⠁".into())]);
+        classes.insert("test", &[('b', "⠉".into())]);
 
         assert_eq!(classes.get("test").unwrap().swap("ab"), "⠁⠉");
     }
