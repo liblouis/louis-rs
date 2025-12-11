@@ -18,7 +18,7 @@ use crate::parser::{
     fallback,
 };
 
-pub use swap::{SwapClasses, Swapper};
+use swap::{SwapClasses, Swapper};
 pub use translation::{Translation, TranslationStage};
 
 use crate::translator::transforms::TransformationTable;
@@ -139,6 +139,7 @@ struct TranslationTableBuilder {
     undefined: Option<String>,
     character_definitions: CharacterDefinition,
     character_classes: CharacterClasses,
+    swap_classes: SwapClasses,
     trie: Trie,
     nocross_trie: Trie,
     correct_transform: TransformationTable,
@@ -159,6 +160,7 @@ impl TranslationTableBuilder {
             undefined: None,
             character_definitions: CharacterDefinition::new(),
             character_classes: CharacterClasses::default(),
+	    swap_classes: SwapClasses::default(),
             trie: Trie::new(),
             nocross_trie: Trie::new(),
             correct_transform: TransformationTable::default(),
@@ -497,6 +499,36 @@ impl TranslationTable {
                             .insert(CharacterClass::Seqafterchars, c);
                     }
                 }
+                Rule::Swapcc { name, chars, replacement  } => {
+                    let class = CharacterClass::from(&name[..]);
+                    for c in chars.chars() {
+                        builder.character_classes.insert(class.clone(), c);
+                    }
+		    let replacements: Vec<String> = replacement.chars().map(|c| c.to_string()).collect();
+		    let mapping: Vec<(char, &str)> = chars.chars()
+			.zip(replacements.iter().map(|s| s.as_str()))
+			.collect();
+		    builder.swap_classes.insert(name, &mapping);
+                }
+		Rule::Swapcd { name, chars, dots } => {
+                    let class = CharacterClass::from(&name[..]);
+                    for c in chars.chars() {
+                        builder.character_classes.insert(class.clone(), c);
+                    }
+		    let dots: Vec<String> = dots.iter().map(|braille| dots_to_unicode(braille)).collect();
+		    let mapping: Vec<(char, &str)> = chars.chars()
+			.zip(dots.iter().map(|s| s.as_str()))
+			.collect();
+		    builder.swap_classes.insert(name, &mapping);
+                }
+                // Rule::Swapdd { name, dots, .. } => {
+                //     let class = CharacterClass::from(&name[..]);
+                //     for c in dots_to_unicode(dots).chars() {
+                //         builder
+                //             .character_classes
+                //             .insert(class.clone(), c);
+                //     }
+                // }
                 // display rules are ignored for translation tables
                 Rule::Display { .. } => (),
                 _ => (),

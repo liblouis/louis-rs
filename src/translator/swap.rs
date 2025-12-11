@@ -25,7 +25,7 @@ impl Swapper {
     }
 }
 
-/// A mapping between a name and the associated Swapper
+/// A mapping between a name and the associated [`Swapper`]
 #[derive(Debug, Default)]
 pub struct SwapClasses(HashMap<String, Swapper>);
 
