@@ -76,12 +76,9 @@ impl Indicator {
         let translations = self.contractions.find_translations(s, prev);
         if !translations.is_empty() {
             let translation = translations.first().unwrap();
-            Some(Translation {
-                length: 1,
-                weight: 1,
-                input: "".to_string(),
-                ..translation.clone()
-            })
+            // the translations contain the contraction as input, so set that one to the empty
+            // string
+            Some(translation.clone().with_input("").with_weight(1))
         } else {
             None
         }
@@ -108,29 +105,23 @@ mod tests {
         assert_eq!(indicator.next("aa".into(), None), None);
         assert_eq!(
             indicator.next("ab".into(), None),
-            Some(Translation {
-                input: "".into(),
-                output: "⠠".into(),
-                length: 1,
-                weight: 1,
-                offset: 0,
-                precedence: Precedence::Default,
-                stage: TranslationStage::Main,
-                origin: Some(rule("letsign 6")),
-            })
+            Some(Translation::new(
+                "".into(),
+                "⠠".into(),
+                1,
+                TranslationStage::Main,
+                rule("letsign 6")
+            ))
         );
         assert_eq!(
             indicator.next("cd".into(), None),
-            Some(Translation {
-                input: "".into(),
-                output: "⠠".into(),
-                length: 1,
-                weight: 1,
-                offset: 0,
-                precedence: Precedence::Default,
-                stage: TranslationStage::Main,
-                origin: Some(rule("letsign 6")),
-            })
+            Some(Translation::new(
+                "".into(),
+                "⠠".into(),
+                1,
+                TranslationStage::Main,
+                rule("letsign 6")
+            ))
         );
     }
 }

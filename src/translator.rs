@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io;
 
+use self::trie::Boundary;
 use hyphenation::Standard;
 use hyphenation::{Hyphenator, Load};
 use match_pattern::MatchPatterns;
@@ -12,15 +13,15 @@ use trie::Trie;
 use crate::parser::HasDirection;
 use crate::parser::HasNocross;
 use crate::parser::HasPrecedence;
-use crate::parser::Precedence;
 use crate::parser::{
     AnchoredRule, Braille, CharacterClass, CharacterClasses, Direction, Rule, dots_to_unicode,
     fallback,
 };
 
+pub use translation::{Translation, TranslationStage};
+
 use crate::translator::transforms::TransformationTable;
 
-use self::trie::Boundary;
 use indication::{lettersign, nocontract, numeric, uppercase};
 
 mod boundaries;
@@ -29,6 +30,7 @@ mod indication;
 mod match_pattern;
 mod nfa;
 mod transforms;
+mod translation;
 mod trie;
 
 #[derive(thiserror::Error, Debug)]
@@ -47,141 +49,6 @@ pub enum TranslationError {
     HyphenationTableIoError(#[from] io::Error),
     #[error(transparent)]
     HyphenationTableLoadError(#[from] hyphenation::load::Error),
-}
-
-/// A translation can have multiple stages.
-///
-/// The `Main` translation is always done. The others are only done if
-/// specific rules are present in a translation table
-#[derive(Debug, PartialEq, Clone, Default, Copy)]
-pub enum TranslationStage {
-    /// Pre-translation stage where the `correct` rules are applied
-    Pre,
-    /// Main translation stage where all the translation and the
-    /// context rules are applied
-    #[default]
-    Main,
-    /// The second post-translation stage where the `pass2` rules are applied
-    Post1,
-    /// The third post-translation stage where the `pass3` rules are applied
-    Post2,
-    /// The fourth post-translation stage where the `pass4` rules are applied
-    Post3,
-}
-
-impl std::fmt::Display for TranslationStage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TranslationStage::Pre => write!(f, "Pre"),
-            TranslationStage::Main => write!(f, "Main"),
-            TranslationStage::Post1 => write!(f, "Pass2"),
-            TranslationStage::Post2 => write!(f, "Pass3"),
-            TranslationStage::Post3 => write!(f, "Pass4"),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Clone, Default)]
-pub struct Translation {
-    /// Input string to be translated
-    input: String,
-    /// The translation of `input`, typically Unicode braille. In the case of back-translation the
-    /// `input` contains Unicode braille and the output plain text.
-    output: String,
-    /// Number of chars in `input`
-    length: usize,
-    /// Weight of a translation. Typically this is the length of the input, but often it includes
-    /// word boundaries as well. In some cases the weight has to be calculated dynamically, for
-    /// instance for `match` opcodes where the length of the matched input often depends on regular
-    /// expressions.
-    weight: usize,
-    /// The `match` opcode contains a pre-pattern which is essentially a look-behind regexp. The
-    /// `offset` is the length of this pre-pattern (calculated at run-time) so that the translation
-    /// can be applied later in the input string, when the pre-pattern has been consumed.
-    offset: usize,
-    precedence: Precedence,
-    stage: TranslationStage,
-    origin: Option<AnchoredRule>,
-}
-
-impl Translation {
-    pub fn new(
-        input: &str,
-        output: &str,
-        weight: usize,
-        stage: TranslationStage,
-        // FIXME: this is some weird thing recommended by Claude: apparently the `impl
-        // Into<Option<T>>` trait bound automatically converts `T` to `Some(T)` and `None` to
-        // `None`, giving you the overloaded behavior you want with a single function. This is more
-        // idiomatic than having separate `new` and `new_with_origin` methods.
-        origin: impl Into<Option<AnchoredRule>>,
-    ) -> Self {
-        let length = input.chars().count();
-        Self {
-            input: input.to_string(),
-            output: output.to_string(),
-            weight,
-            length,
-            offset: 0,
-            precedence: Precedence::Default,
-            stage,
-            origin: origin.into(),
-        }
-    }
-
-    pub fn input(&self) -> String {
-        self.input.clone()
-    }
-
-    pub fn output(&self) -> String {
-        self.output.clone()
-    }
-
-    pub fn origin(&self) -> Option<AnchoredRule> {
-        self.origin.clone()
-    }
-
-    pub fn stage(&self) -> TranslationStage {
-        self.stage
-    }
-
-    /// Set the `offset` of a translation.
-    fn with_offset(self, offset: usize) -> Self {
-        Self { offset, ..self }
-    }
-
-    /// Set the `weight` of a translation if `offset` is greater than 0, otherwise return the
-    /// translation unchanged.
-    fn with_weight_if_offset(self, weight: usize, offset: usize) -> Self {
-        if offset > 0 {
-            Self { weight, ..self }
-        } else {
-            self
-        }
-    }
-
-    /// Adapt a translation based on a captured string if it is not empty.
-    ///
-    /// Typically this means setting the `input` of the translation to the `capture`. The `output`
-    /// can also be set if it has references to the capture.
-    fn with_capture(self, capture: String) -> Self {
-        if !capture.is_empty() {
-            Self {
-                input: capture,
-                ..self
-            }
-        } else {
-            self
-        }
-    }
-
-    /// Decrement the `offset` of a translation.
-    fn decrement_offset(self, decrement: usize) -> Self {
-        Self {
-            offset: self.offset - decrement,
-            ..self
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -955,7 +822,7 @@ impl TranslationTable {
             .last() // the last set of translations is from the last pass
             .unwrap() // there is always at least one element in the list
             .iter()
-            .map(|t| t.output.as_str())
+            .map(|t| t.output())
             .collect()
     }
 
@@ -970,7 +837,7 @@ impl TranslationTable {
             // TODO: figure out what to do with delayed rules that have a negative offset, i.e.
             // if there was a matching rule that consumed so much input that the delayed rule is
             // no longer applicable
-            .partition(|t| t.offset == 0)
+            .partition(|t| t.offset() == 0)
     }
 
     fn word_hyphenates(&self, input: &str) -> bool {
@@ -986,7 +853,7 @@ impl TranslationTable {
         self.nocross_trie
             .find_translations(input, prev)
             .into_iter()
-            .filter(|t| !self.word_hyphenates(&t.input))
+            .filter(|t| !self.word_hyphenates(&t.input()))
             .collect()
     }
 
@@ -994,14 +861,14 @@ impl TranslationTable {
         self.match_patterns
             .find_translations(input)
             .into_iter()
-            .partition(|t| t.offset == 0)
+            .partition(|t| t.offset() == 0)
     }
 
     fn partition_delayed_translations(
         &self,
         delayed: Vec<Translation>,
     ) -> (Vec<Translation>, Vec<Translation>) {
-        delayed.into_iter().partition(|t| t.offset == 0)
+        delayed.into_iter().partition(|t| t.offset() == 0)
     }
 
     fn correct_transform(&self, input: &str) -> Option<Vec<Translation>> {
@@ -1014,7 +881,7 @@ impl TranslationTable {
 
     fn pass2_transform(&self, input: &Vec<Translation>) -> Option<Vec<Translation>> {
         if let Some(transform) = &self.pass2_transform {
-            let input: String = input.iter().map(|t| t.output.as_str()).collect();
+            let input: String = input.iter().map(|t| t.output()).collect();
             Some(transform.trace(&input))
         } else {
             None
@@ -1023,7 +890,7 @@ impl TranslationTable {
 
     fn pass3_transform(&self, input: &Vec<Translation>) -> Option<Vec<Translation>> {
         if let Some(transform) = &self.pass3_transform {
-            let input: String = input.iter().map(|t| t.output.as_str()).collect();
+            let input: String = input.iter().map(|t| t.output()).collect();
             Some(transform.trace(&input))
         } else {
             None
@@ -1031,7 +898,7 @@ impl TranslationTable {
     }
     fn pass4_transform(&self, input: &Vec<Translation>) -> Option<Vec<Translation>> {
         if let Some(transform) = &self.pass4_transform {
-            let input: String = input.iter().map(|t| t.output.as_str()).collect();
+            let input: String = input.iter().map(|t| t.output()).collect();
             Some(transform.trace(&input))
         } else {
             None
@@ -1046,7 +913,7 @@ impl TranslationTable {
         // First do the pre translation pass
         let corrected = if let Some(translations) = self.correct_transform(input) {
             aggregated.push(translations.clone());
-            translations.iter().map(|t| t.output.as_str()).collect()
+            translations.iter().map(|t| t.output()).collect()
         } else {
             input.to_string()
         };
@@ -1078,7 +945,7 @@ impl TranslationTable {
             let nocross_candidate = self
                 .nocross_candidates(chars.as_str(), prev)
                 .into_iter()
-                .max_by_key(|t| t.weight);
+                .max_by_key(|t| t.weight());
 
             // given an input query the trie for matching translations. Then split off the
             // translations that are delayed, i.e. have an offset because they have a pre-pattern
@@ -1099,26 +966,26 @@ impl TranslationTable {
             // use the longest translation
             let candidate = candidates
                 .iter()
-                .max_by_key(|translation| translation.weight);
+                .max_by_key(|translation| translation.weight());
             if let Some(t) = candidate {
                 if let Some(nocross) = nocross_candidate
-                    && nocross.weight >= t.weight
+                    && nocross.weight() >= t.weight()
                 {
                     // Use the nocross translation if it is at least as long as the normal translation
                     let translation = nocross.clone();
                     // move the iterator forward by the number of characters in the translation
-                    chars.nth(nocross.length - 1);
-                    prev = translation.input.chars().last();
+                    chars.nth(nocross.length() - 1);
+                    prev = translation.input().chars().last();
                     translations.push(translation);
-                    delayed_translations = self.update_offsets(delayed_translations, t.length);
+                    delayed_translations = self.update_offsets(delayed_translations, t.length());
                 } else {
                     // there is a matching translation rule
                     let translation = t.clone();
                     // move the iterator forward by the number of characters in the translation
-                    chars.nth(t.length - 1);
-                    prev = translation.input.chars().last();
+                    chars.nth(t.length() - 1);
+                    prev = translation.input().chars().last();
                     translations.push(translation);
-                    delayed_translations = self.update_offsets(delayed_translations, t.length);
+                    delayed_translations = self.update_offsets(delayed_translations, t.length());
                 }
             } else if let Some(next_char) = chars.next() {
                 prev = Some(next_char);

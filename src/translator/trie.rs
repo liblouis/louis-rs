@@ -169,18 +169,14 @@ impl Trie {
 
         if let Some(translation) = &current_node.translation {
             // this node already contains a translation
-            if precedence > translation.precedence {
-                let length = from.chars().count();
-                current_node.translation = Some(Translation {
-                    input: from.to_string(),
-                    output: to.to_string(),
-                    length,
-                    weight: length,
-                    offset: 0,
-                    precedence,
+            if precedence > translation.precedence() {
+                current_node.translation = Some(Translation::new(
+                    from,
+                    to,
+                    from.chars().count(),
                     stage,
-                    origin: Some(origin.clone()),
-                });
+                    origin.clone(),
+                ));
             } else if cfg!(feature = "backwards_compatibility") {
                 // first rule wins, so nothing to insert
             } else {

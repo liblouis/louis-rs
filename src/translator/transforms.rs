@@ -150,10 +150,7 @@ impl TransformationTable {
     }
 
     pub fn translate(&self, input: &str) -> String {
-        self.trace(input)
-            .iter()
-            .map(|t| t.output.as_str())
-            .collect()
+        self.trace(input).iter().map(|t| t.output()).collect()
     }
 
     fn translation_candidates(&self, input: &str, prev: Option<char>) -> Vec<Translation> {
@@ -175,13 +172,13 @@ impl TransformationTable {
             // use the longest translation
             let candidate = candidates
                 .iter()
-                .max_by_key(|translation| translation.weight);
+                .max_by_key(|translation| translation.weight());
             if let Some(t) = candidate {
                 // there is a matching translation rule
                 let translation = t.clone();
                 // move the iterator forward by the number of characters in the translation
-                chars.nth(t.length - 1);
-                prev = translation.input.chars().last();
+                chars.nth(t.length() - 1);
+                prev = translation.input().chars().last();
                 translations.push(translation);
             } else if let Some(next_char) = chars.next() {
                 prev = Some(next_char);

@@ -471,7 +471,7 @@ impl NFA {
     pub fn find_translations(&self, input: &str) -> Vec<Translation> {
         let mut translations =
             self.find_translations_from_state(self.start, input, 0, 0, false, "".to_string());
-        translations.sort_by(|a, b| b.weight.cmp(&a.weight));
+        translations.sort_by(|a, b| b.weight().cmp(&a.weight()));
         // FIXME: It feels a bit smelly to have to dedup the list of translations. Maybe
         // there is something wrong how we traverse the NFA or even how we build it?
         translations.dedup();
