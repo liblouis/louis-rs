@@ -63,10 +63,7 @@ mod tests {
 
     #[test]
     fn swapper_unicode() {
-        let swapper = Swapper::new(&[
-            ('α', "alpha".to_string()),
-            ('🚀', "rocket".to_string()),
-        ]);
+        let swapper = Swapper::new(&[('α', "alpha".to_string()), ('🚀', "rocket".to_string())]);
 
         assert_eq!(swapper.swap("α🚀"), "alpharocket");
     }

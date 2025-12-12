@@ -206,10 +206,10 @@ impl Translation {
     pub fn with_capture(self, capture: String) -> Self {
         if !capture.is_empty() {
             let output = self.output.resolve(&capture);
-	    let length = capture.chars().count();
+            let length = capture.chars().count();
             Self {
                 input: capture,
-		length,
+                length,
                 output,
                 ..self
             }
@@ -312,10 +312,7 @@ mod tests {
 
     #[test]
     fn translation_capture_swap() {
-        let swapper = Swapper::new(&[
-            ('x', "X".to_string()),
-            ('y', "Y".to_string()),
-        ]);
+        let swapper = Swapper::new(&[('x', "X".to_string()), ('y', "Y".to_string())]);
 
         let mut translation = Translation::new("input", "output", 5, TranslationStage::Main, None);
         translation.output = TranslateTo::Swap {
@@ -336,6 +333,6 @@ mod tests {
         let result = translation.with_capture("café🚀🚀".to_string());
 
         assert_eq!(result.input(), "café🚀🚀");
-        assert_eq!(result.length(), 6); 
+        assert_eq!(result.length(), 6);
     }
 }
