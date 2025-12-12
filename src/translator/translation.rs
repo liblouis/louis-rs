@@ -262,11 +262,7 @@ mod tests {
 
     #[test]
     fn resolve_swap() {
-        let swapper = Swapper::new(&[
-            ('a', "A".to_string()),
-            ('b', "B".to_string()),
-            ('c', "C".to_string()),
-        ]);
+        let swapper = Swapper::new(&[('a', "A"), ('b', "B"), ('c', "C")]);
 
         let resolved = TranslateTo::Swap {
             before: "<<".to_string(),
@@ -312,7 +308,7 @@ mod tests {
 
     #[test]
     fn translation_capture_swap() {
-        let swapper = Swapper::new(&[('x', "X".to_string()), ('y', "Y".to_string())]);
+        let swapper = Swapper::new(&[('x', "X"), ('y', "Y")]);
 
         let mut translation = Translation::new("input", "output", 5, TranslationStage::Main, None);
         translation.output = TranslateTo::Swap {

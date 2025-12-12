@@ -11,8 +11,10 @@ use std::collections::HashMap;
 pub struct Swapper(HashMap<char, String>);
 
 impl Swapper {
-    pub fn new(mappings: &[(char, String)]) -> Self {
-        Self(HashMap::from_iter(mappings.iter().cloned()))
+    pub fn new(mappings: &[(char, &str)]) -> Self {
+        Self(HashMap::from_iter(
+            mappings.iter().cloned().map(|(c, s)| (c, s.to_string())),
+        ))
     }
 
     /// Swap the characters in the `input` according to the mapping defined in this Swapper
@@ -30,7 +32,7 @@ pub struct SwapClasses(HashMap<String, Swapper>);
 
 impl SwapClasses {
     /// Insert a list of `mappings` under the given `name`
-    pub fn insert(&mut self, name: &str, mappings: &[(char, String)]) {
+    pub fn insert(&mut self, name: &str, mappings: &[(char, &str)]) {
         self.0.insert(name.to_string(), Swapper::new(mappings));
     }
 
@@ -45,11 +47,7 @@ mod tests {
 
     #[test]
     fn swapper_swap() {
-        let swapper = Swapper::new(&[
-            ('a', "⠁".to_string()),
-            ('b', "⠉".to_string()),
-            ('c', "⠙⠇".to_string()),
-        ]);
+        let swapper = Swapper::new(&[('a', "⠁"), ('b', "⠉"), ('c', "⠙⠇")]);
 
         assert_eq!(swapper.swap("abc"), "⠁⠉⠙⠇");
         assert_eq!(swapper.swap("xyz"), "xyz"); // unmapped chars unchanged
@@ -63,7 +61,7 @@ mod tests {
 
     #[test]
     fn swapper_unicode() {
-        let swapper = Swapper::new(&[('α', "alpha".to_string()), ('🚀', "rocket".to_string())]);
+        let swapper = Swapper::new(&[('α', "alpha"), ('🚀', "rocket")]);
 
         assert_eq!(swapper.swap("α🚀"), "alpharocket");
     }

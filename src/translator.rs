@@ -508,9 +508,11 @@ impl TranslationTable {
                     for c in chars.chars() {
                         builder.character_classes.insert(class.clone(), c);
                     }
-                    let mapping: Vec<(char, String)> = chars
+                    let replacements: Vec<String> =
+                        replacement.chars().map(|c| c.to_string()).collect();
+                    let mapping: Vec<(char, &str)> = chars
                         .chars()
-                        .zip(replacement.chars().map(|c| c.to_string()))
+                        .zip(replacements.iter().map(|s| s.as_str()))
                         .collect();
                     builder.swap_classes.insert(name, &mapping);
                 }
@@ -519,9 +521,13 @@ impl TranslationTable {
                     for c in chars.chars() {
                         builder.character_classes.insert(class.clone(), c);
                     }
-                    let mapping: Vec<(char, String)> = chars
+                    let replacements: Vec<String> = dots
+                        .iter()
+                        .map(|braille| dots_to_unicode(braille))
+                        .collect();
+                    let mapping: Vec<(char, &str)> = chars
                         .chars()
-                        .zip(dots.iter().map(|braille| dots_to_unicode(braille)))
+                        .zip(replacements.iter().map(|s| s.as_str()))
                         .collect();
                     builder.swap_classes.insert(name, &mapping);
                 }
@@ -534,10 +540,14 @@ impl TranslationTable {
                     for c in dots_to_unicode(dots).chars() {
                         builder.character_classes.insert(class.clone(), c);
                     }
-                    let mapping: Vec<(char, String)> = dots
+                    let replacements: Vec<String> = replacement
+                        .iter()
+                        .map(|cells| dots_to_unicode(cells))
+                        .collect();
+                    let mapping: Vec<(char, &str)> = dots
                         .iter()
                         .map(|cell| dot_to_unicode(cell))
-                        .zip(replacement.iter().map(|cells| dots_to_unicode(cells)))
+                        .zip(replacements.iter().map(|s| s.as_str()))
                         .collect();
                     builder.swap_classes.insert(name, &mapping);
                 }
