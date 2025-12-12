@@ -16,10 +16,7 @@ use enumset::{EnumSet, EnumSetType};
 
 use search_path::SearchPath;
 
-use self::{
-    braille::{BrailleChar, BrailleChars, braille_chars, chars_to_dots},
-    multipass::Action,
-};
+use self::braille::{BrailleChar, BrailleChars, braille_chars, chars_to_dots};
 
 pub use attribute::Attribute;
 pub use braille::fallback;
@@ -28,7 +25,8 @@ pub use character_class::{CharacterClass, CharacterClasses};
 pub use match_rule::{Pattern, PatternParser, Patterns};
 pub use multipass::IsLiteral;
 pub use multipass::test;
-pub use multipass::test::{Instruction, Quantifier, Test};
+pub use multipass::test::{Instruction, Quantifier};
+pub use multipass::{Action, Test};
 
 mod attribute;
 mod braille;
