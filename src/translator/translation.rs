@@ -226,3 +226,116 @@ impl Translation {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::translator::swap::Swapper;
+
+    #[test]
+    fn resolve_literal() {
+        assert_eq!(
+            TranslateTo::Literal("foo".to_string()).resolve("bar"),
+            TranslateTo::Literal("foo".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_capture() {
+        let resolved = TranslateTo::Capture {
+            before: "<".to_string(),
+            after: ">".to_string(),
+        }
+        .resolve("CAPTURED");
+        assert_eq!(resolved, TranslateTo::Literal("<CAPTURED>".to_string()));
+    }
+
+    #[test]
+    fn resolve_capture_empty_before_after() {
+        let resolved = TranslateTo::Capture {
+            before: "".to_string(),
+            after: "".to_string(),
+        }
+        .resolve("test");
+        assert_eq!(resolved, TranslateTo::Literal("test".to_string()));
+    }
+
+    #[test]
+    fn resolve_swap() {
+        let swapper = Swapper::new(&[
+            ('a', "A".to_string()),
+            ('b', "B".to_string()),
+            ('c', "C".to_string()),
+        ]);
+
+        let resolved = TranslateTo::Swap {
+            before: "<<".to_string(),
+            after: ">>".to_string(),
+            swapper,
+        }
+        .resolve("abc");
+        assert_eq!(resolved, TranslateTo::Literal("<<ABC>>".to_string()));
+    }
+
+    #[test]
+    fn translation_capture_empty() {
+        let translation = Translation::new("input", "output", 5, TranslationStage::Main, None);
+        let result = translation.with_capture("".to_string());
+
+        // Should be unchanged when capture is empty
+        assert_eq!(result.input(), "input");
+        assert_eq!(result.output(), "output");
+    }
+
+    #[test]
+    fn translation_capture_literal() {
+        let translation = Translation::new("input", "output", 5, TranslationStage::Main, None)
+            .with_capture("captured".to_string());
+
+        assert_eq!(translation.input(), "captured");
+        assert_eq!(translation.output(), "output"); // Literal output unchanged
+    }
+
+    #[test]
+    fn translation_capture_capture() {
+        let mut translation = Translation::new("input", "output", 5, TranslationStage::Main, None);
+        translation.output = TranslateTo::Capture {
+            before: "<".to_string(),
+            after: ">".to_string(),
+        };
+
+        let translation = translation.with_capture("MIDDLE".to_string());
+
+        assert_eq!(translation.input(), "MIDDLE");
+        assert_eq!(translation.output(), "<MIDDLE>");
+    }
+
+    #[test]
+    fn translation_capture_swap() {
+        let swapper = Swapper::new(&[
+            ('x', "X".to_string()),
+            ('y', "Y".to_string()),
+        ]);
+
+        let mut translation = Translation::new("input", "output", 5, TranslationStage::Main, None);
+        translation.output = TranslateTo::Swap {
+            before: "[".to_string(),
+            after: "]".to_string(),
+            swapper,
+        };
+
+        let result = translation.with_capture("xyz".to_string());
+
+        assert_eq!(result.input(), "xyz");
+        assert_eq!(result.output(), "[XYz]");
+    }
+
+    #[test]
+    fn translation_capture_unicode() {
+        let translation = Translation::new("input", "output", 5, TranslationStage::Main, None);
+        let result = translation.with_capture("café🚀🚀".to_string());
+
+        assert_eq!(result.input(), "café🚀🚀");
+        assert_eq!(result.length(), 6); 
+    }
+}
