@@ -205,8 +205,12 @@ impl Translation {
     /// This is used in rules such as `context` and the multipass rules.
     pub fn with_capture(self, capture: String) -> Self {
         if !capture.is_empty() {
+            let output = self.output.resolve(&capture);
+	    let length = capture.chars().count();
             Self {
                 input: capture,
+		length,
+                output,
                 ..self
             }
         } else {
