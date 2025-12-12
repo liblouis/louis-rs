@@ -47,8 +47,7 @@ impl TryFrom<&Action> for String {
 pub enum Instruction {
     String { s: String },
     Dots { dots: BrailleChars },
-    // FIXME: This seems weird. What is the meaning of a class in the action part of a context rule?
-    Class { name: String },
+    SwapClass { name: String },
     Assignment { variable: u8, value: u8 },
     Increment { variable: u8 },
     Decrement { variable: u8 },
@@ -216,7 +215,7 @@ impl<'a> Parser<'a> {
         if name.is_empty() {
             Err(ParseError::InvalidClass)
         } else {
-            Ok(Instruction::Class { name })
+            Ok(Instruction::SwapClass { name })
         }
     }
 
@@ -275,7 +274,7 @@ mod display {
                 Instruction::Dots { dots } => write!(f, "{}", dots_to_unicode(dots)),
                 Instruction::Replace => write!(f, "*"),
                 Instruction::Ignore => write!(f, "?"),
-                Instruction::Class { name } => write!(f, "%{}", name),
+                Instruction::SwapClass { name } => write!(f, "%{}", name),
                 Instruction::Assignment { variable, value } => write!(f, "#{}={}", variable, value),
                 Instruction::Increment { variable } => write!(f, "#{}+", variable),
                 Instruction::Decrement { variable } => write!(f, "#{}-", variable),
@@ -398,14 +397,14 @@ mod tests {
     }
 
     #[test]
-    fn class() {
+    fn swap_class() {
         assert_eq!(
             Parser::new("%foo").action(),
-            Ok(Instruction::Class { name: "foo".into() })
+            Ok(Instruction::SwapClass { name: "foo".into() })
         );
         assert_ne!(
             Parser::new("%hallöchen").action(),
-            Ok(Instruction::Class {
+            Ok(Instruction::SwapClass {
                 name: "hallöchen".into()
             })
         );
