@@ -45,7 +45,7 @@ pub enum TranslateTo {
     Literal(String),
     /// Translate to the result of a capture
     Capture { before: String, after: String },
-    /// Translate to the result of a capture but also apply the mapping defined in the Swappery
+    /// Translate to the result of a capture but also apply the mapping defined in the [`Swapper`]
     Swap {
         before: String,
         after: String,
