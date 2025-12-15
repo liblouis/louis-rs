@@ -3,6 +3,31 @@
 # Changelog
 
 
+## Unreleased
+
+
+### Added
+
+-   Add support for what liblouis calls *character attributes* in match
+    patterns. They are essentially named character classes, like
+    *digit*, *letter*, *lowercase*, etc.
+
+
+### Changed
+
+
+### Deprecated
+
+
+### Removed
+
+
+### Fixed
+
+
+### Security
+
+
 ## 0.2.3 - 2025-12-04
 
 
