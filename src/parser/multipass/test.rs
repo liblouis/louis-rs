@@ -13,11 +13,11 @@ use super::braille::{self, BrailleChars, braille_chars, is_braille_dot};
 pub struct Test {
     at_beginning: bool,
     at_end: bool,
-    tests: Vec<Instruction>,
+    tests: Vec<TestInstruction>,
 }
 
 impl Test {
-    pub fn new(at_beginning: bool, at_end: bool, tests: Vec<Instruction>) -> Self {
+    pub fn new(at_beginning: bool, at_end: bool, tests: Vec<TestInstruction>) -> Self {
         Self {
             at_beginning,
             at_end,
@@ -25,7 +25,7 @@ impl Test {
         }
     }
 
-    pub fn tests(&self) -> &Vec<Instruction> {
+    pub fn tests(&self) -> &Vec<TestInstruction> {
         &self.tests
     }
 }
@@ -76,7 +76,7 @@ pub enum Quantifier {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Instruction {
+pub enum TestInstruction {
     Lookback {
         len: u8,
     },
@@ -100,30 +100,30 @@ pub enum Instruction {
         quantifier: Option<Quantifier>,
     },
     Negate {
-        test: Box<Instruction>,
+        test: Box<TestInstruction>,
     },
     Replace {
-        tests: Vec<Instruction>,
+        tests: Vec<TestInstruction>,
     },
 }
 
-impl IsLiteral for Instruction {
+impl IsLiteral for TestInstruction {
     fn is_literal(&self) -> bool {
         match self {
-            Instruction::String { .. } => true,
-            Instruction::Dots { .. } => true,
+            TestInstruction::String { .. } => true,
+            TestInstruction::Dots { .. } => true,
             _ => false,
         }
     }
 }
 
-impl TryFrom<&Instruction> for String {
+impl TryFrom<&TestInstruction> for String {
     type Error = ConversionError;
 
-    fn try_from(instruction: &Instruction) -> Result<String, Self::Error> {
+    fn try_from(instruction: &TestInstruction) -> Result<String, Self::Error> {
         match instruction {
-            Instruction::String { s } => Ok(s.clone()),
-            Instruction::Dots { dots } => Ok(dots_to_unicode(dots)),
+            TestInstruction::String { s } => Ok(s.clone()),
+            TestInstruction::Dots { dots } => Ok(dots_to_unicode(dots)),
             _ => Err(ConversionError::TestNotLiteral),
         }
     }
@@ -207,13 +207,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn class(&mut self) -> Result<Instruction, ParseError> {
+    fn class(&mut self) -> Result<TestInstruction, ParseError> {
         self.consume('%')?;
         let mut name = String::new();
         // for some stupid reason classes can be just a number
         if self.chars.peek().filter(|c| is_class_digit(c)).is_some() {
             name.push(self.chars.next().unwrap());
-            Ok(Instruction::Class {
+            Ok(TestInstruction::Class {
                 name,
                 quantifier: None,
             })
@@ -230,7 +230,7 @@ impl<'a> Parser<'a> {
             if name.is_empty() {
                 Err(ParseError::InvalidClass)
             } else {
-                Ok(Instruction::Class {
+                Ok(TestInstruction::Class {
                     name,
                     quantifier: self.maybe_quantifier()?,
                 })
@@ -238,7 +238,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn dots(&mut self) -> Result<Instruction, ParseError> {
+    fn dots(&mut self) -> Result<TestInstruction, ParseError> {
         self.consume('@')?;
         let mut dots = String::new();
         while self
@@ -254,7 +254,7 @@ impl<'a> Parser<'a> {
                 braille::ParseError::InvalidBraille { character: None },
             ))
         } else {
-            Ok(Instruction::Dots {
+            Ok(TestInstruction::Dots {
                 dots: braille_chars(&dots)?,
             })
         }
@@ -281,7 +281,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn string(&mut self) -> Result<Instruction, ParseError> {
+    fn string(&mut self) -> Result<TestInstruction, ParseError> {
         self.consume('"')?;
         let mut s = String::new();
         while self.chars.peek().filter(|&c| *c != '"').is_some() {
@@ -290,16 +290,16 @@ impl<'a> Parser<'a> {
             s.push(c);
         }
         self.consume('"')?;
-        Ok(Instruction::String { s })
+        Ok(TestInstruction::String { s })
     }
 
-    fn lookback(&mut self) -> Result<Instruction, ParseError> {
+    fn lookback(&mut self) -> Result<TestInstruction, ParseError> {
         self.consume('_')?;
         let n = match self.chars.peek() {
             Some(c) if c.is_ascii_digit() => self.ascii_number()?,
             _ => 1,
         };
-        Ok(Instruction::Lookback { len: n })
+        Ok(TestInstruction::Lookback { len: n })
     }
 
     fn attribute(&mut self) -> Result<Attribute, ParseError> {
@@ -323,7 +323,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn attributes(&mut self) -> Result<Instruction, ParseError> {
+    fn attributes(&mut self) -> Result<TestInstruction, ParseError> {
         self.consume('$')?;
         let mut attrs: HashSet<Attribute> = HashSet::new();
         while self.chars.peek().filter(|&c| is_attribute(c)).is_some() {
@@ -332,18 +332,18 @@ impl<'a> Parser<'a> {
         if attrs.is_empty() {
             Err(ParseError::InvalidAttribute { found: None })
         } else {
-            Ok(Instruction::Attributes {
+            Ok(TestInstruction::Attributes {
                 attrs,
                 quantifier: self.maybe_quantifier()?,
             })
         }
     }
 
-    fn replacement(&mut self) -> Result<Instruction, ParseError> {
+    fn replacement(&mut self) -> Result<TestInstruction, ParseError> {
         self.consume('[')?;
         let tests = self.many_tests()?;
         self.consume(']')?;
-        Ok(Instruction::Replace { tests })
+        Ok(TestInstruction::Replace { tests })
     }
 
     fn operator(&mut self) -> Result<Operator, ParseError> {
@@ -370,9 +370,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn variable(&mut self) -> Result<Instruction, ParseError> {
+    fn variable(&mut self) -> Result<TestInstruction, ParseError> {
         self.consume('#')?;
-        Ok(Instruction::Variable {
+        Ok(TestInstruction::Variable {
             var: self
                 .ascii_number()
                 .map_err(|_| ParseError::InvalidVariableName)?,
@@ -381,15 +381,15 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn negate(&mut self) -> Result<Instruction, ParseError> {
+    fn negate(&mut self) -> Result<TestInstruction, ParseError> {
         self.consume('!')?;
         let test = self.test()?;
-        Ok(Instruction::Negate {
+        Ok(TestInstruction::Negate {
             test: Box::new(test),
         })
     }
 
-    fn test(&mut self) -> Result<Instruction, ParseError> {
+    fn test(&mut self) -> Result<TestInstruction, ParseError> {
         match self.chars.peek() {
             Some('_') => Ok(self.lookback()?),
             Some('%') => Ok(self.class()?),
@@ -404,8 +404,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn many_tests(&mut self) -> Result<Vec<Instruction>, ParseError> {
-        let mut tests: Vec<Instruction> = Vec::new();
+    fn many_tests(&mut self) -> Result<Vec<TestInstruction>, ParseError> {
+        let mut tests: Vec<TestInstruction> = Vec::new();
         while self.chars.peek().filter(|&c| is_test(c)).is_some() {
             tests.push(self.test()?);
         }
@@ -510,22 +510,22 @@ mod display {
         }
     }
 
-    impl std::fmt::Display for Instruction {
+    impl std::fmt::Display for TestInstruction {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
-                Instruction::Lookback { len } => {
+                TestInstruction::Lookback { len } => {
                     write!(f, "_{}", len)
                 }
-                Instruction::Variable { var, op, operand } => {
+                TestInstruction::Variable { var, op, operand } => {
                     write!(f, "#{}{}{}", var, op, operand)
                 }
-                Instruction::String { s } => {
+                TestInstruction::String { s } => {
                     write!(f, "\"{}\"", s)
                 }
-                Instruction::Dots { dots } => {
+                TestInstruction::Dots { dots } => {
                     write!(f, "@{}", dots_to_unicode(dots))
                 }
-                Instruction::Attributes { attrs, quantifier } => {
+                TestInstruction::Attributes { attrs, quantifier } => {
                     write!(f, "$")?;
                     for attr in attrs {
                         write!(f, "{}", attr)?;
@@ -535,17 +535,17 @@ mod display {
                     }
                     Ok(())
                 }
-                Instruction::Class { name, quantifier } => {
+                TestInstruction::Class { name, quantifier } => {
                     write!(f, "%{}", name)?;
                     if let Some(q) = quantifier {
                         write!(f, "{}", q)?;
                     }
                     Ok(())
                 }
-                Instruction::Negate { test } => {
+                TestInstruction::Negate { test } => {
                     write!(f, "!{}", test)
                 }
-                Instruction::Replace { tests } => {
+                TestInstruction::Replace { tests } => {
                     write!(f, "[")?;
                     for test in tests {
                         write!(f, "{}", test)?;
@@ -578,7 +578,7 @@ mod tests {
     fn dots() {
         assert_eq!(
             Parser::new("@123").dots(),
-            Ok(Instruction::Dots {
+            Ok(TestInstruction::Dots {
                 dots: vec![enum_set!(
                     BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot3
                 )]
@@ -598,7 +598,7 @@ mod tests {
         );
         assert_eq!(
             Parser::new("@1-2").dots(),
-            Ok(Instruction::Dots {
+            Ok(TestInstruction::Dots {
                 dots: vec![enum_set!(BrailleDot::Dot1), enum_set!(BrailleDot::Dot2)]
             })
         );
@@ -608,23 +608,23 @@ mod tests {
     fn string() {
         assert_eq!(
             Parser::new(r#""test""#).string(),
-            Ok(Instruction::String { s: "test".into() })
+            Ok(TestInstruction::String { s: "test".into() })
         );
         assert_eq!(
             Parser::new(r#"",_""#).string(),
-            Ok(Instruction::String { s: ",_".into() })
+            Ok(TestInstruction::String { s: ",_".into() })
         );
         assert_eq!(
             Parser::new(r#"", ""#).string(),
-            Ok(Instruction::String { s: ", ".into() })
+            Ok(TestInstruction::String { s: ", ".into() })
         );
         assert_eq!(
             Parser::new(r#""-\"""#).string(),
-            Ok(Instruction::String { s: "-\"".into() })
+            Ok(TestInstruction::String { s: "-\"".into() })
         );
         assert_eq!(
             Parser::new(r#"".\s\"""#).string(),
-            Ok(Instruction::String { s: ". \"".into() })
+            Ok(TestInstruction::String { s: ". \"".into() })
         );
     }
 
@@ -632,23 +632,23 @@ mod tests {
     fn lookback() {
         assert_eq!(
             Parser::new("_123").lookback(),
-            Ok(Instruction::Lookback { len: 123 })
+            Ok(TestInstruction::Lookback { len: 123 })
         );
         assert_eq!(
             Parser::new("_7").lookback(),
-            Ok(Instruction::Lookback { len: 7 })
+            Ok(TestInstruction::Lookback { len: 7 })
         );
         assert_eq!(
             Parser::new("_ ").lookback(),
-            Ok(Instruction::Lookback { len: 1 })
+            Ok(TestInstruction::Lookback { len: 1 })
         );
         assert_eq!(
             Parser::new("_abc").lookback(),
-            Ok(Instruction::Lookback { len: 1 })
+            Ok(TestInstruction::Lookback { len: 1 })
         );
         assert_eq!(
             Parser::new("_12abc").lookback(),
-            Ok(Instruction::Lookback { len: 12 })
+            Ok(TestInstruction::Lookback { len: 12 })
         );
         assert_eq!(
             Parser::new(" _ ").lookback(),
@@ -663,14 +663,14 @@ mod tests {
     fn attributes() {
         assert_eq!(
             Parser::new("$a").attributes(),
-            Ok(Instruction::Attributes {
+            Ok(TestInstruction::Attributes {
                 attrs: HashSet::from([Attribute::Any]),
                 quantifier: None
             })
         );
         assert_eq!(
             Parser::new("$ay").attributes(),
-            Ok(Instruction::Attributes {
+            Ok(TestInstruction::Attributes {
                 attrs: HashSet::from([Attribute::Any, Attribute::ByOrder(3)]),
                 quantifier: None
             })
@@ -689,14 +689,14 @@ mod tests {
     fn class() {
         assert_eq!(
             Parser::new("%foo").class(),
-            Ok(Instruction::Class {
+            Ok(TestInstruction::Class {
                 name: "foo".into(),
                 quantifier: None
             })
         );
         assert_eq!(
             Parser::new("%3").class(),
-            Ok(Instruction::Class {
+            Ok(TestInstruction::Class {
                 name: "3".into(),
                 quantifier: None
             })
@@ -711,28 +711,28 @@ mod tests {
     fn class_with_quantifier() {
         assert_eq!(
             Parser::new("%foo.").class(),
-            Ok(Instruction::Class {
+            Ok(TestInstruction::Class {
                 name: "foo".into(),
                 quantifier: Some(Quantifier::Any)
             })
         );
         assert_eq!(
             Parser::new("%foo20").class(),
-            Ok(Instruction::Class {
+            Ok(TestInstruction::Class {
                 name: "foo".into(),
                 quantifier: Some(Quantifier::Number(20))
             })
         );
         assert_eq!(
             Parser::new("%foo1-20").class(),
-            Ok(Instruction::Class {
+            Ok(TestInstruction::Class {
                 name: "foo".into(),
                 quantifier: Some(Quantifier::Range(1, 20))
             })
         );
         assert_eq!(
             Parser::new("%foo20-200").class(),
-            Ok(Instruction::Class {
+            Ok(TestInstruction::Class {
                 name: "foo".into(),
                 quantifier: Some(Quantifier::Range(20, 200))
             })
@@ -747,28 +747,28 @@ mod tests {
     fn quantifier() {
         assert_eq!(
             Parser::new("$a ").attributes(),
-            Ok(Instruction::Attributes {
+            Ok(TestInstruction::Attributes {
                 attrs: HashSet::from([Attribute::Any]),
                 quantifier: None
             })
         );
         assert_eq!(
             Parser::new("$a.").attributes(),
-            Ok(Instruction::Attributes {
+            Ok(TestInstruction::Attributes {
                 attrs: HashSet::from([Attribute::Any]),
                 quantifier: Some(Quantifier::Any)
             })
         );
         assert_eq!(
             Parser::new("$a3").attributes(),
-            Ok(Instruction::Attributes {
+            Ok(TestInstruction::Attributes {
                 attrs: HashSet::from([Attribute::Any]),
                 quantifier: Some(Quantifier::Number(3))
             })
         );
         assert_eq!(
             Parser::new("$a3-5").attributes(),
-            Ok(Instruction::Attributes {
+            Ok(TestInstruction::Attributes {
                 attrs: HashSet::from([Attribute::Any]),
                 quantifier: Some(Quantifier::Range(3, 5))
             })
@@ -787,7 +787,7 @@ mod tests {
     fn variable() {
         assert_eq!(
             Parser::new("#1<2").variable(),
-            Ok(Instruction::Variable {
+            Ok(TestInstruction::Variable {
                 var: 1,
                 op: Operator::Lt,
                 operand: 2
@@ -795,7 +795,7 @@ mod tests {
         );
         assert_eq!(
             Parser::new("#1<=2").variable(),
-            Ok(Instruction::Variable {
+            Ok(TestInstruction::Variable {
                 var: 1,
                 op: Operator::LtEq,
                 operand: 2
@@ -803,7 +803,7 @@ mod tests {
         );
         assert_eq!(
             Parser::new("#1=3").variable(),
-            Ok(Instruction::Variable {
+            Ok(TestInstruction::Variable {
                 var: 1,
                 op: Operator::Eq,
                 operand: 3
@@ -815,7 +815,7 @@ mod tests {
         );
         assert_ne!(
             Parser::new("#3=a").variable(),
-            Ok(Instruction::Variable {
+            Ok(TestInstruction::Variable {
                 var: 1,
                 op: Operator::Eq,
                 operand: 3
@@ -832,7 +832,7 @@ mod tests {
         assert_ne!(
             Parser::new("#3=").variable(),
             //Err(ParseError::InvalidNumber(ParseIntError { kind: Empty })),
-            Ok(Instruction::Variable {
+            Ok(TestInstruction::Variable {
                 var: 1,
                 op: Operator::Eq,
                 operand: 3
@@ -844,8 +844,8 @@ mod tests {
     fn replacement() {
         assert_eq!(
             Parser::new("[$d]").replacement(),
-            Ok(Instruction::Replace {
-                tests: vec![Instruction::Attributes {
+            Ok(TestInstruction::Replace {
+                tests: vec![TestInstruction::Attributes {
                     attrs: HashSet::from([Attribute::Class(CharacterClass::Digit)]),
                     quantifier: None
                 }]
@@ -853,8 +853,8 @@ mod tests {
         );
         assert_eq!(
             Parser::new("[%foo]").replacement(),
-            Ok(Instruction::Replace {
-                tests: vec![Instruction::Class {
+            Ok(TestInstruction::Replace {
+                tests: vec![TestInstruction::Class {
                     name: "foo".into(),
                     quantifier: None
                 }]
@@ -877,14 +877,14 @@ mod tests {
                 at_beginning: false,
                 at_end: false,
                 tests: vec![
-                    Instruction::Attributes {
+                    TestInstruction::Attributes {
                         attrs: HashSet::from([Attribute::Class(CharacterClass::Digit)]),
                         quantifier: None
                     },
-                    Instruction::Replace {
-                        tests: vec![Instruction::String { s: "hello".into() }]
+                    TestInstruction::Replace {
+                        tests: vec![TestInstruction::String { s: "hello".into() }]
                     },
-                    Instruction::Class {
+                    TestInstruction::Class {
                         name: "digitletter".into(),
                         quantifier: None
                     }

@@ -2,7 +2,9 @@
 
 use std::collections::HashSet;
 
-use crate::parser::{Instruction, Quantifier, Test, dots_to_unicode};
+use crate::parser::{
+    Action, ActionInstruction, Quantifier, Test, TestInstruction, dots_to_unicode,
+};
 
 use crate::parser::{AnchoredRule, Attribute, CharacterClass, CharacterClasses};
 use crate::translator::nfa::{AST, NFA};
@@ -13,7 +15,7 @@ impl AST {
         AST::from_instructions(test.tests(), ctx)
     }
 
-    fn from_instructions(instructions: &Vec<Instruction>, ctx: &CharacterClasses) -> Self {
+    fn from_instructions(instructions: &Vec<TestInstruction>, ctx: &CharacterClasses) -> Self {
         match instructions.len() {
             0 => todo!(),
             1 => AST::from_instruction(&instructions[0], ctx),
@@ -28,18 +30,18 @@ impl AST {
         }
     }
 
-    fn from_instruction(instruction: &Instruction, ctx: &CharacterClasses) -> Self {
+    fn from_instruction(instruction: &TestInstruction, ctx: &CharacterClasses) -> Self {
         match instruction {
-            Instruction::Lookback { .. } => AST::NotImplemented, // ignore
-            Instruction::Variable { .. } => AST::NotImplemented, // TODO
-            Instruction::String { s } => AST::String(s.to_string()),
-            Instruction::Dots { dots } => AST::String(dots_to_unicode(dots)),
-            Instruction::Attributes { attrs, quantifier } => {
+            TestInstruction::Lookback { .. } => AST::NotImplemented, // ignore
+            TestInstruction::Variable { .. } => AST::NotImplemented, // TODO
+            TestInstruction::String { s } => AST::String(s.to_string()),
+            TestInstruction::Dots { dots } => AST::String(dots_to_unicode(dots)),
+            TestInstruction::Attributes { attrs, quantifier } => {
                 AST::from_multipass_attributes(attrs, quantifier, ctx)
             }
-            Instruction::Class { name, quantifier } => AST::from_class(name, quantifier, ctx),
-            Instruction::Negate { .. } => AST::NotImplemented,
-            Instruction::Replace { tests } => {
+            TestInstruction::Class { name, quantifier } => AST::from_class(name, quantifier, ctx),
+            TestInstruction::Negate { .. } => AST::NotImplemented,
+            TestInstruction::Replace { tests } => {
                 AST::Capture(Box::new(AST::from_instructions(tests, ctx)))
             }
         }

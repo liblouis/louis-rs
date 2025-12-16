@@ -9,12 +9,16 @@ use crate::parser::multipass::ParseError;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Action {
-    actions: Vec<Instruction>,
+    actions: Vec<ActionInstruction>,
 }
 
 impl Action {
-    pub fn new(actions: Vec<Instruction>) -> Self {
+    pub fn new(actions: Vec<ActionInstruction>) -> Self {
         Self { actions }
+    }
+
+    pub fn actions(&self) -> Vec<ActionInstruction> {
+        self.actions.clone()
     }
 }
 
@@ -44,7 +48,7 @@ impl TryFrom<&Action> for String {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Instruction {
+pub enum ActionInstruction {
     String { s: String },
     Dots { dots: BrailleChars },
     SwapClass { name: String },
@@ -55,25 +59,25 @@ pub enum Instruction {
     Ignore,
 }
 
-impl IsLiteral for Instruction {
+impl IsLiteral for ActionInstruction {
     fn is_literal(&self) -> bool {
         match self {
-            Instruction::String { .. } => true,
-            Instruction::Dots { .. } => true,
-            Instruction::Ignore => true,
+            ActionInstruction::String { .. } => true,
+            ActionInstruction::Dots { .. } => true,
+            ActionInstruction::Ignore => true,
             _ => false,
         }
     }
 }
 
-impl TryFrom<&Instruction> for String {
+impl TryFrom<&ActionInstruction> for String {
     type Error = ConversionError;
 
-    fn try_from(instruction: &Instruction) -> Result<String, Self::Error> {
+    fn try_from(instruction: &ActionInstruction) -> Result<String, Self::Error> {
         match instruction {
-            Instruction::String { s } => Ok(s.clone()),
-            Instruction::Dots { dots } => Ok(dots_to_unicode(dots)),
-            Instruction::Ignore => Ok("".to_string()),
+            ActionInstruction::String { s } => Ok(s.clone()),
+            ActionInstruction::Dots { dots } => Ok(dots_to_unicode(dots)),
+            ActionInstruction::Ignore => Ok("".to_string()),
             _ => Err(ConversionError::ActionNotLiteral),
         }
     }
@@ -108,7 +112,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn dots(&mut self) -> Result<Instruction, ParseError> {
+    fn dots(&mut self) -> Result<ActionInstruction, ParseError> {
         self.consume('@')?;
         let mut dots = String::new();
         while self
@@ -124,7 +128,7 @@ impl<'a> Parser<'a> {
                 braille::ParseError::InvalidBraille { character: None },
             ))
         } else {
-            Ok(Instruction::Dots {
+            Ok(ActionInstruction::Dots {
                 dots: braille_chars(&dots)?,
             })
         }
@@ -151,7 +155,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn string(&mut self) -> Result<Instruction, ParseError> {
+    fn string(&mut self) -> Result<ActionInstruction, ParseError> {
         self.consume('"')?;
         let mut s = String::new();
         while self.chars.peek().filter(|&c| *c != '"').is_some() {
@@ -160,17 +164,17 @@ impl<'a> Parser<'a> {
             s.push(c);
         }
         self.consume('"')?;
-        Ok(Instruction::String { s })
+        Ok(ActionInstruction::String { s })
     }
 
-    fn replace(&mut self) -> Result<Instruction, ParseError> {
+    fn replace(&mut self) -> Result<ActionInstruction, ParseError> {
         self.consume('*')?;
-        Ok(Instruction::Replace)
+        Ok(ActionInstruction::Replace)
     }
 
-    fn ignore(&mut self) -> Result<Instruction, ParseError> {
+    fn ignore(&mut self) -> Result<ActionInstruction, ParseError> {
         self.consume('?')?;
-        Ok(Instruction::Ignore)
+        Ok(ActionInstruction::Ignore)
     }
 
     fn ascii_number(&mut self) -> Result<u8, ParseError> {
@@ -182,7 +186,7 @@ impl<'a> Parser<'a> {
         Ok(number)
     }
 
-    fn variable(&mut self) -> Result<Instruction, ParseError> {
+    fn variable(&mut self) -> Result<ActionInstruction, ParseError> {
         self.consume('#')?;
         let variable = self
             .ascii_number()
@@ -190,18 +194,18 @@ impl<'a> Parser<'a> {
         match self.chars.peek() {
             Some('=') => {
                 self.consume('=')?;
-                Ok(Instruction::Assignment {
+                Ok(ActionInstruction::Assignment {
                     variable,
                     value: self.ascii_number()?,
                 })
             }
-            Some('+') => Ok(Instruction::Increment { variable }),
-            Some('-') => Ok(Instruction::Decrement { variable }),
+            Some('+') => Ok(ActionInstruction::Increment { variable }),
+            Some('-') => Ok(ActionInstruction::Decrement { variable }),
             c => Err(ParseError::InvalidOperator { found: c.copied() }),
         }
     }
 
-    fn class(&mut self) -> Result<Instruction, ParseError> {
+    fn class(&mut self) -> Result<ActionInstruction, ParseError> {
         self.consume('%')?;
         let mut name = String::new();
         while self
@@ -215,11 +219,11 @@ impl<'a> Parser<'a> {
         if name.is_empty() {
             Err(ParseError::InvalidClass)
         } else {
-            Ok(Instruction::SwapClass { name })
+            Ok(ActionInstruction::SwapClass { name })
         }
     }
 
-    fn action(&mut self) -> Result<Instruction, ParseError> {
+    fn action(&mut self) -> Result<ActionInstruction, ParseError> {
         match self.chars.peek() {
             Some('@') => Ok(self.dots()?),
             Some('"') => Ok(self.string()?),
@@ -232,8 +236,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn many_actions(&mut self) -> Result<Vec<Instruction>, ParseError> {
-        let mut actions: Vec<Instruction> = Vec::new();
+    fn many_actions(&mut self) -> Result<Vec<ActionInstruction>, ParseError> {
+        let mut actions: Vec<ActionInstruction> = Vec::new();
         while self.chars.peek().filter(|&c| is_action(c)).is_some() {
             actions.push(self.action()?);
         }
@@ -267,17 +271,19 @@ mod display {
         }
     }
 
-    impl std::fmt::Display for Instruction {
+    impl std::fmt::Display for ActionInstruction {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
-                Instruction::String { s } => write!(f, "{}", s),
-                Instruction::Dots { dots } => write!(f, "{}", dots_to_unicode(dots)),
-                Instruction::Replace => write!(f, "*"),
-                Instruction::Ignore => write!(f, "?"),
-                Instruction::SwapClass { name } => write!(f, "%{}", name),
-                Instruction::Assignment { variable, value } => write!(f, "#{}={}", variable, value),
-                Instruction::Increment { variable } => write!(f, "#{}+", variable),
-                Instruction::Decrement { variable } => write!(f, "#{}-", variable),
+                ActionInstruction::String { s } => write!(f, "{}", s),
+                ActionInstruction::Dots { dots } => write!(f, "{}", dots_to_unicode(dots)),
+                ActionInstruction::Replace => write!(f, "*"),
+                ActionInstruction::Ignore => write!(f, "?"),
+                ActionInstruction::SwapClass { name } => write!(f, "%{}", name),
+                ActionInstruction::Assignment { variable, value } => {
+                    write!(f, "#{}={}", variable, value)
+                }
+                ActionInstruction::Increment { variable } => write!(f, "#{}+", variable),
+                ActionInstruction::Decrement { variable } => write!(f, "#{}-", variable),
             }
         }
     }
@@ -294,7 +300,7 @@ mod tests {
     fn dots() {
         assert_eq!(
             Parser::new("@123").dots(),
-            Ok(Instruction::Dots {
+            Ok(ActionInstruction::Dots {
                 dots: vec![enum_set!(
                     BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot3
                 )]
@@ -314,7 +320,7 @@ mod tests {
         );
         assert_eq!(
             Parser::new("@1-2").dots(),
-            Ok(Instruction::Dots {
+            Ok(ActionInstruction::Dots {
                 dots: vec![enum_set!(BrailleDot::Dot1), enum_set!(BrailleDot::Dot2)]
             })
         );
@@ -324,64 +330,64 @@ mod tests {
     fn string() {
         assert_eq!(
             Parser::new(r#""test""#).string(),
-            Ok(Instruction::String { s: "test".into() })
+            Ok(ActionInstruction::String { s: "test".into() })
         );
         assert_eq!(
             Parser::new(r#"",_""#).string(),
-            Ok(Instruction::String { s: ",_".into() })
+            Ok(ActionInstruction::String { s: ",_".into() })
         );
         assert_eq!(
             Parser::new(r#"", ""#).string(),
-            Ok(Instruction::String { s: ", ".into() })
+            Ok(ActionInstruction::String { s: ", ".into() })
         );
         assert_eq!(
             Parser::new(r#""-\"""#).string(),
-            Ok(Instruction::String { s: "-\"".into() })
+            Ok(ActionInstruction::String { s: "-\"".into() })
         );
         assert_eq!(
             Parser::new(r#"".\s\"""#).string(),
-            Ok(Instruction::String { s: ". \"".into() })
+            Ok(ActionInstruction::String { s: ". \"".into() })
         );
     }
 
     #[test]
     fn replace() {
-        assert_eq!(Parser::new("*").replace(), Ok(Instruction::Replace));
+        assert_eq!(Parser::new("*").replace(), Ok(ActionInstruction::Replace));
     }
 
     #[test]
     fn ignore() {
-        assert_eq!(Parser::new("?").ignore(), Ok(Instruction::Ignore));
+        assert_eq!(Parser::new("?").ignore(), Ok(ActionInstruction::Ignore));
     }
 
     #[test]
     fn variable() {
         assert_eq!(
             Parser::new("#1=42").action(),
-            Ok(Instruction::Assignment {
+            Ok(ActionInstruction::Assignment {
                 variable: 1,
                 value: 42
             })
         );
         assert_eq!(
             Parser::new("#42=1").action(),
-            Ok(Instruction::Assignment {
+            Ok(ActionInstruction::Assignment {
                 variable: 42,
                 value: 1
             })
         );
         assert_eq!(
             Parser::new("#5+").action(),
-            Ok(Instruction::Increment { variable: 5 })
+            Ok(ActionInstruction::Increment { variable: 5 })
         );
         assert_eq!(
             Parser::new("#5-").action(),
-            Ok(Instruction::Decrement { variable: 5 })
+            Ok(ActionInstruction::Decrement { variable: 5 })
         );
         assert_ne!(
             Parser::new("#1=").action(),
             //Err(ParseError::InvalidNumber(ParseIntError { kind: Empty })),
-            Ok(Instruction::Assignment {
+            Ok(ActionInstruction::Assignment {
                 variable: 1,
                 value: 42
             })
@@ -400,11 +406,11 @@ mod tests {
     fn swap_class() {
         assert_eq!(
             Parser::new("%foo").action(),
-            Ok(Instruction::SwapClass { name: "foo".into() })
+            Ok(ActionInstruction::SwapClass { name: "foo".into() })
         );
         assert_ne!(
             Parser::new("%hallöchen").action(),
-            Ok(Instruction::SwapClass {
+            Ok(ActionInstruction::SwapClass {
                 name: "hallöchen".into()
             })
         );
@@ -418,8 +424,8 @@ mod tests {
             Parser::new(r#"?"haha""#).actions(),
             Ok(Action {
                 actions: vec![
-                    Instruction::Ignore,
-                    Instruction::String {
+                    ActionInstruction::Ignore,
+                    ActionInstruction::String {
                         s: "haha".to_string()
                     }
                 ]

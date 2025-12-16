@@ -24,8 +24,9 @@ pub use braille::{dot_to_unicode, dots_to_unicode};
 pub use character_class::{CharacterClass, CharacterClasses};
 pub use match_rule::{Pattern, PatternParser, Patterns};
 pub use multipass::IsLiteral;
+pub use multipass::action::ActionInstruction;
 pub use multipass::test;
-pub use multipass::test::{Instruction, Quantifier};
+pub use multipass::test::{Quantifier, TestInstruction};
 pub use multipass::{Action, Test};
 
 mod attribute;
@@ -2403,8 +2404,6 @@ pub fn expand_includes(rules: Vec<AnchoredRule>) -> Result<Vec<AnchoredRule>, Ve
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::multipass::{action, test};
-
     use super::*;
     use enumset::enum_set;
 
@@ -2596,9 +2595,9 @@ mod tests {
                 test: Test::new(
                     false,
                     false,
-                    vec![test::Instruction::String { s: "a".into() }]
+                    vec![TestInstruction::String { s: "a".into() }]
                 ),
-                action: Action::new(vec![action::Instruction::String { s: "b".into() }]),
+                action: Action::new(vec![ActionInstruction::String { s: "b".into() }]),
                 constraints: constraint_set!(Constraint::Noback)
             }),
             RuleParser::new(&"noback correct \"a\" \"b\"").rule()
