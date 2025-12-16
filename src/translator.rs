@@ -47,6 +47,8 @@ pub enum TranslationError {
         derived: char,
         direction: Direction,
     },
+    #[error("Swap class {0} not defined")]
+    SwapClassNotDefined(String),
     #[error(transparent)]
     HyphenationTableIoError(#[from] io::Error),
     #[error(transparent)]

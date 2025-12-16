@@ -35,57 +35,117 @@ impl std::fmt::Display for TranslationStage {
     }
 }
 
-/// Wrapper type to handle different kinds of translation targets.
+/// The destination part fo a translation, i.e. what the translation maps to.
 ///
-/// In most case a translation just translates to a literal string. However in some cases the output
-/// depends on a capture from the input or even some modified (_swapped_) version of the capture
+/// In most cases, e.g. for all translation opcodes, this is just a String. When regular expressions
+/// and capturing groups are involved, e.g. in context actions, the destination string is only known
+/// at run-time once we resolve it given some capture from matching some input.
 #[derive(Debug, PartialEq, Clone)]
 pub enum TranslateTo {
-    /// Translate to a literal string
-    Literal(String),
-    /// Translate to the result of a capture
-    Capture { before: String, after: String },
-    /// Translate to the result of a capture but also apply the mapping defined in the [`Swapper`]
-    Swap {
-        before: String,
-        after: String,
-        swapper: Swapper,
-    },
+    /// A resolved string
+    Resolved(String),
+    /// An unresolved sequence of [`TranslationTargets`]. These can be resolved at run-time to get a
+    /// resolved string.
+    Unresolved(TranslationTargets),
 }
 
 impl Default for TranslateTo {
     fn default() -> Self {
-        TranslateTo::Literal("".to_string())
+        TranslateTo::Resolved("".to_string())
     }
 }
 
 impl std::fmt::Display for TranslateTo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TranslateTo::Literal(s) => write!(f, "{}", s),
+            TranslateTo::Resolved(s) => write!(f, "{}", s),
             _ => todo!(),
         }
     }
 }
 
 impl TranslateTo {
+    pub fn new(literal: &str) -> Self {
+        Self::Resolved(literal.to_string())
+    }
+
+    pub fn from_seq(seq: &[TranslationTarget]) -> Self {
+        Self::Unresolved(TranslationTargets::from_seq(seq))
+    }
+
     pub fn resolve(self, capture: &str) -> Self {
         match self {
-            TranslateTo::Literal(_) => self,
-            TranslateTo::Capture { before, after } => {
-                TranslateTo::Literal(format!("{}{}{}", before, capture, after))
+            TranslateTo::Resolved(_) => self,
+            TranslateTo::Unresolved(translation_targets) => {
+                Self::Resolved(translation_targets.resolve(capture).to_string())
             }
-            TranslateTo::Swap {
-                before,
-                after,
-                swapper,
-            } => TranslateTo::Literal(format!("{}{}{}", before, swapper.swap(capture), after)),
         }
     }
 }
 
-/// The basic unit of a translation. Maps an `input` string to an `output` which is typically also a
-/// string.
+/// Wrapper type to handle different kinds of translation targets.
+///
+/// In most case a translation just translates to a literal string. However in some cases the output
+/// depends on a capture from the input or even some modified (_swapped_) version of the capture
+#[derive(Debug, PartialEq, Clone)]
+pub enum TranslationTarget {
+    /// Translate to a literal string
+    Literal(String),
+    /// Translate to the result of a capture
+    Capture,
+    /// Translate to the result of a capture but also apply the mapping defined in the [`Swapper`]
+    Swap(Swapper),
+}
+
+impl std::fmt::Display for TranslationTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TranslationTarget::Literal(s) => write!(f, "{}", s),
+            _ => todo!(),
+        }
+    }
+}
+
+impl TranslationTarget {
+    pub fn resolve(self, capture: &str) -> Self {
+        match self {
+            TranslationTarget::Literal(_) => self,
+            TranslationTarget::Capture => TranslationTarget::Literal(capture.to_string()),
+            TranslationTarget::Swap(swapper) => TranslationTarget::Literal(swapper.swap(capture)),
+        }
+    }
+}
+
+/// A sequence of [`TranslationTarget`]
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct TranslationTargets(Vec<TranslationTarget>);
+
+impl TranslationTargets {
+    pub fn new(literal: &str) -> Self {
+        Self(vec![TranslationTarget::Literal(literal.to_string())])
+    }
+
+    pub fn from_seq(seq: &[TranslationTarget]) -> Self {
+        Self(seq.to_vec())
+    }
+
+    pub fn resolve(&self, capture: &str) -> Self {
+        let resolved: Vec<TranslationTarget> =
+            self.0.iter().cloned().map(|t| t.resolve(capture)).collect();
+        Self::from_seq(&resolved)
+    }
+}
+
+impl std::fmt::Display for TranslationTargets {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s: String = self.0.iter().cloned().map(|t| t.to_string()).collect();
+        write!(f, "{}", s)
+    }
+}
+
+/// The basic unit of a translation.
+///
+/// Maps an `input` string to an `output` which is typically also a string.
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct Translation {
     /// Input string to be translated
@@ -126,7 +186,7 @@ impl Translation {
     ) -> Self {
         Self {
             input: input.to_string(),
-            output: TranslateTo::Literal(output.to_string()),
+            output: TranslateTo::new(output),
             weight,
             length: input.chars().count(),
             offset: 0,
@@ -235,42 +295,23 @@ mod tests {
     #[test]
     fn resolve_literal() {
         assert_eq!(
-            TranslateTo::Literal("foo".to_string()).resolve("bar"),
-            TranslateTo::Literal("foo".to_string())
+            TranslationTarget::Literal("foo".to_string()).resolve("bar"),
+            TranslationTarget::Literal("foo".to_string())
         );
     }
 
     #[test]
     fn resolve_capture() {
-        let resolved = TranslateTo::Capture {
-            before: "<".to_string(),
-            after: ">".to_string(),
-        }
-        .resolve("CAPTURED");
-        assert_eq!(resolved, TranslateTo::Literal("<CAPTURED>".to_string()));
-    }
-
-    #[test]
-    fn resolve_capture_empty_before_after() {
-        let resolved = TranslateTo::Capture {
-            before: "".to_string(),
-            after: "".to_string(),
-        }
-        .resolve("test");
-        assert_eq!(resolved, TranslateTo::Literal("test".to_string()));
+        let resolved = TranslationTarget::Capture.resolve("CAPTURED");
+        assert_eq!(resolved, TranslationTarget::Literal("CAPTURED".to_string()));
     }
 
     #[test]
     fn resolve_swap() {
         let swapper = Swapper::new(&[('a', "A"), ('b', "B"), ('c', "C")]);
 
-        let resolved = TranslateTo::Swap {
-            before: "<<".to_string(),
-            after: ">>".to_string(),
-            swapper,
-        }
-        .resolve("abc");
-        assert_eq!(resolved, TranslateTo::Literal("<<ABC>>".to_string()));
+        let resolved = TranslationTarget::Swap(swapper).resolve("abc");
+        assert_eq!(resolved, TranslationTarget::Literal("ABC".to_string()));
     }
 
     #[test]
@@ -295,10 +336,11 @@ mod tests {
     #[test]
     fn translation_capture_capture() {
         let mut translation = Translation::new("input", "output", 5, TranslationStage::Main, None);
-        translation.output = TranslateTo::Capture {
-            before: "<".to_string(),
-            after: ">".to_string(),
-        };
+        translation.output = TranslateTo::from_seq(&[
+            TranslationTarget::Literal("<".to_string()),
+            TranslationTarget::Capture,
+            TranslationTarget::Literal(">".to_string()),
+        ]);
 
         let translation = translation.with_capture("MIDDLE".to_string());
 
@@ -311,16 +353,16 @@ mod tests {
         let swapper = Swapper::new(&[('x', "X"), ('y', "Y")]);
 
         let mut translation = Translation::new("input", "output", 5, TranslationStage::Main, None);
-        translation.output = TranslateTo::Swap {
-            before: "[".to_string(),
-            after: "]".to_string(),
-            swapper,
-        };
+        translation.output = TranslateTo::from_seq(&[
+            TranslationTarget::Literal("<".to_string()),
+            TranslationTarget::Swap(swapper),
+            TranslationTarget::Literal(">".to_string()),
+        ]);
 
         let result = translation.with_capture("xyz".to_string());
 
         assert_eq!(result.input(), "xyz");
-        assert_eq!(result.output(), "[XYz]");
+        assert_eq!(result.output(), "<XYz>");
     }
 
     #[test]
