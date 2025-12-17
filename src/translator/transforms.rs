@@ -226,7 +226,7 @@ mod tests {
         let table =
             TransformationTable::compile(&rules, Direction::Forward, TranslationStage::Post1)
                 .unwrap();
-        assert_eq!(dbg!(&table).translate("⠇"), "⠃");
+        assert_eq!(table.translate("⠇"), "⠃");
         assert_eq!(table.translate("⠙"), "⠙");
         assert_eq!(table.translate("🐂"), "🐂");
     }
@@ -237,7 +237,7 @@ mod tests {
         let table =
             TransformationTable::compile(&rules, Direction::Forward, TranslationStage::Post2)
                 .unwrap();
-        assert_eq!(dbg!(&table).translate("⠇"), "⠃");
+        assert_eq!(table.translate("⠇"), "⠃");
         assert_eq!(table.translate("⠙"), "⠙");
         assert_eq!(table.translate("🐂"), "🐂");
     }
@@ -248,7 +248,7 @@ mod tests {
         let table =
             TransformationTable::compile(&rules, Direction::Forward, TranslationStage::Post3)
                 .unwrap();
-        assert_eq!(dbg!(&table).translate("⠇"), "⠃");
+        assert_eq!(table.translate("⠇"), "⠃");
         assert_eq!(table.translate("⠙"), "⠙");
         assert_eq!(table.translate("🐂"), "🐂");
     }
