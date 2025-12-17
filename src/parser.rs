@@ -24,6 +24,7 @@ pub use braille::{dot_to_unicode, dots_to_unicode};
 pub use character_class::{CharacterClass, CharacterClasses};
 pub use match_rule::{Pattern, PatternParser, Patterns};
 pub use multipass::IsLiteral;
+pub use multipass::action;
 pub use multipass::action::ActionInstruction;
 pub use multipass::test;
 pub use multipass::test::{Quantifier, TestInstruction};

@@ -3,12 +3,14 @@
 use std::collections::HashSet;
 
 use crate::parser::{
-    Action, ActionInstruction, Quantifier, Test, TestInstruction, dots_to_unicode,
+    Action, ActionInstruction, IsLiteral, Quantifier, Test, TestInstruction, dots_to_unicode,
 };
 
 use crate::parser::{AnchoredRule, Attribute, CharacterClass, CharacterClasses};
 use crate::translator::nfa::{AST, NFA};
-use crate::translator::{Translation, TranslationStage};
+use crate::translator::swap::SwapClasses;
+use crate::translator::translation::{TranslateTo, TranslationTarget, TranslationTargets};
+use crate::translator::{Translation, TranslationError, TranslationStage};
 
 impl AST {
     fn from_test(test: &Test, ctx: &CharacterClasses) -> Self {
@@ -95,6 +97,45 @@ impl AST {
     }
 }
 
+impl TranslationTarget {
+    fn from_instruction(
+        value: ActionInstruction,
+        ctx: &SwapClasses,
+    ) -> Result<Self, TranslationError> {
+        match value {
+            ActionInstruction::String { s } => Ok(TranslationTarget::Literal(s)),
+            ActionInstruction::Dots { dots } => {
+                Ok(TranslationTarget::Literal(dots_to_unicode(&dots)))
+            }
+            ActionInstruction::SwapClass { name } => {
+                let swapper = ctx
+                    .get(&name)
+                    .ok_or(TranslationError::SwapClassNotDefined(name))?;
+                Ok(TranslationTarget::Swap(swapper))
+            }
+            ActionInstruction::Replace => Ok(TranslationTarget::Capture),
+            ActionInstruction::Ignore => Ok(TranslationTarget::Literal("".to_string())),
+            // ignore instructions that change the environment
+            ActionInstruction::Assignment { .. }
+            | ActionInstruction::Increment { .. }
+            | ActionInstruction::Decrement { .. } => Ok(TranslationTarget::Literal("".to_string())),
+        }
+    }
+}
+
+impl TranslationTargets {
+    fn from_instructions(
+        values: &[ActionInstruction],
+        ctx: &SwapClasses,
+    ) -> Result<Vec<TranslationTarget>, TranslationError> {
+        values
+            .iter()
+            .cloned()
+            .map(|instruction| TranslationTarget::from_instruction(instruction, ctx))
+            .collect()
+    }
+}
+
 #[derive(Debug)]
 pub struct ContextPatterns {
     nfa: NFA,
@@ -107,17 +148,50 @@ impl ContextPatterns {
         }
     }
 
+    /// Create a translation based on `test`, `action`, `origin` and `swap_classes`
+    fn translation(
+        &self,
+        test: &Test,
+        action: &Action,
+        origin: &AnchoredRule,
+        swap_classes: &SwapClasses,
+    ) -> Result<Translation, TranslationError> {
+        let targets = TranslationTargets::from_instructions(&action.actions(), &swap_classes)?;
+        let to = TranslateTo::from_seq(&targets);
+        let from = if test.is_literal() {
+            test.try_into().unwrap()
+        } else {
+            "".to_string()
+        };
+        let translation = if action.is_literal() {
+            // if the action is literal then we can just resolve the from with any capture input and
+            // it will return a resolved string
+            let to = to.resolve("does not matter").to_string();
+            Translation::new(
+                &from,
+                to.as_str(),
+                0,
+                TranslationStage::Main,
+                origin.clone(),
+            )
+        } else {
+            Translation::new(&from, "", 0, TranslationStage::Main, origin.clone()).with_output(&to)
+        };
+        Ok(translation)
+    }
+
     pub fn insert(
         &mut self,
         test: &Test,
-        from: &str,
-        to: &str,
+        action: &Action,
         origin: &AnchoredRule,
-        ctx: &CharacterClasses,
-    ) {
-        let translation = Translation::new(from, to, 0, TranslationStage::Main, origin.clone());
-        let ast = AST::from_test(test, &ctx);
+        character_classes: &CharacterClasses,
+        swap_classes: &SwapClasses,
+    ) -> Result<(), TranslationError> {
+        let translation = self.translation(test, action, origin, swap_classes)?;
+        let ast = AST::from_test(test, &character_classes);
         self.nfa.merge_accepting_fragment(&ast, translation);
+        Ok(())
     }
 
     pub fn find_translations(&self, input: &str) -> Vec<Translation> {
@@ -128,6 +202,8 @@ impl ContextPatterns {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::RuleParser;
+    use crate::parser::action;
     use crate::parser::test;
 
     fn context(class: CharacterClass, chars: &[char]) -> CharacterClasses {
@@ -388,5 +464,83 @@ mod tests {
         assert_eq!(nfa.find_translations("a"), []);
         assert_eq!(nfa.find_translations("aa"), []);
         assert_eq!(nfa.find_translations("def"), []);
+    }
+
+    // just create some fake anchored rule for testing purposes
+    fn origin(line: &str) -> AnchoredRule {
+        let rule = RuleParser::new(line).rule().unwrap();
+        AnchoredRule::new(rule, None, 0)
+    }
+
+    #[test]
+    fn context_simple() {
+        let tests = test::Parser::new("\"abc\"").tests().unwrap();
+        let action = action::Parser::new("\"A_B_C\"").actions().unwrap();
+        let character_classes = CharacterClasses::default();
+        let swap_classes = SwapClasses::default();
+        let origin = origin("context \"abc\" \"A_B_C\"");
+        let mut patterns = ContextPatterns::new();
+        patterns
+            .insert(&tests, &action, &origin, &character_classes, &swap_classes)
+            .unwrap();
+        let translation = Translation::new("abc", "", 3, TranslationStage::Main, origin.clone())
+            .with_output(&TranslateTo::Resolved("A_B_C".to_string()));
+        assert_eq!(patterns.find_translations("abc"), [translation]);
+        assert!(patterns.find_translations("def").is_empty());
+    }
+
+    #[test]
+    fn context_capture() {
+        let tests = test::Parser::new(r#"["abc"]"#).tests().unwrap();
+        let action = action::Parser::new(r#""<"*">""#).actions().unwrap();
+        let character_classes = CharacterClasses::default();
+        let swap_classes = SwapClasses::default();
+        let origin = origin(r#"context "abc" "<"*">""#);
+        let mut patterns = ContextPatterns::new();
+        patterns
+            .insert(&tests, &action, &origin, &character_classes, &swap_classes)
+            .unwrap();
+        let translation = Translation::new("abc", "", 3, TranslationStage::Main, origin.clone())
+            .with_output(&TranslateTo::Resolved("<abc>".to_string()));
+        assert_eq!(patterns.find_translations("abc"), [translation]);
+        assert!(patterns.find_translations("def").is_empty());
+    }
+
+    #[test]
+    fn context_capture_advanced() {
+        let tests = test::Parser::new(r#"$p3["abc"]$p3"#).tests().unwrap();
+        let action = action::Parser::new(r#""<"*">""#).actions().unwrap();
+        let character_classes =
+            CharacterClasses::new(&[(CharacterClass::Punctuation, &['{', '}'])]);
+        let swap_classes = SwapClasses::default();
+        let origin = origin(r#"context $p3"abc"$p3 "<"*">""#);
+        let mut patterns = ContextPatterns::new();
+        patterns
+            .insert(&tests, &action, &origin, &character_classes, &swap_classes)
+            .unwrap();
+        let translation = Translation::new("abc", "", 9, TranslationStage::Main, origin.clone())
+            .with_offset(3)
+            .with_output(&TranslateTo::Resolved("<abc>".to_string()));
+        assert_eq!(patterns.find_translations("{{{abc}}}"), [translation]);
+        assert!(patterns.find_translations("def").is_empty());
+    }
+
+    #[test]
+    fn context_swap() {
+        let tests = test::Parser::new(r#"$p3["abc"]$p3"#).tests().unwrap();
+        let action = action::Parser::new(r#""<"%foo">""#).actions().unwrap();
+        let character_classes =
+            CharacterClasses::new(&[(CharacterClass::Punctuation, &['{', '}'])]);
+        let swap_classes = SwapClasses::new(&[("foo", &[('a', "A"), ('b', "B"), ('c', "C")])]);
+        let origin = origin(r#"context $p3"abc"$p3 "<"%foo">""#);
+        let mut patterns = ContextPatterns::new();
+        patterns
+            .insert(&tests, &action, &origin, &character_classes, &swap_classes)
+            .unwrap();
+        let translation = Translation::new("abc", "", 9, TranslationStage::Main, origin.clone())
+            .with_offset(3)
+            .with_output(&TranslateTo::Resolved("<ABC>".to_string()));
+        assert_eq!(patterns.find_translations("{{{abc}}}"), [translation]);
+        assert!(patterns.find_translations("def").is_empty());
     }
 }
