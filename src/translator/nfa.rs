@@ -46,6 +46,7 @@ enum Transition {
 pub struct NFA {
     states: Vec<State>,
     start: StateId,
+    end: StateId,
     transitions: HashMap<(StateId, Transition), StateId>,
     epsilon_transitions: HashMap<StateId, HashSet<StateId>>,
 }
@@ -85,6 +86,7 @@ impl NFA {
     fn new() -> NFA {
         NFA {
             start: 0,
+            end: 0,
             states: vec![],
             transitions: HashMap::new(),
             epsilon_transitions: HashMap::new(),
@@ -303,14 +305,23 @@ impl NFA {
     }
 
     pub fn merge_accepting_fragment(&mut self, ast: &AST, translation: Translation) {
-        let mut union = Fragment::default();
         let fragment = self.add_accepting_fragment(ast, translation);
-        union = self.add_union(&union, &fragment);
-        self.start = union.start;
+        // if we haven't added any fragments just add the fragment without a union
+        if self.start == 0 && self.end == 0 {
+            self.start = fragment.start;
+            self.end = fragment.end;
+        } else {
+            let existing = Fragment {
+                start: self.start,
+                end: self.end,
+            };
+            let union = self.add_union(&existing, &fragment);
+            self.start = union.start;
+            self.end = union.end;
+        }
     }
 
-    /// Return all states that are reachable from a set of `states`
-    /// via epsilon transitions
+    /// Return all states that are reachable from a set of `states` via epsilon transitions
     fn epsilon_closure(&self, states: &HashSet<StateId>) -> HashSet<StateId> {
         let mut closure: HashSet<StateId> = states.clone();
         let mut queue = VecDeque::from(states.iter().cloned().collect::<Vec<_>>());
@@ -326,11 +337,10 @@ impl NFA {
         closure
     }
 
-    /// Return all states that are directly reachable from the a set
-    /// of `states` via the `transition`.
+    /// Return all states that are directly reachable from the a set of `states` via the
+    /// `transition`.
     fn move_state(&self, states: &HashSet<StateId>, transition: Transition) -> HashSet<StateId> {
         let mut next_states = HashSet::new();
-
         for from in states {
             let key = (*from, transition.clone());
             if let Some(to) = self.transitions.get(&key) {
@@ -342,8 +352,8 @@ impl NFA {
 
     /// Simulate the NFA
     ///
-    /// Given an input string, simulate the NFA to determine if the
-    /// input is accepted by the input string.
+    /// Given an input string, simulate the NFA to determine if the input is accepted by the input
+    /// string.
     pub fn accepts(&self, input: &str) -> bool {
         let mut next_states = self.epsilon_closure(&HashSet::from([self.start]));
         for c in input.chars() {
@@ -413,8 +423,8 @@ impl NFA {
         // traverse all states that are reachable via a CaptureStart transition (an epsilon
         // transition that marks the start of a capture group)
         let reachable_via_capture_start = self.move_state(&next_states, Transition::CaptureStart);
-        let next_states_with_offset = self.epsilon_closure(&reachable_via_capture_start);
-        for state in next_states_with_offset {
+        let next_states_with_capture_start = self.epsilon_closure(&reachable_via_capture_start);
+        for state in next_states_with_capture_start {
             matching_rules.extend(self.find_translations_from_state(
                 state,
                 input,
@@ -428,8 +438,8 @@ impl NFA {
         // traverse all states that are reachable via a CaptureEnd transition (an epsilon transition
         // that marks the end of a capture group)
         let reachable_via_capture_end = self.move_state(&next_states, Transition::CaptureEnd);
-        let next_states_with_offset = self.epsilon_closure(&reachable_via_capture_end);
-        for state in next_states_with_offset {
+        let next_states_with_capture_end = self.epsilon_closure(&reachable_via_capture_end);
+        for state in next_states_with_capture_end {
             matching_rules.extend(self.find_translations_from_state(
                 state,
                 input,
