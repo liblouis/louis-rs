@@ -367,7 +367,7 @@ impl NFA {
         match_length: usize,
         offset: usize,
         capturing: bool,
-        capture: String,
+        capture: &str,
     ) -> Vec<Translation> {
         let mut matching_rules = Vec::new();
 
@@ -391,7 +391,7 @@ impl NFA {
                         // if there is an offset, the weight needs to be calculated at run-time.
                         // The weight is the actual length of match.
                         .with_weight_if_offset(match_length, offset)
-                        .with_capture(capture.clone())
+                        .with_capture(&capture)
                 }),
         );
 
@@ -406,7 +406,7 @@ impl NFA {
                 match_length,
                 match_length,
                 capturing,
-                capture.clone(),
+                capture,
             ));
         }
 
@@ -421,7 +421,7 @@ impl NFA {
                 match_length,
                 match_length,
                 true,
-                capture.clone(),
+                capture,
             ));
         }
 
@@ -436,7 +436,7 @@ impl NFA {
                 match_length,
                 offset,
                 false,
-                capture.clone(),
+                capture,
             ));
         }
 
@@ -448,7 +448,7 @@ impl NFA {
                 .cloned()
                 .collect();
             next_states = self.epsilon_closure(&next_states);
-            let mut capture = capture.clone();
+            let mut capture = capture.to_string();
             if capturing {
                 capture.push(c);
             };
@@ -460,7 +460,7 @@ impl NFA {
                     match_length + 1,
                     offset,
                     capturing,
-                    capture.clone(),
+                    capture.as_str(),
                 ));
             }
         }
@@ -470,7 +470,7 @@ impl NFA {
 
     pub fn find_translations(&self, input: &str) -> Vec<Translation> {
         let mut translations =
-            self.find_translations_from_state(self.start, input, 0, 0, false, "".to_string());
+            self.find_translations_from_state(self.start, input, 0, 0, false, "");
         translations.sort_by(|a, b| b.weight().cmp(&a.weight()));
         // FIXME: It feels a bit smelly to have to dedup the list of translations. Maybe
         // there is something wrong how we traverse the NFA or even how we build it?
@@ -923,20 +923,20 @@ mod tests {
             [translation
                 .clone()
                 .with_weight_if_offset(3, 1)
-                .with_capture("b".to_string())]
+                .with_capture("b")]
         );
         assert_eq!(
             nfa.find_translations("abbc"),
             [translation
                 .clone()
                 .with_weight_if_offset(4, 1)
-                .with_capture("bb".to_string())]
+                .with_capture("bb")]
         );
         assert_eq!(
             nfa.find_translations("abbbbbc"),
             [translation
                 .with_weight_if_offset(7, 1)
-                .with_capture("bbbbb".to_string())]
+                .with_capture("bbbbb")]
         );
         assert_eq!(nfa.find_translations("aabbbbbc"), []);
         assert_eq!(nfa.find_translations("abb"), []);

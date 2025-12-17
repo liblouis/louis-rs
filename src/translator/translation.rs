@@ -263,12 +263,12 @@ impl Translation {
     /// if it has references to the capture.
     ///
     /// This is used in rules such as `context` and the multipass rules.
-    pub fn with_capture(self, capture: String) -> Self {
+    pub fn with_capture(self, capture: &str) -> Self {
         if !capture.is_empty() {
-            let output = self.output.resolve(&capture);
+            let output = self.output.resolve(capture);
             let length = capture.chars().count();
             Self {
-                input: capture,
+                input: capture.to_string(),
                 length,
                 output,
                 ..self
@@ -317,7 +317,7 @@ mod tests {
     #[test]
     fn translation_capture_empty() {
         let translation = Translation::new("input", "output", 5, TranslationStage::Main, None);
-        let result = translation.with_capture("".to_string());
+        let result = translation.with_capture("");
 
         // Should be unchanged when capture is empty
         assert_eq!(result.input(), "input");
@@ -327,7 +327,7 @@ mod tests {
     #[test]
     fn translation_capture_literal() {
         let translation = Translation::new("input", "output", 5, TranslationStage::Main, None)
-            .with_capture("captured".to_string());
+            .with_capture("captured");
 
         assert_eq!(translation.input(), "captured");
         assert_eq!(translation.output(), "output"); // Literal output unchanged
@@ -342,7 +342,7 @@ mod tests {
             TranslationTarget::Literal(">".to_string()),
         ]);
 
-        let translation = translation.with_capture("MIDDLE".to_string());
+        let translation = translation.with_capture("MIDDLE");
 
         assert_eq!(translation.input(), "MIDDLE");
         assert_eq!(translation.output(), "<MIDDLE>");
@@ -359,7 +359,7 @@ mod tests {
             TranslationTarget::Literal(">".to_string()),
         ]);
 
-        let result = translation.with_capture("xyz".to_string());
+        let result = translation.with_capture("xyz");
 
         assert_eq!(result.input(), "xyz");
         assert_eq!(result.output(), "<XYz>");
@@ -368,7 +368,7 @@ mod tests {
     #[test]
     fn translation_capture_unicode() {
         let translation = Translation::new("input", "output", 5, TranslationStage::Main, None);
-        let result = translation.with_capture("café🚀🚀".to_string());
+        let result = translation.with_capture("café🚀🚀");
 
         assert_eq!(result.input(), "café🚀🚀");
         assert_eq!(result.length(), 6);

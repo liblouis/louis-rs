@@ -234,24 +234,15 @@ mod tests {
         let nfa = NFA::from(&ast);
         assert_eq!(
             nfa.find_translations("a1b"),
-            [translation
-                .clone()
-                .with_offset(1)
-                .with_capture("1".to_string())]
+            [translation.clone().with_offset(1).with_capture("1")]
         );
         assert_eq!(
             nfa.find_translations("a2b"),
-            [translation
-                .clone()
-                .with_offset(1)
-                .with_capture("2".to_string())]
+            [translation.clone().with_offset(1).with_capture("2")]
         );
         assert_eq!(
             nfa.find_translations("a3b"),
-            [translation
-                .clone()
-                .with_offset(1)
-                .with_capture("3".to_string())]
+            [translation.clone().with_offset(1).with_capture("3")]
         );
         assert_eq!(nfa.find_translations("bbb"), []);
         assert_eq!(nfa.find_translations("ccc"), []);
@@ -272,45 +263,27 @@ mod tests {
         let nfa = NFA::from(&ast);
         assert_eq!(
             nfa.find_translations("a1b"),
-            [translation
-                .clone()
-                .with_offset(1)
-                .with_capture("1".to_string())]
+            [translation.clone().with_offset(1).with_capture("1")]
         );
         assert_eq!(
             nfa.find_translations("a2b"),
-            [translation
-                .clone()
-                .with_offset(1)
-                .with_capture("2".to_string())]
+            [translation.clone().with_offset(1).with_capture("2")]
         );
         assert_eq!(
             nfa.find_translations("a3b"),
-            [translation
-                .clone()
-                .with_offset(1)
-                .with_capture("3".to_string())]
+            [translation.clone().with_offset(1).with_capture("3")]
         );
         assert_eq!(
             nfa.find_translations("aAb"),
-            [translation
-                .clone()
-                .with_offset(1)
-                .with_capture("A".to_string())]
+            [translation.clone().with_offset(1).with_capture("A")]
         );
         assert_eq!(
             nfa.find_translations("aBb"),
-            [translation
-                .clone()
-                .with_offset(1)
-                .with_capture("B".to_string())]
+            [translation.clone().with_offset(1).with_capture("B")]
         );
         assert_eq!(
             nfa.find_translations("aCb"),
-            [translation
-                .clone()
-                .with_offset(1)
-                .with_capture("C".to_string())]
+            [translation.clone().with_offset(1).with_capture("C")]
         );
         assert_eq!(nfa.find_translations("bbb"), []);
         assert_eq!(nfa.find_translations("ccc"), []);
@@ -334,45 +307,27 @@ mod tests {
         assert_eq!(nfa.find_translations("a31b"), []);
         assert_eq!(
             nfa.find_translations("a123b"),
-            [translation
-                .clone()
-                .with_offset(1)
-                .with_capture("123".to_string())]
+            [translation.clone().with_offset(1).with_capture("123")]
         );
         assert_eq!(
             nfa.find_translations("a222b"),
-            [translation
-                .clone()
-                .with_offset(1)
-                .with_capture("222".to_string())]
+            [translation.clone().with_offset(1).with_capture("222")]
         );
         assert_eq!(
             nfa.find_translations("a321b"),
-            [translation
-                .clone()
-                .with_offset(1)
-                .with_capture("321".to_string())]
+            [translation.clone().with_offset(1).with_capture("321")]
         );
         assert_eq!(
             nfa.find_translations("aABCb"),
-            [translation
-                .clone()
-                .with_offset(1)
-                .with_capture("ABC".to_string())]
+            [translation.clone().with_offset(1).with_capture("ABC")]
         );
         assert_eq!(
             nfa.find_translations("aBBBb"),
-            [translation
-                .clone()
-                .with_offset(1)
-                .with_capture("BBB".to_string())]
+            [translation.clone().with_offset(1).with_capture("BBB")]
         );
         assert_eq!(
             nfa.find_translations("aCBAb"),
-            [translation
-                .clone()
-                .with_offset(1)
-                .with_capture("CBA".to_string())]
+            [translation.clone().with_offset(1).with_capture("CBA")]
         );
         assert_eq!(nfa.find_translations("bbb"), []);
         assert_eq!(nfa.find_translations("ccc"), []);
