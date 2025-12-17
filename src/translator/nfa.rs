@@ -398,9 +398,9 @@ impl NFA {
                     translation
                         .clone()
                         .with_offset(offset)
-                        // if there is an offset, the weight needs to be calculated at run-time.
-                        // The weight is the actual length of match.
-                        .with_weight_if_offset(match_length, offset)
+                        // when dealing with matches that can vary in size we need to calculate the
+                        // weight at run-time and set it accordingly
+                        .with_weight_maybe(match_length)
                         .with_capture(&capture)
                 }),
         );
