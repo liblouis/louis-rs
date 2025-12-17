@@ -53,6 +53,12 @@ impl From<&str> for CharacterClass {
 pub struct CharacterClasses(HashMap<CharacterClass, HashSet<char>>);
 
 impl CharacterClasses {
+    pub fn new(mappings: &[(CharacterClass, &[char])]) -> Self {
+        Self(HashMap::from_iter(mappings.iter().cloned().map(
+            |(class, chars)| (class, HashSet::from_iter(chars.iter().cloned())),
+        )))
+    }
+
     pub fn insert(&mut self, class: CharacterClass, c: char) -> bool {
         self.0.entry(class).or_default().insert(c)
     }

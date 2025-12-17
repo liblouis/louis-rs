@@ -31,6 +31,12 @@ impl Swapper {
 pub struct SwapClasses(HashMap<String, Swapper>);
 
 impl SwapClasses {
+    pub fn new(mappings: &[(&str, &[(char, &str)])]) -> Self {
+        Self(HashMap::from_iter(mappings.iter().cloned().map(
+            |(name, mappings)| (name.to_string(), Swapper::new(mappings)),
+        )))
+    }
+
     /// Insert a list of `mappings` under the given `name`
     pub fn insert(&mut self, name: &str, mappings: &[(char, &str)]) {
         self.0.insert(name.to_string(), Swapper::new(mappings));
