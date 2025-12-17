@@ -138,48 +138,75 @@ mod tests {
         ctx
     }
 
+    /// Create an anchored rule for testing purposes
+    fn test_origin(line: &str) -> AnchoredRule {
+        let rule = RuleParser::new(line).rule().unwrap();
+        AnchoredRule::new(rule, None, 0)
+    }
+
     #[test]
     fn find_string() {
         let tests = test::Parser::new("\"abc\"").tests().unwrap();
-        let translation = Translation::default();
+        let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
         let ast = AST::from_test(&tests, &ctx);
         let nfa = NFA::from(&ast);
-        assert_eq!(nfa.find_translations("abc"), vec![translation]);
+        assert_eq!(
+            nfa.find_translations("abc"),
+            vec![Translation::new("", "", 3, stage, None)]
+        );
         assert!(nfa.find_translations("def").is_empty());
     }
 
     #[test]
     fn find_attribute_digit() {
         let tests = test::Parser::new("$d").tests().unwrap();
-        let translation = Translation::default();
+        let stage = TranslationStage::Main;
         let ctx = context(CharacterClass::Digit, &['1', '2', '3']);
         let ast = AST::from_test(&tests, &ctx);
         let nfa = NFA::from(&ast);
-        assert_eq!(nfa.find_translations("1"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("2"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("3"), vec![translation]);
+        assert_eq!(
+            nfa.find_translations("1"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("2"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("3"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
         assert!(nfa.find_translations("def").is_empty());
     }
 
     #[test]
     fn find_attribute_uppercase() {
         let tests = test::Parser::new("$U").tests().unwrap();
-        let translation = Translation::default();
+        let stage = TranslationStage::Main;
         let ctx = context(CharacterClass::Uppercase, &['A', 'B', 'C']);
         let ast = AST::from_test(&tests, &ctx);
         let nfa = NFA::from(&ast);
-        assert_eq!(nfa.find_translations("A"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("A"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("C"), vec![translation]);
+        assert_eq!(
+            nfa.find_translations("A"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("A"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("C"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
         assert!(nfa.find_translations("def").is_empty());
     }
 
     #[test]
     fn find_attribute_uppercase_punctuation_or_sign() {
         let tests = test::Parser::new("$USp").tests().unwrap();
-        let translation = Translation::default();
         let mut ctx = CharacterClasses::default();
+        let stage = TranslationStage::Main;
         for c in ['A', 'B', 'C'] {
             ctx.insert(CharacterClass::Uppercase, c);
         }
@@ -191,35 +218,62 @@ mod tests {
         }
         let ast = AST::from_test(&tests, &ctx);
         let nfa = NFA::from(&ast);
-        assert_eq!(nfa.find_translations("%"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("."), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("A"), vec![translation]);
+        assert_eq!(
+            nfa.find_translations("%"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("."),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("A"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
         assert!(nfa.find_translations("def").is_empty());
     }
 
     #[test]
     fn find_character_class() {
         let tests = test::Parser::new("%letter").tests().unwrap();
-        let translation = Translation::default();
+        let stage = TranslationStage::Main;
         let ctx = context(CharacterClass::Letter, &['a', 'b', 'c']);
         let ast = AST::from_test(&tests, &ctx);
         let nfa = NFA::from(&ast);
-        assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("b"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("c"), vec![translation]);
+        assert_eq!(
+            nfa.find_translations("a"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("b"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("c"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
         assert!(nfa.find_translations("def").is_empty());
     }
 
     #[test]
     fn find_character_class_three() {
         let tests = test::Parser::new("%letter3").tests().unwrap();
-        let translation = Translation::default();
+        let stage = TranslationStage::Main;
         let ctx = context(CharacterClass::Letter, &['a', 'b', 'c']);
         let ast = AST::from_test(&tests, &ctx);
         let nfa = NFA::from(&ast);
-        assert_eq!(nfa.find_translations("abc"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("bbb"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("ccc"), vec![translation]);
+        assert_eq!(
+            nfa.find_translations("abc"),
+            vec![Translation::new("", "", 3, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("bbb"),
+            vec![Translation::new("", "", 3, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("ccc"),
+            vec![Translation::new("", "", 3, stage, None)]
+        );
         assert!(nfa.find_translations("a").is_empty());
         assert!(nfa.find_translations("aa").is_empty());
         assert!(nfa.find_translations("def").is_empty());

@@ -924,29 +924,20 @@ mod tests {
             Box::new(AST::Character('c')),
         );
         let nfa = NFA::from(&ast);
-        let translation =
-            Translation::new("".into(), "".into(), 0, TranslationStage::Main, None).with_offset(1);
+        let stage = TranslationStage::Main;
         assert_eq!(nfa.find_translations("a"), []);
         assert_eq!(nfa.find_translations("ab"), []);
         assert_eq!(
             nfa.find_translations("abc"),
-            [translation
-                .clone()
-                .with_weight_if_offset(3, 1)
-                .with_capture("b")]
+            [Translation::new("b", "", 3, stage, None).with_offset(1)]
         );
         assert_eq!(
             nfa.find_translations("abbc"),
-            [translation
-                .clone()
-                .with_weight_if_offset(4, 1)
-                .with_capture("bb")]
+            [Translation::new("bb", "", 4, stage, None).with_offset(1)]
         );
         assert_eq!(
             nfa.find_translations("abbbbbc"),
-            [translation
-                .with_weight_if_offset(7, 1)
-                .with_capture("bbbbb")]
+            [Translation::new("bbbbb", "", 7, stage, None).with_offset(1)]
         );
         assert_eq!(nfa.find_translations("aabbbbbc"), []);
         assert_eq!(nfa.find_translations("abb"), []);

@@ -131,23 +131,32 @@ mod tests {
     #[test]
     fn find_pattern() {
         let patterns = PatternParser::new("abc").pattern().unwrap();
-        let translation = Translation::default();
+        let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
         let ast = AST::from_patterns(&patterns, &ctx);
         let nfa = NFA::from(&ast);
-        assert_eq!(nfa.find_translations("abc"), vec![translation]);
+        assert_eq!(
+            nfa.find_translations("abc"),
+            vec![Translation::new("", "", 3, stage, None)]
+        );
         assert!(nfa.find_translations("def").is_empty());
     }
 
     #[test]
     fn find_either() {
         let patterns = PatternParser::new("a|b").pattern().unwrap();
-        let translation = Translation::default();
+        let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
         let ast = AST::from_patterns(&patterns, &ctx);
         let nfa = NFA::from(&ast);
-        assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("b"), vec![translation.clone()]);
+        assert_eq!(
+            nfa.find_translations("a"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("b"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
         assert_eq!(nfa.find_translations("c"), vec![]);
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -155,39 +164,57 @@ mod tests {
     #[test]
     fn find_attribute_digit() {
         let patterns = PatternParser::new("%[#]").pattern().unwrap();
-        let translation = Translation::default();
+        let stage = TranslationStage::Main;
         let mut ctx = CharacterClasses::default();
         for digit in ['1', '2', '3'] {
             ctx.insert(CharacterClass::Digit, digit);
         }
         let ast = AST::from_patterns(&patterns, &ctx);
         let nfa = NFA::from(&ast);
-        assert_eq!(nfa.find_translations("1"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("2"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("3"), vec![translation]);
+        assert_eq!(
+            nfa.find_translations("1"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("2"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("3"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
         assert!(nfa.find_translations("def").is_empty());
     }
 
     #[test]
     fn find_attribute_uppercase() {
         let patterns = PatternParser::new("%[u]").pattern().unwrap();
-        let translation = Translation::default();
+        let stage = TranslationStage::Main;
         let mut ctx = CharacterClasses::default();
         for c in ['A', 'B', 'C'] {
             ctx.insert(CharacterClass::Uppercase, c);
         }
         let ast = AST::from_patterns(&patterns, &ctx);
         let nfa = NFA::from(&ast);
-        assert_eq!(nfa.find_translations("A"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("A"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("C"), vec![translation]);
+        assert_eq!(
+            nfa.find_translations("A"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("A"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("C"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
         assert!(nfa.find_translations("def").is_empty());
     }
 
     #[test]
     fn find_attribute_uppercase_punctuation_or_sign() {
         let patterns = PatternParser::new("%[.$u]").pattern().unwrap();
-        let translation = Translation::default();
+        let stage = TranslationStage::Main;
         let mut ctx = CharacterClasses::default();
         for c in ['A', 'B', 'C'] {
             ctx.insert(CharacterClass::Uppercase, c);
@@ -200,35 +227,62 @@ mod tests {
         }
         let ast = AST::from_patterns(&patterns, &ctx);
         let nfa = NFA::from(&ast);
-        assert_eq!(nfa.find_translations("%"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("."), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("A"), vec![translation]);
+        assert_eq!(
+            nfa.find_translations("%"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("."),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("A"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
         assert!(nfa.find_translations("def").is_empty());
     }
 
     #[test]
     fn find_character_class() {
         let patterns = PatternParser::new("[abc]").pattern().unwrap();
-        let translation = Translation::default();
+        let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
         let ast = AST::from_patterns(&patterns, &ctx);
         let nfa = NFA::from(&ast);
-        assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("b"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("c"), vec![translation]);
+        assert_eq!(
+            nfa.find_translations("a"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("b"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("c"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
         assert!(nfa.find_translations("def").is_empty());
     }
 
     #[test]
     fn find_character_class_one_or_more() {
         let patterns = PatternParser::new("[abc]+").pattern().unwrap();
-        let translation = Translation::default();
+        let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
         let ast = AST::from_patterns(&patterns, &ctx);
         let nfa = NFA::from(&ast);
-        assert_eq!(nfa.find_translations("a"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("b"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("c"), vec![translation]);
+        assert_eq!(
+            nfa.find_translations("a"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("b"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
+        assert_eq!(
+            nfa.find_translations("c"),
+            vec![Translation::new("", "", 1, stage, None)]
+        );
         assert!(nfa.find_translations("def").is_empty());
     }
 
