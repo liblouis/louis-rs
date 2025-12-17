@@ -237,6 +237,14 @@ impl Translation {
         }
     }
 
+    /// Set the `output` of a translation.
+    pub fn with_output(self, output: &TranslateTo) -> Self {
+        Self {
+            output: output.clone(),
+            ..self
+        }
+    }
+
     /// Set the `weight` of a translation.
     pub fn with_weight(self, weight: usize) -> Self {
         Self { weight, ..self }
