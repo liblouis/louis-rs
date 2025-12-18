@@ -199,8 +199,8 @@ impl ContextPatterns {
 mod tests {
     use super::*;
     use crate::parser::RuleParser;
-    use crate::parser::action;
-    use crate::parser::test;
+    use crate::parser::multipass::action;
+    use crate::parser::multipass::test;
 
     fn context(class: CharacterClass, chars: &[char]) -> CharacterClasses {
         let mut ctx = CharacterClasses::default();
