@@ -136,7 +136,7 @@ impl TranslationTargets {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ContextPatterns {
     nfa: NFA,
 }
@@ -154,6 +154,7 @@ impl ContextPatterns {
         test: &Test,
         action: &Action,
         origin: &AnchoredRule,
+        stage: TranslationStage,
         swap_classes: &SwapClasses,
     ) -> Result<Translation, TranslationError> {
         let targets = TranslationTargets::from_instructions(&action.actions(), &swap_classes)?;
@@ -167,15 +168,9 @@ impl ContextPatterns {
             // if the action is literal then we can just resolve the from with any capture input and
             // it will return a resolved string
             let to = to.resolve("does not matter").to_string();
-            Translation::new(
-                &from,
-                to.as_str(),
-                0,
-                TranslationStage::Main,
-                origin.clone(),
-            )
+            Translation::new(&from, to.as_str(), 0, stage, origin.clone())
         } else {
-            Translation::new(&from, "", 0, TranslationStage::Main, origin.clone()).with_output(&to)
+            Translation::new(&from, "", 0, stage, origin.clone()).with_output(&to)
         };
         Ok(translation)
     }
@@ -185,10 +180,11 @@ impl ContextPatterns {
         test: &Test,
         action: &Action,
         origin: &AnchoredRule,
+        stage: TranslationStage,
         character_classes: &CharacterClasses,
         swap_classes: &SwapClasses,
     ) -> Result<(), TranslationError> {
-        let translation = self.translation(test, action, origin, swap_classes)?;
+        let translation = self.translation(test, action, origin, stage, swap_classes)?;
         let ast = AST::from_test(test, &character_classes);
         self.nfa.merge_accepting_fragment(&ast, translation);
         Ok(())
@@ -479,9 +475,17 @@ mod tests {
         let character_classes = CharacterClasses::default();
         let swap_classes = SwapClasses::default();
         let origin = origin("context \"abc\" \"A_B_C\"");
+        let stage = TranslationStage::Main;
         let mut patterns = ContextPatterns::new();
         patterns
-            .insert(&tests, &action, &origin, &character_classes, &swap_classes)
+            .insert(
+                &tests,
+                &action,
+                &origin,
+                stage,
+                &character_classes,
+                &swap_classes,
+            )
             .unwrap();
         let translation = Translation::new("abc", "", 3, TranslationStage::Main, origin.clone())
             .with_output(&TranslateTo::Resolved("A_B_C".to_string()));
@@ -496,9 +500,17 @@ mod tests {
         let character_classes = CharacterClasses::default();
         let swap_classes = SwapClasses::default();
         let origin = origin(r#"context "abc" "<"*">""#);
+        let stage = TranslationStage::Main;
         let mut patterns = ContextPatterns::new();
         patterns
-            .insert(&tests, &action, &origin, &character_classes, &swap_classes)
+            .insert(
+                &tests,
+                &action,
+                &origin,
+                stage,
+                &character_classes,
+                &swap_classes,
+            )
             .unwrap();
         let translation = Translation::new("abc", "", 3, TranslationStage::Main, origin.clone())
             .with_output(&TranslateTo::Resolved("<abc>".to_string()));
@@ -514,9 +526,17 @@ mod tests {
             CharacterClasses::new(&[(CharacterClass::Punctuation, &['{', '}'])]);
         let swap_classes = SwapClasses::default();
         let origin = origin(r#"context $p3"abc"$p3 "<"*">""#);
+        let stage = TranslationStage::Main;
         let mut patterns = ContextPatterns::new();
         patterns
-            .insert(&tests, &action, &origin, &character_classes, &swap_classes)
+            .insert(
+                &tests,
+                &action,
+                &origin,
+                stage,
+                &character_classes,
+                &swap_classes,
+            )
             .unwrap();
         let translation = Translation::new("abc", "", 9, TranslationStage::Main, origin.clone())
             .with_offset(3)
@@ -533,9 +553,17 @@ mod tests {
             CharacterClasses::new(&[(CharacterClass::Punctuation, &['{', '}'])]);
         let swap_classes = SwapClasses::new(&[("foo", &[('a', "A"), ('b', "B"), ('c', "C")])]);
         let origin = origin(r#"context $p3"abc"$p3 "<"%foo">""#);
+        let stage = TranslationStage::Main;
         let mut patterns = ContextPatterns::new();
         patterns
-            .insert(&tests, &action, &origin, &character_classes, &swap_classes)
+            .insert(
+                &tests,
+                &action,
+                &origin,
+                stage,
+                &character_classes,
+                &swap_classes,
+            )
             .unwrap();
         let translation = Translation::new("abc", "", 9, TranslationStage::Main, origin.clone())
             .with_offset(3)
