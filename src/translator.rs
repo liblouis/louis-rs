@@ -251,35 +251,6 @@ impl TranslationTable {
             .filter(|r| r.is_direction(direction))
             .collect();
 
-        // First use the pre translation rules to create a translation table for the pre translation
-        // pass
-        let correct_rules: &Vec<&AnchoredRule> = &rules
-            .iter()
-            .filter(|r| matches!(r.rule, Rule::Correct { .. }))
-            .collect();
-        builder.correct_transform =
-            TransformationTable::compile(&correct_rules, direction, TranslationStage::Pre)?;
-
-        // then use the multipass rules to create translation tables for the post translation passes
-        let pass2_rules: &Vec<&AnchoredRule> = &rules
-            .iter()
-            .filter(|r| matches!(r.rule, Rule::Pass2 { .. }))
-            .collect();
-        let pass3_rules: &Vec<&AnchoredRule> = &rules
-            .iter()
-            .filter(|r| matches!(r.rule, Rule::Pass3 { .. }))
-            .collect();
-        let pass4_rules: &Vec<&AnchoredRule> = &rules
-            .iter()
-            .filter(|r| matches!(r.rule, Rule::Pass4 { .. }))
-            .collect();
-        builder.pass2_transform =
-            TransformationTable::compile(&pass2_rules, direction, TranslationStage::Post1)?;
-        builder.pass3_transform =
-            TransformationTable::compile(&pass3_rules, direction, TranslationStage::Post2)?;
-        builder.pass4_transform =
-            TransformationTable::compile(&pass4_rules, direction, TranslationStage::Post3)?;
-
         // FIXME: For some unknown reason the litdigit rule seems to have precedence over the digit
         // rule. Since they both want to define digits in the same character_definitions slot we
         // need to make sure litdigits rules are handled before digit rules
@@ -847,6 +818,56 @@ impl TranslationTable {
                 _ => (),
             }
         }
+
+        // Use the pre translation rules to create a translation table for the pre translation
+        // pass
+        let correct_rules: &Vec<&AnchoredRule> = &rules
+            .iter()
+            .filter(|r| matches!(r.rule, Rule::Correct { .. }))
+            .collect();
+        builder.correct_transform = TransformationTable::compile(
+            &correct_rules,
+            direction,
+            TranslationStage::Pre,
+            &builder.character_classes,
+            &builder.swap_classes,
+        )?;
+
+        // then use the multipass rules to create translation tables for the post translation passes
+        let pass2_rules: &Vec<&AnchoredRule> = &rules
+            .iter()
+            .filter(|r| matches!(r.rule, Rule::Pass2 { .. }))
+            .collect();
+        let pass3_rules: &Vec<&AnchoredRule> = &rules
+            .iter()
+            .filter(|r| matches!(r.rule, Rule::Pass3 { .. }))
+            .collect();
+        let pass4_rules: &Vec<&AnchoredRule> = &rules
+            .iter()
+            .filter(|r| matches!(r.rule, Rule::Pass4 { .. }))
+            .collect();
+        builder.pass2_transform = TransformationTable::compile(
+            &pass2_rules,
+            direction,
+            TranslationStage::Post1,
+            &builder.character_classes,
+            &builder.swap_classes,
+        )?;
+        builder.pass3_transform = TransformationTable::compile(
+            &pass3_rules,
+            direction,
+            TranslationStage::Post2,
+            &builder.character_classes,
+            &builder.swap_classes,
+        )?;
+        builder.pass4_transform = TransformationTable::compile(
+            &pass4_rules,
+            direction,
+            TranslationStage::Post3,
+            &builder.character_classes,
+            &builder.swap_classes,
+        )?;
+
         builder.numeric_indicator.numeric_characters(
             builder
                 .character_classes
