@@ -58,3 +58,10 @@ pub trait IsLiteral {
     /// Returns `true` if this operand matches only literal characters.
     fn is_literal(&self) -> bool;
 }
+
+/// Determines if the `test` operand (or an `action` operand in the case of back-translation) of a
+/// `context` or `multipass` opcode consumes any input.
+pub trait ConsumesInput {
+    /// Returns `true` if this operand consumes any input.
+    fn consumes_input(&self) -> bool;
+}

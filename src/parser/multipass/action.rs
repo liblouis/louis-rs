@@ -3,6 +3,7 @@ use std::{iter::Peekable, str::Chars};
 
 use super::braille::{self, BrailleChars, braille_chars, is_braille_dot};
 use crate::parser::dots_to_unicode;
+use crate::parser::multipass::ConsumesInput;
 use crate::parser::multipass::ConversionError;
 use crate::parser::multipass::IsLiteral;
 use crate::parser::multipass::ParseError;
@@ -27,6 +28,14 @@ impl IsLiteral for Action {
         self.actions
             .iter()
             .all(|instruction| instruction.is_literal())
+    }
+}
+
+impl ConsumesInput for Action {
+    fn consumes_input(&self) -> bool {
+        self.actions
+            .iter()
+            .any(|instruction| instruction.consumes_input())
     }
 }
 
@@ -66,6 +75,25 @@ impl IsLiteral for ActionInstruction {
             ActionInstruction::Dots { .. } => true,
             ActionInstruction::Ignore => true,
             _ => false,
+        }
+    }
+}
+
+impl ConsumesInput for ActionInstruction {
+    fn consumes_input(&self) -> bool {
+        match self {
+            ActionInstruction::String { .. } => true,
+            ActionInstruction::Dots { .. } => true,
+	    // Ignore drops the matched input when forward translating. This does not consume any
+	    // input when backwards translating
+            ActionInstruction::Ignore => false,
+	     // FIXME: TBH I'm not sure if back-translation of a Replace is possible. How do we know
+	     // what to match when translating backwards?
+            ActionInstruction::Replace => false,
+	     // FIXME: Swap is a specialized form of Replace and as such has the same problems when
+	     // translating backwards
+            ActionInstruction::SwapClass { .. } => false,
+            ActionInstruction::Assignment { .. } | ActionInstruction::Increment { .. } | ActionInstruction::Decrement { ..} => false,
         }
     }
 }
