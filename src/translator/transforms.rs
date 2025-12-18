@@ -1,18 +1,17 @@
-use crate::parser::IsLiteral;
+use crate::parser::CharacterClasses;
+use crate::parser::multipass::ConsumesInput;
 use crate::translator::Translation;
+use crate::translator::context_pattern::ContextPatterns;
+use crate::translator::swap::SwapClasses;
 use crate::{
     Direction,
-    parser::{AnchoredRule, Precedence, Rule},
-    translator::{
-        TranslationError, TranslationStage,
-        trie::{Boundary, Trie},
-    },
+    parser::{AnchoredRule, Rule},
+    translator::{TranslationError, TranslationStage},
 };
 
 #[derive(Debug, Default)]
 pub struct TransformationTable {
-    /// A prefix tree that contains all the translation rules and their [`Translations`](Translation)
-    trie: Trie,
+    patterns: ContextPatterns,
     stage: TranslationStage,
     direction: Direction,
 }
@@ -20,127 +19,95 @@ pub struct TransformationTable {
 /// A builder for [`TransformationTable`]
 #[derive(Debug)]
 struct TransformationTableBuilder {
-    trie: Trie,
+    patterns: ContextPatterns,
 }
 
 impl TransformationTableBuilder {
     fn new() -> Self {
-        Self { trie: Trie::new() }
+        Self {
+            patterns: ContextPatterns::new(),
+        }
     }
 
     fn build(self, direction: Direction, stage: TranslationStage) -> TransformationTable {
         TransformationTable {
             direction,
-            stage,
-            trie: self.trie,
+            stage: stage,
+            patterns: self.patterns,
         }
     }
 }
 
 impl TransformationTable {
     pub fn is_empty(&self) -> bool {
-        self.trie.is_empty()
+        self.patterns.is_empty()
     }
 
     pub fn compile(
         rules: &[&AnchoredRule],
         direction: Direction,
         stage: TranslationStage,
+        character_classes: &CharacterClasses,
+        swap_classes: &SwapClasses,
     ) -> Result<Self, TranslationError> {
         let mut builder = TransformationTableBuilder::new();
 
         for rule in rules {
             match &rule.rule {
                 Rule::Correct { test, action, .. } => {
-                    // FIXME: For now we just use the correct rules that use literal regexps since
-                    // we do not really support the whole range of weirdness that liblouis regexps
-                    // encompass
-                    if test.is_literal() && action.is_literal() {
-                        let from: String = test.try_into().unwrap();
-                        let to: String = action.try_into().unwrap();
-                        if direction == Direction::Backward && to.is_empty() {
-                            // Correct rules can map to an empty string, i.e. to drop some
-                            // characters. Such rules cannot be used for backtranslation (you cannot
-                            // translate the empty string to something)
-                            continue;
-                        }
-                        builder.trie.insert(
-                            &from,
-                            &to,
-                            Boundary::None,
-                            Boundary::None,
-                            direction,
-                            Precedence::Default,
-                            stage,
-                            rule,
-                        );
+                    if direction == Direction::Backward && !action.consumes_input() {
+                        // Correct rules can map to an empty string, i.e. to drop some
+                        // characters. Such rules cannot be used for backtranslation (you cannot
+                        // translate the empty string to something)
+                        continue;
                     }
+                    builder.patterns.insert(
+                        test,
+                        action,
+                        &rule,
+                        stage,
+                        character_classes,
+                        swap_classes,
+                    )?;
                 }
                 Rule::Pass2 { test, action, .. } => {
-                    // FIXME: For now we just use the correct rules that use literal regexps since
-                    // we do not really support the whole range of weirdness that liblouis regexps
-                    // encompass
-                    if test.is_literal() && action.is_literal() {
-                        let from: String = test.try_into().unwrap();
-                        let to: String = action.try_into().unwrap();
-                        if direction == Direction::Backward && to.is_empty() {
-                            continue;
-                        }
-                        builder.trie.insert(
-                            &from,
-                            &to,
-                            Boundary::None,
-                            Boundary::None,
-                            direction,
-                            Precedence::Default,
-                            stage,
-                            rule,
-                        );
+                    if direction == Direction::Backward && !action.consumes_input() {
+                        continue;
                     }
+                    builder.patterns.insert(
+                        test,
+                        action,
+                        &rule,
+                        stage,
+                        character_classes,
+                        swap_classes,
+                    )?;
                 }
                 Rule::Pass3 { test, action, .. } => {
-                    // FIXME: For now we just use the correct rules that use literal regexps since
-                    // we do not really support the whole range of weirdness that liblouis regexps
-                    // encompass
-                    if test.is_literal() && action.is_literal() {
-                        let from: String = test.try_into().unwrap();
-                        let to: String = action.try_into().unwrap();
-                        if direction == Direction::Backward && to.is_empty() {
-                            continue;
-                        }
-                        builder.trie.insert(
-                            &from,
-                            &to,
-                            Boundary::None,
-                            Boundary::None,
-                            direction,
-                            Precedence::Default,
-                            stage,
-                            rule,
-                        );
+                    if direction == Direction::Backward && !action.consumes_input() {
+                        continue;
                     }
+                    builder.patterns.insert(
+                        test,
+                        action,
+                        &rule,
+                        stage,
+                        character_classes,
+                        swap_classes,
+                    )?;
                 }
                 Rule::Pass4 { test, action, .. } => {
-                    // FIXME: For now we just use the correct rules that use literal regexps since
-                    // we do not really support the whole range of weirdness that liblouis regexps
-                    // encompass
-                    if test.is_literal() && action.is_literal() {
-                        let from: String = test.try_into().unwrap();
-                        let to: String = action.try_into().unwrap();
-                        if direction == Direction::Backward && to.is_empty() {
-                            continue;
-                        }
-                        builder.trie.insert(
-                            &from,
-                            &to,
-                            Boundary::None,
-                            Boundary::None,
-                            direction,
-                            Precedence::Default,
-                            stage,
-                            rule,
-                        );
+                    if direction == Direction::Backward && !action.consumes_input() {
+                        continue;
                     }
+                    builder.patterns.insert(
+                        test,
+                        action,
+                        &rule,
+                        stage,
+                        character_classes,
+                        swap_classes,
+                    )?;
                 }
                 _ => (),
             }
@@ -154,10 +121,7 @@ impl TransformationTable {
     }
 
     fn translation_candidates(&self, input: &str, prev: Option<char>) -> Vec<Translation> {
-        self.trie
-            .find_translations(input, prev)
-            .into_iter()
-            .collect()
+        self.patterns.find_translations(input).into_iter().collect()
     }
 
     pub fn trace(&self, input: &str) -> Vec<Translation> {
@@ -213,8 +177,16 @@ mod tests {
     #[test]
     fn correct() {
         let rules = [&parse_rule("correct \"corect\" \"correct\"")];
-        let table = TransformationTable::compile(&rules, Direction::Forward, TranslationStage::Pre)
-            .unwrap();
+        let character_classes = CharacterClasses::default();
+        let swap_classes = SwapClasses::default();
+        let table = TransformationTable::compile(
+            &rules,
+            Direction::Forward,
+            TranslationStage::Pre,
+            &character_classes,
+            &swap_classes,
+        )
+        .unwrap();
         assert_eq!(table.translate("foobar"), "foobar");
         assert_eq!(table.translate("corect"), "correct");
         assert_eq!(table.translate("🐂"), "🐂");
@@ -223,9 +195,16 @@ mod tests {
     #[test]
     fn pass2() {
         let rules = [&parse_rule("pass2 @123 @12")];
-        let table =
-            TransformationTable::compile(&rules, Direction::Forward, TranslationStage::Post1)
-                .unwrap();
+        let character_classes = CharacterClasses::default();
+        let swap_classes = SwapClasses::default();
+        let table = TransformationTable::compile(
+            &rules,
+            Direction::Forward,
+            TranslationStage::Post1,
+            &character_classes,
+            &swap_classes,
+        )
+        .unwrap();
         assert_eq!(table.translate("⠇"), "⠃");
         assert_eq!(table.translate("⠙"), "⠙");
         assert_eq!(table.translate("🐂"), "🐂");
@@ -234,9 +213,16 @@ mod tests {
     #[test]
     fn pass3() {
         let rules = [&parse_rule("pass3 @123 @12")];
-        let table =
-            TransformationTable::compile(&rules, Direction::Forward, TranslationStage::Post2)
-                .unwrap();
+        let character_classes = CharacterClasses::default();
+        let swap_classes = SwapClasses::default();
+        let table = TransformationTable::compile(
+            &rules,
+            Direction::Forward,
+            TranslationStage::Post2,
+            &character_classes,
+            &swap_classes,
+        )
+        .unwrap();
         assert_eq!(table.translate("⠇"), "⠃");
         assert_eq!(table.translate("⠙"), "⠙");
         assert_eq!(table.translate("🐂"), "🐂");
@@ -245,9 +231,16 @@ mod tests {
     #[test]
     fn pass4() {
         let rules = [&parse_rule("pass4 @123 @12")];
-        let table =
-            TransformationTable::compile(&rules, Direction::Forward, TranslationStage::Post3)
-                .unwrap();
+        let character_classes = CharacterClasses::default();
+        let swap_classes = SwapClasses::default();
+        let table = TransformationTable::compile(
+            &rules,
+            Direction::Forward,
+            TranslationStage::Post3,
+            &character_classes,
+            &swap_classes,
+        )
+        .unwrap();
         assert_eq!(table.translate("⠇"), "⠃");
         assert_eq!(table.translate("⠙"), "⠙");
         assert_eq!(table.translate("🐂"), "🐂");

@@ -148,6 +148,10 @@ impl ContextPatterns {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.nfa.is_empty()
+    }
+
     /// Create a translation based on `test`, `action`, `origin` and `swap_classes`
     fn translation(
         &self,

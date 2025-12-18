@@ -93,7 +93,7 @@ impl NFA {
         }
     }
 
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.states.is_empty()
     }
 
