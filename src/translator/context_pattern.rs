@@ -19,7 +19,7 @@ impl AST {
 
     fn from_instructions(instructions: &Vec<TestInstruction>, ctx: &CharacterClasses) -> Self {
         match instructions.len() {
-            0 => todo!(),
+            0 => AST::Empty,
             1 => AST::from_instruction(&instructions[0], ctx),
             _ => {
                 let mut ast = AST::from_instruction(&instructions[0], ctx);

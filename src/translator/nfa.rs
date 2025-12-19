@@ -76,6 +76,8 @@ pub enum AST {
     Either(Box<AST>, Box<AST>),
     Offset,
     Capture(Box<AST>),
+    /// To support empty captures, we need an empty AST
+    Empty,
     /// Stop-gap blanket "implementation" for things that might be needed but are not yet
     /// implemented
     NotImplemented,
@@ -292,6 +294,7 @@ impl NFA {
                 self.add_capture(&fragment)
             }
             AST::Offset => self.add_offset(),
+            AST::Empty => self.add_noop(),
             AST::NotImplemented => self.add_noop(),
         }
     }
@@ -303,12 +306,12 @@ impl NFA {
     }
 
     pub fn merge_accepting_fragment(&mut self, ast: &AST, translation: Translation) {
-	// add an initial node if the nfa is empty
-	if self.is_empty() {
-	    self.start = self.add_state(State::default());
-	}
+        // add an initial node if the nfa is empty
+        if self.is_empty() {
+            self.start = self.add_state(State::default());
+        }
         let fragment = self.add_accepting_fragment(ast, translation);
-	self.add_epsilon(self.start, fragment.start);
+        self.add_epsilon(self.start, fragment.start);
     }
 
     /// Return all states that are reachable from a set of `states` via epsilon transitions
