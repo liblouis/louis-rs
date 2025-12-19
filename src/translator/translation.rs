@@ -172,6 +172,26 @@ pub struct Translation {
     origin: Option<AnchoredRule>,
 }
 
+/// A subset of translation for which [`Hash`] and [`Eq`] is implemented
+#[derive(Debug, PartialEq, Eq, Clone, Default, Hash)]
+pub struct TranslationSubset {
+    input: String,
+    output: String,
+    length: usize,
+    weight: usize,
+}
+
+impl From<&Translation> for TranslationSubset {
+    fn from(translation: &Translation) -> Self {
+        Self {
+            input: translation.input(),
+            output: translation.output(),
+            length: translation.length(),
+            weight: translation.weight(),
+        }
+    }
+}
+
 impl Translation {
     pub fn new(
         input: &str,

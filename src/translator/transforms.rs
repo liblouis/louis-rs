@@ -1,8 +1,11 @@
+use std::collections::HashSet;
+
 use crate::parser::CharacterClasses;
 use crate::parser::multipass::ConsumesInput;
 use crate::translator::Translation;
 use crate::translator::context_pattern::ContextPatterns;
 use crate::translator::swap::SwapClasses;
+use crate::translator::translation::TranslationSubset;
 use crate::{
     Direction,
     parser::{AnchoredRule, Rule},
@@ -128,6 +131,7 @@ impl TransformationTable {
         let mut translations: Vec<Translation> = Vec::new();
         let mut chars = input.chars();
         let mut prev: Option<char> = None;
+        let mut seen: HashSet<TranslationSubset> = HashSet::default();
 
         loop {
             // given an input query the trie for matching translations
@@ -136,8 +140,19 @@ impl TransformationTable {
             // use the longest translation
             let candidate = candidates
                 .iter()
+                .cloned()
+                // drop translation candidates that we have applied already at this position in the
+                // input
+                .filter(|t| !seen.contains(&TranslationSubset::from(t)))
                 .max_by_key(|translation| translation.weight());
             if let Some(t) = candidate {
+                if t.length() == 0 {
+                    // if there is a zero-length translation candiate we run the risk of an infinite
+                    // loop, so remember the current translation so we only apply it once
+                    seen.insert(TranslationSubset::from(&t));
+                } else {
+                    seen.clear();
+                }
                 // there is a matching translation rule
                 let translation = t.clone();
                 // move the iterator forward by the number of characters in the translation
