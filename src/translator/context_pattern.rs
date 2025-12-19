@@ -229,7 +229,7 @@ mod tests {
         let nfa = NFA::from(&ast);
         assert_eq!(
             nfa.find_translations("abc"),
-            vec![Translation::new("", "", 3, stage, None)]
+            [Translation::new("", "", 3, stage, None)]
         );
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -243,15 +243,15 @@ mod tests {
         let nfa = NFA::from(&ast);
         assert_eq!(
             nfa.find_translations("1"),
-            vec![Translation::new("", "", 1, stage, None)]
+            [Translation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("2"),
-            vec![Translation::new("", "", 1, stage, None)]
+            [Translation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("3"),
-            vec![Translation::new("", "", 1, stage, None)]
+            [Translation::new("", "", 1, stage, None)]
         );
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -265,15 +265,15 @@ mod tests {
         let nfa = NFA::from(&ast);
         assert_eq!(
             nfa.find_translations("A"),
-            vec![Translation::new("", "", 1, stage, None)]
+            [Translation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("A"),
-            vec![Translation::new("", "", 1, stage, None)]
+            [Translation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("C"),
-            vec![Translation::new("", "", 1, stage, None)]
+            [Translation::new("", "", 1, stage, None)]
         );
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -296,15 +296,15 @@ mod tests {
         let nfa = NFA::from(&ast);
         assert_eq!(
             nfa.find_translations("%"),
-            vec![Translation::new("", "", 1, stage, None)]
+            [Translation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("."),
-            vec![Translation::new("", "", 1, stage, None)]
+            [Translation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("A"),
-            vec![Translation::new("", "", 1, stage, None)]
+            [Translation::new("", "", 1, stage, None)]
         );
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -318,15 +318,15 @@ mod tests {
         let nfa = NFA::from(&ast);
         assert_eq!(
             nfa.find_translations("a"),
-            vec![Translation::new("", "", 1, stage, None)]
+            [Translation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("b"),
-            vec![Translation::new("", "", 1, stage, None)]
+            [Translation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("c"),
-            vec![Translation::new("", "", 1, stage, None)]
+            [Translation::new("", "", 1, stage, None)]
         );
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -340,15 +340,15 @@ mod tests {
         let nfa = NFA::from(&ast);
         assert_eq!(
             nfa.find_translations("abc"),
-            vec![Translation::new("", "", 3, stage, None)]
+            [Translation::new("", "", 3, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("bbb"),
-            vec![Translation::new("", "", 3, stage, None)]
+            [Translation::new("", "", 3, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("ccc"),
-            vec![Translation::new("", "", 3, stage, None)]
+            [Translation::new("", "", 3, stage, None)]
         );
         assert!(nfa.find_translations("a").is_empty());
         assert!(nfa.find_translations("aa").is_empty());
