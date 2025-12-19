@@ -84,16 +84,18 @@ impl ConsumesInput for ActionInstruction {
         match self {
             ActionInstruction::String { .. } => true,
             ActionInstruction::Dots { .. } => true,
-	    // Ignore drops the matched input when forward translating. This does not consume any
-	    // input when backwards translating
+            // Ignore drops the matched input when forward translating. This does not consume any
+            // input when backwards translating
             ActionInstruction::Ignore => false,
-	     // FIXME: TBH I'm not sure if back-translation of a Replace is possible. How do we know
-	     // what to match when translating backwards?
+            // FIXME: TBH I'm not sure if back-translation of a Replace is possible. How do we know
+            // what to match when translating backwards?
             ActionInstruction::Replace => false,
-	     // FIXME: Swap is a specialized form of Replace and as such has the same problems when
-	     // translating backwards
+            // FIXME: Swap is a specialized form of Replace and as such has the same problems when
+            // translating backwards
             ActionInstruction::SwapClass { .. } => false,
-            ActionInstruction::Assignment { .. } | ActionInstruction::Increment { .. } | ActionInstruction::Decrement { ..} => false,
+            ActionInstruction::Assignment { .. }
+            | ActionInstruction::Increment { .. }
+            | ActionInstruction::Decrement { .. } => false,
         }
     }
 }
