@@ -46,7 +46,6 @@ enum Transition {
 pub struct NFA {
     states: Vec<State>,
     start: StateId,
-    end: StateId,
     transitions: HashMap<(StateId, Transition), StateId>,
     epsilon_transitions: HashMap<StateId, HashSet<StateId>>,
 }
@@ -86,7 +85,6 @@ impl NFA {
     fn new() -> NFA {
         NFA {
             start: 0,
-            end: 0,
             states: vec![],
             transitions: HashMap::new(),
             epsilon_transitions: HashMap::new(),
@@ -167,7 +165,7 @@ impl NFA {
     }
 
     /// Combine two NFAs into the union of both
-    pub fn add_union(&mut self, r1: &Fragment, r2: &Fragment) -> Fragment {
+    fn add_union(&mut self, r1: &Fragment, r2: &Fragment) -> Fragment {
         let start = self.add_state(State::default());
         let end = self.add_state(State::default());
         self.add_epsilon(start, r1.start);
@@ -298,27 +296,19 @@ impl NFA {
         }
     }
 
-    pub fn add_accepting_fragment(&mut self, ast: &AST, translation: Translation) -> Fragment {
+    fn add_accepting_fragment(&mut self, ast: &AST, translation: Translation) -> Fragment {
         let fragment = self.add_fragment(ast);
         self.set_accepting(fragment.end, translation);
         fragment
     }
 
     pub fn merge_accepting_fragment(&mut self, ast: &AST, translation: Translation) {
+	// add an initial node if the nfa is empty
+	if self.is_empty() {
+	    self.start = self.add_state(State::default());
+	}
         let fragment = self.add_accepting_fragment(ast, translation);
-        // if we haven't added any fragments just add the fragment without a union
-        if self.start == 0 && self.end == 0 {
-            self.start = fragment.start;
-            self.end = fragment.end;
-        } else {
-            let existing = Fragment {
-                start: self.start,
-                end: self.end,
-            };
-            let union = self.add_union(&existing, &fragment);
-            self.start = union.start;
-            self.end = union.end;
-        }
+	self.add_epsilon(self.start, fragment.start);
     }
 
     /// Return all states that are reachable from a set of `states` via epsilon transitions
