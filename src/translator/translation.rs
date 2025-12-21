@@ -59,7 +59,10 @@ impl std::fmt::Display for TranslateTo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TranslateTo::Resolved(s) => write!(f, "{}", s),
-            _ => todo!(),
+            t => unreachable!(
+                "to_string() should never be invoked on an unresolved TranslateTo {:?}",
+                t
+            ),
         }
     }
 }
@@ -101,7 +104,10 @@ impl std::fmt::Display for TranslationTarget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TranslationTarget::Literal(s) => write!(f, "{}", s),
-            _ => todo!(),
+            t => unreachable!(
+                "to_string() should never be invoked on an unresolved TranslationTarget {:?}",
+                t
+            ),
         }
     }
 }
