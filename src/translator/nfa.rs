@@ -7,7 +7,7 @@
 //! the reachable states is an accepting state
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use super::Translation;
+use crate::translator::translation::{AnyTranslation, Resolve, Translation};
 
 /// Reference to a state in the [NFA] states vector
 type StateId = usize;
@@ -17,7 +17,7 @@ type StateId = usize;
 /// An accepting state contains a [Translation]
 #[derive(Debug, Default)]
 struct State {
-    translation: Option<Translation>,
+    translation: Option<AnyTranslation>,
 }
 
 /// An transition between two [States](State) in the [NFA]
@@ -103,7 +103,7 @@ impl NFA {
         idx
     }
 
-    fn set_accepting(&mut self, end: StateId, translation: Translation) {
+    fn set_accepting(&mut self, end: StateId, translation: AnyTranslation) {
         self.states[end].translation = Some(translation);
     }
 
@@ -299,13 +299,13 @@ impl NFA {
         }
     }
 
-    fn add_accepting_fragment(&mut self, ast: &AST, translation: Translation) -> Fragment {
+    fn add_accepting_fragment(&mut self, ast: &AST, translation: AnyTranslation) -> Fragment {
         let fragment = self.add_fragment(ast);
         self.set_accepting(fragment.end, translation);
         fragment
     }
 
-    pub fn merge_accepting_fragment(&mut self, ast: &AST, translation: Translation) {
+    pub fn merge_accepting_fragment(&mut self, ast: &AST, translation: AnyTranslation) {
         // add an initial node if the nfa is empty
         if self.is_empty() {
             self.start = self.add_state(State::default());
@@ -387,15 +387,7 @@ impl NFA {
             next_states
                 .iter()
                 .flat_map(|state| &self.states[*state].translation)
-                .map(|translation| {
-                    translation
-                        .clone()
-                        .with_offset(offset)
-                        // when dealing with matches that can vary in size we need to calculate the
-                        // weight at run-time and set it accordingly
-                        .with_weight_maybe(match_length)
-                        .with_capture(&capture)
-                }),
+                .map(|translation| translation.clone().resolve(capture, match_length, offset)),
         );
 
         // traverse all states that are reachable via an offset transition (essentially an
@@ -528,7 +520,13 @@ pub fn nfa_dot(nfa: &NFA) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::translator::TranslationStage;
+    use crate::{
+        parser::Precedence,
+        translator::{
+            TranslationStage,
+            translation::{TranslationTarget, UnresolvedTranslation},
+        },
+    };
 
     use super::*;
 
@@ -536,7 +534,17 @@ mod tests {
     impl From<&AST> for NFA {
         fn from(ast: &AST) -> Self {
             let mut nfa = NFA::new();
-            let body = nfa.add_accepting_fragment(ast, Translation::default());
+            let body =
+                nfa.add_accepting_fragment(ast, AnyTranslation::Resolved(Translation::default()));
+            nfa.start = body.start;
+            nfa
+        }
+    }
+
+    impl NFA {
+        pub fn from_with_translation(ast: &AST, translation: AnyTranslation) -> Self {
+            let mut nfa = NFA::new();
+            let body = nfa.add_accepting_fragment(ast, translation);
             nfa.start = body.start;
             nfa
         }
@@ -802,8 +810,6 @@ mod tests {
 
     #[test]
     fn find_with_offset() {
-        let translation =
-            Translation::new("".into(), "".into(), 7, TranslationStage::Main, None).with_offset(4);
         let ast = AST::Concat(
             Box::new(AST::Concat(
                 Box::new(AST::OneOrMore(Box::new(AST::Any))),
@@ -811,13 +817,40 @@ mod tests {
             )),
             Box::new(AST::String("foo".into())),
         );
-        let nfa = NFA::from(&ast);
-        assert_eq!(nfa.find_translations("aaaafoo"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("____foo"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("1111foo"), vec![translation.clone()]);
-        assert_eq!(nfa.find_translations("fooofoo"), vec![translation.clone()]);
-        assert_ne!(nfa.find_translations("foo"), vec![translation.clone()]);
-        assert_ne!(nfa.find_translations("foofoo"), vec![translation.clone()]);
+        let stage = TranslationStage::Main;
+        let translation = UnresolvedTranslation::new(
+            &[TranslationTarget::Literal("".to_string())],
+            Precedence::Default,
+            stage,
+            None,
+        );
+        let nfa = NFA::from_with_translation(&ast, AnyTranslation::Unresolved(translation));
+        let resolved_translation =
+            Translation::new("".into(), "".into(), 7, stage, None).with_offset(4);
+        assert_eq!(
+            nfa.find_translations("aaaafoo"),
+            vec![resolved_translation.clone()]
+        );
+        assert_eq!(
+            nfa.find_translations("____foo"),
+            vec![resolved_translation.clone()]
+        );
+        assert_eq!(
+            nfa.find_translations("1111foo"),
+            vec![resolved_translation.clone()]
+        );
+        assert_eq!(
+            nfa.find_translations("fooofoo"),
+            vec![resolved_translation.clone()]
+        );
+        assert_ne!(
+            nfa.find_translations("foo"),
+            vec![resolved_translation.clone()]
+        );
+        assert_ne!(
+            nfa.find_translations("foofoo"),
+            vec![resolved_translation.clone()]
+        );
     }
 
     #[test]
@@ -916,8 +949,14 @@ mod tests {
             )),
             Box::new(AST::Character('c')),
         );
-        let nfa = NFA::from(&ast);
         let stage = TranslationStage::Main;
+        let translation = UnresolvedTranslation::new(
+            &[TranslationTarget::Literal("".to_string())],
+            Precedence::Default,
+            stage,
+            None,
+        );
+        let nfa = NFA::from_with_translation(&ast, AnyTranslation::Unresolved(translation));
         assert_eq!(nfa.find_translations("a"), []);
         assert_eq!(nfa.find_translations("ab"), []);
         assert_eq!(

@@ -28,6 +28,21 @@ impl Test {
     pub fn tests(&self) -> &Vec<TestInstruction> {
         &self.tests
     }
+
+    pub fn add_implicit_replace(self) -> Self {
+        if !self
+            .tests
+            .iter()
+            .any(|t| matches!(t, TestInstruction::Replace { .. }))
+        {
+            Self {
+                tests: vec![TestInstruction::Replace { tests: self.tests }],
+                ..self
+            }
+        } else {
+            self
+        }
+    }
 }
 
 impl IsLiteral for Test {

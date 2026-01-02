@@ -35,57 +35,6 @@ impl std::fmt::Display for TranslationStage {
     }
 }
 
-/// The destination part fo a translation, i.e. what the translation maps to.
-///
-/// In most cases, e.g. for all translation opcodes, this is just a String. When regular expressions
-/// and capturing groups are involved, e.g. in context actions, the destination string is only known
-/// at run-time once we resolve it given some capture from matching some input.
-#[derive(Debug, PartialEq, Clone)]
-pub enum TranslateTo {
-    /// A resolved string
-    Resolved(String),
-    /// An unresolved sequence of [`TranslationTargets`]. These can be resolved at run-time to get a
-    /// resolved string.
-    Unresolved(TranslationTargets),
-}
-
-impl Default for TranslateTo {
-    fn default() -> Self {
-        TranslateTo::Resolved("".to_string())
-    }
-}
-
-impl std::fmt::Display for TranslateTo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TranslateTo::Resolved(s) => write!(f, "{}", s),
-            t => unreachable!(
-                "to_string() should never be invoked on an unresolved TranslateTo {:?}",
-                t
-            ),
-        }
-    }
-}
-
-impl TranslateTo {
-    pub fn new(literal: &str) -> Self {
-        Self::Resolved(literal.to_string())
-    }
-
-    pub fn from_seq(seq: &[TranslationTarget]) -> Self {
-        Self::Unresolved(TranslationTargets::from_seq(seq))
-    }
-
-    pub fn resolve(self, capture: &str) -> Self {
-        match self {
-            TranslateTo::Resolved(_) => self,
-            TranslateTo::Unresolved(translation_targets) => {
-                Self::Resolved(translation_targets.resolve(capture).to_string())
-            }
-        }
-    }
-}
-
 /// Wrapper type to handle different kinds of translation targets.
 ///
 /// In most case a translation just translates to a literal string. However in some cases the output
@@ -149,6 +98,74 @@ impl std::fmt::Display for TranslationTargets {
     }
 }
 
+pub trait Resolve {
+    fn resolve(self, capture: &str, weight: usize, offset: usize) -> Translation;
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct UnresolvedTranslation {
+    output: Vec<TranslationTarget>,
+    precedence: Precedence,
+    stage: TranslationStage,
+    origin: Option<AnchoredRule>,
+}
+
+impl UnresolvedTranslation {
+    pub fn new(
+        output: &[TranslationTarget],
+        precedence: Precedence,
+        stage: TranslationStage,
+        origin: impl Into<Option<AnchoredRule>>,
+    ) -> Self {
+        Self {
+            output: output.to_vec(),
+            precedence,
+            stage,
+            origin: origin.into(),
+        }
+    }
+}
+
+impl Resolve for UnresolvedTranslation {
+    fn resolve(self, capture: &str, weight: usize, offset: usize) -> Translation {
+        let resolved: String = self
+            .output
+            .iter()
+            .cloned()
+            .map(|t| t.resolve(capture))
+            .map(|t| t.to_string())
+            .collect();
+        let length = capture.chars().count();
+        Translation {
+            input: capture.to_string(),
+            output: resolved,
+            length,
+            weight,
+            offset,
+            precedence: self.precedence,
+            stage: self.stage,
+            origin: self.origin,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum AnyTranslation {
+    Resolved(Translation),
+    Unresolved(UnresolvedTranslation),
+}
+
+impl Resolve for AnyTranslation {
+    fn resolve(self, capture: &str, weight: usize, offset: usize) -> Translation {
+        match self {
+            AnyTranslation::Resolved(translation) => {
+                translation.with_weight(weight).with_offset(offset)
+            }
+            AnyTranslation::Unresolved(unresolved) => unresolved.resolve(capture, weight, offset),
+        }
+    }
+}
+
 /// The basic unit of a translation.
 ///
 /// Maps an `input` string to an `output` which is typically also a string.
@@ -158,7 +175,7 @@ pub struct Translation {
     input: String,
     /// The translation of `input`, typically Unicode braille. In the case of back-translation the
     /// `input` contains Unicode braille and the output plain text.
-    output: TranslateTo,
+    output: String,
     /// Number of chars in `input`
     length: usize,
     /// Weight of a translation. Typically this is the length of the input, but often it includes
@@ -212,9 +229,9 @@ impl Translation {
     ) -> Self {
         Self {
             input: input.to_string(),
-            output: TranslateTo::new(output),
-            weight,
+            output: output.to_string(),
             length: input.chars().count(),
+            weight,
             offset: 0,
             precedence: Precedence::Default,
             stage,
@@ -263,14 +280,6 @@ impl Translation {
         }
     }
 
-    /// Set the `output` of a translation.
-    pub fn with_output(self, output: &TranslateTo) -> Self {
-        Self {
-            output: output.clone(),
-            ..self
-        }
-    }
-
     /// Set the `weight` of a translation.
     pub fn with_weight(self, weight: usize) -> Self {
         Self { weight, ..self }
@@ -287,27 +296,6 @@ impl Translation {
     pub fn with_weight_maybe(self, weight: usize) -> Self {
         if self.weight == 0 {
             Self { weight, ..self }
-        } else {
-            self
-        }
-    }
-
-    /// Adapt a translation based on a captured string.
-    ///
-    /// Update the `input` with the given `capture` if it is non-empty. The `output` can also be set
-    /// if it has references to the capture.
-    ///
-    /// This is used in rules such as `context` and the multipass rules.
-    pub fn with_capture(self, capture: &str) -> Self {
-        if !capture.is_empty() {
-            let output = self.output.resolve(capture);
-            let length = capture.chars().count();
-            Self {
-                input: capture.to_string(),
-                length,
-                output,
-                ..self
-            }
         } else {
             self
         }
@@ -351,50 +339,61 @@ mod tests {
 
     #[test]
     fn translation_capture_empty() {
-        let translation = Translation::new("input", "output", 5, TranslationStage::Main, None);
-        let result = translation.with_capture("");
+        let translation = UnresolvedTranslation::new(
+            &[TranslationTarget::Capture],
+            Precedence::Default,
+            TranslationStage::Main,
+            None,
+        );
+        let result = translation.resolve("", 5, 0);
 
-        // Should be unchanged when capture is empty
-        assert_eq!(result.input(), "input");
-        assert_eq!(result.output(), "output");
+        assert_eq!(result.input(), "");
+        assert_eq!(result.output(), "");
     }
 
     #[test]
     fn translation_capture_literal() {
-        let translation = Translation::new("input", "output", 5, TranslationStage::Main, None)
-            .with_capture("captured");
+        let translation = UnresolvedTranslation::new(
+            &[TranslationTarget::Capture],
+            Precedence::Default,
+            TranslationStage::Main,
+            None,
+        );
+        let result = translation.resolve("captured", 8, 0);
 
-        assert_eq!(translation.input(), "captured");
-        assert_eq!(translation.output(), "output"); // Literal output unchanged
+        assert_eq!(result.input(), "captured");
+        assert_eq!(result.output(), "captured");
     }
 
     #[test]
     fn translation_capture_capture() {
-        let mut translation = Translation::new("input", "output", 5, TranslationStage::Main, None);
-        translation.output = TranslateTo::from_seq(&[
-            TranslationTarget::Literal("<".to_string()),
+        let translation = UnresolvedTranslation::new(
+            &[TranslationTarget::Literal("<".to_string()),
             TranslationTarget::Capture,
-            TranslationTarget::Literal(">".to_string()),
-        ]);
+            TranslationTarget::Literal(">".to_string())],
+            Precedence::Default,
+            TranslationStage::Main,
+            None,
+        );
+        let result = translation.resolve("MIDDLE", 8, 0);
 
-        let translation = translation.with_capture("MIDDLE");
-
-        assert_eq!(translation.input(), "MIDDLE");
-        assert_eq!(translation.output(), "<MIDDLE>");
+        assert_eq!(result.input(), "MIDDLE");
+        assert_eq!(result.output(), "<MIDDLE>");
     }
 
     #[test]
     fn translation_capture_swap() {
         let swapper = Swapper::new(&[('x', "X"), ('y', "Y")]);
 
-        let mut translation = Translation::new("input", "output", 5, TranslationStage::Main, None);
-        translation.output = TranslateTo::from_seq(&[
-            TranslationTarget::Literal("<".to_string()),
+        let translation = UnresolvedTranslation::new(
+            &[TranslationTarget::Literal("<".to_string()),
             TranslationTarget::Swap(swapper),
-            TranslationTarget::Literal(">".to_string()),
-        ]);
-
-        let result = translation.with_capture("xyz");
+            TranslationTarget::Literal(">".to_string())],
+            Precedence::Default,
+            TranslationStage::Main,
+            None,
+        );
+        let result = translation.resolve("xyz", 8, 0);
 
         assert_eq!(result.input(), "xyz");
         assert_eq!(result.output(), "<XYz>");
@@ -402,8 +401,15 @@ mod tests {
 
     #[test]
     fn translation_capture_unicode() {
-        let translation = Translation::new("input", "output", 5, TranslationStage::Main, None);
-        let result = translation.with_capture("café🚀🚀");
+        let translation = UnresolvedTranslation::new(
+            &[TranslationTarget::Literal("<".to_string()),
+            TranslationTarget::Capture,
+            TranslationTarget::Literal(">".to_string())],
+            Precedence::Default,
+            TranslationStage::Main,
+            None,
+        );
+        let result = translation.resolve("café🚀🚀", 6, 0);
 
         assert_eq!(result.input(), "café🚀🚀");
         assert_eq!(result.length(), 6);
