@@ -75,22 +75,6 @@ impl TranslationTarget {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct TranslationTargets(Vec<TranslationTarget>);
 
-impl TranslationTargets {
-    pub fn new(literal: &str) -> Self {
-        Self(vec![TranslationTarget::Literal(literal.to_string())])
-    }
-
-    pub fn from_seq(seq: &[TranslationTarget]) -> Self {
-        Self(seq.to_vec())
-    }
-
-    pub fn resolve(&self, capture: &str) -> Self {
-        let resolved: Vec<TranslationTarget> =
-            self.0.iter().cloned().map(|t| t.resolve(capture)).collect();
-        Self::from_seq(&resolved)
-    }
-}
-
 impl std::fmt::Display for TranslationTargets {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s: String = self.0.iter().cloned().map(|t| t.to_string()).collect();
