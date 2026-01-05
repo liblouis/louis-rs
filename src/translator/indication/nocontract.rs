@@ -18,7 +18,7 @@ use crate::translator::TranslationStage;
 use crate::translator::trie::Boundary;
 use crate::{
     parser::{AnchoredRule, Direction, Precedence},
-    translator::{Translation, trie::Trie},
+    translator::{ResolvedTranslation, trie::Trie},
 };
 
 use log::warn;
@@ -78,7 +78,7 @@ pub struct Indicator {
 }
 
 impl Indicator {
-    pub fn next(&self, s: &str, prev: Option<char>) -> Option<Translation> {
+    pub fn next(&self, s: &str, prev: Option<char>) -> Option<ResolvedTranslation> {
         let translations = self.contractions.find_translations(s, prev);
         if !translations.is_empty() {
             let translation = translations.first().unwrap();
@@ -111,7 +111,7 @@ mod tests {
         assert_eq!(indicator.next("aa".into(), None), None);
         assert_eq!(
             indicator.next("ab".into(), None),
-            Some(Translation::new(
+            Some(ResolvedTranslation::new(
                 "".into(),
                 "⡀".into(),
                 1,
@@ -121,7 +121,7 @@ mod tests {
         );
         assert_eq!(
             indicator.next("cd".into(), None),
-            Some(Translation::new(
+            Some(ResolvedTranslation::new(
                 "".into(),
                 "⡀".into(),
                 1,

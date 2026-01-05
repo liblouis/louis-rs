@@ -9,7 +9,7 @@
 //! is in. When given the next pending character(s) to translate, they
 //! keep track of state changes and will notify the caller whether an
 //! indication is required by optionally returning a
-//! [`Translation`](crate::translator::Translation).
+//! [`ResolvedTranslation`](crate::translator::ResolvedTranslation).
 //!
 //! There are multiple state machines to keep track of different indication
 //! requirements:

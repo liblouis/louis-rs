@@ -83,7 +83,7 @@ impl std::fmt::Display for TranslationTargets {
 }
 
 pub trait Resolve {
-    fn resolve(self, capture: &str, weight: usize, offset: usize) -> Translation;
+    fn resolve(self, capture: &str, weight: usize, offset: usize) -> ResolvedTranslation;
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -111,7 +111,7 @@ impl UnresolvedTranslation {
 }
 
 impl Resolve for UnresolvedTranslation {
-    fn resolve(self, capture: &str, weight: usize, offset: usize) -> Translation {
+    fn resolve(self, capture: &str, weight: usize, offset: usize) -> ResolvedTranslation {
         let resolved: String = self
             .output
             .iter()
@@ -120,7 +120,7 @@ impl Resolve for UnresolvedTranslation {
             .map(|t| t.to_string())
             .collect();
         let length = capture.chars().count();
-        Translation {
+        ResolvedTranslation {
             input: capture.to_string(),
             output: resolved,
             length,
@@ -134,18 +134,18 @@ impl Resolve for UnresolvedTranslation {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum AnyTranslation {
-    Resolved(Translation),
+pub enum Translation {
+    Resolved(ResolvedTranslation),
     Unresolved(UnresolvedTranslation),
 }
 
-impl Resolve for AnyTranslation {
-    fn resolve(self, capture: &str, weight: usize, offset: usize) -> Translation {
+impl Resolve for Translation {
+    fn resolve(self, capture: &str, weight: usize, offset: usize) -> ResolvedTranslation {
         match self {
-            AnyTranslation::Resolved(translation) => {
+            Translation::Resolved(translation) => {
                 translation.with_weight(weight).with_offset(offset)
             }
-            AnyTranslation::Unresolved(unresolved) => unresolved.resolve(capture, weight, offset),
+            Translation::Unresolved(unresolved) => unresolved.resolve(capture, weight, offset),
         }
     }
 }
@@ -154,7 +154,7 @@ impl Resolve for AnyTranslation {
 ///
 /// Maps an `input` string to an `output` which is typically also a string.
 #[derive(Debug, PartialEq, Clone, Default)]
-pub struct Translation {
+pub struct ResolvedTranslation {
     /// Input string to be translated
     input: String,
     /// The translation of `input`, typically Unicode braille. In the case of back-translation the
@@ -188,8 +188,8 @@ pub struct TranslationSubset {
     weight: usize,
 }
 
-impl From<&Translation> for TranslationSubset {
-    fn from(translation: &Translation) -> Self {
+impl From<&ResolvedTranslation> for TranslationSubset {
+    fn from(translation: &ResolvedTranslation) -> Self {
         Self {
             input: translation.input(),
             output: translation.output(),
@@ -199,7 +199,7 @@ impl From<&Translation> for TranslationSubset {
     }
 }
 
-impl Translation {
+impl ResolvedTranslation {
     pub fn new(
         input: &str,
         output: &str,

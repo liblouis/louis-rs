@@ -10,9 +10,9 @@ use crate::parser::{AnchoredRule, Attribute, CharacterClass, CharacterClasses};
 use crate::translator::nfa::{AST, NFA};
 use crate::translator::swap::SwapClasses;
 use crate::translator::translation::{
-    AnyTranslation, TranslationTarget, TranslationTargets, UnresolvedTranslation,
+    Translation, TranslationTarget, TranslationTargets, UnresolvedTranslation,
 };
-use crate::translator::{Translation, TranslationError, TranslationStage};
+use crate::translator::{ResolvedTranslation, TranslationError, TranslationStage};
 
 impl AST {
     fn from_test(test: &Test, ctx: &CharacterClasses) -> Self {
@@ -184,11 +184,11 @@ impl ContextPatterns {
         let test = test.clone().add_implicit_replace();
         let ast = AST::from_test(&test, &character_classes);
         self.nfa
-            .merge_accepting_fragment(&ast, AnyTranslation::Unresolved(translation));
+            .merge_accepting_fragment(&ast, Translation::Unresolved(translation));
         Ok(())
     }
 
-    pub fn find_translations(&self, input: &str) -> Vec<Translation> {
+    pub fn find_translations(&self, input: &str) -> Vec<ResolvedTranslation> {
         self.nfa.find_translations(input)
     }
 }
@@ -224,7 +224,7 @@ mod tests {
         let nfa = NFA::from(&ast);
         assert_eq!(
             nfa.find_translations("abc"),
-            [Translation::new("", "", 3, stage, None)]
+            [ResolvedTranslation::new("", "", 3, stage, None)]
         );
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -241,18 +241,18 @@ mod tests {
             stage,
             None,
         );
-        let nfa = NFA::from_with_translation(&ast, AnyTranslation::Unresolved(translation));
+        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
         assert_eq!(
             nfa.find_translations("1"),
-            [Translation::new("", "", 1, stage, None)]
+            [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("2"),
-            [Translation::new("", "", 1, stage, None)]
+            [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("3"),
-            [Translation::new("", "", 1, stage, None)]
+            [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -269,18 +269,18 @@ mod tests {
             stage,
             None,
         );
-        let nfa = NFA::from_with_translation(&ast, AnyTranslation::Unresolved(translation));
+        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
         assert_eq!(
             nfa.find_translations("A"),
-            [Translation::new("", "", 1, stage, None)]
+            [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("A"),
-            [Translation::new("", "", 1, stage, None)]
+            [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("C"),
-            [Translation::new("", "", 1, stage, None)]
+            [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -306,18 +306,18 @@ mod tests {
             stage,
             None,
         );
-        let nfa = NFA::from_with_translation(&ast, AnyTranslation::Unresolved(translation));
+        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
         assert_eq!(
             nfa.find_translations("%"),
-            [Translation::new("", "", 1, stage, None)]
+            [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("."),
-            [Translation::new("", "", 1, stage, None)]
+            [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("A"),
-            [Translation::new("", "", 1, stage, None)]
+            [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -334,18 +334,18 @@ mod tests {
             stage,
             None,
         );
-        let nfa = NFA::from_with_translation(&ast, AnyTranslation::Unresolved(translation));
+        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
         assert_eq!(
             nfa.find_translations("a"),
-            [Translation::new("", "", 1, stage, None)]
+            [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("b"),
-            [Translation::new("", "", 1, stage, None)]
+            [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("c"),
-            [Translation::new("", "", 1, stage, None)]
+            [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -362,18 +362,18 @@ mod tests {
             stage,
             None,
         );
-        let nfa = NFA::from_with_translation(&ast, AnyTranslation::Unresolved(translation));
+        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
         assert_eq!(
             nfa.find_translations("abc"),
-            [Translation::new("", "", 3, stage, None)]
+            [ResolvedTranslation::new("", "", 3, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("bbb"),
-            [Translation::new("", "", 3, stage, None)]
+            [ResolvedTranslation::new("", "", 3, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("ccc"),
-            [Translation::new("", "", 3, stage, None)]
+            [ResolvedTranslation::new("", "", 3, stage, None)]
         );
         assert!(nfa.find_translations("a").is_empty());
         assert!(nfa.find_translations("aa").is_empty());
@@ -391,18 +391,18 @@ mod tests {
             TranslationStage::Main,
             None,
         );
-        let nfa = NFA::from_with_translation(&ast, AnyTranslation::Unresolved(translation));
+        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
         assert_eq!(
             nfa.find_translations("a1b"),
-            [Translation::new("1", "", 3, TranslationStage::Main, None).with_offset(1)]
+            [ResolvedTranslation::new("1", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
             nfa.find_translations("a2b"),
-            [Translation::new("2", "", 3, TranslationStage::Main, None).with_offset(1)]
+            [ResolvedTranslation::new("2", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
             nfa.find_translations("a3b"),
-            [Translation::new("3", "", 3, TranslationStage::Main, None).with_offset(1)]
+            [ResolvedTranslation::new("3", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(nfa.find_translations("bbb"), []);
         assert_eq!(nfa.find_translations("ccc"), []);
@@ -425,30 +425,30 @@ mod tests {
             TranslationStage::Main,
             None,
         );
-        let nfa = NFA::from_with_translation(&ast, AnyTranslation::Unresolved(translation));
+        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
         assert_eq!(
             nfa.find_translations("a1b"),
-            [Translation::new("1", "", 3, TranslationStage::Main, None).with_offset(1)]
+            [ResolvedTranslation::new("1", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
             nfa.find_translations("a2b"),
-            [Translation::new("2", "", 3, TranslationStage::Main, None).with_offset(1)]
+            [ResolvedTranslation::new("2", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
             nfa.find_translations("a3b"),
-            [Translation::new("3", "", 3, TranslationStage::Main, None).with_offset(1)]
+            [ResolvedTranslation::new("3", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
             nfa.find_translations("aAb"),
-            [Translation::new("A", "", 3, TranslationStage::Main, None).with_offset(1)]
+            [ResolvedTranslation::new("A", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
             nfa.find_translations("aBb"),
-            [Translation::new("B", "", 3, TranslationStage::Main, None).with_offset(1)]
+            [ResolvedTranslation::new("B", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
             nfa.find_translations("aCb"),
-            [Translation::new("C", "", 3, TranslationStage::Main, None).with_offset(1)]
+            [ResolvedTranslation::new("C", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(nfa.find_translations("bbb"), []);
         assert_eq!(nfa.find_translations("ccc"), []);
@@ -471,33 +471,33 @@ mod tests {
             TranslationStage::Main,
             None,
         );
-        let nfa = NFA::from_with_translation(&ast, AnyTranslation::Unresolved(translation));
+        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
         assert_eq!(nfa.find_translations("a1b"), []);
         assert_eq!(nfa.find_translations("a22b"), []);
         assert_eq!(nfa.find_translations("a31b"), []);
         assert_eq!(
             nfa.find_translations("a123b"),
-            [Translation::new("123", "", 5, TranslationStage::Main, None).with_offset(1)]
+            [ResolvedTranslation::new("123", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
             nfa.find_translations("a222b"),
-            [Translation::new("222", "", 5, TranslationStage::Main, None).with_offset(1)]
+            [ResolvedTranslation::new("222", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
             nfa.find_translations("a321b"),
-            [Translation::new("321", "", 5, TranslationStage::Main, None).with_offset(1)]
+            [ResolvedTranslation::new("321", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
             nfa.find_translations("aABCb"),
-            [Translation::new("ABC", "", 5, TranslationStage::Main, None).with_offset(1)]
+            [ResolvedTranslation::new("ABC", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
             nfa.find_translations("aBBBb"),
-            [Translation::new("BBB", "", 5, TranslationStage::Main, None).with_offset(1)]
+            [ResolvedTranslation::new("BBB", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
             nfa.find_translations("aCBAb"),
-            [Translation::new("CBA", "", 5, TranslationStage::Main, None).with_offset(1)]
+            [ResolvedTranslation::new("CBA", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(nfa.find_translations("bbb"), []);
         assert_eq!(nfa.find_translations("ccc"), []);
@@ -532,7 +532,7 @@ mod tests {
             )
             .unwrap();
         let translation =
-            Translation::new("abc", "A_B_C", 3, TranslationStage::Main, origin.clone());
+            ResolvedTranslation::new("abc", "A_B_C", 3, TranslationStage::Main, origin.clone());
         assert_eq!(patterns.find_translations("abc"), [translation]);
         assert!(patterns.find_translations("def").is_empty());
     }
@@ -557,7 +557,7 @@ mod tests {
             )
             .unwrap();
         let translation =
-            Translation::new("abc", "<abc>", 3, TranslationStage::Main, origin.clone());
+            ResolvedTranslation::new("abc", "<abc>", 3, TranslationStage::Main, origin.clone());
         assert_eq!(patterns.find_translations("abc"), [translation]);
         assert!(patterns.find_translations("def").is_empty());
     }
@@ -583,7 +583,7 @@ mod tests {
             )
             .unwrap();
         let translation =
-            Translation::new("abc", "<abc>", 9, TranslationStage::Main, origin.clone())
+            ResolvedTranslation::new("abc", "<abc>", 9, TranslationStage::Main, origin.clone())
                 .with_offset(3);
         assert_eq!(patterns.find_translations("{{{abc}}}"), [translation]);
         assert!(patterns.find_translations("def").is_empty());
@@ -610,7 +610,7 @@ mod tests {
             )
             .unwrap();
         let translation =
-            Translation::new("abc", "<ABC>", 9, TranslationStage::Main, origin.clone())
+            ResolvedTranslation::new("abc", "<ABC>", 9, TranslationStage::Main, origin.clone())
                 .with_offset(3);
         assert_eq!(patterns.find_translations("{{{abc}}}"), [translation]);
         assert!(patterns.find_translations("def").is_empty());

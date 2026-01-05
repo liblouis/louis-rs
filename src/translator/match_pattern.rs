@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use crate::parser::{AnchoredRule, Attribute, CharacterClasses, Pattern, Patterns};
 
 use crate::translator::nfa::{AST, NFA};
-use crate::translator::{Translation, TranslationStage};
+use crate::translator::{ResolvedTranslation, TranslationStage};
 
 impl AST {
     fn from_pattern(item: &Pattern, ctx: &CharacterClasses) -> Self {
@@ -105,15 +105,15 @@ impl MatchPatterns {
         origin: &AnchoredRule,
         ctx: &CharacterClasses,
     ) {
-        let translation = Translation::new(chars, to, 0, TranslationStage::Main, origin.clone());
+        let translation = ResolvedTranslation::new(chars, to, 0, TranslationStage::Main, origin.clone());
         let ast = AST::from_match_rule(pre, chars.to_string(), post, &ctx);
         self.nfa.merge_accepting_fragment(
             &ast,
-            super::translation::AnyTranslation::Resolved(translation),
+            super::translation::Translation::Resolved(translation),
         );
     }
 
-    pub fn find_translations(&self, input: &str) -> Vec<Translation> {
+    pub fn find_translations(&self, input: &str) -> Vec<ResolvedTranslation> {
         self.nfa.find_translations(input)
     }
 }
@@ -140,7 +140,7 @@ mod tests {
         let nfa = NFA::from(&ast);
         assert_eq!(
             nfa.find_translations("abc"),
-            vec![Translation::new("", "", 3, stage, None)]
+            vec![ResolvedTranslation::new("", "", 3, stage, None)]
         );
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -154,11 +154,11 @@ mod tests {
         let nfa = NFA::from(&ast);
         assert_eq!(
             nfa.find_translations("a"),
-            vec![Translation::new("", "", 1, stage, None)]
+            vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("b"),
-            vec![Translation::new("", "", 1, stage, None)]
+            vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(nfa.find_translations("c"), vec![]);
         assert!(nfa.find_translations("def").is_empty());
@@ -176,15 +176,15 @@ mod tests {
         let nfa = NFA::from(&ast);
         assert_eq!(
             nfa.find_translations("1"),
-            vec![Translation::new("", "", 1, stage, None)]
+            vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("2"),
-            vec![Translation::new("", "", 1, stage, None)]
+            vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("3"),
-            vec![Translation::new("", "", 1, stage, None)]
+            vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -201,15 +201,15 @@ mod tests {
         let nfa = NFA::from(&ast);
         assert_eq!(
             nfa.find_translations("A"),
-            vec![Translation::new("", "", 1, stage, None)]
+            vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("A"),
-            vec![Translation::new("", "", 1, stage, None)]
+            vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("C"),
-            vec![Translation::new("", "", 1, stage, None)]
+            vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -232,15 +232,15 @@ mod tests {
         let nfa = NFA::from(&ast);
         assert_eq!(
             nfa.find_translations("%"),
-            vec![Translation::new("", "", 1, stage, None)]
+            vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("."),
-            vec![Translation::new("", "", 1, stage, None)]
+            vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("A"),
-            vec![Translation::new("", "", 1, stage, None)]
+            vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -254,15 +254,15 @@ mod tests {
         let nfa = NFA::from(&ast);
         assert_eq!(
             nfa.find_translations("a"),
-            vec![Translation::new("", "", 1, stage, None)]
+            vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("b"),
-            vec![Translation::new("", "", 1, stage, None)]
+            vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("c"),
-            vec![Translation::new("", "", 1, stage, None)]
+            vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -276,15 +276,15 @@ mod tests {
         let nfa = NFA::from(&ast);
         assert_eq!(
             nfa.find_translations("a"),
-            vec![Translation::new("", "", 1, stage, None)]
+            vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("b"),
-            vec![Translation::new("", "", 1, stage, None)]
+            vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
             nfa.find_translations("c"),
-            vec![Translation::new("", "", 1, stage, None)]
+            vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert!(nfa.find_translations("def").is_empty());
     }
@@ -297,7 +297,7 @@ mod tests {
         let rule = fake_rule();
         let mut matcher = MatchPatterns::new();
         matcher.insert(&pre, "foo".into(), &post, "".into(), &rule, &ctx);
-        let translation = Translation::new(
+        let translation = ResolvedTranslation::new(
             "foo".into(),
             "".into(),
             5,
@@ -314,7 +314,7 @@ mod tests {
             vec![translation.clone()]
         );
         let translations = vec![
-            Translation::new(
+            ResolvedTranslation::new(
                 "foo".into(),
                 "".into(),
                 9,
@@ -322,7 +322,7 @@ mod tests {
                 rule.clone(),
             )
             .with_offset(3),
-            Translation::new(
+            ResolvedTranslation::new(
                 "foo".into(),
                 "".into(),
                 8,
@@ -330,7 +330,7 @@ mod tests {
                 rule.clone(),
             )
             .with_offset(3),
-            Translation::new(
+            ResolvedTranslation::new(
                 "foo".into(),
                 "".into(),
                 7,
@@ -353,7 +353,7 @@ mod tests {
         match_patterns.insert(&pre, "foo".into(), &post, "FOO".into(), &rule, &ctx);
         match_patterns.insert(&pre, "bar".into(), &post, "BAR".into(), &rule, &ctx);
         let translation = vec![
-            Translation::new(
+            ResolvedTranslation::new(
                 "foo".into(),
                 "FOO".into(),
                 7,
@@ -364,7 +364,7 @@ mod tests {
         ];
         assert_eq!(match_patterns.find_translations("aaafoo333"), translation);
         let translation = vec![
-            Translation::new(
+            ResolvedTranslation::new(
                 "bar".into(),
                 "BAR".into(),
                 7,

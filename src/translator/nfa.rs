@@ -7,7 +7,7 @@
 //! the reachable states is an accepting state
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::translator::translation::{AnyTranslation, Resolve, Translation};
+use crate::translator::translation::{Translation, Resolve, ResolvedTranslation};
 
 /// Reference to a state in the [NFA] states vector
 type StateId = usize;
@@ -17,7 +17,7 @@ type StateId = usize;
 /// An accepting state contains a [Translation]
 #[derive(Debug, Default)]
 struct State {
-    translation: Option<AnyTranslation>,
+    translation: Option<Translation>,
 }
 
 /// An transition between two [States](State) in the [NFA]
@@ -103,7 +103,7 @@ impl NFA {
         idx
     }
 
-    fn set_accepting(&mut self, end: StateId, translation: AnyTranslation) {
+    fn set_accepting(&mut self, end: StateId, translation: Translation) {
         self.states[end].translation = Some(translation);
     }
 
@@ -299,13 +299,13 @@ impl NFA {
         }
     }
 
-    fn add_accepting_fragment(&mut self, ast: &AST, translation: AnyTranslation) -> Fragment {
+    fn add_accepting_fragment(&mut self, ast: &AST, translation: Translation) -> Fragment {
         let fragment = self.add_fragment(ast);
         self.set_accepting(fragment.end, translation);
         fragment
     }
 
-    pub fn merge_accepting_fragment(&mut self, ast: &AST, translation: AnyTranslation) {
+    pub fn merge_accepting_fragment(&mut self, ast: &AST, translation: Translation) {
         // add an initial node if the nfa is empty
         if self.is_empty() {
             self.start = self.add_state(State::default());
@@ -371,7 +371,7 @@ impl NFA {
         offset: usize,
         capturing: bool,
         capture: &str,
-    ) -> Vec<Translation> {
+    ) -> Vec<ResolvedTranslation> {
         let mut matching_rules = Vec::new();
 
         // return early if the nfa is empty
@@ -463,7 +463,7 @@ impl NFA {
         matching_rules
     }
 
-    pub fn find_translations(&self, input: &str) -> Vec<Translation> {
+    pub fn find_translations(&self, input: &str) -> Vec<ResolvedTranslation> {
         let mut translations =
             self.find_translations_from_state(self.start, input, 0, 0, false, "");
         translations.sort_by(|a, b| b.weight().cmp(&a.weight()));
@@ -535,14 +535,14 @@ mod tests {
         fn from(ast: &AST) -> Self {
             let mut nfa = NFA::new();
             let body =
-                nfa.add_accepting_fragment(ast, AnyTranslation::Resolved(Translation::default()));
+                nfa.add_accepting_fragment(ast, Translation::Resolved(ResolvedTranslation::default()));
             nfa.start = body.start;
             nfa
         }
     }
 
     impl NFA {
-        pub fn from_with_translation(ast: &AST, translation: AnyTranslation) -> Self {
+        pub fn from_with_translation(ast: &AST, translation: Translation) -> Self {
             let mut nfa = NFA::new();
             let body = nfa.add_accepting_fragment(ast, translation);
             nfa.start = body.start;
@@ -824,9 +824,9 @@ mod tests {
             stage,
             None,
         );
-        let nfa = NFA::from_with_translation(&ast, AnyTranslation::Unresolved(translation));
+        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
         let resolved_translation =
-            Translation::new("".into(), "".into(), 7, stage, None).with_offset(4);
+            ResolvedTranslation::new("".into(), "".into(), 7, stage, None).with_offset(4);
         assert_eq!(
             nfa.find_translations("aaaafoo"),
             vec![resolved_translation.clone()]
@@ -956,20 +956,20 @@ mod tests {
             stage,
             None,
         );
-        let nfa = NFA::from_with_translation(&ast, AnyTranslation::Unresolved(translation));
+        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
         assert_eq!(nfa.find_translations("a"), []);
         assert_eq!(nfa.find_translations("ab"), []);
         assert_eq!(
             nfa.find_translations("abc"),
-            [Translation::new("b", "", 3, stage, None).with_offset(1)]
+            [ResolvedTranslation::new("b", "", 3, stage, None).with_offset(1)]
         );
         assert_eq!(
             nfa.find_translations("abbc"),
-            [Translation::new("bb", "", 4, stage, None).with_offset(1)]
+            [ResolvedTranslation::new("bb", "", 4, stage, None).with_offset(1)]
         );
         assert_eq!(
             nfa.find_translations("abbbbbc"),
-            [Translation::new("bbbbb", "", 7, stage, None).with_offset(1)]
+            [ResolvedTranslation::new("bbbbb", "", 7, stage, None).with_offset(1)]
         );
         assert_eq!(nfa.find_translations("aabbbbbc"), []);
         assert_eq!(nfa.find_translations("abb"), []);

@@ -14,7 +14,7 @@
 
 use crate::{
     parser::AnchoredRule,
-    translator::{Translation, TranslationStage},
+    translator::{ResolvedTranslation, TranslationStage},
 };
 
 use std::collections::HashSet;
@@ -51,7 +51,7 @@ impl IndicatorBuilder {
     }
 
     pub fn capsletter(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.start_letter_translation = Some(Translation::new(
+        self.0.start_letter_translation = Some(ResolvedTranslation::new(
             "",
             s,
             1,
@@ -61,7 +61,7 @@ impl IndicatorBuilder {
     }
 
     pub fn begcapsword(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.start_word_translation = Some(Translation::new(
+        self.0.start_word_translation = Some(ResolvedTranslation::new(
             "",
             s,
             1,
@@ -71,7 +71,7 @@ impl IndicatorBuilder {
     }
 
     pub fn endcapsword(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.end_word_translation = Some(Translation::new(
+        self.0.end_word_translation = Some(ResolvedTranslation::new(
             "",
             s,
             1,
@@ -81,7 +81,7 @@ impl IndicatorBuilder {
     }
 
     pub fn begcaps(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.start_translation = Some(Translation::new(
+        self.0.start_translation = Some(ResolvedTranslation::new(
             "",
             s,
             1,
@@ -91,7 +91,7 @@ impl IndicatorBuilder {
     }
 
     pub fn endcaps(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.end_translation = Some(Translation::new(
+        self.0.end_translation = Some(ResolvedTranslation::new(
             "",
             s,
             1,
@@ -118,11 +118,11 @@ pub struct Indicator {
     state: State,
     uppercase_chars: HashSet<char>,
     extra_uppercase_chars: HashSet<char>,
-    start_letter_translation: Option<Translation>,
-    start_word_translation: Option<Translation>,
-    end_word_translation: Option<Translation>,
-    start_translation: Option<Translation>,
-    end_translation: Option<Translation>,
+    start_letter_translation: Option<ResolvedTranslation>,
+    start_word_translation: Option<ResolvedTranslation>,
+    end_word_translation: Option<ResolvedTranslation>,
+    start_translation: Option<ResolvedTranslation>,
+    end_translation: Option<ResolvedTranslation>,
     terminating_chars: HashSet<char>,
 }
 
@@ -133,7 +133,7 @@ impl Indicator {
     /// indicator only looks at the next character, but there are cases where
     /// the indicator wants a bigger look-ahead, so we take a `&str` as input
     /// instead of just a `char`.
-    pub fn next(&mut self, s: &str) -> Option<Translation> {
+    pub fn next(&mut self, s: &str) -> Option<ResolvedTranslation> {
         let mut chars = s.chars();
         let c = chars.next();
         if !self.is_indicating() || c.is_none() {
@@ -201,7 +201,7 @@ mod tests {
         let mut indicator = builder.build();
         assert_eq!(
             indicator.next("Abc ".into()),
-            Some(Translation::new("", "⠇", 1, TranslationStage::Main, rule,))
+            Some(ResolvedTranslation::new("", "⠇", 1, TranslationStage::Main, rule,))
         );
         assert_eq!(indicator.next("bc ".into()), None);
         assert_eq!(indicator.next("c ".into()), None);
@@ -223,7 +223,7 @@ mod tests {
         let mut indicator = builder.build();
         assert_eq!(
             indicator.next("ABCa".into()),
-            Some(Translation::new(
+            Some(ResolvedTranslation::new(
                 "",
                 "⠇",
                 1,
@@ -235,7 +235,7 @@ mod tests {
         assert_eq!(indicator.next("Ca".into()), None);
         assert_eq!(
             indicator.next("a".into()),
-            Some(Translation::new(
+            Some(ResolvedTranslation::new(
                 "",
                 "⠠",
                 1,

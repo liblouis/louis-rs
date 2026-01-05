@@ -15,7 +15,7 @@
 
 use crate::{
     parser::AnchoredRule,
-    translator::{Translation, TranslationStage},
+    translator::{ResolvedTranslation, TranslationStage},
 };
 
 use std::collections::HashSet;
@@ -48,7 +48,7 @@ impl IndicatorBuilder {
     }
 
     pub fn numsign(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.start_translation = Some(Translation::new(
+        self.0.start_translation = Some(ResolvedTranslation::new(
             "",
             s,
             1,
@@ -58,7 +58,7 @@ impl IndicatorBuilder {
     }
 
     pub fn nonumsign(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.end_translation = Some(Translation::new(
+        self.0.end_translation = Some(ResolvedTranslation::new(
             "",
             s,
             1,
@@ -102,9 +102,9 @@ pub struct Indicator {
     /// [State::Default] mode
     extra_numeric_chars: HashSet<char>,
     /// The translation to indicate the start of a sequence of numerical characters
-    start_translation: Option<Translation>,
+    start_translation: Option<ResolvedTranslation>,
     /// The characters to indicate the end of a sequence of numerical characters
-    end_translation: Option<Translation>,
+    end_translation: Option<ResolvedTranslation>,
     /// The characters that will trigger the indication of the end of a sequence of numerical characters
     terminating_chars: HashSet<char>,
 }
@@ -115,13 +115,13 @@ impl Indicator {
     /// Takes a string slice to examine the next character(s). Typically the
     /// indicator only looks at the next character, but there are cases where
     /// the indicator wants a bigger look-ahead, so we take a `&str` as input
-    /// instead of just a `char`. Returns a [`Translation`] when transitioning
-    /// between numeric and non-numeric states or `None` when no state change
-    /// occurs (or the table contains no `numsign` opcode).
+    /// instead of just a `char`. Returns a [`ResolvedTranslation`] when
+    /// transitioning between numeric and non-numeric states or `None` when no
+    /// state change occurs (or the table contains no `numsign` opcode).
     ///
     /// # Arguments
     /// * `s` - A string slice containing the character(s) to process
-    pub fn next(&mut self, s: &str) -> Option<Translation> {
+    pub fn next(&mut self, s: &str) -> Option<ResolvedTranslation> {
         let c = s.chars().next();
         if self.start_translation.is_none() || c.is_none() {
             return None;
@@ -168,7 +168,7 @@ mod tests {
         assert_eq!(indicator.next("b12 a".into()), None);
         assert_eq!(
             indicator.next("12 a".into()),
-            Some(Translation::new("", "⠼", 1, TranslationStage::Main, rule))
+            Some(ResolvedTranslation::new("", "⠼", 1, TranslationStage::Main, rule))
         );
         assert_eq!(indicator.next("2 a".into()), None);
         assert_eq!(indicator.next(" a".into()), None);
@@ -193,7 +193,7 @@ mod tests {
         assert_eq!(indicator.next("b12a".into()), None);
         assert_eq!(
             indicator.next("12a".into()),
-            Some(Translation::new(
+            Some(ResolvedTranslation::new(
                 "",
                 "⠼",
                 1,
@@ -204,7 +204,7 @@ mod tests {
         assert_eq!(indicator.next("2a".into()), None);
         assert_eq!(
             indicator.next("a".into()),
-            Some(Translation::new(
+            Some(ResolvedTranslation::new(
                 "",
                 "⠰",
                 1,

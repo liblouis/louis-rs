@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::parser::CharacterClasses;
 use crate::parser::multipass::ConsumesInput;
-use crate::translator::Translation;
+use crate::translator::ResolvedTranslation;
 use crate::translator::context_pattern::ContextPatterns;
 use crate::translator::swap::SwapClasses;
 use crate::translator::translation::TranslationSubset;
@@ -123,12 +123,12 @@ impl TransformationTable {
         self.trace(input).iter().map(|t| t.output()).collect()
     }
 
-    fn translation_candidates(&self, input: &str, prev: Option<char>) -> Vec<Translation> {
+    fn translation_candidates(&self, input: &str, prev: Option<char>) -> Vec<ResolvedTranslation> {
         self.patterns.find_translations(input).into_iter().collect()
     }
 
-    pub fn trace(&self, input: &str) -> Vec<Translation> {
-        let mut translations: Vec<Translation> = Vec::new();
+    pub fn trace(&self, input: &str) -> Vec<ResolvedTranslation> {
+        let mut translations: Vec<ResolvedTranslation> = Vec::new();
         let mut chars = input.chars();
         let mut prev: Option<char> = None;
         let mut seen: HashSet<TranslationSubset> = HashSet::default();
@@ -162,7 +162,7 @@ impl TransformationTable {
             } else if let Some(next_char) = chars.next() {
                 prev = Some(next_char);
                 // no translation rule found, just pass the character through
-                let translation = Translation::new(
+                let translation = ResolvedTranslation::new(
                     &next_char.to_string(),
                     &next_char.to_string(),
                     1,

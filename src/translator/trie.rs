@@ -10,7 +10,7 @@ use crate::{
     },
 };
 
-use super::Translation;
+use super::ResolvedTranslation;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum Boundary {
@@ -32,7 +32,7 @@ enum Transition {
 
 #[derive(Default, Debug)]
 struct TrieNode {
-    translation: Option<Translation>,
+    translation: Option<ResolvedTranslation>,
     transitions: HashMap<Transition, TrieNode>,
 }
 
@@ -166,7 +166,7 @@ impl Trie {
         if let Some(translation) = &current_node.translation {
             // this node already contains a translation
             if precedence > translation.precedence() {
-                current_node.translation = Some(Translation::new(
+                current_node.translation = Some(ResolvedTranslation::new(
                     from,
                     to,
                     from.chars().count(),
@@ -178,11 +178,11 @@ impl Trie {
             } else {
                 // last rule wins
                 current_node.translation =
-                    Some(Translation::new(from, to, length, stage, origin.clone()));
+                    Some(ResolvedTranslation::new(from, to, length, stage, origin.clone()));
             }
         } else {
             current_node.translation =
-                Some(Translation::new(from, to, length, stage, origin.clone()));
+                Some(ResolvedTranslation::new(from, to, length, stage, origin.clone()));
         }
     }
 
@@ -192,7 +192,7 @@ impl Trie {
         prev: Option<char>,
         node: &TrieNode,
         match_length: usize,
-    ) -> Vec<Translation> {
+    ) -> Vec<ResolvedTranslation> {
         let mut matching_rules = Vec::new();
         let mut chars = input.chars();
 
@@ -290,7 +290,7 @@ impl Trie {
         matching_rules
     }
 
-    pub fn find_translations(&self, input: &str, prev: Option<char>) -> Vec<Translation> {
+    pub fn find_translations(&self, input: &str, prev: Option<char>) -> Vec<ResolvedTranslation> {
         let mut matching_rules = Vec::new();
 
         matching_rules.extend(self.find_translations_from_node(input, prev, &self.root, 0));
@@ -316,44 +316,44 @@ mod tests {
         let trie = Trie::new();
         assert_eq!(
             trie.find_translations("foo", None),
-            Vec::<Translation>::new()
+            Vec::<ResolvedTranslation>::new()
         );
     }
 
     #[test]
     fn find_translations() {
         let mut trie = Trie::new();
-        let empty = Vec::<Translation>::new();
+        let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let a = Translation::new(
+        let a = ResolvedTranslation::new(
             "a".into(),
             "A".into(),
             1,
             TranslationStage::Main,
             rule.clone(),
         );
-        let f = Translation::new(
+        let f = ResolvedTranslation::new(
             "f".into(),
             "F".into(),
             1,
             TranslationStage::Main,
             rule.clone(),
         );
-        let fo = Translation::new(
+        let fo = ResolvedTranslation::new(
             "fo".into(),
             "FO".into(),
             2,
             TranslationStage::Main,
             rule.clone(),
         );
-        let foo = Translation::new(
+        let foo = ResolvedTranslation::new(
             "foo".into(),
             "FOO".into(),
             3,
             TranslationStage::Main,
             rule.clone(),
         );
-        let foobar = Translation::new(
+        let foobar = ResolvedTranslation::new(
             "foobar".into(),
             "FOOBAR".into(),
             6,
@@ -439,9 +439,9 @@ mod tests {
     #[test]
     fn find_translations_with_boundaries() {
         let mut trie = Trie::new();
-        let empty = Vec::<Translation>::new();
+        let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let a = Translation::new(
+        let a = ResolvedTranslation::new(
             "a".into(),
             "A".into(),
             3,
@@ -465,9 +465,9 @@ mod tests {
     #[test]
     fn find_translations_with_negative_boundary_after() {
         let mut trie = Trie::new();
-        let empty = Vec::<Translation>::new();
+        let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let foo = Translation::new(
+        let foo = ResolvedTranslation::new(
             "foo".into(),
             "FOO".into(),
             5,
@@ -493,9 +493,9 @@ mod tests {
     #[test]
     fn find_translations_with_negative_boundary_before() {
         let mut trie = Trie::new();
-        let empty = Vec::<Translation>::new();
+        let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let foo = Translation::new(
+        let foo = ResolvedTranslation::new(
             "foo".into(),
             "FOO".into(),
             4,
@@ -521,9 +521,9 @@ mod tests {
     #[test]
     fn find_translations_with_negative_boundaries() {
         let mut trie = Trie::new();
-        let empty = Vec::<Translation>::new();
+        let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let foo = Translation::new(
+        let foo = ResolvedTranslation::new(
             "foo".into(),
             "FOO".into(),
             5,
@@ -550,9 +550,9 @@ mod tests {
     #[test]
     fn find_translations_with_word_num_boundary() {
         let mut trie = Trie::new();
-        let empty = Vec::<Translation>::new();
+        let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let foo = Translation::new(
+        let foo = ResolvedTranslation::new(
             "aaa".into(),
             "A".into(),
             5,
@@ -578,9 +578,9 @@ mod tests {
     #[test]
     fn find_translations_with_num_word_boundary() {
         let mut trie = Trie::new();
-        let empty = Vec::<Translation>::new();
+        let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let foo = Translation::new(
+        let foo = ResolvedTranslation::new(
             "st".into(),
             "S".into(),
             4,
@@ -608,7 +608,7 @@ mod tests {
     fn find_translations_case_insensitive() {
         let mut trie = Trie::new();
         let rule = fake_rule();
-        let foo = Translation::new(
+        let foo = ResolvedTranslation::new(
             "foo".into(),
             "FOO".into(),
             3,

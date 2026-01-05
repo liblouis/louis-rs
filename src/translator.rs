@@ -19,7 +19,7 @@ use crate::parser::{
 };
 
 use swap::SwapClasses;
-pub use translation::{Translation, TranslationStage};
+pub use translation::{ResolvedTranslation, TranslationStage};
 
 use crate::translator::transforms::TransformationTable;
 
@@ -114,7 +114,7 @@ pub struct TranslationTable {
     /// only to resolve implicit braille
     character_definitions: CharacterDefinition,
     character_classes: CharacterClasses,
-    /// A prefix tree that contains all the translation rules and their [`Translations`](Translation)
+    /// A prefix tree that contains all the translation rules and their [`ResolvedTranslations`](ResolvedTranslation)
     trie: Trie,
     match_patterns: MatchPatterns,
     /// All the nocross translation rules are stored in a separate trie
@@ -889,7 +889,7 @@ impl TranslationTable {
         Ok(builder.build(direction))
     }
 
-    fn update_offsets(&self, translations: Vec<Translation>, decrement: usize) -> Vec<Translation> {
+    fn update_offsets(&self, translations: Vec<ResolvedTranslation>, decrement: usize) -> Vec<ResolvedTranslation> {
         translations
             .into_iter()
             .map(|t| t.decrement_offset(decrement))
@@ -909,7 +909,7 @@ impl TranslationTable {
         &self,
         input: &str,
         prev: Option<char>,
-    ) -> (Vec<Translation>, Vec<Translation>) {
+    ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
         self.trie
             .find_translations(input, prev)
             .into_iter()
@@ -928,7 +928,7 @@ impl TranslationTable {
         }
     }
 
-    fn nocross_candidates(&self, input: &str, prev: Option<char>) -> Vec<Translation> {
+    fn nocross_candidates(&self, input: &str, prev: Option<char>) -> Vec<ResolvedTranslation> {
         self.nocross_trie
             .find_translations(input, prev)
             .into_iter()
@@ -936,7 +936,7 @@ impl TranslationTable {
             .collect()
     }
 
-    fn match_candidates(&self, input: &str) -> (Vec<Translation>, Vec<Translation>) {
+    fn match_candidates(&self, input: &str) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
         self.match_patterns
             .find_translations(input)
             .into_iter()
@@ -945,12 +945,12 @@ impl TranslationTable {
 
     fn partition_delayed_translations(
         &self,
-        delayed: Vec<Translation>,
-    ) -> (Vec<Translation>, Vec<Translation>) {
+        delayed: Vec<ResolvedTranslation>,
+    ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
         delayed.into_iter().partition(|t| t.offset() == 0)
     }
 
-    fn correct_transform(&self, input: &str) -> Option<Vec<Translation>> {
+    fn correct_transform(&self, input: &str) -> Option<Vec<ResolvedTranslation>> {
         if let Some(transform) = &self.correct_transform {
             Some(transform.trace(&input))
         } else {
@@ -958,7 +958,7 @@ impl TranslationTable {
         }
     }
 
-    fn pass2_transform(&self, input: &Vec<Translation>) -> Option<Vec<Translation>> {
+    fn pass2_transform(&self, input: &Vec<ResolvedTranslation>) -> Option<Vec<ResolvedTranslation>> {
         if let Some(transform) = &self.pass2_transform {
             let input: String = input.iter().map(|t| t.output()).collect();
             Some(transform.trace(&input))
@@ -967,7 +967,7 @@ impl TranslationTable {
         }
     }
 
-    fn pass3_transform(&self, input: &Vec<Translation>) -> Option<Vec<Translation>> {
+    fn pass3_transform(&self, input: &Vec<ResolvedTranslation>) -> Option<Vec<ResolvedTranslation>> {
         if let Some(transform) = &self.pass3_transform {
             let input: String = input.iter().map(|t| t.output()).collect();
             Some(transform.trace(&input))
@@ -975,7 +975,7 @@ impl TranslationTable {
             None
         }
     }
-    fn pass4_transform(&self, input: &Vec<Translation>) -> Option<Vec<Translation>> {
+    fn pass4_transform(&self, input: &Vec<ResolvedTranslation>) -> Option<Vec<ResolvedTranslation>> {
         if let Some(transform) = &self.pass4_transform {
             let input: String = input.iter().map(|t| t.output()).collect();
             Some(transform.trace(&input))
@@ -984,10 +984,10 @@ impl TranslationTable {
         }
     }
 
-    pub fn trace(&self, input: &str) -> Vec<Vec<Translation>> {
-        let mut translations: Vec<Translation> = Vec::new();
-        let mut aggregated: Vec<Vec<Translation>> = Vec::new();
-        let mut delayed_translations: Vec<Translation> = Vec::new();
+    pub fn trace(&self, input: &str) -> Vec<Vec<ResolvedTranslation>> {
+        let mut translations: Vec<ResolvedTranslation> = Vec::new();
+        let mut aggregated: Vec<Vec<ResolvedTranslation>> = Vec::new();
+        let mut delayed_translations: Vec<ResolvedTranslation> = Vec::new();
 
         // First do the pre translation pass
         let corrected = if let Some(translations) = self.correct_transform(input) {
@@ -1071,7 +1071,7 @@ impl TranslationTable {
                 // no translation rule found
                 if let Some(ref replacement) = self.undefined {
                     // there is a rule for undefined characters
-                    let translation = Translation::new(
+                    let translation = ResolvedTranslation::new(
                         &next_char.to_string(),
                         replacement,
                         1,
@@ -1082,7 +1082,7 @@ impl TranslationTable {
                     delayed_translations = self.update_offsets(delayed_translations, 1);
                 } else {
                     // otherwise handle it as a undefined character
-                    let translation = Translation::new(
+                    let translation = ResolvedTranslation::new(
                         &next_char.to_string(),
                         &self.handle_undefined_char(next_char),
                         1,

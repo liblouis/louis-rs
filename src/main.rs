@@ -14,7 +14,7 @@ use parser::TableError;
 
 use crate::parser::AnchoredRule;
 use crate::parser::Direction;
-use crate::translator::Translation;
+use crate::translator::ResolvedTranslation;
 use crate::translator::TranslationStage;
 use crate::translator::TranslationTable;
 
@@ -129,7 +129,7 @@ impl Trace {
     }
 }
 
-fn print_trace(all_translations: &Vec<Vec<Translation>>) {
+fn print_trace(all_translations: &Vec<Vec<ResolvedTranslation>>) {
     for translations in all_translations {
         let mut traces: Vec<Trace> = Vec::new();
         for (id, translation) in translations
