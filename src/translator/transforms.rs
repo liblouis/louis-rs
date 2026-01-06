@@ -55,9 +55,12 @@ impl TransformationTable {
     ) -> Result<Self, TranslationError> {
         let mut builder = TransformationTableBuilder::new();
 
-        for rule in rules {
+        for &rule in rules {
             match &rule.rule {
-                Rule::Correct { test, action, .. } => {
+                Rule::Correct { test, action, .. }
+                | Rule::Pass2 { test, action, .. }
+                | Rule::Pass3 { test, action, .. }
+                | Rule::Pass4 { test, action, .. } => {
                     if direction == Direction::Backward && !action.consumes_input() {
                         // Correct rules can map to an empty string, i.e. to drop some
                         // characters. Such rules cannot be used for backtranslation (you cannot
@@ -67,46 +70,7 @@ impl TransformationTable {
                     builder.patterns.insert(
                         test,
                         action,
-                        &rule,
-                        stage,
-                        character_classes,
-                        swap_classes,
-                    )?;
-                }
-                Rule::Pass2 { test, action, .. } => {
-                    if direction == Direction::Backward && !action.consumes_input() {
-                        continue;
-                    }
-                    builder.patterns.insert(
-                        test,
-                        action,
-                        &rule,
-                        stage,
-                        character_classes,
-                        swap_classes,
-                    )?;
-                }
-                Rule::Pass3 { test, action, .. } => {
-                    if direction == Direction::Backward && !action.consumes_input() {
-                        continue;
-                    }
-                    builder.patterns.insert(
-                        test,
-                        action,
-                        &rule,
-                        stage,
-                        character_classes,
-                        swap_classes,
-                    )?;
-                }
-                Rule::Pass4 { test, action, .. } => {
-                    if direction == Direction::Backward && !action.consumes_input() {
-                        continue;
-                    }
-                    builder.patterns.insert(
-                        test,
-                        action,
-                        &rule,
+                        rule,
                         stage,
                         character_classes,
                         swap_classes,
