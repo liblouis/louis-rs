@@ -201,7 +201,13 @@ mod tests {
         let mut indicator = builder.build();
         assert_eq!(
             indicator.next("Abc ".into()),
-            Some(ResolvedTranslation::new("", "⠇", 1, TranslationStage::Main, rule,))
+            Some(ResolvedTranslation::new(
+                "",
+                "⠇",
+                1,
+                TranslationStage::Main,
+                rule,
+            ))
         );
         assert_eq!(indicator.next("bc ".into()), None);
         assert_eq!(indicator.next("c ".into()), None);

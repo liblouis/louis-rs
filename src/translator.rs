@@ -889,7 +889,11 @@ impl TranslationTable {
         Ok(builder.build(direction))
     }
 
-    fn update_offsets(&self, translations: Vec<ResolvedTranslation>, decrement: usize) -> Vec<ResolvedTranslation> {
+    fn update_offsets(
+        &self,
+        translations: Vec<ResolvedTranslation>,
+        decrement: usize,
+    ) -> Vec<ResolvedTranslation> {
         translations
             .into_iter()
             .map(|t| t.decrement_offset(decrement))
@@ -936,7 +940,10 @@ impl TranslationTable {
             .collect()
     }
 
-    fn match_candidates(&self, input: &str) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
+    fn match_candidates(
+        &self,
+        input: &str,
+    ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
         self.match_patterns
             .find_translations(input)
             .into_iter()
@@ -958,7 +965,10 @@ impl TranslationTable {
         }
     }
 
-    fn pass2_transform(&self, input: &Vec<ResolvedTranslation>) -> Option<Vec<ResolvedTranslation>> {
+    fn pass2_transform(
+        &self,
+        input: &Vec<ResolvedTranslation>,
+    ) -> Option<Vec<ResolvedTranslation>> {
         if let Some(transform) = &self.pass2_transform {
             let input: String = input.iter().map(|t| t.output()).collect();
             Some(transform.trace(&input))
@@ -967,7 +977,10 @@ impl TranslationTable {
         }
     }
 
-    fn pass3_transform(&self, input: &Vec<ResolvedTranslation>) -> Option<Vec<ResolvedTranslation>> {
+    fn pass3_transform(
+        &self,
+        input: &Vec<ResolvedTranslation>,
+    ) -> Option<Vec<ResolvedTranslation>> {
         if let Some(transform) = &self.pass3_transform {
             let input: String = input.iter().map(|t| t.output()).collect();
             Some(transform.trace(&input))
@@ -975,7 +988,10 @@ impl TranslationTable {
             None
         }
     }
-    fn pass4_transform(&self, input: &Vec<ResolvedTranslation>) -> Option<Vec<ResolvedTranslation>> {
+    fn pass4_transform(
+        &self,
+        input: &Vec<ResolvedTranslation>,
+    ) -> Option<Vec<ResolvedTranslation>> {
         if let Some(transform) = &self.pass4_transform {
             let input: String = input.iter().map(|t| t.output()).collect();
             Some(transform.trace(&input))

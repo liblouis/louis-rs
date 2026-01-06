@@ -105,12 +105,11 @@ impl MatchPatterns {
         origin: &AnchoredRule,
         ctx: &CharacterClasses,
     ) {
-        let translation = ResolvedTranslation::new(chars, to, 0, TranslationStage::Main, origin.clone());
+        let translation =
+            ResolvedTranslation::new(chars, to, 0, TranslationStage::Main, origin.clone());
         let ast = AST::from_match_rule(pre, chars.to_string(), post, &ctx);
-        self.nfa.merge_accepting_fragment(
-            &ast,
-            super::translation::Translation::Resolved(translation),
-        );
+        self.nfa
+            .merge_accepting_fragment(&ast, super::translation::Translation::Resolved(translation));
     }
 
     pub fn find_translations(&self, input: &str) -> Vec<ResolvedTranslation> {

@@ -168,7 +168,13 @@ mod tests {
         assert_eq!(indicator.next("b12 a".into()), None);
         assert_eq!(
             indicator.next("12 a".into()),
-            Some(ResolvedTranslation::new("", "⠼", 1, TranslationStage::Main, rule))
+            Some(ResolvedTranslation::new(
+                "",
+                "⠼",
+                1,
+                TranslationStage::Main,
+                rule
+            ))
         );
         assert_eq!(indicator.next("2 a".into()), None);
         assert_eq!(indicator.next(" a".into()), None);

@@ -177,12 +177,22 @@ impl Trie {
                 // first rule wins, so nothing to insert
             } else {
                 // last rule wins
-                current_node.translation =
-                    Some(ResolvedTranslation::new(from, to, length, stage, origin.clone()));
+                current_node.translation = Some(ResolvedTranslation::new(
+                    from,
+                    to,
+                    length,
+                    stage,
+                    origin.clone(),
+                ));
             }
         } else {
-            current_node.translation =
-                Some(ResolvedTranslation::new(from, to, length, stage, origin.clone()));
+            current_node.translation = Some(ResolvedTranslation::new(
+                from,
+                to,
+                length,
+                stage,
+                origin.clone(),
+            ));
         }
     }
 

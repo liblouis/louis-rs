@@ -352,9 +352,11 @@ mod tests {
     #[test]
     fn translation_capture_capture() {
         let translation = UnresolvedTranslation::new(
-            &[TranslationTarget::Literal("<".to_string()),
-            TranslationTarget::Capture,
-            TranslationTarget::Literal(">".to_string())],
+            &[
+                TranslationTarget::Literal("<".to_string()),
+                TranslationTarget::Capture,
+                TranslationTarget::Literal(">".to_string()),
+            ],
             Precedence::Default,
             TranslationStage::Main,
             None,
@@ -370,9 +372,11 @@ mod tests {
         let swapper = Swapper::new(&[('x', "X"), ('y', "Y")]);
 
         let translation = UnresolvedTranslation::new(
-            &[TranslationTarget::Literal("<".to_string()),
-            TranslationTarget::Swap(swapper),
-            TranslationTarget::Literal(">".to_string())],
+            &[
+                TranslationTarget::Literal("<".to_string()),
+                TranslationTarget::Swap(swapper),
+                TranslationTarget::Literal(">".to_string()),
+            ],
             Precedence::Default,
             TranslationStage::Main,
             None,
@@ -386,9 +390,11 @@ mod tests {
     #[test]
     fn translation_capture_unicode() {
         let translation = UnresolvedTranslation::new(
-            &[TranslationTarget::Literal("<".to_string()),
-            TranslationTarget::Capture,
-            TranslationTarget::Literal(">".to_string())],
+            &[
+                TranslationTarget::Literal("<".to_string()),
+                TranslationTarget::Capture,
+                TranslationTarget::Literal(">".to_string()),
+            ],
             Precedence::Default,
             TranslationStage::Main,
             None,

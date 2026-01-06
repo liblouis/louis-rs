@@ -7,7 +7,7 @@
 //! the reachable states is an accepting state
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::translator::translation::{Translation, Resolve, ResolvedTranslation};
+use crate::translator::translation::{Resolve, ResolvedTranslation, Translation};
 
 /// Reference to a state in the [NFA] states vector
 type StateId = usize;
@@ -534,8 +534,8 @@ mod tests {
     impl From<&AST> for NFA {
         fn from(ast: &AST) -> Self {
             let mut nfa = NFA::new();
-            let body =
-                nfa.add_accepting_fragment(ast, Translation::Resolved(ResolvedTranslation::default()));
+            let body = nfa
+                .add_accepting_fragment(ast, Translation::Resolved(ResolvedTranslation::default()));
             nfa.start = body.start;
             nfa
         }
