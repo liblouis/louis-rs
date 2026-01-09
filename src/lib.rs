@@ -13,14 +13,14 @@ in any version.
 use std::path::Path;
 
 use louis::parser;
-use louis::translator::TranslationTable;
+use louis::translator::TranslationPipeline;
 use louis::Direction;
 
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
 let file = Path::new("en-us-g1.ctb");
 let rules = parser::table_expanded(file).expect("Failed to parse table");
-let table = TranslationTable::compile(rules, Direction::Forward)?;
-let braille = table.translate("hello world");
+let pipeline = TranslationPipeline::compile(&rules, Direction::Forward)?;
+let braille = pipeline.translate("hello world");
 assert_eq!(braille, "⠓⠑⠇⠇⠕⠀⠺⠕⠗⠇⠙");
 # Ok(())
 # }
@@ -32,4 +32,4 @@ pub mod parser;
 pub mod translator;
 
 pub use parser::Direction;
-pub use translator::TranslationTable;
+pub use translator::TranslationPipeline;

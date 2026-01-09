@@ -9,6 +9,7 @@ use crate::parser::{
 use crate::parser::{AnchoredRule, Attribute, CharacterClass, CharacterClasses};
 use crate::translator::nfa::{AST, NFA};
 use crate::translator::swap::SwapClasses;
+use crate::translator::table::TableContext;
 use crate::translator::translation::{
     Translation, TranslationTarget, TranslationTargets, UnresolvedTranslation,
 };
@@ -177,12 +178,11 @@ impl ContextPatterns {
         action: &Action,
         origin: &AnchoredRule,
         stage: TranslationStage,
-        character_classes: &CharacterClasses,
-        swap_classes: &SwapClasses,
+        ctx: &TableContext,
     ) -> Result<(), TranslationError> {
-        let translation = self.translation(action, origin, stage, swap_classes)?;
+        let translation = self.translation(action, origin, stage, ctx.swap_classes())?;
         let test = test.clone().add_implicit_replace();
-        let ast = AST::from_test(&test, &character_classes);
+        let ast = AST::from_test(&test, ctx.character_classes());
         self.nfa
             .merge_accepting_fragment(&ast, Translation::Unresolved(translation));
         Ok(())
@@ -516,20 +516,11 @@ mod tests {
     fn context_simple() {
         let tests = test::Parser::new("\"abc\"").tests().unwrap();
         let action = action::Parser::new("\"A_B_C\"").actions().unwrap();
-        let character_classes = CharacterClasses::default();
-        let swap_classes = SwapClasses::default();
         let origin = origin("context \"abc\" \"A_B_C\"");
         let stage = TranslationStage::Main;
         let mut patterns = ContextPatterns::new();
         patterns
-            .insert(
-                &tests,
-                &action,
-                &origin,
-                stage,
-                &character_classes,
-                &swap_classes,
-            )
+            .insert(&tests, &action, &origin, stage, &TableContext::default())
             .unwrap();
         let translation =
             ResolvedTranslation::new("abc", "A_B_C", 3, TranslationStage::Main, origin.clone());
@@ -541,20 +532,11 @@ mod tests {
     fn context_capture() {
         let tests = test::Parser::new(r#"["abc"]"#).tests().unwrap();
         let action = action::Parser::new(r#""<"*">""#).actions().unwrap();
-        let character_classes = CharacterClasses::default();
-        let swap_classes = SwapClasses::default();
         let origin = origin(r#"context "abc" "<"*">""#);
         let stage = TranslationStage::Main;
         let mut patterns = ContextPatterns::new();
         patterns
-            .insert(
-                &tests,
-                &action,
-                &origin,
-                stage,
-                &character_classes,
-                &swap_classes,
-            )
+            .insert(&tests, &action, &origin, stage, &TableContext::default())
             .unwrap();
         let translation =
             ResolvedTranslation::new("abc", "<abc>", 3, TranslationStage::Main, origin.clone());
@@ -566,21 +548,15 @@ mod tests {
     fn context_capture_advanced() {
         let tests = test::Parser::new(r#"$p3["abc"]$p3"#).tests().unwrap();
         let action = action::Parser::new(r#""<"*">""#).actions().unwrap();
-        let character_classes =
-            CharacterClasses::new(&[(CharacterClass::Punctuation, &['{', '}'])]);
-        let swap_classes = SwapClasses::default();
+        let context = TableContext::new(
+            CharacterClasses::new(&[(CharacterClass::Punctuation, &['{', '}'])]),
+            SwapClasses::default(),
+        );
         let origin = origin(r#"context $p3"abc"$p3 "<"*">""#);
         let stage = TranslationStage::Main;
         let mut patterns = ContextPatterns::new();
         patterns
-            .insert(
-                &tests,
-                &action,
-                &origin,
-                stage,
-                &character_classes,
-                &swap_classes,
-            )
+            .insert(&tests, &action, &origin, stage, &context)
             .unwrap();
         let translation =
             ResolvedTranslation::new("abc", "<abc>", 9, TranslationStage::Main, origin.clone())
@@ -593,21 +569,15 @@ mod tests {
     fn context_swap() {
         let tests = test::Parser::new(r#"$p3["abc"]$p3"#).tests().unwrap();
         let action = action::Parser::new(r#""<"%foo">""#).actions().unwrap();
-        let character_classes =
-            CharacterClasses::new(&[(CharacterClass::Punctuation, &['{', '}'])]);
-        let swap_classes = SwapClasses::new(&[("foo", &[('a', "A"), ('b', "B"), ('c', "C")])]);
+        let context = TableContext::new(
+            CharacterClasses::new(&[(CharacterClass::Punctuation, &['{', '}'])]),
+            SwapClasses::new(&[("foo", &[('a', "A"), ('b', "B"), ('c', "C")])]),
+        );
         let origin = origin(r#"context $p3"abc"$p3 "<"%foo">""#);
         let stage = TranslationStage::Main;
         let mut patterns = ContextPatterns::new();
         patterns
-            .insert(
-                &tests,
-                &action,
-                &origin,
-                stage,
-                &character_classes,
-                &swap_classes,
-            )
+            .insert(&tests, &action, &origin, stage, &context)
             .unwrap();
         let translation =
             ResolvedTranslation::new("abc", "<ABC>", 9, TranslationStage::Main, origin.clone())

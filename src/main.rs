@@ -15,8 +15,8 @@ use parser::TableError;
 use crate::parser::AnchoredRule;
 use crate::parser::Direction;
 use crate::translator::ResolvedTranslation;
+use crate::translator::TranslationPipeline;
 use crate::translator::TranslationStage;
-use crate::translator::TranslationTable;
 
 mod metadata;
 mod test;
@@ -158,7 +158,7 @@ fn trace(table: &Path, direction: Direction, input: &str) {
     let rules = parser::table_expanded(table);
     match rules {
         Ok(rules) => {
-            match TranslationTable::compile(rules, direction) {
+            match TranslationPipeline::compile(&rules, direction) {
                 Ok(table) => {
                     println!("{}", table.translate(input));
                     print_trace(&table.trace(input));
@@ -176,7 +176,7 @@ fn translate(table: &Path, direction: Direction, input: &str) {
     let rules = parser::table_expanded(table);
     match rules {
         Ok(rules) => {
-            match TranslationTable::compile(rules, direction) {
+            match TranslationPipeline::compile(&rules, direction) {
                 Ok(table) => println!("{}", table.translate(input)),
                 Err(e) => eprintln!("Could not compile table: {:?}", e),
             };
@@ -190,7 +190,7 @@ fn translate(table: &Path, direction: Direction, input: &str) {
 // we pass a closure to the repl function so that we can use it for
 // both the parsing repl and the translation repl. In the case of the
 // parsing repl it is an empty closure but the translation repl closes
-// over the TranslationTable.
+// over the TranslationPipeline.
 fn repl(handler: Box<dyn Fn(String)>) {
     print!("> ");
     io::stdout().flush().unwrap();
@@ -361,7 +361,7 @@ fn main() {
             None => {
                 let rules = parser::table_expanded(&table);
                 match rules {
-                    Ok(rules) => match TranslationTable::compile(rules, direction) {
+                    Ok(rules) => match TranslationPipeline::compile(&rules, direction) {
                         Ok(table) => repl(Box::new(move |input| {
                             println!("{}", table.translate(&input));
                             if tracing {

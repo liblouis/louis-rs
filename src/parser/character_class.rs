@@ -49,7 +49,7 @@ impl From<&str> for CharacterClass {
 }
 
 /// A mapping between a character class and the associated set of characters
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct CharacterClasses(HashMap<CharacterClass, HashSet<char>>);
 
 impl CharacterClasses {

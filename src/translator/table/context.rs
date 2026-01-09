@@ -1,10 +1,9 @@
 use std::collections::HashSet;
 
-use crate::parser::CharacterClasses;
 use crate::parser::multipass::ConsumesInput;
 use crate::translator::ResolvedTranslation;
 use crate::translator::context_pattern::ContextPatterns;
-use crate::translator::swap::SwapClasses;
+use crate::translator::table::TableContext;
 use crate::translator::translation::TranslationSubset;
 use crate::{
     Direction,
@@ -13,27 +12,27 @@ use crate::{
 };
 
 #[derive(Debug, Default)]
-pub struct TransformationTable {
+pub struct ContextTable {
     patterns: ContextPatterns,
     stage: TranslationStage,
     direction: Direction,
 }
 
-/// A builder for [`TransformationTable`]
+/// A builder for [`ContextTable`]
 #[derive(Debug)]
-struct TransformationTableBuilder {
+struct ContextTableBuilder {
     patterns: ContextPatterns,
 }
 
-impl TransformationTableBuilder {
+impl ContextTableBuilder {
     fn new() -> Self {
         Self {
             patterns: ContextPatterns::new(),
         }
     }
 
-    fn build(self, direction: Direction, stage: TranslationStage) -> TransformationTable {
-        TransformationTable {
+    fn build(self, direction: Direction, stage: TranslationStage) -> ContextTable {
+        ContextTable {
             direction,
             stage: stage,
             patterns: self.patterns,
@@ -41,21 +40,20 @@ impl TransformationTableBuilder {
     }
 }
 
-impl TransformationTable {
+impl ContextTable {
     pub fn is_empty(&self) -> bool {
         self.patterns.is_empty()
     }
 
     pub fn compile(
-        rules: &[&AnchoredRule],
+        rules: &[AnchoredRule],
         direction: Direction,
         stage: TranslationStage,
-        character_classes: &CharacterClasses,
-        swap_classes: &SwapClasses,
+        ctx: &TableContext,
     ) -> Result<Self, TranslationError> {
-        let mut builder = TransformationTableBuilder::new();
+        let mut builder = ContextTableBuilder::new();
 
-        for &rule in rules {
+        for rule in rules {
             match &rule.rule {
                 Rule::Correct { test, action, .. }
                 | Rule::Pass2 { test, action, .. }
@@ -67,14 +65,7 @@ impl TransformationTable {
                         // translate the empty string to something)
                         continue;
                     }
-                    builder.patterns.insert(
-                        test,
-                        action,
-                        rule,
-                        stage,
-                        character_classes,
-                        swap_classes,
-                    )?;
+                    builder.patterns.insert(test, action, rule, stage, ctx)?;
                 }
                 _ => (),
             }
@@ -155,73 +146,48 @@ mod tests {
 
     #[test]
     fn correct() {
-        let rules = [&parse_rule("correct \"corect\" \"correct\"")];
-        let character_classes = CharacterClasses::default();
-        let swap_classes = SwapClasses::default();
-        let table = TransformationTable::compile(
-            &rules,
-            Direction::Forward,
-            TranslationStage::Pre,
-            &character_classes,
-            &swap_classes,
-        )
-        .unwrap();
-        assert_eq!(table.translate("foobar"), "foobar");
-        assert_eq!(table.translate("corect"), "correct");
-        assert_eq!(table.translate("🐂"), "🐂");
+        let rules = [parse_rule("correct \"corect\" \"correct\"")];
+        let ctx = TableContext::default();
+        let transform =
+            ContextTable::compile(&rules, Direction::Forward, TranslationStage::Pre, &ctx).unwrap();
+        assert_eq!(transform.translate("foobar"), "foobar");
+        assert_eq!(transform.translate("corect"), "correct");
+        assert_eq!(transform.translate("🐂"), "🐂");
     }
 
     #[test]
     fn pass2() {
-        let rules = [&parse_rule("pass2 @123 @12")];
-        let character_classes = CharacterClasses::default();
-        let swap_classes = SwapClasses::default();
-        let table = TransformationTable::compile(
-            &rules,
-            Direction::Forward,
-            TranslationStage::Post1,
-            &character_classes,
-            &swap_classes,
-        )
-        .unwrap();
-        assert_eq!(table.translate("⠇"), "⠃");
-        assert_eq!(table.translate("⠙"), "⠙");
-        assert_eq!(table.translate("🐂"), "🐂");
+        let rules = [parse_rule("pass2 @123 @12")];
+        let ctx = TableContext::default();
+        let transform =
+            ContextTable::compile(&rules, Direction::Forward, TranslationStage::Post1, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("⠇"), "⠃");
+        assert_eq!(transform.translate("⠙"), "⠙");
+        assert_eq!(transform.translate("🐂"), "🐂");
     }
 
     #[test]
     fn pass3() {
-        let rules = [&parse_rule("pass3 @123 @12")];
-        let character_classes = CharacterClasses::default();
-        let swap_classes = SwapClasses::default();
-        let table = TransformationTable::compile(
-            &rules,
-            Direction::Forward,
-            TranslationStage::Post2,
-            &character_classes,
-            &swap_classes,
-        )
-        .unwrap();
-        assert_eq!(table.translate("⠇"), "⠃");
-        assert_eq!(table.translate("⠙"), "⠙");
-        assert_eq!(table.translate("🐂"), "🐂");
+        let rules = [parse_rule("pass3 @123 @12")];
+        let ctx = TableContext::default();
+        let transform =
+            ContextTable::compile(&rules, Direction::Forward, TranslationStage::Post2, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("⠇"), "⠃");
+        assert_eq!(transform.translate("⠙"), "⠙");
+        assert_eq!(transform.translate("🐂"), "🐂");
     }
 
     #[test]
     fn pass4() {
-        let rules = [&parse_rule("pass4 @123 @12")];
-        let character_classes = CharacterClasses::default();
-        let swap_classes = SwapClasses::default();
-        let table = TransformationTable::compile(
-            &rules,
-            Direction::Forward,
-            TranslationStage::Post3,
-            &character_classes,
-            &swap_classes,
-        )
-        .unwrap();
-        assert_eq!(table.translate("⠇"), "⠃");
-        assert_eq!(table.translate("⠙"), "⠙");
-        assert_eq!(table.translate("🐂"), "🐂");
+        let rules = [parse_rule("pass4 @123 @12")];
+        let ctx = TableContext::default();
+        let transform =
+            ContextTable::compile(&rules, Direction::Forward, TranslationStage::Post3, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("⠇"), "⠃");
+        assert_eq!(transform.translate("⠙"), "⠙");
+        assert_eq!(transform.translate("🐂"), "🐂");
     }
 }

@@ -6,7 +6,7 @@ use enumset::{EnumSet, EnumSetType};
 
 use crate::{
     parser::{self, Direction, TableError},
-    translator::{self, DisplayTable, TranslationTable},
+    translator::{self, DisplayTable, TranslationPipeline},
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -115,14 +115,14 @@ impl<'a> TestMatrix<'a> {
             }
             None => vec![],
         };
-        Ok(DisplayTable::compile(display_rules, direction))
+        Ok(DisplayTable::compile(&display_rules, direction))
     }
 
     fn translation_table(
         &self,
         table: &Table,
         direction: Direction,
-    ) -> Result<TranslationTable, TestError> {
+    ) -> Result<TranslationPipeline, TestError> {
         let rules = match table {
             Table::Simple(path) => parser::table_expanded(path.as_path())?,
             Table::List(paths) => {
@@ -138,7 +138,7 @@ impl<'a> TestMatrix<'a> {
             }
             Table::Query(..) => return Err(TestError::NotImplemented),
         };
-        Ok(TranslationTable::compile(rules, direction)?)
+        Ok(TranslationPipeline::compile(&rules, direction)?)
     }
 
     pub fn check(&self) -> Result<Vec<TestResult>, TestError> {
@@ -275,7 +275,7 @@ pub struct Test {
 impl Test {
     fn check(
         &self,
-        table: &TranslationTable,
+        table: &TranslationPipeline,
         display_table: &DisplayTable,
         direction: Direction,
     ) -> TestResult {
