@@ -20,12 +20,12 @@ pub enum Regexp {
 }
 
 impl Regexp {
-    pub fn compile(regexp: &Regexp) -> Vm {
+    pub fn compile(regexp: &Regexp) -> CompiledRegexp {
         let mut instructions = Vec::new();
 	let mut character_classes = Vec::new();
 	Regexp::emit(regexp, &mut instructions, &mut character_classes);
         instructions.push(Instruction::Match);
-        Vm {instructions, character_classes}
+        CompiledRegexp {instructions, character_classes}
     }
 
     fn emit(regexp: &Regexp, instructions: &mut Vec<Instruction>, character_classes: &mut Vec<HashSet<char>>) {
@@ -115,14 +115,14 @@ pub enum Instruction {
 }
 
 #[derive(Debug, Clone)]
-pub struct Vm {
+pub struct CompiledRegexp {
     instructions: Vec<Instruction>,
     // the HashSet for character classes are stored separately from the instructions to improve
     // cache locality
     character_classes: Vec<HashSet<char>>,
 }
 
-impl Vm {
+impl CompiledRegexp {
     fn is_match_from(&self, pc: usize, input: &str) -> bool {
         if pc >= self.instructions.len() {
             return false;
