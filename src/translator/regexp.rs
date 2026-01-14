@@ -101,14 +101,17 @@ impl Regexp {
     }
 }
 
+type InstructionIndex = usize;
+type CharacterClassIndex = usize;
+
 #[derive(Debug, Clone)]
 pub enum Instruction {
     Char(char),
-    Class(usize),
+    Class(CharacterClassIndex),
     Any,
     Match,
-    Jump(usize),
-    Split(usize, usize),
+    Jump(InstructionIndex),
+    Split(InstructionIndex, InstructionIndex),
 }
 
 #[derive(Debug, Clone)]
