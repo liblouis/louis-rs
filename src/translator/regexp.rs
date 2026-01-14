@@ -20,81 +20,88 @@ pub enum Regexp {
 }
 
 impl Regexp {
-    pub fn compile(regexp: &Regexp) -> CompiledRegexp {
+    pub fn compile(&self) -> CompiledRegexp {
         let mut instructions = Vec::new();
-	let mut character_classes = Vec::new();
-	Regexp::emit(regexp, &mut instructions, &mut character_classes);
+        let mut character_classes = Vec::new();
+        self.emit(&mut instructions, &mut character_classes);
         instructions.push(Instruction::Match);
-        CompiledRegexp {instructions, character_classes}
+        CompiledRegexp {
+            instructions,
+            character_classes,
+        }
     }
 
-    fn emit(regexp: &Regexp, instructions: &mut Vec<Instruction>, character_classes: &mut Vec<HashSet<char>>) {
-        match regexp {
+    fn emit(
+        &self,
+        instructions: &mut Vec<Instruction>,
+        character_classes: &mut Vec<HashSet<char>>,
+    ) {
+        match self {
             Regexp::Literal(c) => instructions.push(Instruction::Char(*c)),
             Regexp::Concat(left, right) => {
-                Regexp::emit(left, instructions, character_classes);
-                Regexp::emit(right, instructions, character_classes);
+                left.emit(instructions, character_classes);
+                right.emit(instructions, character_classes);
             }
             Regexp::Either(left, right) => {
                 let p1 = instructions.len();
                 instructions.push(Instruction::Split(p1 + 1, 0));
-                Regexp::emit(left, instructions, character_classes);
+                left.emit(instructions, character_classes);
                 let p2 = instructions.len();
                 instructions.push(Instruction::Jump(0));
                 instructions[p1] = Instruction::Split(p1 + 1, p2 + 1);
-                Regexp::emit(right, instructions, character_classes);
+                right.emit(instructions, character_classes);
                 instructions[p2] = Instruction::Jump(instructions.len());
             }
             Regexp::Optional(regexp) => {
                 let pos = instructions.len();
                 instructions.push(Instruction::Split(pos + 1, 0));
-                Regexp::emit(regexp, instructions, character_classes);
+                regexp.emit(instructions, character_classes);
                 instructions[pos] = Instruction::Split(pos + 1, instructions.len());
             }
             Regexp::ZeroOrMore(regexp) => {
                 let pos = instructions.len();
                 instructions.push(Instruction::Split(pos + 1, 0));
-                Regexp::emit(regexp, instructions, character_classes);
+                regexp.emit(instructions, character_classes);
                 instructions.push(Instruction::Jump(pos));
                 instructions[pos] = Instruction::Split(pos + 1, instructions.len());
             }
             Regexp::OneOrMore(regexp) => {
                 let pos = instructions.len();
-                Regexp::emit(regexp, instructions, character_classes);
+                regexp.emit(instructions, character_classes);
                 instructions.push(Instruction::Split(pos, instructions.len() + 1));
             }
             Regexp::Any => instructions.push(Instruction::Any),
-	    Regexp::CharacterClass(characters) => {
-		character_classes.push(characters.clone());
+            Regexp::CharacterClass(characters) => {
+                character_classes.push(characters.clone());
                 instructions.push(Instruction::Class(character_classes.len() - 1));
-	    }
+            }
             Regexp::RepeatExactly(n, regexp) => {
-		for i in 0..*n {
-                    Regexp::emit(regexp, instructions, character_classes);
-		}
-	    }
+                for i in 0..*n {
+                    regexp.emit(instructions, character_classes);
+                }
+            }
             Regexp::RepeatAtLeast(min, regexp) => {
-		for i in 0..*min {
-                    Regexp::emit(regexp, instructions, character_classes);
-		}
+                for i in 0..*min {
+                    regexp.emit(instructions, character_classes);
+                }
                 let pos = instructions.len();
                 instructions.push(Instruction::Split(pos + 1, 0));
-                Regexp::emit(regexp, instructions, character_classes);
+                regexp.emit(instructions, character_classes);
                 instructions.push(Instruction::Jump(pos));
                 instructions[pos] = Instruction::Split(pos + 1, instructions.len());
-	    }
+            }
             Regexp::RepeatAtLeastAtMost(min, max, regexp) => {
-		for i in 0..*min {
-                    Regexp::emit(regexp, instructions, character_classes);
-		}
+                for i in 0..*min {
+                    regexp.emit(instructions, character_classes);
+                }
                 let pos = instructions.len();
                 instructions.push(Instruction::Split(pos + 1, 0));
-		for i in *min..*max {
-		    Regexp::emit(regexp, instructions, character_classes);
-		}
+                for i in *min..*max {
+                    regexp.emit(instructions, character_classes);
+                }
                 instructions.push(Instruction::Jump(pos));
                 instructions[pos] = Instruction::Split(pos + 1, instructions.len());
-	    }
+            }
             Regexp::Capture(regexp) => todo!(),
             Regexp::Empty => (),
         }
@@ -139,7 +146,7 @@ impl CompiledRegexp {
                     false
                 }
             }
-	    Instruction::Class(index) => {
+            Instruction::Class(index) => {
                 let mut chars = input.chars().peekable();
                 if let Some(actual) = chars.peek()
                     && self.character_classes[index].contains(actual)
@@ -148,7 +155,7 @@ impl CompiledRegexp {
                 } else {
                     false
                 }
-	    }
+            }
             Instruction::Any => {
                 let mut chars = input.chars();
                 if let Some(actual) = chars.next() {
@@ -180,14 +187,18 @@ mod tests {
 
     #[test]
     fn character() {
-        let re = Regexp::compile(&Regexp::Literal('a'));
+        let re = Regexp::Literal('a').compile();
         assert!(re.is_match("a"));
         assert!(!re.is_match("b"));
     }
 
     #[test]
     fn alteration() {
-        let re = Regexp::compile(&Regexp::Either(Box::new(Regexp::Literal('a')), Box::new(Regexp::Literal('b'))));
+        let re = Regexp::Either(
+            Box::new(Regexp::Literal('a')),
+            Box::new(Regexp::Literal('b')),
+        )
+        .compile();
         assert!(re.is_match("a"));
         assert!(re.is_match("b"));
         assert!(re.is_match("ab"));
@@ -196,7 +207,11 @@ mod tests {
 
     #[test]
     fn concatenation() {
-        let re = Regexp::compile(&Regexp::Concat(Box::new(Regexp::Literal('a')), Box::new(Regexp::Literal('b'))));
+        let re = Regexp::Concat(
+            Box::new(Regexp::Literal('a')),
+            Box::new(Regexp::Literal('b')),
+        )
+        .compile();
         assert!(re.is_match("ab"));
         assert!(re.is_match("abc"));
         assert!(!re.is_match("a"));
@@ -207,8 +222,7 @@ mod tests {
 
     #[test]
     fn kleene() {
-        let re = Regexp::compile(&Regexp::ZeroOrMore(Box::new(Regexp::Literal('a'))));
-	dbg!(&re);
+        let re = Regexp::ZeroOrMore(Box::new(Regexp::Literal('a'))).compile();
         assert!(re.is_match(""));
         assert!(re.is_match("a"));
         assert!(re.is_match("aa"));
@@ -222,7 +236,7 @@ mod tests {
 
     #[test]
     fn one_or_more() {
-        let re = Regexp::compile(&Regexp::OneOrMore(Box::new(Regexp::Literal('a'))));
+        let re = Regexp::OneOrMore(Box::new(Regexp::Literal('a'))).compile();
         assert!(!re.is_match(""));
         assert!(re.is_match("a"));
         assert!(re.is_match("aa"));
@@ -236,16 +250,20 @@ mod tests {
 
     #[test]
     fn any() {
-        let re = Regexp::compile(&Regexp::Any);
+        let re = Regexp::Any.compile();
         assert!(re.is_match("abb"));
     }
 
     #[test]
     fn optional() {
-        let re = Regexp::compile(
-	    &Regexp::Concat(
-		Box::new(Regexp::Optional(Box::new(Regexp::Concat(Box::new(Regexp::Literal('a')), Box::new(Regexp::Any))))),
-		Box::new(Regexp::Literal('b'))));
+        let re = Regexp::Concat(
+            Box::new(Regexp::Optional(Box::new(Regexp::Concat(
+                Box::new(Regexp::Literal('a')),
+                Box::new(Regexp::Any),
+            )))),
+            Box::new(Regexp::Literal('b')),
+        )
+        .compile();
         assert!(re.is_match("acb"));
         assert!(re.is_match("axb"));
         assert!(re.is_match("b"));
@@ -255,7 +273,10 @@ mod tests {
 
     #[test]
     fn character_class() {
-        let re = Regexp::compile(&Regexp::OneOrMore(Box::new(Regexp::CharacterClass(HashSet::from(['a', 'b', 'c'])))));
+        let re = Regexp::OneOrMore(Box::new(Regexp::CharacterClass(HashSet::from([
+            'a', 'b', 'c',
+        ]))))
+        .compile();
         assert!(re.is_match("acb"));
         assert!(re.is_match("axb"));
         assert!(re.is_match("b"));
@@ -267,7 +288,7 @@ mod tests {
     #[test]
     fn repeat_exactly() {
         // exactly one 'a'
-        let re = Regexp::compile(&Regexp::RepeatExactly(1, Box::new(Regexp::Literal('a'))));
+        let re = Regexp::RepeatExactly(1, Box::new(Regexp::Literal('a'))).compile();
         assert!(re.is_match("a"));
         assert!(!re.is_match("c"));
         assert!(!re.is_match("bbb"));
@@ -276,7 +297,7 @@ mod tests {
         assert!(re.is_match("aaaa"));
 
         // exactly two 'a'
-        let re = Regexp::compile(&Regexp::RepeatExactly(2, Box::new(Regexp::Literal('a'))));
+        let re = Regexp::RepeatExactly(2, Box::new(Regexp::Literal('a'))).compile();
         assert!(re.is_match("aa"));
         assert!(!re.is_match("c"));
         assert!(!re.is_match("bbb"));
@@ -286,7 +307,7 @@ mod tests {
         assert!(re.is_match("aaaa"));
 
         // exactly three 'a'
-        let re = Regexp::compile(&Regexp::RepeatExactly(3, Box::new(Regexp::Literal('a'))));
+        let re = Regexp::RepeatExactly(3, Box::new(Regexp::Literal('a'))).compile();
         assert!(re.is_match("aaa"));
         assert!(!re.is_match("c"));
         assert!(!re.is_match("bbb"));
@@ -298,7 +319,7 @@ mod tests {
     #[test]
     fn repeat_at_least() {
         // at least one 'a'
-        let re = Regexp::compile(&&Regexp::RepeatAtLeast(1, Box::new(Regexp::Literal('a'))));
+        let re = Regexp::RepeatAtLeast(1, Box::new(Regexp::Literal('a'))).compile();
         assert!(re.is_match("a"));
         assert!(re.is_match("aa"));
         assert!(re.is_match("aaa"));
@@ -309,7 +330,7 @@ mod tests {
         assert!(!re.is_match(""));
 
         // at least two 'a'
-        let re = Regexp::compile(&&Regexp::RepeatAtLeast(2, Box::new(Regexp::Literal('a'))));
+        let re = Regexp::RepeatAtLeast(2, Box::new(Regexp::Literal('a'))).compile();
         assert!(re.is_match("aa"));
         assert!(re.is_match("aaa"));
         assert!(re.is_match("aaaa"));
@@ -321,7 +342,7 @@ mod tests {
         assert!(!re.is_match("a"));
 
         // at least three 'a'
-        let re = Regexp::compile(&&Regexp::RepeatAtLeast(3, Box::new(Regexp::Literal('a'))));
+        let re = Regexp::RepeatAtLeast(3, Box::new(Regexp::Literal('a'))).compile();
         assert!(re.is_match("aaa"));
         assert!(re.is_match("aaaa"));
         assert!(re.is_match("aaaaa"));
@@ -336,7 +357,7 @@ mod tests {
     #[test]
     fn repeat_at_least_at_most() {
         // at least three and at most five 'a's
-        let re = Regexp::compile(&&&Regexp::RepeatAtLeastAtMost(3, 5, Box::new(Regexp::Literal('a'))));
+        let re = Regexp::RepeatAtLeastAtMost(3, 5, Box::new(Regexp::Literal('a'))).compile();
         assert!(!re.is_match("a"));
         assert!(!re.is_match("aa"));
         assert!(re.is_match("aaa"));
