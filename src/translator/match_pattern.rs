@@ -4,30 +4,33 @@ use std::collections::HashSet;
 
 use crate::parser::{AnchoredRule, Attribute, CharacterClasses, Pattern, Patterns};
 
-use crate::translator::nfa::{AST, NFA};
+use crate::translator::regexp::{CompiledRegexp, Regexp};
+use crate::translator::translation::Translation;
 use crate::translator::{ResolvedTranslation, TranslationStage};
 
-impl AST {
+impl Regexp {
     fn from_pattern(item: &Pattern, ctx: &CharacterClasses) -> Self {
         match item {
-            Pattern::Empty => AST::NotImplemented,
-            Pattern::Characters(s) => AST::String(s.to_string()),
-            Pattern::Boundary => AST::NotImplemented,
-            Pattern::Any => AST::Any,
-            Pattern::Set(hash_set) => AST::Set(hash_set.clone()),
-            Pattern::Attributes(hash_set) => AST::from_attributes(hash_set, ctx),
-            Pattern::Group(_vec) => AST::NotImplemented,
-            Pattern::Negate(_pattern) => AST::NotImplemented,
-            Pattern::Optional(pattern) => AST::Optional(Box::new(AST::from_pattern(pattern, ctx))),
+            Pattern::Empty => Regexp::Empty,
+            Pattern::Characters(s) => Regexp::String(s.to_string()),
+            Pattern::Boundary => Regexp::NotImplemented,
+            Pattern::Any => Regexp::Any,
+            Pattern::Set(hash_set) => Regexp::CharacterClass(hash_set.clone()),
+            Pattern::Attributes(hash_set) => Regexp::from_attributes(hash_set, ctx),
+            Pattern::Group(_vec) => Regexp::NotImplemented,
+            Pattern::Negate(_pattern) => Regexp::NotImplemented,
+            Pattern::Optional(pattern) => {
+                Regexp::Optional(Box::new(Regexp::from_pattern(pattern, ctx)))
+            }
             Pattern::ZeroOrMore(pattern) => {
-                AST::ZeroOrMore(Box::new(AST::from_pattern(pattern, ctx)))
+                Regexp::ZeroOrMore(Box::new(Regexp::from_pattern(pattern, ctx)))
             }
             Pattern::OneOrMore(pattern) => {
-                AST::OneOrMore(Box::new(AST::from_pattern(pattern, ctx)))
+                Regexp::OneOrMore(Box::new(Regexp::from_pattern(pattern, ctx)))
             }
-            Pattern::Either(left, right) => AST::Either(
-                Box::new(AST::from_pattern(left, ctx)),
-                Box::new(AST::from_pattern(right, ctx)),
+            Pattern::Either(left, right) => Regexp::Either(
+                Box::new(Regexp::from_pattern(left, ctx)),
+                Box::new(Regexp::from_pattern(right, ctx)),
             ),
         }
     }
@@ -35,14 +38,14 @@ impl AST {
     fn from_patterns(patterns: &Patterns, ctx: &CharacterClasses) -> Self {
         match patterns.len() {
             0 => todo!(),
-            1 => AST::from_pattern(&patterns[0], ctx),
+            1 => Regexp::from_pattern(&patterns[0], ctx),
             _ => {
-                let mut ast = AST::from_pattern(&patterns[0], ctx);
+                let mut regexp = Regexp::from_pattern(&patterns[0], ctx);
                 for pattern in patterns.iter().skip(1) {
-                    let other = AST::from_pattern(pattern, ctx);
-                    ast = AST::Concat(Box::new(ast), Box::new(other));
+                    let other = Regexp::from_pattern(pattern, ctx);
+                    regexp = Regexp::Concat(Box::new(regexp), Box::new(other));
                 }
-                ast
+                regexp
             }
         }
     }
@@ -61,39 +64,35 @@ impl AST {
                 Attribute::Any => (), // TODO
             }
         }
-        AST::Set(characters)
+        Regexp::CharacterClass(characters)
     }
 
-    /// Combine the pre and post patterns with the match characters into one big regexp AST by joining them with concat
+    /// Combine the pre and post patterns with the match characters into one big Regexp by joining
+    /// them with concat
     fn from_match_rule(
         pre: &Patterns,
         chars: String,
         post: &Patterns,
         ctx: &CharacterClasses,
     ) -> Self {
-        AST::Concat(
-            Box::new(AST::Concat(
-                Box::new(AST::Concat(
-                    Box::new(AST::from_patterns(pre, ctx)),
-                    Box::new(AST::Offset),
-                )),
-                Box::new(AST::String(chars)),
+        Regexp::Concat(
+            Box::new(Regexp::Concat(
+                Box::new(Regexp::from_patterns(pre, ctx)),
+                Box::new(Regexp::Capture(Box::new(Regexp::String(chars)))),
             )),
-            Box::new(AST::from_patterns(post, ctx)),
+            Box::new(Regexp::from_patterns(post, ctx)),
         )
     }
 }
 
 #[derive(Debug)]
-pub struct MatchPatterns {
-    nfa: NFA,
+pub struct MatchPatternsBuilder {
+    pairs: Vec<(Regexp, Translation)>,
 }
 
-impl MatchPatterns {
+impl MatchPatternsBuilder {
     pub fn new() -> Self {
-        Self {
-            nfa: NFA::default(),
-        }
+        Self { pairs: Vec::new() }
     }
 
     pub fn insert(
@@ -105,15 +104,32 @@ impl MatchPatterns {
         origin: &AnchoredRule,
         ctx: &CharacterClasses,
     ) {
-        let translation =
-            ResolvedTranslation::new(chars, to, 0, TranslationStage::Main, origin.clone());
-        let ast = AST::from_match_rule(pre, chars.to_string(), post, &ctx);
-        self.nfa
-            .merge_accepting_fragment(&ast, super::translation::Translation::Resolved(translation));
+        let translation = Translation::Resolved(ResolvedTranslation::new(
+            chars,
+            to,
+            0,
+            TranslationStage::Main,
+            origin.clone(),
+        ));
+        let re = Regexp::from_match_rule(pre, chars.to_string(), post, &ctx);
+        self.pairs.push((re, translation));
     }
 
-    pub fn find_translations(&self, input: &str) -> Vec<ResolvedTranslation> {
-        self.nfa.find_translations(input)
+    pub fn build(self) -> MatchPatterns {
+        MatchPatterns {
+            re: Regexp::compile_many_accepting(&self.pairs),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct MatchPatterns {
+    re: CompiledRegexp,
+}
+
+impl MatchPatterns {
+    pub fn find(&self, input: &str) -> Vec<ResolvedTranslation> {
+        self.re.find(input)
     }
 }
 
@@ -135,13 +151,12 @@ mod tests {
         let patterns = PatternParser::new("abc").pattern().unwrap();
         let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
-        let ast = AST::from_patterns(&patterns, &ctx);
-        let nfa = NFA::from(&ast);
+        let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            nfa.find_translations("abc"),
+            re.find("abc"),
             vec![ResolvedTranslation::new("", "", 3, stage, None)]
         );
-        assert!(nfa.find_translations("def").is_empty());
+        assert!(re.find("def").is_empty());
     }
 
     #[test]
@@ -149,18 +164,17 @@ mod tests {
         let patterns = PatternParser::new("a|b").pattern().unwrap();
         let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
-        let ast = AST::from_patterns(&patterns, &ctx);
-        let nfa = NFA::from(&ast);
+        let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            nfa.find_translations("a"),
+            re.find("a"),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("b"),
+            re.find("b"),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert_eq!(nfa.find_translations("c"), vec![]);
-        assert!(nfa.find_translations("def").is_empty());
+        assert_eq!(re.find("c"), vec![]);
+        assert!(re.find("def").is_empty());
     }
 
     #[test]
@@ -171,21 +185,20 @@ mod tests {
         for digit in ['1', '2', '3'] {
             ctx.insert(CharacterClass::Digit, digit);
         }
-        let ast = AST::from_patterns(&patterns, &ctx);
-        let nfa = NFA::from(&ast);
+        let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            nfa.find_translations("1"),
+            re.find("1"),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("2"),
+            re.find("2"),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("3"),
+            re.find("3"),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(nfa.find_translations("def").is_empty());
+        assert!(re.find("def").is_empty());
     }
 
     #[test]
@@ -196,21 +209,20 @@ mod tests {
         for c in ['A', 'B', 'C'] {
             ctx.insert(CharacterClass::Uppercase, c);
         }
-        let ast = AST::from_patterns(&patterns, &ctx);
-        let nfa = NFA::from(&ast);
+        let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            nfa.find_translations("A"),
+            re.find("A"),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("A"),
+            re.find("A"),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("C"),
+            re.find("C"),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(nfa.find_translations("def").is_empty());
+        assert!(re.find("def").is_empty());
     }
 
     #[test]
@@ -227,21 +239,20 @@ mod tests {
         for c in ['%', '&', '/'] {
             ctx.insert(CharacterClass::Sign, c);
         }
-        let ast = AST::from_patterns(&patterns, &ctx);
-        let nfa = NFA::from(&ast);
+        let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            nfa.find_translations("%"),
+            re.find("%"),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("."),
+            re.find("."),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("A"),
+            re.find("A"),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(nfa.find_translations("def").is_empty());
+        assert!(re.find("def").is_empty());
     }
 
     #[test]
@@ -249,21 +260,20 @@ mod tests {
         let patterns = PatternParser::new("[abc]").pattern().unwrap();
         let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
-        let ast = AST::from_patterns(&patterns, &ctx);
-        let nfa = NFA::from(&ast);
+        let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            nfa.find_translations("a"),
+            re.find("a"),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("b"),
+            re.find("b"),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("c"),
+            re.find("c"),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(nfa.find_translations("def").is_empty());
+        assert!(re.find("def").is_empty());
     }
 
     #[test]
@@ -271,21 +281,21 @@ mod tests {
         let patterns = PatternParser::new("[abc]+").pattern().unwrap();
         let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
-        let ast = AST::from_patterns(&patterns, &ctx);
-        let nfa = NFA::from(&ast);
+        let re = Regexp::from_patterns(&patterns, &ctx).compile();
+	dbg!(&re);
         assert_eq!(
-            nfa.find_translations("a"),
+            re.find("a"),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("b"),
+            re.find("b"),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("c"),
+            re.find("c"),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(nfa.find_translations("def").is_empty());
+        assert!(re.find("def").is_empty());
     }
 
     #[test]
@@ -294,8 +304,8 @@ mod tests {
         let post = PatternParser::new("[123]+").pattern().unwrap();
         let ctx = CharacterClasses::default();
         let rule = fake_rule();
-        let mut matcher = MatchPatterns::new();
-        matcher.insert(&pre, "foo".into(), &post, "".into(), &rule, &ctx);
+        let mut builder = MatchPatternsBuilder::new();
+        builder.insert(&pre, "foo".into(), &post, "".into(), &rule, &ctx);
         let translation = ResolvedTranslation::new(
             "foo".into(),
             "".into(),
@@ -303,15 +313,10 @@ mod tests {
             TranslationStage::Main,
             rule.clone(),
         )
-        .with_offset(1);
-        assert_eq!(
-            matcher.find_translations("afoo1"),
-            vec![translation.clone()]
-        );
-        assert_eq!(
-            matcher.find_translations("bfoo2"),
-            vec![translation.clone()]
-        );
+            .with_offset(1);
+	let matcher = builder.build();
+        assert_eq!(matcher.find("afoo1"), vec![translation.clone()]);
+        assert_eq!(matcher.find("bfoo2"), vec![translation.clone()]);
         let translations = vec![
             ResolvedTranslation::new(
                 "foo".into(),
@@ -338,8 +343,8 @@ mod tests {
             )
             .with_offset(3),
         ];
-        assert_eq!(matcher.find_translations("cccfoo333"), translations);
-        assert!(matcher.find_translations("def").is_empty());
+        assert_eq!(matcher.find("cccfoo333"), translations);
+        assert!(matcher.find("def").is_empty());
     }
 
     #[test]
@@ -348,9 +353,9 @@ mod tests {
         let post = PatternParser::new("[1234567890]").pattern().unwrap();
         let ctx = CharacterClasses::default();
         let rule = fake_rule();
-        let mut match_patterns = MatchPatterns::new();
-        match_patterns.insert(&pre, "foo".into(), &post, "FOO".into(), &rule, &ctx);
-        match_patterns.insert(&pre, "bar".into(), &post, "BAR".into(), &rule, &ctx);
+        let mut builder = MatchPatternsBuilder::new();
+        builder.insert(&pre, "foo".into(), &post, "FOO".into(), &rule, &ctx);
+        builder.insert(&pre, "bar".into(), &post, "BAR".into(), &rule, &ctx);
         let translation = vec![
             ResolvedTranslation::new(
                 "foo".into(),
@@ -361,7 +366,8 @@ mod tests {
             )
             .with_offset(3),
         ];
-        assert_eq!(match_patterns.find_translations("aaafoo333"), translation);
+	let matcher = builder.build();
+        assert_eq!(matcher.find("aaafoo333"), translation);
         let translation = vec![
             ResolvedTranslation::new(
                 "bar".into(),
@@ -372,7 +378,7 @@ mod tests {
             )
             .with_offset(3),
         ];
-        assert_eq!(match_patterns.find_translations("aaabar333"), translation);
-        assert_ne!(match_patterns.find_translations("aaabaz333"), translation);
+        assert_eq!(matcher.find("aaabar333"), translation);
+        assert_ne!(matcher.find("aaabaz333"), translation);
     }
 }

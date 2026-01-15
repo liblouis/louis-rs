@@ -3,19 +3,11 @@ use std::{fs::File, io};
 use hyphenation::{Hyphenator, Load, Standard};
 
 use crate::{
-    Direction,
     parser::{
-        AnchoredRule, Braille, CharacterClass, CharacterClasses, HasNocross, HasPrecedence,
-        fallback,
-    },
-    translator::{
-        CharacterDefinition, ResolvedTranslation, Rule, TranslationError, TranslationStage,
-        dots_to_unicode,
-        indication::{lettersign, nocontract, numeric, uppercase},
-        match_pattern::MatchPatterns,
-        table::TableContext,
-        trie::{Boundary, Trie},
-    },
+        fallback, AnchoredRule, Braille, CharacterClass, CharacterClasses, HasNocross, HasPrecedence
+    }, translator::{
+        dots_to_unicode, indication::{lettersign, nocontract, numeric, uppercase}, match_pattern::{MatchPatterns, MatchPatternsBuilder}, table::TableContext, trie::{Boundary, Trie}, CharacterDefinition, ResolvedTranslation, Rule, TranslationError, TranslationStage
+    }, Direction
 };
 
 #[derive(Debug)]
@@ -44,7 +36,7 @@ struct PrimaryTableBuilder {
     trie: Trie,
     nocross_trie: Trie,
     hyphenator: Option<Standard>,
-    match_patterns: MatchPatterns,
+    match_patterns: MatchPatternsBuilder,
     numeric_indicator: numeric::IndicatorBuilder,
     uppercase_indicator: uppercase::IndicatorBuilder,
     lettersign_indicator: lettersign::IndicatorBuilder,
@@ -58,7 +50,7 @@ impl PrimaryTableBuilder {
             trie: Trie::new(),
             nocross_trie: Trie::new(),
             hyphenator: None,
-            match_patterns: MatchPatterns::new(),
+            match_patterns: MatchPatternsBuilder::new(),
             numeric_indicator: numeric::IndicatorBuilder::new(),
             uppercase_indicator: uppercase::IndicatorBuilder::new(),
             lettersign_indicator: lettersign::IndicatorBuilder::new(),
@@ -103,7 +95,7 @@ impl PrimaryTableBuilder {
             trie: self.trie,
             nocross_trie: self.nocross_trie,
             hyphenator: self.hyphenator,
-            match_patterns: self.match_patterns,
+            match_patterns: self.match_patterns.build(),
             numeric_indicator: self.numeric_indicator.build(),
             uppercase_indicator: self.uppercase_indicator.build(),
             lettersign_indicator: self.lettersign_indicator.build(),
@@ -572,7 +564,7 @@ impl PrimaryTable {
         input: &str,
     ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
         self.match_patterns
-            .find_translations(input)
+            .find(input)
             .into_iter()
             .partition(|t| t.offset() == 0)
     }
