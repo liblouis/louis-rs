@@ -127,6 +127,8 @@ pub enum Instruction {
     Match(TranslationIndex),
     Jump(InstructionIndex),
     Split(InstructionIndex, InstructionIndex),
+    CaptureStart,
+    CaptureEnd,
 }
 
 #[derive(Debug, Clone)]
@@ -178,6 +180,9 @@ impl CompiledRegexp {
             Instruction::Split(index1, index2) => {
                 self.is_match_from(index1, input) || self.is_match_from(index2, input)
             }
+            Instruction::CaptureStart | Instruction::CaptureEnd => {
+                self.is_match_from(pc + 1, &input)
+            } // Ignore
         }
     }
 
@@ -258,6 +263,17 @@ impl CompiledRegexp {
                 self.find_from(index1, input, sp, length + 1, capture, translations);
                 self.find_from(index2, input, sp, length + 1, capture, translations);
             }
+            Instruction::CaptureStart => {
+                self.find_from(pc + 1, &input, sp, length, (length, 0), translations)
+            }
+            Instruction::CaptureEnd => self.find_from(
+                pc + 1,
+                &input,
+                sp,
+                length,
+                (capture.0, length),
+                translations,
+            ),
         }
     }
 
