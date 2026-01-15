@@ -62,7 +62,7 @@ impl Regexp {
         }
     }
 
-    fn compile_many_accepting(
+    fn compile_many_accepting_internal(
         pairs: &[(Regexp, Translation)],
         instructions: &mut Vec<Instruction>,
         character_classes: &mut Vec<HashSet<char>>,
@@ -85,7 +85,7 @@ impl Regexp {
             let p2 = instructions.len();
             instructions.push(Instruction::Jump(0));
             instructions[p1] = Instruction::Split(p1 + 1, p2 + 1);
-            Regexp::compile_many_accepting(
+            Regexp::compile_many_accepting_internal(
                 &pairs[1..],
                 instructions,
                 character_classes,
@@ -95,11 +95,11 @@ impl Regexp {
         }
     }
 
-    pub fn compile_accepting(pairs: &[(Regexp, Translation)]) -> CompiledRegexp {
+    pub fn compile_many_accepting(pairs: &[(Regexp, Translation)]) -> CompiledRegexp {
         let mut instructions = Vec::new();
         let mut character_classes = Vec::new();
         let mut translations = Vec::new();
-        Regexp::compile_many_accepting(
+        Regexp::compile_many_accepting_internal(
             pairs,
             &mut instructions,
             &mut character_classes,
@@ -233,7 +233,7 @@ pub struct CompiledRegexp {
 }
 
 impl CompiledRegexp {
-    fn is_match_from(&self, pc: usize, input: &str) -> bool {
+    fn is_match_internal(&self, pc: usize, input: &str) -> bool {
         if pc >= self.instructions.len() {
             return false;
         }
@@ -244,7 +244,7 @@ impl CompiledRegexp {
                 if let Some(actual) = chars.peek()
                     && expected == *actual
                 {
-                    self.is_match_from(pc + 1, &input[actual.len_utf8()..])
+                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..])
                 } else {
                     false
                 }
@@ -254,7 +254,7 @@ impl CompiledRegexp {
                 if let Some(actual) = chars.peek()
                     && self.character_classes[index].contains(actual)
                 {
-                    self.is_match_from(pc + 1, &input[actual.len_utf8()..])
+                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..])
                 } else {
                     false
                 }
@@ -262,27 +262,27 @@ impl CompiledRegexp {
             Instruction::Any => {
                 let mut chars = input.chars();
                 if let Some(actual) = chars.next() {
-                    self.is_match_from(pc + 1, &input[actual.len_utf8()..])
+                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..])
                 } else {
                     false
                 }
             }
             Instruction::Match(_) => true,
-            Instruction::Jump(index) => self.is_match_from(index, input),
+            Instruction::Jump(index) => self.is_match_internal(index, input),
             Instruction::Split(index1, index2) => {
-                self.is_match_from(index1, input) || self.is_match_from(index2, input)
+                self.is_match_internal(index1, input) || self.is_match_internal(index2, input)
             }
             Instruction::CaptureStart | Instruction::CaptureEnd => {
-                self.is_match_from(pc + 1, &input)
+                self.is_match_internal(pc + 1, &input)
             } // Ignore
         }
     }
 
     pub fn is_match(&self, input: &str) -> bool {
-        self.is_match_from(0, input)
+        self.is_match_internal(0, input)
     }
 
-    fn find_from(
+    fn find_internal(
         &self,
         pc: usize,
         input: &str,
@@ -301,7 +301,7 @@ impl CompiledRegexp {
                 if let Some(actual) = chars.peek()
                     && expected == *actual
                 {
-                    self.find_from(
+                    self.find_internal(
                         pc + 1,
                         &input,
                         sp + actual.len_utf8(),
@@ -316,7 +316,7 @@ impl CompiledRegexp {
                 if let Some(actual) = chars.peek()
                     && self.character_classes[index].contains(actual)
                 {
-                    self.find_from(
+                    self.find_internal(
                         pc + 1,
                         &input,
                         sp + actual.len_utf8(),
@@ -329,7 +329,7 @@ impl CompiledRegexp {
             Instruction::Any => {
                 let mut chars = input[sp..].chars();
                 if let Some(actual) = chars.next() {
-                    self.find_from(
+                    self.find_internal(
                         pc + 1,
                         &input,
                         sp + actual.len_utf8(),
@@ -349,16 +349,16 @@ impl CompiledRegexp {
                 );
             }
             Instruction::Jump(index) => {
-                self.find_from(index, input, sp, length + 1, capture, translations)
+                self.find_internal(index, input, sp, length + 1, capture, translations)
             }
             Instruction::Split(index1, index2) => {
-                self.find_from(index1, input, sp, length + 1, capture, translations);
-                self.find_from(index2, input, sp, length + 1, capture, translations);
+                self.find_internal(index1, input, sp, length + 1, capture, translations);
+                self.find_internal(index2, input, sp, length + 1, capture, translations);
             }
             Instruction::CaptureStart => {
-                self.find_from(pc + 1, &input, sp, length, (length, 0), translations)
+                self.find_internal(pc + 1, &input, sp, length, (length, 0), translations)
             }
-            Instruction::CaptureEnd => self.find_from(
+            Instruction::CaptureEnd => self.find_internal(
                 pc + 1,
                 &input,
                 sp,
@@ -371,7 +371,7 @@ impl CompiledRegexp {
 
     pub fn find(&self, input: &str) -> Vec<ResolvedTranslation> {
         let mut translations = Vec::new();
-        self.find_from(0, input, 0, 0, (0, 0), &mut translations);
+        self.find_internal(0, input, 0, 0, (0, 0), &mut translations);
         translations
     }
 }
@@ -775,7 +775,7 @@ mod tests {
 
     #[test]
     fn compile_many() {
-        let re = Regexp::compile_accepting(&[
+        let re = Regexp::compile_many_accepting(&[
             (
                 Regexp::Literal('a'),
                 Translation::Resolved(ResolvedTranslation::new(
