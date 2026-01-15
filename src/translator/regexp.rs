@@ -1,11 +1,24 @@
+//! Regular expression engine with virtual machine-based matching.
+//!
+//! This module implements a regular expression compiler and virtual machine
+//! executor based on the approach described in [Regular Expression Matching:
+//! the Virtual Machine Approach](https://swtch.com/~rsc/regexp/regexp2.html) by
+//! Russ Cox.
+//!
+//! The engine compiles regular expression ASTs into a sequence of virtual
+//! machine instructions that can be executed to match patterns against input
+//! strings. This approach provides efficient matching with linear time
+//! complexity and support for features like character classes, quantifiers, and
+//! captures.
+
 use std::collections::HashSet;
 
-/// An abstract syntax tree
 use crate::translator::{
     ResolvedTranslation,
     translation::{Resolve, Translation},
 };
 
+/// Abstract syntax tree representation of regular expressions
 #[derive(Debug)]
 pub enum Regexp {
     Literal(char),
@@ -119,24 +132,38 @@ type InstructionIndex = usize;
 type CharacterClassIndex = usize;
 type TranslationIndex = usize;
 
+/// Virtual machine instruction set for pattern matching
 #[derive(Debug, Clone)]
 pub enum Instruction {
+    /// Match a single char
     Char(char),
+    /// Match a set of chars. Contains a reference to the character class.
     Class(CharacterClassIndex),
+    /// Match any character
     Any,
+    /// Mark a successful match of the regexp. Contains a reference to the
+    /// payload, the [`Translation`]
     Match(TranslationIndex),
+    /// Jump to the [`Instruction`] at given index
     Jump(InstructionIndex),
+    /// Continue executing the virtual machine at both given indexes
     Split(InstructionIndex, InstructionIndex),
+    /// Start a capture
     CaptureStart,
+    /// End a capture
     CaptureEnd,
 }
 
+/// Compiled version of [`Regexp`]. Contains bytecode and associated data structures
 #[derive(Debug, Clone)]
 pub struct CompiledRegexp {
+    /// The bytecode instructions that execute the pattern matching
     instructions: Vec<Instruction>,
-    // the HashSet for character classes are stored separately from the instructions to improve
-    // cache locality
+    /// Character classes defined in this regexp. They are are stored separately
+    /// from the instructions to improve cache locality
     character_classes: Vec<HashSet<char>>,
+    /// Each match contains a [`Translation`] as a payload. Again, these are
+    /// stored separately from the instructions to improve cache locality
     translations: Vec<Translation>,
 }
 
