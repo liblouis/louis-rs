@@ -33,6 +33,8 @@ pub enum Regexp {
     RepeatAtLeast(u8, Box<Regexp>),
     RepeatAtLeastAtMost(u8, u8, Box<Regexp>),
     Capture(Box<Regexp>),
+    /// Convenience that is unrolled into a sequence of [`Literal`](Regexp#variant.Literal)
+    String(String),
     /// To support empty captures, we need an empty AST
     Empty,
 }
@@ -188,6 +190,11 @@ impl Regexp {
                 regexp.emit(instructions, character_classes);
                 instructions.push(Instruction::CaptureEnd);
             }
+	    Regexp::String(s) => {
+		for c in s.chars() {
+		    instructions.push(Instruction::Char(c))
+		}
+	    },
             Regexp::Empty => (),
         }
     }
@@ -596,31 +603,14 @@ mod tests {
             None,
         ));
         let re = Regexp::Concat(
-            Box::new(Regexp::Literal('f')),
+            Box::new(Regexp::String("foo".to_string())),
             Box::new(Regexp::Concat(
-                Box::new(Regexp::Literal('o')),
-                Box::new(Regexp::Concat(
-                    Box::new(Regexp::Literal('o')),
-                    Box::new(Regexp::Concat(
-                        Box::new(Regexp::Capture(Box::new(Regexp::Concat(
-                            Box::new(Regexp::Any),
-                            Box::new(Regexp::Concat(
-                                Box::new(Regexp::Literal('a')),
-                                Box::new(Regexp::Literal('r')),
-                            )),
-                        )))),
-                        Box::new(Regexp::Concat(
-                            Box::new(Regexp::Literal('f')),
-                            Box::new(Regexp::Concat(
-                                Box::new(Regexp::Literal('o')),
-                                Box::new(Regexp::Literal('o')),
-                            )),
-                        )),
-                    )),
-                )),
-            )),
-        )
-        .compile_with_payload(translation);
+                Box::new(Regexp::Capture(
+		    Box::new(Regexp::Concat(
+			Box::new(Regexp::Any),
+			Box::new(Regexp::String("ar".to_string())))))),
+		Box::new(Regexp::String("foo".to_string())))))
+	    .compile_with_payload(translation);
 
         assert_eq!(re.find("foo"), []);
         assert_eq!(re.find("foobar"), []);
@@ -661,31 +651,14 @@ mod tests {
             None,
         ));
         let re = Regexp::Concat(
-            Box::new(Regexp::Literal('f')),
+            Box::new(Regexp::String("foo".to_string())),
             Box::new(Regexp::Concat(
-                Box::new(Regexp::Literal('o')),
-                Box::new(Regexp::Concat(
-                    Box::new(Regexp::Literal('o')),
-                    Box::new(Regexp::Concat(
-                        Box::new(Regexp::Capture(Box::new(Regexp::Concat(
-                            Box::new(Regexp::Any),
-                            Box::new(Regexp::Concat(
-                                Box::new(Regexp::Literal('a')),
-                                Box::new(Regexp::Literal('r')),
-                            )),
-                        )))),
-                        Box::new(Regexp::Concat(
-                            Box::new(Regexp::Literal('f')),
-                            Box::new(Regexp::Concat(
-                                Box::new(Regexp::Literal('o')),
-                                Box::new(Regexp::Literal('o')),
-                            )),
-                        )),
-                    )),
-                )),
-            )),
-        )
-        .compile_with_payload(translation);
+                Box::new(Regexp::Capture(
+		    Box::new(Regexp::Concat(
+			Box::new(Regexp::Any),
+			Box::new(Regexp::String("ar".to_string())))))),
+		Box::new(Regexp::String("foo".to_string())))))
+	    .compile_with_payload(translation);
 
         assert_eq!(re.find("foo"), []);
         assert_eq!(re.find("foobar"), []);
