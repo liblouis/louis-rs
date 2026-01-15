@@ -62,6 +62,56 @@ impl Regexp {
         }
     }
 
+    fn compile_many_accepting(
+        pairs: &[(Regexp, Translation)],
+        instructions: &mut Vec<Instruction>,
+        character_classes: &mut Vec<HashSet<char>>,
+        translations: &mut Vec<Translation>,
+    ) {
+        if pairs.is_empty() {
+            // we're done
+        } else if pairs.len() == 1 {
+            let (regexp, payload) = &pairs[0];
+            regexp.emit(instructions, character_classes);
+            translations.push(payload.clone());
+            instructions.push(Instruction::Match(translations.len() - 1));
+        } else {
+            let p1 = instructions.len();
+            instructions.push(Instruction::Split(p1 + 1, 0));
+            let (regexp, payload) = &pairs[0];
+            regexp.emit(instructions, character_classes);
+            translations.push(payload.clone());
+            instructions.push(Instruction::Match(translations.len() - 1));
+            let p2 = instructions.len();
+            instructions.push(Instruction::Jump(0));
+            instructions[p1] = Instruction::Split(p1 + 1, p2 + 1);
+            Regexp::compile_many_accepting(
+                &pairs[1..],
+                instructions,
+                character_classes,
+                translations,
+            );
+            instructions[p2] = Instruction::Jump(instructions.len());
+        }
+    }
+
+    pub fn compile_accepting(pairs: &[(Regexp, Translation)]) -> CompiledRegexp {
+        let mut instructions = Vec::new();
+        let mut character_classes = Vec::new();
+        let mut translations = Vec::new();
+        Regexp::compile_many_accepting(
+            pairs,
+            &mut instructions,
+            &mut character_classes,
+            &mut translations,
+        );
+        CompiledRegexp {
+            instructions,
+            character_classes,
+            translations,
+        }
+    }
+
     fn emit(
         &self,
         instructions: &mut Vec<Instruction>,
@@ -353,6 +403,23 @@ mod tests {
         assert!(re.is_match("b"));
         assert!(re.is_match("ab"));
         assert!(!re.is_match("c"));
+    }
+
+    #[test]
+    fn multiple_alterations() {
+        let re = Regexp::Either(
+            Box::new(Regexp::Literal('a')),
+            Box::new(Regexp::Either(
+                Box::new(Regexp::Literal('b')),
+                Box::new(Regexp::Literal('c')),
+            )),
+        )
+        .compile();
+        assert!(re.is_match("a"));
+        assert!(re.is_match("b"));
+        assert!(re.is_match("ab"));
+        assert!(re.is_match("c"));
+        assert!(!re.is_match("d"));
     }
 
     #[test]
@@ -706,4 +773,43 @@ mod tests {
         assert_eq!(re.find("bbb"), []);
     }
 
+    #[test]
+    fn compile_many() {
+        let re = Regexp::compile_accepting(&[
+            (
+                Regexp::Literal('a'),
+                Translation::Resolved(ResolvedTranslation::new(
+                    "a",
+                    "1",
+                    1,
+                    TranslationStage::Main,
+                    None,
+                )),
+            ),
+            (
+                Regexp::Literal('b'),
+                Translation::Resolved(ResolvedTranslation::new(
+                    "b",
+                    "2",
+                    1,
+                    TranslationStage::Main,
+                    None,
+                )),
+            ),
+            (
+                Regexp::Literal('c'),
+                Translation::Resolved(ResolvedTranslation::new(
+                    "c",
+                    "3",
+                    1,
+                    TranslationStage::Main,
+                    None,
+                )),
+            ),
+        ]);
+        assert!(re.is_match("a"));
+        assert!(re.is_match("b"));
+        assert!(re.is_match("c"));
+        assert!(!re.is_match("d"));
+    }
 }
