@@ -185,8 +185,86 @@ impl CompiledRegexp {
         self.is_match_from(0, input)
     }
 
-    pub fn find(&self, input: &str) {
-        todo!()
+    fn find_from(
+        &self,
+        pc: usize,
+        input: &str,
+        sp: usize,
+        length: usize,
+        capture: (usize, usize),
+        translations: &mut Vec<ResolvedTranslation>,
+    ) {
+        if pc >= self.instructions.len() {
+            return;
+        }
+
+        match self.instructions[pc] {
+            Instruction::Char(expected) => {
+                let mut chars = input[sp..].chars().peekable();
+                if let Some(actual) = chars.peek()
+                    && expected == *actual
+                {
+                    self.find_from(
+                        pc + 1,
+                        &input,
+                        sp + actual.len_utf8(),
+                        length + 1,
+                        capture,
+                        translations,
+                    )
+                }
+            }
+            Instruction::Class(index) => {
+                let mut chars = input[sp..].chars().peekable();
+                if let Some(actual) = chars.peek()
+                    && self.character_classes[index].contains(actual)
+                {
+                    self.find_from(
+                        pc + 1,
+                        &input,
+                        sp + actual.len_utf8(),
+                        length + 1,
+                        capture,
+                        translations,
+                    )
+                }
+            }
+            Instruction::Any => {
+                let mut chars = input[sp..].chars();
+                if let Some(actual) = chars.next() {
+                    self.find_from(
+                        pc + 1,
+                        &input,
+                        sp + actual.len_utf8(),
+                        length + 1,
+                        capture,
+                        translations,
+                    )
+                }
+            }
+            Instruction::Match(index) => {
+                let (start, end) = capture;
+                let capture = &input[start..end];
+                translations.push(
+                    self.translations[index]
+                        .clone()
+                        .resolve(capture, length, start),
+                );
+            }
+            Instruction::Jump(index) => {
+                self.find_from(index, input, sp, length + 1, capture, translations)
+            }
+            Instruction::Split(index1, index2) => {
+                self.find_from(index1, input, sp, length + 1, capture, translations);
+                self.find_from(index2, input, sp, length + 1, capture, translations);
+            }
+        }
+    }
+
+    pub fn find(&self, input: &str) -> Vec<ResolvedTranslation> {
+        let mut translations = Vec::new();
+        self.find_from(0, input, 0, 0, (0, 0), &mut translations);
+        translations
     }
 }
 
