@@ -37,6 +37,9 @@ pub enum Regexp {
     String(String),
     /// To support empty captures, we need an empty AST
     Empty,
+    /// Stop-gap blanket "implementation" for things that might be needed but are not yet
+    /// implemented
+    NotImplemented,
 }
 
 impl Regexp {
@@ -196,6 +199,7 @@ impl Regexp {
 		}
 	    },
             Regexp::Empty => (),
+            Regexp::NotImplemented => (),
         }
     }
 }
