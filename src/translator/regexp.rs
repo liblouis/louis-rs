@@ -1,6 +1,11 @@
 use std::collections::HashSet;
 
 /// An abstract syntax tree
+use crate::translator::{
+    ResolvedTranslation,
+    translation::{Resolve, Translation},
+};
+
 #[derive(Debug)]
 pub enum Regexp {
     Literal(char),
@@ -23,11 +28,13 @@ impl Regexp {
     pub fn compile(&self) -> CompiledRegexp {
         let mut instructions = Vec::new();
         let mut character_classes = Vec::new();
+        let translations = Vec::new();
         self.emit(&mut instructions, &mut character_classes);
-        instructions.push(Instruction::Match);
+        instructions.push(Instruction::Match(0));
         CompiledRegexp {
             instructions,
             character_classes,
+            translations,
         }
     }
 
@@ -110,13 +117,14 @@ impl Regexp {
 
 type InstructionIndex = usize;
 type CharacterClassIndex = usize;
+type TranslationIndex = usize;
 
 #[derive(Debug, Clone)]
 pub enum Instruction {
     Char(char),
     Class(CharacterClassIndex),
     Any,
-    Match,
+    Match(TranslationIndex),
     Jump(InstructionIndex),
     Split(InstructionIndex, InstructionIndex),
 }
@@ -127,6 +135,7 @@ pub struct CompiledRegexp {
     // the HashSet for character classes are stored separately from the instructions to improve
     // cache locality
     character_classes: Vec<HashSet<char>>,
+    translations: Vec<Translation>,
 }
 
 impl CompiledRegexp {
@@ -164,7 +173,7 @@ impl CompiledRegexp {
                     false
                 }
             }
-            Instruction::Match => true,
+            Instruction::Match(_) => true,
             Instruction::Jump(index) => self.is_match_from(index, input),
             Instruction::Split(index1, index2) => {
                 self.is_match_from(index1, input) || self.is_match_from(index2, input)
