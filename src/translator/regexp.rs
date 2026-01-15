@@ -14,7 +14,7 @@
 use std::collections::HashSet;
 
 use crate::translator::{
-    ResolvedTranslation,
+    ResolvedTranslation, TranslationStage,
     translation::{Resolve, Translation},
 };
 
@@ -39,9 +39,20 @@ pub enum Regexp {
 
 impl Regexp {
     pub fn compile(&self) -> CompiledRegexp {
+        let payload = Translation::Resolved(ResolvedTranslation::new(
+            "",
+            "",
+            0,
+            TranslationStage::Main,
+            None,
+        ));
+        self.compile_with_payload(payload)
+    }
+
+    fn compile_with_payload(&self, payload: Translation) -> CompiledRegexp {
         let mut instructions = Vec::new();
         let mut character_classes = Vec::new();
-        let translations = Vec::new();
+        let translations = Vec::from([payload]);
         self.emit(&mut instructions, &mut character_classes);
         instructions.push(Instruction::Match(0));
         CompiledRegexp {
@@ -122,7 +133,11 @@ impl Regexp {
                 instructions.push(Instruction::Jump(pos));
                 instructions[pos] = Instruction::Split(pos + 1, instructions.len());
             }
-            Regexp::Capture(regexp) => todo!(),
+            Regexp::Capture(regexp) => {
+                instructions.push(Instruction::CaptureStart);
+                regexp.emit(instructions, character_classes);
+                instructions.push(Instruction::CaptureEnd);
+            }
             Regexp::Empty => (),
         }
     }
@@ -313,6 +328,11 @@ impl CompiledRegexp {
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        parser::Precedence,
+        translator::translation::{TranslationTarget, UnresolvedTranslation},
+    };
+
     use super::*;
 
     #[test]
@@ -500,48 +520,190 @@ mod tests {
         assert!(!re.is_match("bbb"));
     }
 
-    // #[test]
-    // fn capture() {
-    //     let re = Vm::new(&[]);
-    //     let ast = AST::Concat(
-    //         Box::new(AST::Concat(
-    //             Box::new(AST::Character('a')),
-    //             Box::new(AST::Capture(Box::new(AST::OneOrMore(Box::new(
-    //                 AST::Character('b'),
-    //             ))))),
-    //         )),
-    //         Box::new(AST::Character('c')),
-    //     );
-    //     let stage = TranslationStage::Main;
-    //     let translation = UnresolvedTranslation::new(
-    //         &[TranslationTarget::Literal("".to_string())],
-    //         Precedence::Default,
-    //         stage,
-    //         None,
-    //     );
-    //     let re = re::from_with_translation(&ast, Translation::Unresolved(translation));
-    //     assert_eq!(refind("a"), []);
-    //     assert_eq!(re.find("ab"), []);
-    //     assert_eq!(
-    //         re.find("abc"),
-    //         [ResolvedTranslation::new("b", "", 3, stage, None).with_offset(1)]
-    //     );
-    //     assert_eq!(
-    //         re.find("abbc"),
-    //         [ResolvedTranslation::new("bb", "", 4, stage, None).with_offset(1)]
-    //     );
-    //     assert_eq!(
-    //         re.find("abbbbbc"),
-    //         [ResolvedTranslation::new("bbbbb", "", 7, stage, None).with_offset(1)]
-    //     );
-    //     assert_eq!(re.find("aabbbbbc"), []);
-    //     assert_eq!(re.find("abb"), []);
-    //     assert_eq!(re.find("abbbb"), []);
-    //     assert_eq!(re.find("abbbbbbbbbb"), []);
-    //     assert_eq!(re.find("aaaaaa"), []);
-    //     assert_eq!(re.find("aaaaaaaaaaaaaaaaaaaaaa"), []);
-    //     assert_eq!(re.find("aaab"), []);
-    //     assert_eq!(re.find("c"), []);
-    //     assert_eq!(re.find("bbb"), []);
-    // }
+    #[test]
+    fn capture() {
+        let translation = Translation::Unresolved(UnresolvedTranslation::new(
+            &[TranslationTarget::Capture],
+            Precedence::Default,
+            TranslationStage::Main,
+            None,
+        ));
+        let re = Regexp::Concat(
+            Box::new(Regexp::Literal('f')),
+            Box::new(Regexp::Concat(
+                Box::new(Regexp::Literal('o')),
+                Box::new(Regexp::Concat(
+                    Box::new(Regexp::Literal('o')),
+                    Box::new(Regexp::Concat(
+                        Box::new(Regexp::Capture(Box::new(Regexp::Concat(
+                            Box::new(Regexp::Any),
+                            Box::new(Regexp::Concat(
+                                Box::new(Regexp::Literal('a')),
+                                Box::new(Regexp::Literal('r')),
+                            )),
+                        )))),
+                        Box::new(Regexp::Concat(
+                            Box::new(Regexp::Literal('f')),
+                            Box::new(Regexp::Concat(
+                                Box::new(Regexp::Literal('o')),
+                                Box::new(Regexp::Literal('o')),
+                            )),
+                        )),
+                    )),
+                )),
+            )),
+        )
+        .compile_with_payload(translation);
+
+        assert_eq!(re.find("foo"), []);
+        assert_eq!(re.find("foobar"), []);
+        assert_eq!(
+            re.find("foobarfoo"),
+            [
+                ResolvedTranslation::new("bar", "bar", 3, TranslationStage::Main, None)
+                    .with_offset(3)
+                    .with_weight(9)
+            ]
+        );
+        assert_eq!(
+            re.find("fooxarfoo"),
+            [
+                ResolvedTranslation::new("xar", "xar", 3, TranslationStage::Main, None)
+                    .with_offset(3)
+                    .with_weight(9)
+            ]
+        );
+        assert_eq!(
+            re.find("foobarfoobar"),
+            [
+                ResolvedTranslation::new("bar", "bar", 3, TranslationStage::Main, None)
+                    .with_offset(3)
+                    .with_weight(9)
+            ]
+        );
+        assert_eq!(re.find("aaaaaa"), []);
+        assert_eq!(re.find("bbb"), []);
+    }
+
+    #[test]
+    fn capture_replace_with_literal() {
+        let translation = Translation::Unresolved(UnresolvedTranslation::new(
+            &[TranslationTarget::Literal("baz".to_string())],
+            Precedence::Default,
+            TranslationStage::Main,
+            None,
+        ));
+        let re = Regexp::Concat(
+            Box::new(Regexp::Literal('f')),
+            Box::new(Regexp::Concat(
+                Box::new(Regexp::Literal('o')),
+                Box::new(Regexp::Concat(
+                    Box::new(Regexp::Literal('o')),
+                    Box::new(Regexp::Concat(
+                        Box::new(Regexp::Capture(Box::new(Regexp::Concat(
+                            Box::new(Regexp::Any),
+                            Box::new(Regexp::Concat(
+                                Box::new(Regexp::Literal('a')),
+                                Box::new(Regexp::Literal('r')),
+                            )),
+                        )))),
+                        Box::new(Regexp::Concat(
+                            Box::new(Regexp::Literal('f')),
+                            Box::new(Regexp::Concat(
+                                Box::new(Regexp::Literal('o')),
+                                Box::new(Regexp::Literal('o')),
+                            )),
+                        )),
+                    )),
+                )),
+            )),
+        )
+        .compile_with_payload(translation);
+
+        assert_eq!(re.find("foo"), []);
+        assert_eq!(re.find("foobar"), []);
+        assert_eq!(
+            re.find("foobarfoo"),
+            [
+                ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
+                    .with_offset(3)
+                    .with_weight(9)
+            ]
+        );
+        assert_eq!(
+            re.find("fooxarfoo"),
+            [
+                ResolvedTranslation::new("xar", "baz", 3, TranslationStage::Main, None)
+                    .with_offset(3)
+                    .with_weight(9)
+            ]
+        );
+        assert_eq!(
+            re.find("foobarfoobar"),
+            [
+                ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
+                    .with_offset(3)
+                    .with_weight(9)
+            ]
+        );
+    }
+
+    #[test]
+    fn offset() {
+        let translation = Translation::Resolved(ResolvedTranslation::new(
+            "bar",
+            "baz",
+            9,
+            TranslationStage::Main,
+            None,
+        ));
+        let re = Regexp::Concat(
+            Box::new(Regexp::Literal('f')),
+            Box::new(Regexp::Concat(
+                Box::new(Regexp::Literal('o')),
+                Box::new(Regexp::Concat(
+                    Box::new(Regexp::Literal('o')),
+                    Box::new(Regexp::Concat(
+                        Box::new(Regexp::Capture(Box::new(Regexp::Concat(
+                            Box::new(Regexp::Literal('b')),
+                            Box::new(Regexp::Concat(
+                                Box::new(Regexp::Literal('a')),
+                                Box::new(Regexp::Literal('r')),
+                            )),
+                        )))),
+                        Box::new(Regexp::Concat(
+                            Box::new(Regexp::Literal('f')),
+                            Box::new(Regexp::Concat(
+                                Box::new(Regexp::Literal('o')),
+                                Box::new(Regexp::Literal('o')),
+                            )),
+                        )),
+                    )),
+                )),
+            )),
+        )
+        .compile_with_payload(translation);
+
+        assert_eq!(re.find("foo"), []);
+        assert_eq!(re.find("foobar"), []);
+        assert_eq!(
+            re.find("foobarfoo"),
+            [
+                ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
+                    .with_offset(3)
+                    .with_weight(9)
+            ]
+        );
+        assert_eq!(
+            re.find("foobarfoobar"),
+            [
+                ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
+                    .with_offset(3)
+                    .with_weight(9)
+            ]
+        );
+        assert_eq!(re.find("aaaaaa"), []);
+        assert_eq!(re.find("bbb"), []);
+    }
+
 }
