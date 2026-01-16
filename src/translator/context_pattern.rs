@@ -226,12 +226,6 @@ mod tests {
         ctx
     }
 
-    /// Create an anchored rule for testing purposes
-    fn test_origin(line: &str) -> AnchoredRule {
-        let rule = RuleParser::new(line).rule().unwrap();
-        AnchoredRule::new(rule, None, 0)
-    }
-
     #[test]
     fn find_string() {
         let tests = test::Parser::new("\"abc\"").tests().unwrap();
@@ -315,7 +309,6 @@ mod tests {
         for c in ['%', '&', '/'] {
             ctx.insert(CharacterClass::Sign, c);
         }
-        let ast = Regexp::from_test(&tests, &ctx);
         let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,

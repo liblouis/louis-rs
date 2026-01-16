@@ -274,17 +274,6 @@ impl ResolvedTranslation {
         Self { offset, ..self }
     }
 
-    /// Set the `weight` of a translation if it is `0`, i.e. hasn't been set before.
-    ///
-    /// This is used when the weight is not static, i.e. it is only known after a regexp search.
-    pub fn with_weight_maybe(self, weight: usize) -> Self {
-        if self.weight == 0 {
-            Self { weight, ..self }
-        } else {
-            self
-        }
-    }
-
     /// Decrement the `offset` of a translation.
     pub fn decrement_offset(self, decrement: usize) -> Self {
         Self {
