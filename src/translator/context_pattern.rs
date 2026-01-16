@@ -307,13 +307,14 @@ mod tests {
             ctx.insert(CharacterClass::Sign, c);
         }
         let ast = Regexp::from_test(&tests, &ctx);
-        let translation = UnresolvedTranslation::new(
+        let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
             stage,
             None,
-        );
-        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
+        ));
+	let regexp = Regexp::from_test(&tests, &ctx);
+	let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
             re.find("%"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
@@ -334,14 +335,15 @@ mod tests {
         let tests = test::Parser::new("%letter").tests().unwrap();
         let stage = TranslationStage::Main;
         let ctx = context(CharacterClass::Letter, &['a', 'b', 'c']);
-        let ast = Regexp::from_test(&tests, &ctx);
-        let translation = UnresolvedTranslation::new(
-            &[TranslationTarget::Literal("".to_string())],
-            Precedence::Default,
-            stage,
-            None,
-        );
-        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
+        let translation = Translation::Unresolved(
+	    UnresolvedTranslation::new(
+		&[TranslationTarget::Literal("".to_string())],
+		Precedence::Default,
+		stage,
+		None,
+            ));
+	let regexp = Regexp::from_test(&tests, &ctx);
+	let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
             re.find("a"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
@@ -362,14 +364,14 @@ mod tests {
         let tests = test::Parser::new("%letter3").tests().unwrap();
         let stage = TranslationStage::Main;
         let ctx = context(CharacterClass::Letter, &['a', 'b', 'c']);
-        let ast = Regexp::from_test(&tests, &ctx);
-        let translation = UnresolvedTranslation::new(
+        let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
             stage,
             None,
-        );
-        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
+        ));
+	let regexp = Regexp::from_test(&tests, &ctx);
+	let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
             re.find("abc"),
             [ResolvedTranslation::new("", "", 3, stage, None)]
@@ -391,14 +393,14 @@ mod tests {
     fn find_capture_with_character_class() {
         let tests = test::Parser::new("\"a\"[%digit]\"b\"").tests().unwrap();
         let ctx = context(CharacterClass::Digit, &['1', '2', '3']);
-        let ast = Regexp::from_test(&tests, &ctx);
-        let translation = UnresolvedTranslation::new(
+        let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
             TranslationStage::Main,
             None,
-        );
-        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
+        ));
+	let regexp = Regexp::from_test(&tests, &ctx);
+	let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
             re.find("a1b"),
             [ResolvedTranslation::new("1", "", 3, TranslationStage::Main, None).with_offset(1)]
@@ -425,14 +427,14 @@ mod tests {
         for c in ['A', 'B', 'C'] {
             ctx.insert(CharacterClass::Uppercase, c);
         }
-        let ast = Regexp::from_test(&tests, &ctx);
-        let translation = UnresolvedTranslation::new(
+        let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
             TranslationStage::Main,
             None,
-        );
-        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
+        ));
+	let regexp = Regexp::from_test(&tests, &ctx);
+	let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
             re.find("a1b"),
             [ResolvedTranslation::new("1", "", 3, TranslationStage::Main, None).with_offset(1)]
@@ -471,14 +473,14 @@ mod tests {
         for c in ['A', 'B', 'C'] {
             ctx.insert(CharacterClass::Uppercase, c);
         }
-        let ast = Regexp::from_test(&tests, &ctx);
-        let translation = UnresolvedTranslation::new(
+        let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
             TranslationStage::Main,
             None,
-        );
-        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
+        ));
+	let regexp = Regexp::from_test(&tests, &ctx);
+	let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(re.find("a1b"), []);
         assert_eq!(re.find("a22b"), []);
         assert_eq!(re.find("a31b"), []);
@@ -525,14 +527,15 @@ mod tests {
         let action = action::Parser::new("\"A_B_C\"").actions().unwrap();
         let origin = origin("context \"abc\" \"A_B_C\"");
         let stage = TranslationStage::Main;
-        let mut patterns = ContextPatterns::new();
-        patterns
+        let mut builder = ContextPatternsBuilder::new();
+        builder
             .insert(&tests, &action, &origin, stage, &TableContext::default())
             .unwrap();
         let translation =
             ResolvedTranslation::new("abc", "A_B_C", 3, TranslationStage::Main, origin.clone());
-        assert_eq!(patterns.find_translations("abc"), [translation]);
-        assert!(patterns.find_translations("def").is_empty());
+	let patterns = builder.build();
+        assert_eq!(patterns.find("abc"), [translation]);
+        assert!(patterns.find("def").is_empty());
     }
 
     #[test]
@@ -541,14 +544,15 @@ mod tests {
         let action = action::Parser::new(r#""<"*">""#).actions().unwrap();
         let origin = origin(r#"context "abc" "<"*">""#);
         let stage = TranslationStage::Main;
-        let mut patterns = ContextPatterns::new();
-        patterns
+        let mut builder = ContextPatternsBuilder::new();
+        builder
             .insert(&tests, &action, &origin, stage, &TableContext::default())
             .unwrap();
         let translation =
             ResolvedTranslation::new("abc", "<abc>", 3, TranslationStage::Main, origin.clone());
-        assert_eq!(patterns.find_translations("abc"), [translation]);
-        assert!(patterns.find_translations("def").is_empty());
+	let patterns = builder.build();
+        assert_eq!(patterns.find("abc"), [translation]);
+        assert!(patterns.find("def").is_empty());
     }
 
     #[test]
@@ -561,15 +565,16 @@ mod tests {
         );
         let origin = origin(r#"context $p3"abc"$p3 "<"*">""#);
         let stage = TranslationStage::Main;
-        let mut patterns = ContextPatterns::new();
-        patterns
+        let mut builder = ContextPatternsBuilder::new();
+        builder
             .insert(&tests, &action, &origin, stage, &context)
             .unwrap();
         let translation =
             ResolvedTranslation::new("abc", "<abc>", 9, TranslationStage::Main, origin.clone())
                 .with_offset(3);
-        assert_eq!(patterns.find_translations("{{{abc}}}"), [translation]);
-        assert!(patterns.find_translations("def").is_empty());
+	let patterns = builder.build();
+        assert_eq!(patterns.find("{{{abc}}}"), [translation]);
+        assert!(patterns.find("def").is_empty());
     }
 
     #[test]
@@ -582,14 +587,15 @@ mod tests {
         );
         let origin = origin(r#"context $p3"abc"$p3 "<"%foo">""#);
         let stage = TranslationStage::Main;
-        let mut patterns = ContextPatterns::new();
-        patterns
+        let mut builder = ContextPatternsBuilder::new();
+        builder
             .insert(&tests, &action, &origin, stage, &context)
             .unwrap();
         let translation =
             ResolvedTranslation::new("abc", "<ABC>", 9, TranslationStage::Main, origin.clone())
                 .with_offset(3);
-        assert_eq!(patterns.find_translations("{{{abc}}}"), [translation]);
-        assert!(patterns.find_translations("def").is_empty());
+	let patterns = builder.build();
+        assert_eq!(patterns.find("{{{abc}}}"), [translation]);
+        assert!(patterns.find("def").is_empty());
     }
 }

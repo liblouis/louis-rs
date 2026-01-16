@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::parser::multipass::ConsumesInput;
 use crate::translator::ResolvedTranslation;
-use crate::translator::context_pattern::ContextPatterns;
+use crate::translator::context_pattern::{ContextPatterns, ContextPatternsBuilder};
 use crate::translator::table::TableContext;
 use crate::translator::translation::TranslationSubset;
 use crate::{
@@ -11,7 +11,7 @@ use crate::{
     translator::{TranslationError, TranslationStage},
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ContextTable {
     patterns: ContextPatterns,
     stage: TranslationStage,
@@ -21,13 +21,13 @@ pub struct ContextTable {
 /// A builder for [`ContextTable`]
 #[derive(Debug)]
 struct ContextTableBuilder {
-    patterns: ContextPatterns,
+    patterns: ContextPatternsBuilder,
 }
 
 impl ContextTableBuilder {
     fn new() -> Self {
         Self {
-            patterns: ContextPatterns::new(),
+            patterns: ContextPatternsBuilder::new(),
         }
     }
 
@@ -35,7 +35,7 @@ impl ContextTableBuilder {
         ContextTable {
             direction,
             stage: stage,
-            patterns: self.patterns,
+            patterns: self.patterns.build(),
         }
     }
 }
