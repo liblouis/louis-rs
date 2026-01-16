@@ -282,7 +282,6 @@ mod tests {
         let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
         let re = Regexp::from_patterns(&patterns, &ctx).compile();
-	dbg!(&re);
         assert_eq!(
             re.find("a"),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
