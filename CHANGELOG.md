@@ -3,11 +3,18 @@
 # Changelog
 
 
-## Unreleased
+## 0.2.4 - 2026-01-16
 
 
 ### Added
 
+-   Add support for a translation pipeline. This simplifies the code and
+    improves back-translation, where the pipeline is just applied in
+    reverse.
+-   Add support for multipass opcodes. Everything works except for
+    negation and variables.
+-   Migrate to a virtual machine based regular expression engine, because
+    the NFA based engine was way too slow.
 -   Add support for what liblouis calls *character attributes* in match
     patterns. They are essentially named character classes, like
     *digit*, *letter*, *lowercase*, etc.
@@ -20,6 +27,8 @@
 
 
 ### Removed
+
+-   The NFA based regular expression engine
 
 
 ### Fixed
@@ -49,7 +58,7 @@
 
 ### Fixed
 
--   Fix an infinite loop when backtranslating `correct` rules
+-   Fix an infinite loop when back-translating `correct` rules
 
 
 ## 0.2.1
