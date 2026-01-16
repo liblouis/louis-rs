@@ -367,14 +367,14 @@ impl CompiledRegexp {
                 self.find_internal(index2, input, sp, length, capture, translations);
             }
             Instruction::CaptureStart => {
-                self.find_internal(pc + 1, &input, sp, length, (length, 0), translations)
+                self.find_internal(pc + 1, &input, sp, length, (sp, 0), translations)
             }
             Instruction::CaptureEnd => self.find_internal(
                 pc + 1,
                 &input,
                 sp,
                 length,
-                (capture.0, length),
+                (capture.0, sp),
                 translations,
             ),
         }
