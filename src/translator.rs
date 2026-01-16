@@ -14,7 +14,6 @@ mod boundaries;
 mod context_pattern;
 mod indication;
 mod match_pattern;
-mod nfa;
 mod pipeline;
 mod regexp;
 mod swap;
