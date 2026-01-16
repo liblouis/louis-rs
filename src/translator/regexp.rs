@@ -162,12 +162,12 @@ impl Regexp {
                 instructions.push(Instruction::Class(character_classes.len() - 1));
             }
             Regexp::RepeatExactly(n, regexp) => {
-                for i in 0..*n {
+                for _ in 0..*n {
                     regexp.emit(instructions, character_classes);
                 }
             }
             Regexp::RepeatAtLeast(min, regexp) => {
-                for i in 0..*min {
+                for _ in 0..*min {
                     regexp.emit(instructions, character_classes);
                 }
                 let pos = instructions.len();
@@ -177,12 +177,12 @@ impl Regexp {
                 instructions[pos] = Instruction::Split(pos + 1, instructions.len());
             }
             Regexp::RepeatAtLeastAtMost(min, max, regexp) => {
-                for i in 0..*min {
+                for _ in 0..*min {
                     regexp.emit(instructions, character_classes);
                 }
                 let pos = instructions.len();
                 instructions.push(Instruction::Split(pos + 1, 0));
-                for i in *min..*max {
+                for _ in *min..*max {
                     regexp.emit(instructions, character_classes);
                 }
                 instructions.push(Instruction::Jump(pos));
