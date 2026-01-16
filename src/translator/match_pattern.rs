@@ -1,4 +1,4 @@
-//! Store and find match rules using a simple regexp engine ([`nfa`](crate::translator::nfa))
+//! Store and find match rules using a simple regexp engine ([`Regexp`](crate::translator::regexp))
 
 use std::collections::HashSet;
 
