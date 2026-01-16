@@ -241,13 +241,14 @@ mod tests {
         let tests = test::Parser::new("$d").tests().unwrap();
         let stage = TranslationStage::Main;
         let ctx = context(CharacterClass::Digit, &['1', '2', '3']);
-        let translation = UnresolvedTranslation::new(
+        let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
             stage,
             None,
-        );
-        let re = Regexp::from_test(&tests, &ctx).compile_with_payload(Translation::Unresolved(translation));
+        ));
+	let regexp = Regexp::from_test(&tests, &ctx);
+	let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
             re.find("1"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
@@ -268,13 +269,14 @@ mod tests {
         let tests = test::Parser::new("$U").tests().unwrap();
         let stage = TranslationStage::Main;
         let ctx = context(CharacterClass::Uppercase, &['A', 'B', 'C']);
-        let translation = UnresolvedTranslation::new(
+        let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
             stage,
             None,
-        );
-        let re = Regexp::from_test(&tests, &ctx).compile_with_payload(Translation::Unresolved(translation));
+        ));
+	let regexp = Regexp::from_test(&tests, &ctx);
+	let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
             re.find("A"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
