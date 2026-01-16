@@ -7,7 +7,7 @@ use crate::parser::{
 };
 
 use crate::parser::{AnchoredRule, Attribute, CharacterClass, CharacterClasses};
-use crate::translator::nfa::{AST, NFA};
+use crate::translator::regexp::{CompiledRegexp, Regexp};
 use crate::translator::swap::SwapClasses;
 use crate::translator::table::TableContext;
 use crate::translator::translation::{
@@ -15,20 +15,20 @@ use crate::translator::translation::{
 };
 use crate::translator::{ResolvedTranslation, TranslationError, TranslationStage};
 
-impl AST {
+impl Regexp {
     fn from_test(test: &Test, ctx: &CharacterClasses) -> Self {
-        AST::from_instructions(test.tests(), ctx)
+        Regexp::from_instructions(test.tests(), ctx)
     }
 
     fn from_instructions(instructions: &Vec<TestInstruction>, ctx: &CharacterClasses) -> Self {
         match instructions.len() {
-            0 => AST::Empty,
-            1 => AST::from_instruction(&instructions[0], ctx),
+            0 => Regexp::Empty,
+            1 => Regexp::from_instruction(&instructions[0], ctx),
             _ => {
-                let mut ast = AST::from_instruction(&instructions[0], ctx);
+                let mut ast = Regexp::from_instruction(&instructions[0], ctx);
                 for instruction in &instructions[1..] {
-                    let other = AST::from_instruction(instruction, ctx);
-                    ast = AST::Concat(Box::new(ast), Box::new(other));
+                    let other = Regexp::from_instruction(instruction, ctx);
+                    ast = Regexp::Concat(Box::new(ast), Box::new(other));
                 }
                 ast
             }
@@ -37,17 +37,17 @@ impl AST {
 
     fn from_instruction(instruction: &TestInstruction, ctx: &CharacterClasses) -> Self {
         match instruction {
-            TestInstruction::Lookback { .. } => AST::NotImplemented, // ignore
-            TestInstruction::Variable { .. } => AST::NotImplemented, // TODO
-            TestInstruction::String { s } => AST::String(s.to_string()),
-            TestInstruction::Dots { dots } => AST::String(dots_to_unicode(dots)),
+            TestInstruction::Lookback { .. } => Regexp::NotImplemented, // ignore
+            TestInstruction::Variable { .. } => Regexp::NotImplemented, // TODO
+            TestInstruction::String { s } => Regexp::String(s.to_string()),
+            TestInstruction::Dots { dots } => Regexp::String(dots_to_unicode(dots)),
             TestInstruction::Attributes { attrs, quantifier } => {
-                AST::from_multipass_attributes(attrs, quantifier, ctx)
+                Regexp::from_multipass_attributes(attrs, quantifier, ctx)
             }
-            TestInstruction::Class { name, quantifier } => AST::from_class(name, quantifier, ctx),
-            TestInstruction::Negate { .. } => AST::NotImplemented,
+            TestInstruction::Class { name, quantifier } => Regexp::from_class(name, quantifier, ctx),
+            TestInstruction::Negate { .. } => Regexp::NotImplemented,
             TestInstruction::Replace { tests } => {
-                AST::Capture(Box::new(AST::from_instructions(tests, ctx)))
+                Regexp::Capture(Box::new(Regexp::from_instructions(tests, ctx)))
             }
         }
     }
@@ -57,14 +57,14 @@ impl AST {
         let characters = ctx.get(&class).unwrap_or_default(); // FIXME: should probably fail if we cannot find the class
         if let Some(quantifier) = quantifier {
             match quantifier {
-                Quantifier::Number(n) => AST::RepeatExactly(*n, Box::new(AST::Set(characters))),
+                Quantifier::Number(n) => Regexp::RepeatExactly(*n, Box::new(Regexp::CharacterClass(characters))),
                 Quantifier::Range(min, max) => {
-                    AST::RepeatAtLeastAtMost(*min, *max, Box::new(AST::Set(characters)))
+                    Regexp::RepeatAtLeastAtMost(*min, *max, Box::new(Regexp::CharacterClass(characters)))
                 }
-                Quantifier::Any => AST::ZeroOrMore(Box::new(AST::Set(characters))),
+                Quantifier::Any => Regexp::ZeroOrMore(Box::new(Regexp::CharacterClass(characters))),
             }
         } else {
-            AST::Set(characters)
+            Regexp::CharacterClass(characters)
         }
     }
 
@@ -88,14 +88,14 @@ impl AST {
         }
         if let Some(quantifier) = quantifier {
             match quantifier {
-                Quantifier::Number(n) => AST::RepeatExactly(*n, Box::new(AST::Set(characters))),
+                Quantifier::Number(n) => Regexp::RepeatExactly(*n, Box::new(Regexp::CharacterClass(characters))),
                 Quantifier::Range(min, max) => {
-                    AST::RepeatAtLeastAtMost(*min, *max, Box::new(AST::Set(characters)))
+                    Regexp::RepeatAtLeastAtMost(*min, *max, Box::new(Regexp::CharacterClass(characters)))
                 }
-                Quantifier::Any => AST::ZeroOrMore(Box::new(AST::Set(characters))),
+                Quantifier::Any => Regexp::ZeroOrMore(Box::new(Regexp::CharacterClass(characters))),
             }
         } else {
-            AST::Set(characters)
+            Regexp::CharacterClass(characters)
         }
     }
 }
@@ -139,20 +139,14 @@ impl TranslationTargets {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct ContextPatterns {
-    nfa: NFA,
+#[derive(Debug)]
+pub struct ContextPatternsBuilder {
+    pairs: Vec<(Regexp, Translation)>,
 }
 
-impl ContextPatterns {
+impl ContextPatternsBuilder {
     pub fn new() -> Self {
-        Self {
-            nfa: NFA::default(),
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.nfa.is_empty()
+        Self { pairs: Vec::new() }
     }
 
     /// Create a translation based on `test`, `action`, `origin` and `swap_classes`
@@ -180,16 +174,30 @@ impl ContextPatterns {
         stage: TranslationStage,
         ctx: &TableContext,
     ) -> Result<(), TranslationError> {
-        let translation = self.translation(action, origin, stage, ctx.swap_classes())?;
+        let translation = Translation::Unresolved(self.translation(action, origin, stage, ctx.swap_classes())?);
         let test = test.clone().add_implicit_replace();
-        let ast = AST::from_test(&test, ctx.character_classes());
-        self.nfa
-            .merge_accepting_fragment(&ast, Translation::Unresolved(translation));
+        let re = Regexp::from_test(&test, ctx.character_classes());
+        self.pairs.push((re, translation));
         Ok(())
     }
 
-    pub fn find_translations(&self, input: &str) -> Vec<ResolvedTranslation> {
-        self.nfa.find_translations(input)
+    pub fn build(self) -> ContextPatterns {
+        ContextPatterns { re: Regexp::compile_many_accepting(&self.pairs) }
+    }
+}
+
+#[derive(Debug)]
+pub struct ContextPatterns {
+    re: CompiledRegexp,
+}
+
+impl ContextPatterns {
+    pub fn is_empty(&self) -> bool {
+	todo!()
+    }
+
+    pub fn find(&self, input: &str) -> Vec<ResolvedTranslation> {
+        self.re.find(input)
     }
 }
 
@@ -220,13 +228,12 @@ mod tests {
         let tests = test::Parser::new("\"abc\"").tests().unwrap();
         let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
-        let ast = AST::from_test(&tests, &ctx);
-        let nfa = NFA::from(&ast);
+        let re = Regexp::from_test(&tests, &ctx).compile();
         assert_eq!(
-            nfa.find_translations("abc"),
+            re.find("abc"),
             [ResolvedTranslation::new("", "", 3, stage, None)]
         );
-        assert!(nfa.find_translations("def").is_empty());
+        assert!(re.find("def").is_empty());
     }
 
     #[test]
@@ -234,27 +241,26 @@ mod tests {
         let tests = test::Parser::new("$d").tests().unwrap();
         let stage = TranslationStage::Main;
         let ctx = context(CharacterClass::Digit, &['1', '2', '3']);
-        let ast = AST::from_test(&tests, &ctx);
         let translation = UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
             stage,
             None,
         );
-        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
+        let re = Regexp::from_test(&tests, &ctx).compile_with_payload(Translation::Unresolved(translation));
         assert_eq!(
-            nfa.find_translations("1"),
+            re.find("1"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("2"),
+            re.find("2"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("3"),
+            re.find("3"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(nfa.find_translations("def").is_empty());
+        assert!(re.find("def").is_empty());
     }
 
     #[test]
@@ -262,27 +268,26 @@ mod tests {
         let tests = test::Parser::new("$U").tests().unwrap();
         let stage = TranslationStage::Main;
         let ctx = context(CharacterClass::Uppercase, &['A', 'B', 'C']);
-        let ast = AST::from_test(&tests, &ctx);
         let translation = UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
             stage,
             None,
         );
-        let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
+        let re = Regexp::from_test(&tests, &ctx).compile_with_payload(Translation::Unresolved(translation));
         assert_eq!(
-            nfa.find_translations("A"),
+            re.find("A"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("A"),
+            re.find("A"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("C"),
+            re.find("C"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(nfa.find_translations("def").is_empty());
+        assert!(re.find("def").is_empty());
     }
 
     #[test]
@@ -299,7 +304,7 @@ mod tests {
         for c in ['%', '&', '/'] {
             ctx.insert(CharacterClass::Sign, c);
         }
-        let ast = AST::from_test(&tests, &ctx);
+        let ast = Regexp::from_test(&tests, &ctx);
         let translation = UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
@@ -308,18 +313,18 @@ mod tests {
         );
         let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
         assert_eq!(
-            nfa.find_translations("%"),
+            re.find("%"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("."),
+            re.find("."),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("A"),
+            re.find("A"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(nfa.find_translations("def").is_empty());
+        assert!(re.find("def").is_empty());
     }
 
     #[test]
@@ -327,7 +332,7 @@ mod tests {
         let tests = test::Parser::new("%letter").tests().unwrap();
         let stage = TranslationStage::Main;
         let ctx = context(CharacterClass::Letter, &['a', 'b', 'c']);
-        let ast = AST::from_test(&tests, &ctx);
+        let ast = Regexp::from_test(&tests, &ctx);
         let translation = UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
@@ -336,18 +341,18 @@ mod tests {
         );
         let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
         assert_eq!(
-            nfa.find_translations("a"),
+            re.find("a"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("b"),
+            re.find("b"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("c"),
+            re.find("c"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(nfa.find_translations("def").is_empty());
+        assert!(re.find("def").is_empty());
     }
 
     #[test]
@@ -355,7 +360,7 @@ mod tests {
         let tests = test::Parser::new("%letter3").tests().unwrap();
         let stage = TranslationStage::Main;
         let ctx = context(CharacterClass::Letter, &['a', 'b', 'c']);
-        let ast = AST::from_test(&tests, &ctx);
+        let ast = Regexp::from_test(&tests, &ctx);
         let translation = UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
@@ -364,27 +369,27 @@ mod tests {
         );
         let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
         assert_eq!(
-            nfa.find_translations("abc"),
+            re.find("abc"),
             [ResolvedTranslation::new("", "", 3, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("bbb"),
+            re.find("bbb"),
             [ResolvedTranslation::new("", "", 3, stage, None)]
         );
         assert_eq!(
-            nfa.find_translations("ccc"),
+            re.find("ccc"),
             [ResolvedTranslation::new("", "", 3, stage, None)]
         );
-        assert!(nfa.find_translations("a").is_empty());
-        assert!(nfa.find_translations("aa").is_empty());
-        assert!(nfa.find_translations("def").is_empty());
+        assert!(re.find("a").is_empty());
+        assert!(re.find("aa").is_empty());
+        assert!(re.find("def").is_empty());
     }
 
     #[test]
     fn find_capture_with_character_class() {
         let tests = test::Parser::new("\"a\"[%digit]\"b\"").tests().unwrap();
         let ctx = context(CharacterClass::Digit, &['1', '2', '3']);
-        let ast = AST::from_test(&tests, &ctx);
+        let ast = Regexp::from_test(&tests, &ctx);
         let translation = UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
@@ -393,22 +398,22 @@ mod tests {
         );
         let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
         assert_eq!(
-            nfa.find_translations("a1b"),
+            re.find("a1b"),
             [ResolvedTranslation::new("1", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            nfa.find_translations("a2b"),
+            re.find("a2b"),
             [ResolvedTranslation::new("2", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            nfa.find_translations("a3b"),
+            re.find("a3b"),
             [ResolvedTranslation::new("3", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
-        assert_eq!(nfa.find_translations("bbb"), []);
-        assert_eq!(nfa.find_translations("ccc"), []);
-        assert_eq!(nfa.find_translations("a"), []);
-        assert_eq!(nfa.find_translations("aa"), []);
-        assert_eq!(nfa.find_translations("def"), []);
+        assert_eq!(re.find("bbb"), []);
+        assert_eq!(re.find("ccc"), []);
+        assert_eq!(re.find("a"), []);
+        assert_eq!(re.find("aa"), []);
+        assert_eq!(re.find("def"), []);
     }
 
     #[test]
@@ -418,7 +423,7 @@ mod tests {
         for c in ['A', 'B', 'C'] {
             ctx.insert(CharacterClass::Uppercase, c);
         }
-        let ast = AST::from_test(&tests, &ctx);
+        let ast = Regexp::from_test(&tests, &ctx);
         let translation = UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
@@ -427,34 +432,34 @@ mod tests {
         );
         let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
         assert_eq!(
-            nfa.find_translations("a1b"),
+            re.find("a1b"),
             [ResolvedTranslation::new("1", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            nfa.find_translations("a2b"),
+            re.find("a2b"),
             [ResolvedTranslation::new("2", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            nfa.find_translations("a3b"),
+            re.find("a3b"),
             [ResolvedTranslation::new("3", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            nfa.find_translations("aAb"),
+            re.find("aAb"),
             [ResolvedTranslation::new("A", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            nfa.find_translations("aBb"),
+            re.find("aBb"),
             [ResolvedTranslation::new("B", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            nfa.find_translations("aCb"),
+            re.find("aCb"),
             [ResolvedTranslation::new("C", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
-        assert_eq!(nfa.find_translations("bbb"), []);
-        assert_eq!(nfa.find_translations("ccc"), []);
-        assert_eq!(nfa.find_translations("a"), []);
-        assert_eq!(nfa.find_translations("aa"), []);
-        assert_eq!(nfa.find_translations("def"), []);
+        assert_eq!(re.find("bbb"), []);
+        assert_eq!(re.find("ccc"), []);
+        assert_eq!(re.find("a"), []);
+        assert_eq!(re.find("aa"), []);
+        assert_eq!(re.find("def"), []);
     }
 
     #[test]
@@ -464,7 +469,7 @@ mod tests {
         for c in ['A', 'B', 'C'] {
             ctx.insert(CharacterClass::Uppercase, c);
         }
-        let ast = AST::from_test(&tests, &ctx);
+        let ast = Regexp::from_test(&tests, &ctx);
         let translation = UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
@@ -472,38 +477,38 @@ mod tests {
             None,
         );
         let nfa = NFA::from_with_translation(&ast, Translation::Unresolved(translation));
-        assert_eq!(nfa.find_translations("a1b"), []);
-        assert_eq!(nfa.find_translations("a22b"), []);
-        assert_eq!(nfa.find_translations("a31b"), []);
+        assert_eq!(re.find("a1b"), []);
+        assert_eq!(re.find("a22b"), []);
+        assert_eq!(re.find("a31b"), []);
         assert_eq!(
-            nfa.find_translations("a123b"),
+            re.find("a123b"),
             [ResolvedTranslation::new("123", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            nfa.find_translations("a222b"),
+            re.find("a222b"),
             [ResolvedTranslation::new("222", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            nfa.find_translations("a321b"),
+            re.find("a321b"),
             [ResolvedTranslation::new("321", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            nfa.find_translations("aABCb"),
+            re.find("aABCb"),
             [ResolvedTranslation::new("ABC", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            nfa.find_translations("aBBBb"),
+            re.find("aBBBb"),
             [ResolvedTranslation::new("BBB", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            nfa.find_translations("aCBAb"),
+            re.find("aCBAb"),
             [ResolvedTranslation::new("CBA", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
-        assert_eq!(nfa.find_translations("bbb"), []);
-        assert_eq!(nfa.find_translations("ccc"), []);
-        assert_eq!(nfa.find_translations("a"), []);
-        assert_eq!(nfa.find_translations("aa"), []);
-        assert_eq!(nfa.find_translations("def"), []);
+        assert_eq!(re.find("bbb"), []);
+        assert_eq!(re.find("ccc"), []);
+        assert_eq!(re.find("a"), []);
+        assert_eq!(re.find("aa"), []);
+        assert_eq!(re.find("def"), []);
     }
 
     // just create some fake anchored rule for testing purposes

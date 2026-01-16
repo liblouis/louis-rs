@@ -79,7 +79,7 @@ impl ContextTable {
     }
 
     fn translation_candidates(&self, input: &str, prev: Option<char>) -> Vec<ResolvedTranslation> {
-        self.patterns.find_translations(input).into_iter().collect()
+        self.patterns.find(input).into_iter().collect()
     }
 
     pub fn trace(&self, input: &str) -> Vec<ResolvedTranslation> {

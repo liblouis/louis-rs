@@ -54,7 +54,7 @@ impl Regexp {
         self.compile_with_payload(payload)
     }
 
-    fn compile_with_payload(&self, payload: Translation) -> CompiledRegexp {
+    pub fn compile_with_payload(&self, payload: Translation) -> CompiledRegexp {
         let mut instructions = Vec::new();
         let mut character_classes = Vec::new();
         let translations = Vec::from([payload]);
