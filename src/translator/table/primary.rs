@@ -3,11 +3,19 @@ use std::{fs::File, io};
 use hyphenation::{Hyphenator, Load, Standard};
 
 use crate::{
+    Direction,
     parser::{
-        fallback, AnchoredRule, Braille, CharacterClass, CharacterClasses, HasNocross, HasPrecedence
-    }, translator::{
-        dots_to_unicode, indication::{lettersign, nocontract, numeric, uppercase}, match_pattern::{MatchPatterns, MatchPatternsBuilder}, table::TableContext, trie::{Boundary, Trie}, CharacterDefinition, ResolvedTranslation, Rule, TranslationError, TranslationStage
-    }, Direction
+        AnchoredRule, Braille, CharacterClass, CharacterClasses, HasNocross, HasPrecedence,
+        fallback,
+    },
+    translator::{
+        CharacterDefinition, ResolvedTranslation, Rule, TranslationError, TranslationStage,
+        dots_to_unicode,
+        indication::{lettersign, nocontract, numeric, uppercase},
+        match_pattern::{MatchPatterns, MatchPatternsBuilder},
+        table::TableContext,
+        trie::{Boundary, Trie},
+    },
 };
 
 #[derive(Debug)]

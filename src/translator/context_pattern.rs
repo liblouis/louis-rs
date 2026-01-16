@@ -44,7 +44,9 @@ impl Regexp {
             TestInstruction::Attributes { attrs, quantifier } => {
                 Regexp::from_multipass_attributes(attrs, quantifier, ctx)
             }
-            TestInstruction::Class { name, quantifier } => Regexp::from_class(name, quantifier, ctx),
+            TestInstruction::Class { name, quantifier } => {
+                Regexp::from_class(name, quantifier, ctx)
+            }
             TestInstruction::Negate { .. } => Regexp::NotImplemented,
             TestInstruction::Replace { tests } => {
                 Regexp::Capture(Box::new(Regexp::from_instructions(tests, ctx)))
@@ -57,10 +59,14 @@ impl Regexp {
         let characters = ctx.get(&class).unwrap_or_default(); // FIXME: should probably fail if we cannot find the class
         if let Some(quantifier) = quantifier {
             match quantifier {
-                Quantifier::Number(n) => Regexp::RepeatExactly(*n, Box::new(Regexp::CharacterClass(characters))),
-                Quantifier::Range(min, max) => {
-                    Regexp::RepeatAtLeastAtMost(*min, *max, Box::new(Regexp::CharacterClass(characters)))
+                Quantifier::Number(n) => {
+                    Regexp::RepeatExactly(*n, Box::new(Regexp::CharacterClass(characters)))
                 }
+                Quantifier::Range(min, max) => Regexp::RepeatAtLeastAtMost(
+                    *min,
+                    *max,
+                    Box::new(Regexp::CharacterClass(characters)),
+                ),
                 Quantifier::Any => Regexp::ZeroOrMore(Box::new(Regexp::CharacterClass(characters))),
             }
         } else {
@@ -88,10 +94,14 @@ impl Regexp {
         }
         if let Some(quantifier) = quantifier {
             match quantifier {
-                Quantifier::Number(n) => Regexp::RepeatExactly(*n, Box::new(Regexp::CharacterClass(characters))),
-                Quantifier::Range(min, max) => {
-                    Regexp::RepeatAtLeastAtMost(*min, *max, Box::new(Regexp::CharacterClass(characters)))
+                Quantifier::Number(n) => {
+                    Regexp::RepeatExactly(*n, Box::new(Regexp::CharacterClass(characters)))
                 }
+                Quantifier::Range(min, max) => Regexp::RepeatAtLeastAtMost(
+                    *min,
+                    *max,
+                    Box::new(Regexp::CharacterClass(characters)),
+                ),
                 Quantifier::Any => Regexp::ZeroOrMore(Box::new(Regexp::CharacterClass(characters))),
             }
         } else {
@@ -174,7 +184,8 @@ impl ContextPatternsBuilder {
         stage: TranslationStage,
         ctx: &TableContext,
     ) -> Result<(), TranslationError> {
-        let translation = Translation::Unresolved(self.translation(action, origin, stage, ctx.swap_classes())?);
+        let translation =
+            Translation::Unresolved(self.translation(action, origin, stage, ctx.swap_classes())?);
         let test = test.clone().add_implicit_replace();
         let re = Regexp::from_test(&test, ctx.character_classes());
         self.pairs.push((re, translation));
@@ -182,7 +193,9 @@ impl ContextPatternsBuilder {
     }
 
     pub fn build(self) -> ContextPatterns {
-        ContextPatterns { re: Regexp::compile_many_accepting(&self.pairs) }
+        ContextPatterns {
+            re: Regexp::compile_many_accepting(&self.pairs),
+        }
     }
 }
 
@@ -247,8 +260,8 @@ mod tests {
             stage,
             None,
         ));
-	let regexp = Regexp::from_test(&tests, &ctx);
-	let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
+        let regexp = Regexp::from_test(&tests, &ctx);
+        let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
             re.find("1"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
@@ -275,8 +288,8 @@ mod tests {
             stage,
             None,
         ));
-	let regexp = Regexp::from_test(&tests, &ctx);
-	let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
+        let regexp = Regexp::from_test(&tests, &ctx);
+        let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
             re.find("A"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
@@ -313,8 +326,8 @@ mod tests {
             stage,
             None,
         ));
-	let regexp = Regexp::from_test(&tests, &ctx);
-	let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
+        let regexp = Regexp::from_test(&tests, &ctx);
+        let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
             re.find("%"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
@@ -335,15 +348,14 @@ mod tests {
         let tests = test::Parser::new("%letter").tests().unwrap();
         let stage = TranslationStage::Main;
         let ctx = context(CharacterClass::Letter, &['a', 'b', 'c']);
-        let translation = Translation::Unresolved(
-	    UnresolvedTranslation::new(
-		&[TranslationTarget::Literal("".to_string())],
-		Precedence::Default,
-		stage,
-		None,
-            ));
-	let regexp = Regexp::from_test(&tests, &ctx);
-	let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
+        let translation = Translation::Unresolved(UnresolvedTranslation::new(
+            &[TranslationTarget::Literal("".to_string())],
+            Precedence::Default,
+            stage,
+            None,
+        ));
+        let regexp = Regexp::from_test(&tests, &ctx);
+        let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
             re.find("a"),
             [ResolvedTranslation::new("", "", 1, stage, None)]
@@ -370,8 +382,8 @@ mod tests {
             stage,
             None,
         ));
-	let regexp = Regexp::from_test(&tests, &ctx);
-	let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
+        let regexp = Regexp::from_test(&tests, &ctx);
+        let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
             re.find("abc"),
             [ResolvedTranslation::new("", "", 3, stage, None)]
@@ -399,8 +411,8 @@ mod tests {
             TranslationStage::Main,
             None,
         ));
-	let regexp = Regexp::from_test(&tests, &ctx);
-	let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
+        let regexp = Regexp::from_test(&tests, &ctx);
+        let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
             re.find("a1b"),
             [ResolvedTranslation::new("1", "", 3, TranslationStage::Main, None).with_offset(1)]
@@ -433,8 +445,8 @@ mod tests {
             TranslationStage::Main,
             None,
         ));
-	let regexp = Regexp::from_test(&tests, &ctx);
-	let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
+        let regexp = Regexp::from_test(&tests, &ctx);
+        let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
             re.find("a1b"),
             [ResolvedTranslation::new("1", "", 3, TranslationStage::Main, None).with_offset(1)]
@@ -479,8 +491,8 @@ mod tests {
             TranslationStage::Main,
             None,
         ));
-	let regexp = Regexp::from_test(&tests, &ctx);
-	let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
+        let regexp = Regexp::from_test(&tests, &ctx);
+        let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(re.find("a1b"), []);
         assert_eq!(re.find("a22b"), []);
         assert_eq!(re.find("a31b"), []);
@@ -533,7 +545,7 @@ mod tests {
             .unwrap();
         let translation =
             ResolvedTranslation::new("abc", "A_B_C", 3, TranslationStage::Main, origin.clone());
-	let patterns = builder.build();
+        let patterns = builder.build();
         assert_eq!(patterns.find("abc"), [translation]);
         assert!(patterns.find("def").is_empty());
     }
@@ -550,7 +562,7 @@ mod tests {
             .unwrap();
         let translation =
             ResolvedTranslation::new("abc", "<abc>", 3, TranslationStage::Main, origin.clone());
-	let patterns = builder.build();
+        let patterns = builder.build();
         assert_eq!(patterns.find("abc"), [translation]);
         assert!(patterns.find("def").is_empty());
     }
@@ -572,7 +584,7 @@ mod tests {
         let translation =
             ResolvedTranslation::new("abc", "<abc>", 9, TranslationStage::Main, origin.clone())
                 .with_offset(3);
-	let patterns = builder.build();
+        let patterns = builder.build();
         assert_eq!(patterns.find("{{{abc}}}"), [translation]);
         assert!(patterns.find("def").is_empty());
     }
@@ -594,7 +606,7 @@ mod tests {
         let translation =
             ResolvedTranslation::new("abc", "<ABC>", 9, TranslationStage::Main, origin.clone())
                 .with_offset(3);
-	let patterns = builder.build();
+        let patterns = builder.build();
         assert_eq!(patterns.find("{{{abc}}}"), [translation]);
         assert!(patterns.find("def").is_empty());
     }

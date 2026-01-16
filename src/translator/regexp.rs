@@ -369,14 +369,9 @@ impl CompiledRegexp {
             Instruction::CaptureStart => {
                 self.find_internal(pc + 1, &input, sp, length, (sp, 0), translations)
             }
-            Instruction::CaptureEnd => self.find_internal(
-                pc + 1,
-                &input,
-                sp,
-                length,
-                (capture.0, sp),
-                translations,
-            ),
+            Instruction::CaptureEnd => {
+                self.find_internal(pc + 1, &input, sp, length, (capture.0, sp), translations)
+            }
         }
     }
 

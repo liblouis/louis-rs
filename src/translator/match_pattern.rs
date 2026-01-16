@@ -313,8 +313,8 @@ mod tests {
             TranslationStage::Main,
             rule.clone(),
         )
-            .with_offset(1);
-	let matcher = builder.build();
+        .with_offset(1);
+        let matcher = builder.build();
         assert_eq!(matcher.find("afoo1"), vec![translation.clone()]);
         assert_eq!(matcher.find("bfoo2"), vec![translation.clone()]);
         let translations = vec![
@@ -366,7 +366,7 @@ mod tests {
             )
             .with_offset(3),
         ];
-	let matcher = builder.build();
+        let matcher = builder.build();
         assert_eq!(matcher.find("aaafoo333"), translation);
         let translation = vec![
             ResolvedTranslation::new(
