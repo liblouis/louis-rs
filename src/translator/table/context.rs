@@ -41,10 +41,6 @@ impl ContextTableBuilder {
 }
 
 impl ContextTable {
-    pub fn is_empty(&self) -> bool {
-        self.patterns.is_empty()
-    }
-
     pub fn compile(
         rules: &[AnchoredRule],
         direction: Direction,

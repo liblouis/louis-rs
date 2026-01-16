@@ -205,10 +205,6 @@ pub struct ContextPatterns {
 }
 
 impl ContextPatterns {
-    pub fn is_empty(&self) -> bool {
-	todo!()
-    }
-
     pub fn find(&self, input: &str) -> Vec<ResolvedTranslation> {
         self.re.find(input)
     }
