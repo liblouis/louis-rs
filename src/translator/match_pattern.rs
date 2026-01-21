@@ -4,6 +4,7 @@ use std::collections::HashSet;
 
 use crate::parser::{AnchoredRule, Attribute, CharacterClasses, Pattern, Patterns};
 
+use crate::translator::effect::Environment;
 use crate::translator::regexp::{CompiledRegexp, Regexp};
 use crate::translator::translation::Translation;
 use crate::translator::{ResolvedTranslation, TranslationStage};
@@ -129,7 +130,7 @@ pub struct MatchPatterns {
 
 impl MatchPatterns {
     pub fn find(&self, input: &str) -> Vec<ResolvedTranslation> {
-        self.re.find(input)
+        self.re.find(input, &Environment::new())
     }
 }
 
@@ -148,37 +149,40 @@ mod tests {
 
     #[test]
     fn find_pattern() {
+        let env = Environment::new();
         let patterns = PatternParser::new("abc").pattern().unwrap();
         let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
         let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            re.find("abc"),
+            re.find("abc", &env),
             vec![ResolvedTranslation::new("", "", 3, stage, None)]
         );
-        assert!(re.find("def").is_empty());
+        assert!(re.find("def", &env).is_empty());
     }
 
     #[test]
     fn find_either() {
+        let env = Environment::new();
         let patterns = PatternParser::new("a|b").pattern().unwrap();
         let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
         let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            re.find("a"),
+            re.find("a", &env),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("b"),
+            re.find("b", &env),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert_eq!(re.find("c"), vec![]);
-        assert!(re.find("def").is_empty());
+        assert_eq!(re.find("c", &env), vec![]);
+        assert!(re.find("def", &env).is_empty());
     }
 
     #[test]
     fn find_attribute_digit() {
+        let env = Environment::new();
         let patterns = PatternParser::new("%[#]").pattern().unwrap();
         let stage = TranslationStage::Main;
         let mut ctx = CharacterClasses::default();
@@ -187,22 +191,23 @@ mod tests {
         }
         let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            re.find("1"),
+            re.find("1", &env),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("2"),
+            re.find("2", &env),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("3"),
+            re.find("3", &env),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(re.find("def").is_empty());
+        assert!(re.find("def", &env).is_empty());
     }
 
     #[test]
     fn find_attribute_uppercase() {
+        let env = Environment::new();
         let patterns = PatternParser::new("%[u]").pattern().unwrap();
         let stage = TranslationStage::Main;
         let mut ctx = CharacterClasses::default();
@@ -211,22 +216,23 @@ mod tests {
         }
         let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            re.find("A"),
+            re.find("A", &env),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("A"),
+            re.find("A", &env),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("C"),
+            re.find("C", &env),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(re.find("def").is_empty());
+        assert!(re.find("def", &env).is_empty());
     }
 
     #[test]
     fn find_attribute_uppercase_punctuation_or_sign() {
+        let env = Environment::new();
         let patterns = PatternParser::new("%[.$u]").pattern().unwrap();
         let stage = TranslationStage::Main;
         let mut ctx = CharacterClasses::default();
@@ -241,60 +247,62 @@ mod tests {
         }
         let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            re.find("%"),
+            re.find("%", &env),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("."),
+            re.find(".", &env),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("A"),
+            re.find("A", &env),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(re.find("def").is_empty());
+        assert!(re.find("def", &env).is_empty());
     }
 
     #[test]
     fn find_character_class() {
+        let env = Environment::new();
         let patterns = PatternParser::new("[abc]").pattern().unwrap();
         let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
         let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            re.find("a"),
+            re.find("a", &env),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("b"),
+            re.find("b", &env),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("c"),
+            re.find("c", &env),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(re.find("def").is_empty());
+        assert!(re.find("def", &env).is_empty());
     }
 
     #[test]
     fn find_character_class_one_or_more() {
+        let env = Environment::new();
         let patterns = PatternParser::new("[abc]+").pattern().unwrap();
         let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
         let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            re.find("a"),
+            re.find("a", &env),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("b"),
+            re.find("b", &env),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("c"),
+            re.find("c", &env),
             vec![ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(re.find("def").is_empty());
+        assert!(re.find("def", &env).is_empty());
     }
 
     #[test]
@@ -348,6 +356,7 @@ mod tests {
 
     #[test]
     fn find_multiple_match() {
+        let env = Environment::new();
         let pre = PatternParser::new("[abc]+").pattern().unwrap();
         let post = PatternParser::new("[1234567890]").pattern().unwrap();
         let ctx = CharacterClasses::default();

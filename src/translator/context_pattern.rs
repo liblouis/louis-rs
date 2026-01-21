@@ -8,6 +8,7 @@ use crate::parser::{
 };
 
 use crate::parser::{AnchoredRule, Attribute, CharacterClass, CharacterClasses};
+use crate::translator::effect::Environment;
 use crate::translator::regexp::{CompiledRegexp, Regexp};
 use crate::translator::swap::SwapClasses;
 use crate::translator::table::TableContext;
@@ -212,8 +213,8 @@ pub struct ContextPatterns {
 }
 
 impl ContextPatterns {
-    pub fn find(&self, input: &str) -> Vec<ResolvedTranslation> {
-        self.re.find(input)
+    pub fn find(&self, input: &str, env: &Environment) -> Vec<ResolvedTranslation> {
+        self.re.find(input, env)
     }
 }
 
@@ -235,19 +236,21 @@ mod tests {
 
     #[test]
     fn find_string() {
+        let env = Environment::new();
         let tests = test::Parser::new("\"abc\"").tests().unwrap();
         let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
         let re = Regexp::from_test(&tests, &ctx).compile();
         assert_eq!(
-            re.find("abc"),
+            re.find("abc", &env),
             [ResolvedTranslation::new("", "", 3, stage, None)]
         );
-        assert!(re.find("def").is_empty());
+        assert!(re.find("def", &env).is_empty());
     }
 
     #[test]
     fn find_attribute_digit() {
+        let env = Environment::new();
         let tests = test::Parser::new("$d").tests().unwrap();
         let stage = TranslationStage::Main;
         let ctx = context(CharacterClass::Digit, &['1', '2', '3']);
@@ -260,22 +263,23 @@ mod tests {
         let regexp = Regexp::from_test(&tests, &ctx);
         let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
-            re.find("1"),
+            re.find("1", &env),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("2"),
+            re.find("2", &env),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("3"),
+            re.find("3", &env),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(re.find("def").is_empty());
+        assert!(re.find("def", &env).is_empty());
     }
 
     #[test]
     fn find_attribute_uppercase() {
+        let env = Environment::new();
         let tests = test::Parser::new("$U").tests().unwrap();
         let stage = TranslationStage::Main;
         let ctx = context(CharacterClass::Uppercase, &['A', 'B', 'C']);
@@ -288,22 +292,23 @@ mod tests {
         let regexp = Regexp::from_test(&tests, &ctx);
         let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
-            re.find("A"),
+            re.find("A", &env),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("A"),
+            re.find("A", &env),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("C"),
+            re.find("C", &env),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(re.find("def").is_empty());
+        assert!(re.find("def", &env).is_empty());
     }
 
     #[test]
     fn find_attribute_uppercase_punctuation_or_sign() {
+        let env = Environment::new();
         let tests = test::Parser::new("$USp").tests().unwrap();
         let mut ctx = CharacterClasses::default();
         let stage = TranslationStage::Main;
@@ -325,22 +330,23 @@ mod tests {
         let regexp = Regexp::from_test(&tests, &ctx);
         let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
-            re.find("%"),
+            re.find("%", &env),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("."),
+            re.find(".", &env),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("A"),
+            re.find("A", &env),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(re.find("def").is_empty());
+        assert!(re.find("def", &env).is_empty());
     }
 
     #[test]
     fn find_character_class() {
+        let env = Environment::new();
         let tests = test::Parser::new("%letter").tests().unwrap();
         let stage = TranslationStage::Main;
         let ctx = context(CharacterClass::Letter, &['a', 'b', 'c']);
@@ -353,22 +359,23 @@ mod tests {
         let regexp = Regexp::from_test(&tests, &ctx);
         let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
-            re.find("a"),
+            re.find("a", &env),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("b"),
+            re.find("b", &env),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
         assert_eq!(
-            re.find("c"),
+            re.find("c", &env),
             [ResolvedTranslation::new("", "", 1, stage, None)]
         );
-        assert!(re.find("def").is_empty());
+        assert!(re.find("def", &env).is_empty());
     }
 
     #[test]
     fn find_character_class_three() {
+        let env = Environment::new();
         let tests = test::Parser::new("%letter3").tests().unwrap();
         let stage = TranslationStage::Main;
         let ctx = context(CharacterClass::Letter, &['a', 'b', 'c']);
@@ -381,24 +388,25 @@ mod tests {
         let regexp = Regexp::from_test(&tests, &ctx);
         let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
-            re.find("abc"),
+            re.find("abc", &env),
             [ResolvedTranslation::new("", "", 3, stage, None)]
         );
         assert_eq!(
-            re.find("bbb"),
+            re.find("bbb", &env),
             [ResolvedTranslation::new("", "", 3, stage, None)]
         );
         assert_eq!(
-            re.find("ccc"),
+            re.find("ccc", &env),
             [ResolvedTranslation::new("", "", 3, stage, None)]
         );
-        assert!(re.find("a").is_empty());
-        assert!(re.find("aa").is_empty());
-        assert!(re.find("def").is_empty());
+        assert!(re.find("a", &env).is_empty());
+        assert!(re.find("aa", &env).is_empty());
+        assert!(re.find("def", &env).is_empty());
     }
 
     #[test]
     fn find_capture_with_character_class() {
+        let env = Environment::new();
         let tests = test::Parser::new("\"a\"[%digit]\"b\"").tests().unwrap();
         let ctx = context(CharacterClass::Digit, &['1', '2', '3']);
         let translation = Translation::Unresolved(UnresolvedTranslation::new(
@@ -410,26 +418,27 @@ mod tests {
         let regexp = Regexp::from_test(&tests, &ctx);
         let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
-            re.find("a1b"),
+            re.find("a1b", &env),
             [ResolvedTranslation::new("1", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            re.find("a2b"),
+            re.find("a2b", &env),
             [ResolvedTranslation::new("2", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            re.find("a3b"),
+            re.find("a3b", &env),
             [ResolvedTranslation::new("3", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
-        assert_eq!(re.find("bbb"), []);
-        assert_eq!(re.find("ccc"), []);
-        assert_eq!(re.find("a"), []);
-        assert_eq!(re.find("aa"), []);
-        assert_eq!(re.find("def"), []);
+        assert_eq!(re.find("bbb", &env), []);
+        assert_eq!(re.find("ccc", &env), []);
+        assert_eq!(re.find("a", &env), []);
+        assert_eq!(re.find("aa", &env), []);
+        assert_eq!(re.find("def", &env), []);
     }
 
     #[test]
     fn find_capture_with_attribute() {
+        let env = Environment::new();
         let tests = test::Parser::new("\"a\"[$dU]\"b\"").tests().unwrap();
         let mut ctx = context(CharacterClass::Digit, &['1', '2', '3']);
         for c in ['A', 'B', 'C'] {
@@ -444,38 +453,39 @@ mod tests {
         let regexp = Regexp::from_test(&tests, &ctx);
         let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
         assert_eq!(
-            re.find("a1b"),
+            re.find("a1b", &env),
             [ResolvedTranslation::new("1", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            re.find("a2b"),
+            re.find("a2b", &env),
             [ResolvedTranslation::new("2", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            re.find("a3b"),
+            re.find("a3b", &env),
             [ResolvedTranslation::new("3", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            re.find("aAb"),
+            re.find("aAb", &env),
             [ResolvedTranslation::new("A", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            re.find("aBb"),
+            re.find("aBb", &env),
             [ResolvedTranslation::new("B", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            re.find("aCb"),
+            re.find("aCb", &env),
             [ResolvedTranslation::new("C", "", 3, TranslationStage::Main, None).with_offset(1)]
         );
-        assert_eq!(re.find("bbb"), []);
-        assert_eq!(re.find("ccc"), []);
-        assert_eq!(re.find("a"), []);
-        assert_eq!(re.find("aa"), []);
-        assert_eq!(re.find("def"), []);
+        assert_eq!(re.find("bbb", &env), []);
+        assert_eq!(re.find("ccc", &env), []);
+        assert_eq!(re.find("a", &env), []);
+        assert_eq!(re.find("aa", &env), []);
+        assert_eq!(re.find("def", &env), []);
     }
 
     #[test]
     fn find_capture_with_attribute_and_quantifier() {
+        let env = Environment::new();
         let tests = test::Parser::new("\"a\"[$dU3]\"b\"").tests().unwrap();
         let mut ctx = context(CharacterClass::Digit, &['1', '2', '3']);
         for c in ['A', 'B', 'C'] {
@@ -489,38 +499,38 @@ mod tests {
         ));
         let regexp = Regexp::from_test(&tests, &ctx);
         let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
-        assert_eq!(re.find("a1b"), []);
-        assert_eq!(re.find("a22b"), []);
-        assert_eq!(re.find("a31b"), []);
+        assert_eq!(re.find("a1b", &env), []);
+        assert_eq!(re.find("a22b", &env), []);
+        assert_eq!(re.find("a31b", &env), []);
         assert_eq!(
-            re.find("a123b"),
+            re.find("a123b", &env),
             [ResolvedTranslation::new("123", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            re.find("a222b"),
+            re.find("a222b", &env),
             [ResolvedTranslation::new("222", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            re.find("a321b"),
+            re.find("a321b", &env),
             [ResolvedTranslation::new("321", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            re.find("aABCb"),
+            re.find("aABCb", &env),
             [ResolvedTranslation::new("ABC", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            re.find("aBBBb"),
+            re.find("aBBBb", &env),
             [ResolvedTranslation::new("BBB", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
         assert_eq!(
-            re.find("aCBAb"),
+            re.find("aCBAb", &env),
             [ResolvedTranslation::new("CBA", "", 5, TranslationStage::Main, None).with_offset(1)]
         );
-        assert_eq!(re.find("bbb"), []);
-        assert_eq!(re.find("ccc"), []);
-        assert_eq!(re.find("a"), []);
-        assert_eq!(re.find("aa"), []);
-        assert_eq!(re.find("def"), []);
+        assert_eq!(re.find("bbb", &env), []);
+        assert_eq!(re.find("ccc", &env), []);
+        assert_eq!(re.find("a", &env), []);
+        assert_eq!(re.find("aa", &env), []);
+        assert_eq!(re.find("def", &env), []);
     }
 
     // just create some fake anchored rule for testing purposes
@@ -531,6 +541,7 @@ mod tests {
 
     #[test]
     fn context_simple() {
+        let env = Environment::new();
         let tests = test::Parser::new("\"abc\"").tests().unwrap();
         let action = action::Parser::new("\"A_B_C\"").actions().unwrap();
         let origin = origin("context \"abc\" \"A_B_C\"");
@@ -542,12 +553,13 @@ mod tests {
         let translation =
             ResolvedTranslation::new("abc", "A_B_C", 3, TranslationStage::Main, origin.clone());
         let patterns = builder.build();
-        assert_eq!(patterns.find("abc"), [translation]);
-        assert!(patterns.find("def").is_empty());
+        assert_eq!(patterns.find("abc", &env), [translation]);
+        assert!(patterns.find("def", &env).is_empty());
     }
 
     #[test]
     fn context_capture() {
+        let env = Environment::new();
         let tests = test::Parser::new(r#"["abc"]"#).tests().unwrap();
         let action = action::Parser::new(r#""<"*">""#).actions().unwrap();
         let origin = origin(r#"context "abc" "<"*">""#);
@@ -559,12 +571,13 @@ mod tests {
         let translation =
             ResolvedTranslation::new("abc", "<abc>", 3, TranslationStage::Main, origin.clone());
         let patterns = builder.build();
-        assert_eq!(patterns.find("abc"), [translation]);
-        assert!(patterns.find("def").is_empty());
+        assert_eq!(patterns.find("abc", &env), [translation]);
+        assert!(patterns.find("def", &env).is_empty());
     }
 
     #[test]
     fn context_capture_advanced() {
+        let env = Environment::new();
         let tests = test::Parser::new(r#"$p3["abc"]$p3"#).tests().unwrap();
         let action = action::Parser::new(r#""<"*">""#).actions().unwrap();
         let context = TableContext::new(
@@ -581,12 +594,13 @@ mod tests {
             ResolvedTranslation::new("abc", "<abc>", 9, TranslationStage::Main, origin.clone())
                 .with_offset(3);
         let patterns = builder.build();
-        assert_eq!(patterns.find("{{{abc}}}"), [translation]);
-        assert!(patterns.find("def").is_empty());
+        assert_eq!(patterns.find("{{{abc}}}", &env), [translation]);
+        assert!(patterns.find("def", &env).is_empty());
     }
 
     #[test]
     fn context_swap() {
+        let env = Environment::new();
         let tests = test::Parser::new(r#"$p3["abc"]$p3"#).tests().unwrap();
         let action = action::Parser::new(r#""<"%foo">""#).actions().unwrap();
         let context = TableContext::new(
@@ -603,7 +617,7 @@ mod tests {
             ResolvedTranslation::new("abc", "<ABC>", 9, TranslationStage::Main, origin.clone())
                 .with_offset(3);
         let patterns = builder.build();
-        assert_eq!(patterns.find("{{{abc}}}"), [translation]);
-        assert!(patterns.find("def").is_empty());
+        assert_eq!(patterns.find("{{{abc}}}", &env), [translation]);
+        assert!(patterns.find("def", &env).is_empty());
     }
 }
