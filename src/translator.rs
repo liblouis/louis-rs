@@ -12,6 +12,7 @@ use crate::{
 
 mod boundaries;
 mod context_pattern;
+mod effect;
 mod indication;
 mod match_pattern;
 mod pipeline;
