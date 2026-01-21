@@ -15,6 +15,7 @@ use std::collections::HashSet;
 
 use crate::translator::{
     ResolvedTranslation, TranslationStage,
+    effect::Environment,
     translation::{Resolve, Translation},
 };
 
@@ -35,6 +36,8 @@ pub enum Regexp {
     Capture(Box<Regexp>),
     /// Convenience that is unrolled into a sequence of [`Literal`](Regexp#variant.Literal)
     String(String),
+    /// Check whether variable at index is equal to given value
+    VariableEqual(VariableIndex, u8),
     /// To support empty captures, we need an empty AST
     Empty,
     /// Stop-gap blanket "implementation" for things that might be needed but are not yet
@@ -200,6 +203,9 @@ impl Regexp {
                     instructions.push(Instruction::Char(c))
                 }
             }
+            Regexp::VariableEqual(index, value) => {
+                instructions.push(Instruction::VariableEqual(*index, *value))
+            }
             Regexp::Empty => (),
             Regexp::NotImplemented => (),
         }
@@ -209,6 +215,7 @@ impl Regexp {
 type InstructionIndex = usize;
 type CharacterClassIndex = usize;
 type TranslationIndex = usize;
+type VariableIndex = u8;
 
 /// Virtual machine instruction set for pattern matching
 #[derive(Debug, Clone)]
@@ -230,6 +237,8 @@ pub enum Instruction {
     CaptureStart,
     /// End a capture
     CaptureEnd,
+    /// Test whether a variable is equal to a value
+    VariableEqual(VariableIndex, u8),
 }
 
 /// Compiled version of [`Regexp`]. Contains bytecode and associated data structures
@@ -246,7 +255,7 @@ pub struct CompiledRegexp {
 }
 
 impl CompiledRegexp {
-    fn is_match_internal(&self, pc: usize, input: &str) -> bool {
+    fn is_match_internal(&self, pc: usize, input: &str, env: &Environment) -> bool {
         if pc >= self.instructions.len() {
             return false;
         }
@@ -257,7 +266,7 @@ impl CompiledRegexp {
                 if let Some(actual) = chars.peek()
                     && expected == *actual
                 {
-                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..])
+                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..], env)
                 } else {
                     false
                 }
@@ -267,7 +276,7 @@ impl CompiledRegexp {
                 if let Some(actual) = chars.peek()
                     && self.character_classes[index].contains(actual)
                 {
-                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..])
+                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..], env)
                 } else {
                     false
                 }
@@ -275,24 +284,34 @@ impl CompiledRegexp {
             Instruction::Any => {
                 let mut chars = input.chars();
                 if let Some(actual) = chars.next() {
-                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..])
+                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..], env)
                 } else {
                     false
                 }
             }
             Instruction::Match(_) => true,
-            Instruction::Jump(index) => self.is_match_internal(index, input),
+            Instruction::Jump(index) => self.is_match_internal(index, input, env),
             Instruction::Split(index1, index2) => {
-                self.is_match_internal(index1, input) || self.is_match_internal(index2, input)
+                self.is_match_internal(index1, input, env)
+                    || self.is_match_internal(index2, input, env)
             }
             Instruction::CaptureStart | Instruction::CaptureEnd => {
-                self.is_match_internal(pc + 1, &input)
-            } // Ignore
+                self.is_match_internal(pc + 1, &input, env)
+            }
+            Instruction::VariableEqual(var, expected) => {
+                if let Some(&actual) = env.get(var)
+                    && actual == expected
+                {
+                    self.is_match_internal(pc + 1, &input, env)
+                } else {
+                    false
+                }
+            }
         }
     }
 
-    pub fn is_match(&self, input: &str) -> bool {
-        self.is_match_internal(0, input)
+    pub fn is_match(&self, input: &str, env: &Environment) -> bool {
+        self.is_match_internal(0, input, env)
     }
 
     fn find_internal(
@@ -301,6 +320,7 @@ impl CompiledRegexp {
         input: &str,
         sp: usize,
         length: usize,
+        env: &Environment,
         capture: (usize, usize),
         translations: &mut Vec<ResolvedTranslation>,
     ) {
@@ -319,6 +339,7 @@ impl CompiledRegexp {
                         &input,
                         sp + actual.len_utf8(),
                         length + 1,
+                        env,
                         capture,
                         translations,
                     )
@@ -334,6 +355,7 @@ impl CompiledRegexp {
                         &input,
                         sp + actual.len_utf8(),
                         length + 1,
+                        env,
                         capture,
                         translations,
                     )
@@ -347,6 +369,7 @@ impl CompiledRegexp {
                         &input,
                         sp + actual.len_utf8(),
                         length + 1,
+                        env,
                         capture,
                         translations,
                     )
@@ -362,24 +385,37 @@ impl CompiledRegexp {
                 );
             }
             Instruction::Jump(index) => {
-                self.find_internal(index, input, sp, length, capture, translations)
+                self.find_internal(index, input, sp, length, env, capture, translations)
             }
             Instruction::Split(index1, index2) => {
-                self.find_internal(index1, input, sp, length, capture, translations);
-                self.find_internal(index2, input, sp, length, capture, translations);
+                self.find_internal(index1, input, sp, length, env, capture, translations);
+                self.find_internal(index2, input, sp, length, env, capture, translations);
             }
             Instruction::CaptureStart => {
-                self.find_internal(pc + 1, &input, sp, length, (sp, 0), translations)
+                self.find_internal(pc + 1, &input, sp, length, env, (sp, 0), translations)
             }
-            Instruction::CaptureEnd => {
-                self.find_internal(pc + 1, &input, sp, length, (capture.0, sp), translations)
+            Instruction::CaptureEnd => self.find_internal(
+                pc + 1,
+                &input,
+                sp,
+                length,
+                env,
+                (capture.0, sp),
+                translations,
+            ),
+            Instruction::VariableEqual(var, expected) => {
+                if let Some(&actual) = env.get(var)
+                    && actual == expected
+                {
+                    self.find_internal(pc + 1, &input, sp, length, env, capture, translations)
+                }
             }
         }
     }
 
-    pub fn find(&self, input: &str) -> Vec<ResolvedTranslation> {
+    pub fn find(&self, input: &str, env: &Environment) -> Vec<ResolvedTranslation> {
         let mut translations = Vec::new();
-        self.find_internal(0, input, 0, 0, (0, 0), &mut translations);
+        self.find_internal(0, input, 0, 0, env, (0, 0), &mut translations);
         translations
     }
 }
@@ -388,33 +424,39 @@ impl CompiledRegexp {
 mod tests {
     use crate::{
         parser::Precedence,
-        translator::translation::{TranslationTarget, UnresolvedTranslation},
+        translator::{
+            effect::Effect,
+            translation::{TranslationTarget, UnresolvedTranslation},
+        },
     };
 
     use super::*;
 
     #[test]
     fn character() {
+        let env = Environment::new();
         let re = Regexp::Literal('a').compile();
-        assert!(re.is_match("a"));
-        assert!(!re.is_match("b"));
+        assert!(re.is_match("a", &env));
+        assert!(!re.is_match("b", &env));
     }
 
     #[test]
     fn alteration() {
+        let env = Environment::new();
         let re = Regexp::Either(
             Box::new(Regexp::Literal('a')),
             Box::new(Regexp::Literal('b')),
         )
         .compile();
-        assert!(re.is_match("a"));
-        assert!(re.is_match("b"));
-        assert!(re.is_match("ab"));
-        assert!(!re.is_match("c"));
+        assert!(re.is_match("a", &env));
+        assert!(re.is_match("b", &env));
+        assert!(re.is_match("ab", &env));
+        assert!(!re.is_match("c", &env));
     }
 
     #[test]
     fn multiple_alterations() {
+        let env = Environment::new();
         let re = Regexp::Either(
             Box::new(Regexp::Literal('a')),
             Box::new(Regexp::Either(
@@ -423,64 +465,69 @@ mod tests {
             )),
         )
         .compile();
-        assert!(re.is_match("a"));
-        assert!(re.is_match("b"));
-        assert!(re.is_match("ab"));
-        assert!(re.is_match("c"));
-        assert!(!re.is_match("d"));
+        assert!(re.is_match("a", &env));
+        assert!(re.is_match("b", &env));
+        assert!(re.is_match("ab", &env));
+        assert!(re.is_match("c", &env));
+        assert!(!re.is_match("d", &env));
     }
 
     #[test]
     fn concatenation() {
+        let env = Environment::new();
         let re = Regexp::Concat(
             Box::new(Regexp::Literal('a')),
             Box::new(Regexp::Literal('b')),
         )
         .compile();
-        assert!(re.is_match("ab"));
-        assert!(re.is_match("abc"));
-        assert!(!re.is_match("a"));
-        assert!(!re.is_match("b"));
-        assert!(!re.is_match("ba"));
-        assert!(!re.is_match("c"));
+        assert!(re.is_match("ab", &env));
+        assert!(re.is_match("abc", &env));
+        assert!(!re.is_match("a", &env));
+        assert!(!re.is_match("b", &env));
+        assert!(!re.is_match("ba", &env));
+        assert!(!re.is_match("c", &env));
     }
 
     #[test]
     fn kleene() {
+        let env = Environment::new();
         let re = Regexp::ZeroOrMore(Box::new(Regexp::Literal('a'))).compile();
-        assert!(re.is_match(""));
-        assert!(re.is_match("a"));
-        assert!(re.is_match("aa"));
-        assert!(re.is_match("aaaaa"));
-        assert!(re.is_match("b"));
-        assert!(re.is_match("ba"));
-        assert!(re.is_match("ab"));
-        assert!(re.is_match("c"));
-        assert!(re.is_match("abc"));
+        assert!(re.is_match("", &env));
+        assert!(re.is_match("a", &env));
+        assert!(re.is_match("aa", &env));
+        assert!(re.is_match("aaaaa", &env));
+        assert!(re.is_match("b", &env));
+        assert!(re.is_match("ba", &env));
+        assert!(re.is_match("ab", &env));
+        assert!(re.is_match("c", &env));
+        assert!(re.is_match("abc", &env));
     }
 
     #[test]
     fn one_or_more() {
+        let env = Environment::new();
         let re = Regexp::OneOrMore(Box::new(Regexp::Literal('a'))).compile();
-        assert!(!re.is_match(""));
-        assert!(re.is_match("a"));
-        assert!(re.is_match("aa"));
-        assert!(re.is_match("ab"));
-        assert!(re.is_match("abc"));
-        assert!(re.is_match("aaaaa"));
-        assert!(!re.is_match("b"));
-        assert!(!re.is_match("ba"));
-        assert!(!re.is_match("c"));
+        assert!(!re.is_match("", &env));
+        assert!(re.is_match("a", &env));
+        assert!(re.is_match("aa", &env));
+        assert!(re.is_match("ab", &env));
+        assert!(re.is_match("abc", &env));
+        assert!(re.is_match("aaaaa", &env));
+        assert!(!re.is_match("b", &env));
+        assert!(!re.is_match("ba", &env));
+        assert!(!re.is_match("c", &env));
     }
 
     #[test]
     fn any() {
+        let env = Environment::new();
         let re = Regexp::Any.compile();
-        assert!(re.is_match("abb"));
+        assert!(re.is_match("abb", &env));
     }
 
     #[test]
     fn optional() {
+        let env = Environment::new();
         let re = Regexp::Concat(
             Box::new(Regexp::Optional(Box::new(Regexp::Concat(
                 Box::new(Regexp::Literal('a')),
@@ -489,114 +536,151 @@ mod tests {
             Box::new(Regexp::Literal('b')),
         )
         .compile();
-        assert!(re.is_match("acb"));
-        assert!(re.is_match("axb"));
-        assert!(re.is_match("b"));
-        assert!(re.is_match("bbb"));
-        assert!(!re.is_match("c"));
+        assert!(re.is_match("acb", &env));
+        assert!(re.is_match("axb", &env));
+        assert!(re.is_match("b", &env));
+        assert!(re.is_match("bbb", &env));
+        assert!(!re.is_match("c", &env));
     }
 
     #[test]
     fn character_class() {
+        let env = Environment::new();
         let re = Regexp::OneOrMore(Box::new(Regexp::CharacterClass(HashSet::from([
             'a', 'b', 'c',
         ]))))
         .compile();
-        assert!(re.is_match("acb"));
-        assert!(re.is_match("axb"));
-        assert!(re.is_match("b"));
-        assert!(re.is_match("bbb"));
-        assert!(re.is_match("c"));
-        assert!(!re.is_match("x"));
+        assert!(re.is_match("acb", &env));
+        assert!(re.is_match("axb", &env));
+        assert!(re.is_match("b", &env));
+        assert!(re.is_match("bbb", &env));
+        assert!(re.is_match("c", &env));
+        assert!(!re.is_match("x", &env));
     }
 
     #[test]
     fn repeat_exactly() {
+        let env = Environment::new();
         // exactly one 'a'
         let re = Regexp::RepeatExactly(1, Box::new(Regexp::Literal('a'))).compile();
-        assert!(re.is_match("a"));
-        assert!(!re.is_match("c"));
-        assert!(!re.is_match("bbb"));
-        assert!(!re.is_match(""));
-        assert!(re.is_match("aa"));
-        assert!(re.is_match("aaaa"));
+        assert!(re.is_match("a", &env));
+        assert!(!re.is_match("c", &env));
+        assert!(!re.is_match("bbb", &env));
+        assert!(!re.is_match("", &env));
+        assert!(re.is_match("aa", &env));
+        assert!(re.is_match("aaaa", &env));
 
         // exactly two 'a'
         let re = Regexp::RepeatExactly(2, Box::new(Regexp::Literal('a'))).compile();
-        assert!(re.is_match("aa"));
-        assert!(!re.is_match("c"));
-        assert!(!re.is_match("bbb"));
-        assert!(!re.is_match(""));
-        assert!(!re.is_match("a"));
-        assert!(re.is_match("aaa"));
-        assert!(re.is_match("aaaa"));
+        assert!(re.is_match("aa", &env));
+        assert!(!re.is_match("c", &env));
+        assert!(!re.is_match("bbb", &env));
+        assert!(!re.is_match("", &env));
+        assert!(!re.is_match("a", &env));
+        assert!(re.is_match("aaa", &env));
+        assert!(re.is_match("aaaa", &env));
 
         // exactly three 'a'
         let re = Regexp::RepeatExactly(3, Box::new(Regexp::Literal('a'))).compile();
-        assert!(re.is_match("aaa"));
-        assert!(!re.is_match("c"));
-        assert!(!re.is_match("bbb"));
-        assert!(!re.is_match("a"));
-        assert!(!re.is_match("aa"));
-        assert!(re.is_match("aaaa"));
+        assert!(re.is_match("aaa", &env));
+        assert!(!re.is_match("c", &env));
+        assert!(!re.is_match("bbb", &env));
+        assert!(!re.is_match("a", &env));
+        assert!(!re.is_match("aa", &env));
+        assert!(re.is_match("aaaa", &env));
     }
 
     #[test]
     fn repeat_at_least() {
+        let env = Environment::new();
         // at least one 'a'
         let re = Regexp::RepeatAtLeast(1, Box::new(Regexp::Literal('a'))).compile();
-        assert!(re.is_match("a"));
-        assert!(re.is_match("aa"));
-        assert!(re.is_match("aaa"));
-        assert!(re.is_match("aaaaaaaaaaaaaaaaaaaaaa"));
-        assert!(re.is_match("aaab"));
-        assert!(!re.is_match("c"));
-        assert!(!re.is_match("bbb"));
-        assert!(!re.is_match(""));
+        assert!(re.is_match("a", &env));
+        assert!(re.is_match("aa", &env));
+        assert!(re.is_match("aaa", &env));
+        assert!(re.is_match("aaaaaaaaaaaaaaaaaaaaaa", &env));
+        assert!(re.is_match("aaab", &env));
+        assert!(!re.is_match("c", &env));
+        assert!(!re.is_match("bbb", &env));
+        assert!(!re.is_match("", &env));
 
         // at least two 'a'
         let re = Regexp::RepeatAtLeast(2, Box::new(Regexp::Literal('a'))).compile();
-        assert!(re.is_match("aa"));
-        assert!(re.is_match("aaa"));
-        assert!(re.is_match("aaaa"));
-        assert!(re.is_match("aaaaaaaaaaaaaaaaaaaaa"));
-        assert!(re.is_match("aaab"));
-        assert!(!re.is_match("c"));
-        assert!(!re.is_match("bbb"));
-        assert!(!re.is_match(""));
-        assert!(!re.is_match("a"));
+        assert!(re.is_match("aa", &env));
+        assert!(re.is_match("aaa", &env));
+        assert!(re.is_match("aaaa", &env));
+        assert!(re.is_match("aaaaaaaaaaaaaaaaaaaaa", &env));
+        assert!(re.is_match("aaab", &env));
+        assert!(!re.is_match("c", &env));
+        assert!(!re.is_match("bbb", &env));
+        assert!(!re.is_match("", &env));
+        assert!(!re.is_match("a", &env));
 
         // at least three 'a'
         let re = Regexp::RepeatAtLeast(3, Box::new(Regexp::Literal('a'))).compile();
-        assert!(re.is_match("aaa"));
-        assert!(re.is_match("aaaa"));
-        assert!(re.is_match("aaaaa"));
-        assert!(re.is_match("aaaaaaaaaaaaaaaaaaaaaa"));
-        assert!(re.is_match("aaab"));
-        assert!(!re.is_match("c"));
-        assert!(!re.is_match("bbb"));
-        assert!(!re.is_match("a"));
-        assert!(!re.is_match("aa"));
+        assert!(re.is_match("aaa", &env));
+        assert!(re.is_match("aaaa", &env));
+        assert!(re.is_match("aaaaa", &env));
+        assert!(re.is_match("aaaaaaaaaaaaaaaaaaaaaa", &env));
+        assert!(re.is_match("aaab", &env));
+        assert!(!re.is_match("c", &env));
+        assert!(!re.is_match("bbb", &env));
+        assert!(!re.is_match("a", &env));
+        assert!(!re.is_match("aa", &env));
     }
 
     #[test]
     fn repeat_at_least_at_most() {
+        let env = Environment::new();
         // at least three and at most five 'a's
         let re = Regexp::RepeatAtLeastAtMost(3, 5, Box::new(Regexp::Literal('a'))).compile();
-        assert!(!re.is_match("a"));
-        assert!(!re.is_match("aa"));
-        assert!(re.is_match("aaa"));
-        assert!(re.is_match("aaaa"));
-        assert!(re.is_match("aaaaa"));
-        assert!(re.is_match("aaaaaa"));
-        assert!(re.is_match("aaaaaaaaaaaaaaaaaaaaaa"));
-        assert!(re.is_match("aaab"));
-        assert!(!re.is_match("c"));
-        assert!(!re.is_match("bbb"));
+        assert!(!re.is_match("a", &env));
+        assert!(!re.is_match("aa", &env));
+        assert!(re.is_match("aaa", &env));
+        assert!(re.is_match("aaaa", &env));
+        assert!(re.is_match("aaaaa", &env));
+        assert!(re.is_match("aaaaaa", &env));
+        assert!(re.is_match("aaaaaaaaaaaaaaaaaaaaaa", &env));
+        assert!(re.is_match("aaab", &env));
+        assert!(!re.is_match("c", &env));
+        assert!(!re.is_match("bbb", &env));
+    }
+
+    #[test]
+    fn variable_equal() {
+        let mut env = Environment::new();
+        let re = Regexp::Concat(
+            Box::new(Regexp::VariableEqual(1, 1)),
+            Box::new(Regexp::Literal('a')),
+        )
+        .compile();
+        // these should not match as the variable is not defined
+        assert!(!re.is_match("a", &env));
+        assert!(!re.is_match("aa", &env));
+        assert!(!re.is_match("aaab", &env));
+        assert!(!re.is_match("c", &env));
+        assert!(!re.is_match("bbb", &env));
+        let effect = Effect::new(1, 42);
+        env.apply(&effect);
+        // these should not match as the variable is 42 instead of 1
+        assert!(!re.is_match("a", &env));
+        assert!(!re.is_match("aa", &env));
+        assert!(!re.is_match("aaab", &env));
+        assert!(!re.is_match("c", &env));
+        assert!(!re.is_match("bbb", &env));
+        let effect = Effect::new(1, 1);
+        env.apply(&effect);
+        // these should match as the variable is finally equal to 1
+        assert!(re.is_match("a", &env));
+        assert!(re.is_match("aa", &env));
+        assert!(re.is_match("aaab", &env));
+        assert!(!re.is_match("c", &env));
+        assert!(!re.is_match("bbb", &env));
     }
 
     #[test]
     fn capture() {
+        let env = Environment::new();
         let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Capture],
             Precedence::Default,
@@ -615,10 +699,10 @@ mod tests {
         )
         .compile_with_payload(translation);
 
-        assert_eq!(re.find("foo"), []);
-        assert_eq!(re.find("foobar"), []);
+        assert_eq!(re.find("foo", &env), []);
+        assert_eq!(re.find("foobar", &env), []);
         assert_eq!(
-            re.find("foobarfoo"),
+            re.find("foobarfoo", &env),
             [
                 ResolvedTranslation::new("bar", "bar", 3, TranslationStage::Main, None)
                     .with_offset(3)
@@ -626,7 +710,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            re.find("fooxarfoo"),
+            re.find("fooxarfoo", &env),
             [
                 ResolvedTranslation::new("xar", "xar", 3, TranslationStage::Main, None)
                     .with_offset(3)
@@ -634,19 +718,20 @@ mod tests {
             ]
         );
         assert_eq!(
-            re.find("foobarfoobar"),
+            re.find("foobarfoobar", &env),
             [
                 ResolvedTranslation::new("bar", "bar", 3, TranslationStage::Main, None)
                     .with_offset(3)
                     .with_weight(9)
             ]
         );
-        assert_eq!(re.find("aaaaaa"), []);
-        assert_eq!(re.find("bbb"), []);
+        assert_eq!(re.find("aaaaaa", &env), []);
+        assert_eq!(re.find("bbb", &env), []);
     }
 
     #[test]
     fn capture_replace_with_literal() {
+        let env = Environment::new();
         let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("baz".to_string())],
             Precedence::Default,
@@ -665,10 +750,10 @@ mod tests {
         )
         .compile_with_payload(translation);
 
-        assert_eq!(re.find("foo"), []);
-        assert_eq!(re.find("foobar"), []);
+        assert_eq!(re.find("foo", &env), []);
+        assert_eq!(re.find("foobar", &env), []);
         assert_eq!(
-            re.find("foobarfoo"),
+            re.find("foobarfoo", &env),
             [
                 ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
                     .with_offset(3)
@@ -676,7 +761,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            re.find("fooxarfoo"),
+            re.find("fooxarfoo", &env),
             [
                 ResolvedTranslation::new("xar", "baz", 3, TranslationStage::Main, None)
                     .with_offset(3)
@@ -684,7 +769,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            re.find("foobarfoobar"),
+            re.find("foobarfoobar", &env),
             [
                 ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
                     .with_offset(3)
@@ -695,6 +780,7 @@ mod tests {
 
     #[test]
     fn offset() {
+        let env = Environment::new();
         let translation = Translation::Resolved(ResolvedTranslation::new(
             "bar",
             "baz",
@@ -729,10 +815,10 @@ mod tests {
         )
         .compile_with_payload(translation);
 
-        assert_eq!(re.find("foo"), []);
-        assert_eq!(re.find("foobar"), []);
+        assert_eq!(re.find("foo", &env), []);
+        assert_eq!(re.find("foobar", &env), []);
         assert_eq!(
-            re.find("foobarfoo"),
+            re.find("foobarfoo", &env),
             [
                 ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
                     .with_offset(3)
@@ -740,19 +826,20 @@ mod tests {
             ]
         );
         assert_eq!(
-            re.find("foobarfoobar"),
+            re.find("foobarfoobar", &env),
             [
                 ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
                     .with_offset(3)
                     .with_weight(9)
             ]
         );
-        assert_eq!(re.find("aaaaaa"), []);
-        assert_eq!(re.find("bbb"), []);
+        assert_eq!(re.find("aaaaaa", &env), []);
+        assert_eq!(re.find("bbb", &env), []);
     }
 
     #[test]
     fn compile_many() {
+        let env = Environment::new();
         let re = Regexp::compile_many_accepting(&[
             (
                 Regexp::Literal('a'),
@@ -785,9 +872,9 @@ mod tests {
                 )),
             ),
         ]);
-        assert!(re.is_match("a"));
-        assert!(re.is_match("b"));
-        assert!(re.is_match("c"));
-        assert!(!re.is_match("d"));
+        assert!(re.is_match("a", &env));
+        assert!(re.is_match("b", &env));
+        assert!(re.is_match("c", &env));
+        assert!(!re.is_match("d", &env));
     }
 }

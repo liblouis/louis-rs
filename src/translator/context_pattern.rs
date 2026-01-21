@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use crate::parser::multipass::test::Operator;
 use crate::parser::{
     Action, ActionInstruction, HasPrecedence, Quantifier, Test, TestInstruction, dots_to_unicode,
 };
@@ -38,7 +39,13 @@ impl Regexp {
     fn from_instruction(instruction: &TestInstruction, ctx: &CharacterClasses) -> Self {
         match instruction {
             TestInstruction::Lookback { .. } => Regexp::NotImplemented, // ignore
-            TestInstruction::Variable { .. } => Regexp::NotImplemented, // TODO
+            TestInstruction::Variable { var, op, operand } => match op {
+                Operator::Eq => Regexp::VariableEqual(*var, *operand),
+                // FIXME: operands other than equal do not seem to exist in the wild (at least not
+                // in the tables that are shipped with liblouis), so maybe that feature should be
+                // removed
+                _ => todo!(),
+            },
             TestInstruction::String { s } => Regexp::String(s.to_string()),
             TestInstruction::Dots { dots } => Regexp::String(dots_to_unicode(dots)),
             TestInstruction::Attributes { attrs, quantifier } => {
