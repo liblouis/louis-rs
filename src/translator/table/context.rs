@@ -109,12 +109,12 @@ impl ContextTable {
                     seen.insert(TranslationSubset::from(&t));
                 } else {
                     seen.clear();
+                    // move the iterator forward by the number of characters in the translation
+                    chars.nth(t.length() - 1);
+                    prev = t.input().chars().last();
                 }
                 // there is a matching translation rule
                 let translation = t.clone();
-                // move the iterator forward by the number of characters in the translation
-                chars.nth(t.length() - 1);
-                prev = translation.input().chars().last();
                 translations.push(translation);
             } else if let Some(next_char) = chars.next() {
                 prev = Some(next_char);
