@@ -685,6 +685,7 @@ mod tests {
             &[TranslationTarget::Capture],
             Precedence::Default,
             TranslationStage::Main,
+            &[],
             None,
         ));
         let re = Regexp::Concat(
@@ -736,6 +737,7 @@ mod tests {
             &[TranslationTarget::Literal("baz".to_string())],
             Precedence::Default,
             TranslationStage::Main,
+            &[],
             None,
         ));
         let re = Regexp::Concat(

@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum EffectKind {
     Increment,
     Decrement,
     Set(u8),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Effect {
     slot: u8,
     kind: EffectKind,

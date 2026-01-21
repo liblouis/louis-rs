@@ -1,6 +1,6 @@
 use crate::{
     parser::{AnchoredRule, Precedence},
-    translator::swap::Swapper,
+    translator::{effect::Effect, swap::Swapper},
 };
 
 /// A translation can have multiple stages.
@@ -91,6 +91,7 @@ pub struct UnresolvedTranslation {
     output: Vec<TranslationTarget>,
     precedence: Precedence,
     stage: TranslationStage,
+    effects: Vec<Effect>,
     origin: Option<AnchoredRule>,
 }
 
@@ -99,12 +100,14 @@ impl UnresolvedTranslation {
         output: &[TranslationTarget],
         precedence: Precedence,
         stage: TranslationStage,
+        effects: &[Effect],
         origin: impl Into<Option<AnchoredRule>>,
     ) -> Self {
         Self {
             output: output.to_vec(),
             precedence,
             stage,
+            effects: effects.to_vec(),
             origin: origin.into(),
         }
     }
@@ -316,6 +319,7 @@ mod tests {
             &[TranslationTarget::Capture],
             Precedence::Default,
             TranslationStage::Main,
+            &[],
             None,
         );
         let result = translation.resolve("", 5, 0);
@@ -330,6 +334,7 @@ mod tests {
             &[TranslationTarget::Capture],
             Precedence::Default,
             TranslationStage::Main,
+            &[],
             None,
         );
         let result = translation.resolve("captured", 8, 0);
@@ -348,6 +353,7 @@ mod tests {
             ],
             Precedence::Default,
             TranslationStage::Main,
+            &[],
             None,
         );
         let result = translation.resolve("MIDDLE", 8, 0);
@@ -368,6 +374,7 @@ mod tests {
             ],
             Precedence::Default,
             TranslationStage::Main,
+            &[],
             None,
         );
         let result = translation.resolve("xyz", 8, 0);
@@ -386,6 +393,7 @@ mod tests {
             ],
             Precedence::Default,
             TranslationStage::Main,
+            &[],
             None,
         );
         let result = translation.resolve("café🚀🚀", 6, 0);

@@ -8,7 +8,7 @@ use crate::parser::{
 };
 
 use crate::parser::{AnchoredRule, Attribute, CharacterClass, CharacterClasses};
-use crate::translator::effect::Environment;
+use crate::translator::effect::{Effect, Environment};
 use crate::translator::regexp::{CompiledRegexp, Regexp};
 use crate::translator::swap::SwapClasses;
 use crate::translator::table::TableContext;
@@ -157,6 +157,28 @@ impl TranslationTargets {
     }
 }
 
+/// A sequence of [`Effect`]
+#[derive(Debug, Clone)]
+pub struct Effects(Vec<Effect>);
+
+impl Effects {
+    fn from_instructions(values: &[ActionInstruction]) -> Vec<Effect> {
+        values
+            .iter()
+            .cloned()
+            .flat_map(|instruction| Effects::from_instruction(instruction))
+            .collect()
+    }
+
+    fn from_instruction(value: ActionInstruction) -> Option<Effect> {
+        if let ActionInstruction::Assignment { variable, value } = value {
+            Some(Effect::new(variable, value))
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ContextPatternsBuilder {
     pairs: Vec<(Regexp, Translation)>,
@@ -176,10 +198,12 @@ impl ContextPatternsBuilder {
         swap_classes: &SwapClasses,
     ) -> Result<UnresolvedTranslation, TranslationError> {
         let targets = TranslationTargets::from_instructions(&action.actions(), &swap_classes)?;
+        let effects = Effects::from_instructions(&action.actions());
         Ok(UnresolvedTranslation::new(
             &targets,
             origin.precedence(),
             stage,
+            &effects,
             origin.clone(),
         ))
     }
@@ -258,6 +282,7 @@ mod tests {
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
             stage,
+            &[],
             None,
         ));
         let regexp = Regexp::from_test(&tests, &ctx);
@@ -287,6 +312,7 @@ mod tests {
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
             stage,
+            &[],
             None,
         ));
         let regexp = Regexp::from_test(&tests, &ctx);
@@ -325,6 +351,7 @@ mod tests {
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
             stage,
+            &[],
             None,
         ));
         let regexp = Regexp::from_test(&tests, &ctx);
@@ -354,6 +381,7 @@ mod tests {
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
             stage,
+            &[],
             None,
         ));
         let regexp = Regexp::from_test(&tests, &ctx);
@@ -383,6 +411,7 @@ mod tests {
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
             stage,
+            &[],
             None,
         ));
         let regexp = Regexp::from_test(&tests, &ctx);
@@ -413,6 +442,7 @@ mod tests {
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
             TranslationStage::Main,
+            &[],
             None,
         ));
         let regexp = Regexp::from_test(&tests, &ctx);
@@ -448,6 +478,7 @@ mod tests {
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
             TranslationStage::Main,
+            &[],
             None,
         ));
         let regexp = Regexp::from_test(&tests, &ctx);
@@ -495,6 +526,7 @@ mod tests {
             &[TranslationTarget::Literal("".to_string())],
             Precedence::Default,
             TranslationStage::Main,
+            &[],
             None,
         ));
         let regexp = Regexp::from_test(&tests, &ctx);
