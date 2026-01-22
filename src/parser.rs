@@ -2142,28 +2142,27 @@ impl<'a> RuleParser<'a> {
 
             Opcode::Swapcd => {
                 fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
+                let name = self.name()?;
                 let chars = self.chars()?;
                 let dots = self.many_braillechars()?;
                 fail_if_differing_number_of_replacements(chars.chars().count(), dots.len())?;
-                Rule::Swapcd {
-                    name: self.name()?,
-                    chars,
-                    dots,
-                }
+                Rule::Swapcd { name, chars, dots }
             }
             Opcode::Swapdd => {
                 fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
+                let name = self.name()?;
                 let dots = self.many_braillechar()?;
                 let replacement = self.many_braillechars()?;
                 fail_if_differing_number_of_replacements(dots.len(), replacement.len())?;
                 Rule::Swapdd {
-                    name: self.name()?,
+                    name,
                     dots,
                     replacement,
                 }
             }
             Opcode::Swapcc => {
                 fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
+                let name = self.name()?;
                 let chars = self.chars()?;
                 let replacement = self.chars()?;
                 fail_if_differing_number_of_replacements(
@@ -2171,7 +2170,7 @@ impl<'a> RuleParser<'a> {
                     replacement.chars().count(),
                 )?;
                 Rule::Swapcc {
-                    name: self.name()?,
+                    name,
                     chars,
                     replacement,
                 }
