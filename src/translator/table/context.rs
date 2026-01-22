@@ -81,7 +81,7 @@ impl ContextTable {
         prev: Option<char>,
         env: &Environment,
     ) -> Vec<ResolvedTranslation> {
-        self.patterns.find(input, env).into_iter().collect()
+        self.patterns.find(input, env)
     }
 
     pub fn trace(&self, input: &str, env: &Environment) -> Vec<ResolvedTranslation> {
