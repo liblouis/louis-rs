@@ -2320,11 +2320,11 @@ pub fn table(table: &str, path: Option<PathBuf>) -> Result<Vec<AnchoredRule>, Ve
                 .map(|rule| AnchoredRule {
                     rule,
                     path: path.clone(),
-                    line: line_no,
+                    line: line_no + 1,
                 })
                 .map_err(|e| TableError::ParseError {
                     path: path.clone(),
-                    line: line_no,
+                    line: line_no + 1,
                     error: e,
                 })
         })
