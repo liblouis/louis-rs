@@ -296,13 +296,13 @@ impl CompiledRegexp {
                     || self.is_match_internal(index2, input, env)
             }
             Instruction::CaptureStart | Instruction::CaptureEnd => {
-                self.is_match_internal(pc + 1, &input, env)
+                self.is_match_internal(pc + 1, input, env)
             }
             Instruction::VariableEqual(var, expected) => {
                 if let Some(&actual) = env.get(var)
                     && actual == expected
                 {
-                    self.is_match_internal(pc + 1, &input, env)
+                    self.is_match_internal(pc + 1, input, env)
                 } else {
                     false
                 }
@@ -336,7 +336,7 @@ impl CompiledRegexp {
                 {
                     self.find_internal(
                         pc + 1,
-                        &input,
+                        input,
                         sp + actual.len_utf8(),
                         length + 1,
                         env,
@@ -352,7 +352,7 @@ impl CompiledRegexp {
                 {
                     self.find_internal(
                         pc + 1,
-                        &input,
+                        input,
                         sp + actual.len_utf8(),
                         length + 1,
                         env,
@@ -366,7 +366,7 @@ impl CompiledRegexp {
                 if let Some(actual) = chars.next() {
                     self.find_internal(
                         pc + 1,
-                        &input,
+                        input,
                         sp + actual.len_utf8(),
                         length + 1,
                         env,
@@ -392,11 +392,11 @@ impl CompiledRegexp {
                 self.find_internal(index2, input, sp, length, env, capture, translations);
             }
             Instruction::CaptureStart => {
-                self.find_internal(pc + 1, &input, sp, length, env, (sp, 0), translations)
+                self.find_internal(pc + 1, input, sp, length, env, (sp, 0), translations)
             }
             Instruction::CaptureEnd => self.find_internal(
                 pc + 1,
-                &input,
+                input,
                 sp,
                 length,
                 env,
@@ -407,7 +407,7 @@ impl CompiledRegexp {
                 if let Some(&actual) = env.get(var)
                     && actual == expected
                 {
-                    self.find_internal(pc + 1, &input, sp, length, env, capture, translations)
+                    self.find_internal(pc + 1, input, sp, length, env, capture, translations)
                 }
             }
         }

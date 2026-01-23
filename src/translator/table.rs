@@ -142,10 +142,7 @@ impl TableContext {
                     for c in chars.chars() {
                         character_classes.insert(class.clone(), c);
                     }
-                    let replacements: Vec<String> = dots
-                        .iter()
-                        .map(|braille| dots_to_unicode(braille))
-                        .collect();
+                    let replacements: Vec<String> = dots.iter().map(dots_to_unicode).collect();
                     let mapping: Vec<(char, &str)> = chars
                         .chars()
                         .zip(replacements.iter().map(|s| s.as_str()))
@@ -161,13 +158,11 @@ impl TableContext {
                     for c in dots_to_unicode(dots).chars() {
                         character_classes.insert(class.clone(), c);
                     }
-                    let replacements: Vec<String> = replacement
-                        .iter()
-                        .map(|cells| dots_to_unicode(cells))
-                        .collect();
+                    let replacements: Vec<String> =
+                        replacement.iter().map(dots_to_unicode).collect();
                     let mapping: Vec<(char, &str)> = dots
                         .iter()
-                        .map(|cell| dot_to_unicode(cell))
+                        .map(dot_to_unicode)
                         .zip(replacements.iter().map(|s| s.as_str()))
                         .collect();
                     swap_classes.insert(name, &mapping);

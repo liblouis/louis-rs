@@ -56,7 +56,7 @@ impl Regexp {
         for attr in attributes {
             match attr {
                 Attribute::Class(class) => {
-                    if let Some(chars) = ctx.get(&class) {
+                    if let Some(chars) = ctx.get(class) {
                         characters.extend(chars);
                     }
                 }
@@ -112,7 +112,7 @@ impl MatchPatternsBuilder {
             TranslationStage::Main,
             origin.clone(),
         ));
-        let re = Regexp::from_match_rule(pre, chars.to_string(), post, &ctx);
+        let re = Regexp::from_match_rule(pre, chars.to_string(), post, ctx);
         self.pairs.push((re, translation));
     }
 

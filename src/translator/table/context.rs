@@ -35,7 +35,7 @@ impl ContextTableBuilder {
     fn build(self, direction: Direction, stage: TranslationStage) -> ContextTable {
         ContextTable {
             direction,
-            stage: stage,
+            stage,
             patterns: self.patterns.build(),
         }
     }

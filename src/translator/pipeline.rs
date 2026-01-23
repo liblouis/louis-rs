@@ -43,21 +43,21 @@ impl TranslationPipeline {
 
         let correct_rules: Vec<AnchoredRule> = rules
             .iter()
-            .cloned()
             .filter(|r| matches!(r.rule, Rule::Correct { .. }))
+            .cloned()
             .collect();
         if !correct_rules.is_empty() {
             let transform =
                 ContextTable::compile(&correct_rules, direction, TranslationStage::Pre, &ctx)?;
             steps.push(Transformation::Pre(transform));
         }
-        let context = TableContext::compile(&rules)?;
-        let transform = PrimaryTable::compile(&rules, direction, TranslationStage::Main, &context)?;
+        let context = TableContext::compile(rules)?;
+        let transform = PrimaryTable::compile(rules, direction, TranslationStage::Main, &context)?;
         steps.push(Transformation::Primary(transform));
         let pass2_rules: Vec<AnchoredRule> = rules
             .iter()
-            .cloned()
             .filter(|r| matches!(r.rule, Rule::Pass2 { .. }))
+            .cloned()
             .collect();
         if !pass2_rules.is_empty() {
             let transform =
@@ -76,8 +76,8 @@ impl TranslationPipeline {
         }
         let pass4_rules: Vec<AnchoredRule> = rules
             .iter()
-            .cloned()
             .filter(|r| matches!(r.rule, Rule::Pass4 { .. }))
+            .cloned()
             .collect();
         if !pass4_rules.is_empty() {
             let transform =

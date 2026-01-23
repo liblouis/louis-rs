@@ -70,12 +70,12 @@ pub enum ActionInstruction {
 
 impl IsLiteral for ActionInstruction {
     fn is_literal(&self) -> bool {
-        match self {
-            ActionInstruction::String { .. } => true,
-            ActionInstruction::Dots { .. } => true,
-            ActionInstruction::Ignore => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            ActionInstruction::String { .. }
+                | ActionInstruction::Dots { .. }
+                | ActionInstruction::Ignore
+        )
     }
 }
 

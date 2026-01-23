@@ -124,11 +124,10 @@ pub enum TestInstruction {
 
 impl IsLiteral for TestInstruction {
     fn is_literal(&self) -> bool {
-        match self {
-            TestInstruction::String { .. } => true,
-            TestInstruction::Dots { .. } => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            TestInstruction::String { .. } | TestInstruction::Dots { .. }
+        )
     }
 }
 

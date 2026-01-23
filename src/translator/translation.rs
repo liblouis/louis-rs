@@ -77,7 +77,7 @@ pub struct TranslationTargets(Vec<TranslationTarget>);
 
 impl std::fmt::Display for TranslationTargets {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s: String = self.0.iter().cloned().map(|t| t.to_string()).collect();
+        let s: String = self.0.iter().map(|t| t.to_string()).collect();
         write!(f, "{}", s)
     }
 }

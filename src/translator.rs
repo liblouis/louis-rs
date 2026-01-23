@@ -96,10 +96,7 @@ pub struct DisplayTable {
 impl DisplayTable {
     pub fn compile(rules: &[AnchoredRule], direction: Direction) -> DisplayTable {
         let mut mapping = HashMap::new();
-        let rules: Vec<_> = rules
-            .into_iter()
-            .filter(|r| r.is_direction(direction))
-            .collect();
+        let rules: Vec<_> = rules.iter().filter(|r| r.is_direction(direction)).collect();
 
         for rule in rules {
             match &rule.rule {
@@ -108,11 +105,11 @@ impl DisplayTable {
                 } => {
                     if cfg!(feature = "backwards_compatibility") {
                         // first rule wins
-                        let key = dots_to_unicode(&dots).chars().nth(0).unwrap();
+                        let key = dots_to_unicode(dots).chars().nth(0).unwrap();
                         mapping.entry(key).or_insert(*character);
                     } else {
                         // last rule wins
-                        mapping.insert(dots_to_unicode(&dots).chars().nth(0).unwrap(), *character);
+                        mapping.insert(dots_to_unicode(dots).chars().nth(0).unwrap(), *character);
                     }
                 }
                 _ => (), // ignore all other rules for display tables

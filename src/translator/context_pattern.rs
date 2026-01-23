@@ -22,7 +22,7 @@ impl Regexp {
         Regexp::from_instructions(test.tests(), ctx)
     }
 
-    fn from_instructions(instructions: &Vec<TestInstruction>, ctx: &CharacterClasses) -> Self {
+    fn from_instructions(instructions: &[TestInstruction], ctx: &CharacterClasses) -> Self {
         match instructions.len() {
             0 => Regexp::Empty,
             1 => Regexp::from_instruction(&instructions[0], ctx),
@@ -91,7 +91,7 @@ impl Regexp {
         for attr in attrs {
             match attr {
                 Attribute::Class(class) => {
-                    if let Some(chars) = ctx.get(&class) {
+                    if let Some(chars) = ctx.get(class) {
                         characters.extend(chars);
                     }
                 }
@@ -166,7 +166,7 @@ impl Effects {
         values
             .iter()
             .cloned()
-            .flat_map(|instruction| Effects::from_instruction(instruction))
+            .flat_map(Effects::from_instruction)
             .collect()
     }
 
@@ -197,7 +197,7 @@ impl ContextPatternsBuilder {
         stage: TranslationStage,
         swap_classes: &SwapClasses,
     ) -> Result<UnresolvedTranslation, TranslationError> {
-        let targets = TranslationTargets::from_instructions(&action.actions(), &swap_classes)?;
+        let targets = TranslationTargets::from_instructions(&action.actions(), swap_classes)?;
         let effects = Effects::from_instructions(&action.actions());
         Ok(UnresolvedTranslation::new(
             &targets,
