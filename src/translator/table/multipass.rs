@@ -117,6 +117,7 @@ impl MultipassTable {
                 // there is a matching translation rule
                 let translation = t.clone();
                 translations.push(translation);
+
                 // update the environment if needed
                 if !t.effects().is_empty() {
                     for effect in t.effects() {
