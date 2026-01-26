@@ -131,6 +131,7 @@ impl Resolve for UnresolvedTranslation {
             offset,
             precedence: self.precedence,
             stage: self.stage,
+            effects: self.effects,
             origin: self.origin,
         }
     }
@@ -178,6 +179,9 @@ pub struct ResolvedTranslation {
     precedence: Precedence,
     /// The stage in which this translation is applied
     stage: TranslationStage,
+    /// A possibly empty list of [`Effect`]s. These will be applied to the
+    /// [`Environment`](crate::translator::effect::Environment) if this Translation is used
+    effects: Vec<Effect>,
     /// Which translation rule was the cause for this translation
     origin: Option<AnchoredRule>,
 }
@@ -222,6 +226,7 @@ impl ResolvedTranslation {
             offset: 0,
             precedence: Precedence::Default,
             stage,
+            effects: Vec::default(),
             origin: origin.into(),
         }
     }
@@ -256,6 +261,10 @@ impl ResolvedTranslation {
 
     pub fn stage(&self) -> TranslationStage {
         self.stage
+    }
+
+    pub fn effects(&self) -> &Vec<Effect> {
+        &self.effects
     }
 
     /// Set the `input` of a translation.
