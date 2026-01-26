@@ -3,14 +3,14 @@ use crate::{
     parser::{AnchoredRule, Rule},
     translator::{
         ResolvedTranslation, TranslationError, TranslationStage,
-        table::{TableContext, context::ContextTable, primary::PrimaryTable},
+        table::{TableContext, multipass::MultipassTable, primary::PrimaryTable},
     },
 };
 
 pub enum Transformation {
-    Pre(ContextTable),
+    Pre(MultipassTable),
     Primary(PrimaryTable),
-    Post(ContextTable),
+    Post(MultipassTable),
 }
 
 impl Transformation {
@@ -47,7 +47,7 @@ impl TranslationPipeline {
             .collect();
         if !correct_rules.is_empty() {
             let transform =
-                ContextTable::compile(&correct_rules, direction, TranslationStage::Pre, &ctx)?;
+                MultipassTable::compile(&correct_rules, direction, TranslationStage::Pre, &ctx)?;
             steps.push(Transformation::Pre(transform));
         }
         let context = TableContext::compile(rules)?;
@@ -60,7 +60,7 @@ impl TranslationPipeline {
             .collect();
         if !pass2_rules.is_empty() {
             let transform =
-                ContextTable::compile(&pass2_rules, direction, TranslationStage::Post1, &ctx)?;
+                MultipassTable::compile(&pass2_rules, direction, TranslationStage::Post1, &ctx)?;
             steps.push(Transformation::Post(transform));
         }
         let pass3_rules: Vec<AnchoredRule> = rules
@@ -70,7 +70,7 @@ impl TranslationPipeline {
             .collect();
         if !pass3_rules.is_empty() {
             let transform =
-                ContextTable::compile(&pass3_rules, direction, TranslationStage::Post2, &ctx)?;
+                MultipassTable::compile(&pass3_rules, direction, TranslationStage::Post2, &ctx)?;
             steps.push(Transformation::Post(transform));
         }
         let pass4_rules: Vec<AnchoredRule> = rules
@@ -80,7 +80,7 @@ impl TranslationPipeline {
             .collect();
         if !pass4_rules.is_empty() {
             let transform =
-                ContextTable::compile(&pass4_rules, direction, TranslationStage::Post3, &ctx)?;
+                MultipassTable::compile(&pass4_rules, direction, TranslationStage::Post3, &ctx)?;
             steps.push(Transformation::Post(transform));
         }
         match direction {

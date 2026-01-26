@@ -13,27 +13,27 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct ContextTable {
+pub struct MultipassTable {
     patterns: ContextPatterns,
     stage: TranslationStage,
     direction: Direction,
 }
 
-/// A builder for [`ContextTable`]
+/// A builder for [`MultipassTable`]
 #[derive(Debug)]
-struct ContextTableBuilder {
+struct MultipassTableBuilder {
     patterns: ContextPatternsBuilder,
 }
 
-impl ContextTableBuilder {
+impl MultipassTableBuilder {
     fn new() -> Self {
         Self {
             patterns: ContextPatternsBuilder::new(),
         }
     }
 
-    fn build(self, direction: Direction, stage: TranslationStage) -> ContextTable {
-        ContextTable {
+    fn build(self, direction: Direction, stage: TranslationStage) -> MultipassTable {
+        MultipassTable {
             direction,
             stage,
             patterns: self.patterns.build(),
@@ -41,14 +41,14 @@ impl ContextTableBuilder {
     }
 }
 
-impl ContextTable {
+impl MultipassTable {
     pub fn compile(
         rules: &[AnchoredRule],
         direction: Direction,
         stage: TranslationStage,
         ctx: &TableContext,
     ) -> Result<Self, TranslationError> {
-        let mut builder = ContextTableBuilder::new();
+        let mut builder = MultipassTableBuilder::new();
 
         for rule in rules {
             match &rule.rule {
@@ -158,7 +158,8 @@ mod tests {
         let rules = [parse_rule("correct \"corect\" \"correct\"")];
         let ctx = TableContext::default();
         let transform =
-            ContextTable::compile(&rules, Direction::Forward, TranslationStage::Pre, &ctx).unwrap();
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Pre, &ctx)
+                .unwrap();
         assert_eq!(transform.translate("foobar"), "foobar");
         assert_eq!(transform.translate("corect"), "correct");
         assert_eq!(transform.translate("🐂"), "🐂");
@@ -169,7 +170,7 @@ mod tests {
         let rules = [parse_rule("pass2 @123 @12")];
         let ctx = TableContext::default();
         let transform =
-            ContextTable::compile(&rules, Direction::Forward, TranslationStage::Post1, &ctx)
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Post1, &ctx)
                 .unwrap();
         assert_eq!(transform.translate("⠇"), "⠃");
         assert_eq!(transform.translate("⠙"), "⠙");
@@ -181,7 +182,7 @@ mod tests {
         let rules = [parse_rule("pass3 @123 @12")];
         let ctx = TableContext::default();
         let transform =
-            ContextTable::compile(&rules, Direction::Forward, TranslationStage::Post2, &ctx)
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Post2, &ctx)
                 .unwrap();
         assert_eq!(transform.translate("⠇"), "⠃");
         assert_eq!(transform.translate("⠙"), "⠙");
@@ -193,7 +194,7 @@ mod tests {
         let rules = [parse_rule("pass4 @123 @12")];
         let ctx = TableContext::default();
         let transform =
-            ContextTable::compile(&rules, Direction::Forward, TranslationStage::Post3, &ctx)
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Post3, &ctx)
                 .unwrap();
         assert_eq!(transform.translate("⠇"), "⠃");
         assert_eq!(transform.translate("⠙"), "⠙");
@@ -212,7 +213,7 @@ mod tests {
         ];
         let ctx = TableContext::default();
         let transform =
-            ContextTable::compile(&rules, Direction::Forward, TranslationStage::Post1, &ctx)
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Post1, &ctx)
                 .unwrap();
         dbg!(&transform);
         assert_eq!(transform.translate("⠁⠁⠇⠁⠁⠸⠁⠁"), "⠁⠁⠇⠠⠠⠸⠁⠁");
