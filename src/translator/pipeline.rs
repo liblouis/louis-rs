@@ -7,6 +7,7 @@ use crate::{
     },
 };
 
+#[derive(Debug)]
 pub enum Transformation {
     Pre(MultipassTable),
     Primary(PrimaryTable),
@@ -31,6 +32,7 @@ impl Transformation {
     }
 }
 
+#[derive(Debug)]
 pub struct TranslationPipeline {
     steps: Vec<Transformation>,
 }
