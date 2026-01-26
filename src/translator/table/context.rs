@@ -86,7 +86,7 @@ impl ContextTable {
 
     pub fn trace(&self, input: &str) -> Vec<ResolvedTranslation> {
         let mut translations: Vec<ResolvedTranslation> = Vec::new();
-        let env = Environment::new();
+        let mut env = Environment::new();
         let mut chars = input.chars();
         let mut prev: Option<char> = None;
         let mut seen: HashSet<TranslationSubset> = HashSet::default();
@@ -117,6 +117,12 @@ impl ContextTable {
                 // there is a matching translation rule
                 let translation = t.clone();
                 translations.push(translation);
+                // update the environment if needed
+                if !t.effects().is_empty() {
+                    for effect in t.effects() {
+                        env.apply(effect);
+                    }
+                }
             } else if let Some(next_char) = chars.next() {
                 prev = Some(next_char);
                 // no translation rule found, just pass the character through
@@ -191,6 +197,25 @@ mod tests {
                 .unwrap();
         assert_eq!(transform.translate("⠇"), "⠃");
         assert_eq!(transform.translate("⠙"), "⠙");
+        assert_eq!(transform.translate("🐂"), "🐂");
+    }
+
+    #[test]
+    fn effects() {
+        let rules = [
+            // when encountering @123 set var 1 to 1
+            parse_rule("pass2 @123 @123#1=1"),
+            // while var 1 is 1 transform @1 to @6
+            parse_rule("pass2 #1=1@1 @6"),
+            // when encountering @456 set var 1 back to 0
+            parse_rule("pass2 @456 @456#1=0"),
+        ];
+        let ctx = TableContext::default();
+        let transform =
+            ContextTable::compile(&rules, Direction::Forward, TranslationStage::Post1, &ctx)
+                .unwrap();
+        dbg!(&transform);
+        assert_eq!(transform.translate("⠁⠁⠇⠁⠁⠸⠁⠁"), "⠁⠁⠇⠠⠠⠸⠁⠁");
         assert_eq!(transform.translate("🐂"), "🐂");
     }
 }
