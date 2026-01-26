@@ -1,4 +1,4 @@
-//! Regular expression engine with virtual machine-based matching.
+//! Regular expression engine implemented using a virtual machine.
 //!
 //! This module implements a regular expression compiler and virtual machine
 //! executor based on the approach described in [Regular Expression Matching:
