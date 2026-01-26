@@ -1,4 +1,4 @@
-use std::{fs::File, io};
+use std::{collections::HashSet, fs::File, io};
 
 use hyphenation::{Hyphenator, Load, Standard};
 
@@ -10,10 +10,13 @@ use crate::{
     },
     translator::{
         CharacterDefinition, ResolvedTranslation, Rule, TranslationError, TranslationStage,
+        context_pattern::{ContextPatterns, ContextPatternsBuilder},
         dots_to_unicode,
+        effect::Environment,
         indication::{lettersign, nocontract, numeric, uppercase},
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
         table::TableContext,
+        translation::TranslationSubset,
         trie::{Boundary, Trie},
     },
 };
@@ -26,6 +29,7 @@ pub struct PrimaryTable {
     /// A prefix tree that contains all the translation rules and their [`ResolvedTranslations`](ResolvedTranslation)
     trie: Trie,
     match_patterns: MatchPatterns,
+    context_patterns: ContextPatterns,
     /// All the nocross translation rules are stored in a separate trie
     nocross_trie: Trie,
     hyphenator: Option<Standard>,
@@ -45,6 +49,7 @@ struct PrimaryTableBuilder {
     nocross_trie: Trie,
     hyphenator: Option<Standard>,
     match_patterns: MatchPatternsBuilder,
+    context_patterns: ContextPatternsBuilder,
     numeric_indicator: numeric::IndicatorBuilder,
     uppercase_indicator: uppercase::IndicatorBuilder,
     lettersign_indicator: lettersign::IndicatorBuilder,
@@ -59,6 +64,7 @@ impl PrimaryTableBuilder {
             nocross_trie: Trie::new(),
             hyphenator: None,
             match_patterns: MatchPatternsBuilder::new(),
+            context_patterns: ContextPatternsBuilder::new(),
             numeric_indicator: numeric::IndicatorBuilder::new(),
             uppercase_indicator: uppercase::IndicatorBuilder::new(),
             lettersign_indicator: lettersign::IndicatorBuilder::new(),
@@ -104,6 +110,7 @@ impl PrimaryTableBuilder {
             nocross_trie: self.nocross_trie,
             hyphenator: self.hyphenator,
             match_patterns: self.match_patterns.build(),
+            context_patterns: self.context_patterns.build(),
             numeric_indicator: self.numeric_indicator.build(),
             uppercase_indicator: self.uppercase_indicator.build(),
             lettersign_indicator: self.lettersign_indicator.build(),
@@ -495,6 +502,15 @@ impl PrimaryTable {
                         ctx.character_classes(),
                     );
                 }
+                Rule::Context { test, action, .. } => {
+                    builder.context_patterns.insert(
+                        test,
+                        action,
+                        rule,
+                        TranslationStage::Main,
+                        ctx,
+                    )?;
+                }
                 Rule::IncludeHyphenation { path } => {
                     let file = File::open(path)?;
                     let mut reader = io::BufReader::new(file);
@@ -577,6 +593,17 @@ impl PrimaryTable {
             .partition(|t| t.offset() == 0)
     }
 
+    fn context_candidates(
+        &self,
+        input: &str,
+        env: &Environment,
+    ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
+        self.context_patterns
+            .find(input, env)
+            .into_iter()
+            .partition(|t| t.offset() == 0)
+    }
+
     fn partition_delayed_translations(
         &self,
         delayed: Vec<ResolvedTranslation>,
@@ -588,8 +615,10 @@ impl PrimaryTable {
         let mut translations: Vec<ResolvedTranslation> = Vec::new();
         let mut delayed_translations: Vec<ResolvedTranslation> = Vec::new();
 
+        let mut env = Environment::new();
         let mut chars = input.chars();
         let mut prev: Option<char> = None;
+        let mut seen: HashSet<TranslationSubset> = HashSet::default();
 
         // FIXME: the following seems weird, but the indicator is a mutable state machine. Since
         // self (the translation table) is immutable we build a mutable copy of the indicator for
@@ -621,12 +650,21 @@ impl PrimaryTable {
             // translations that are delayed, i.e. have an offset because they have a pre-pattern
             let (mut candidates, delayed) = self.translation_candidates(chars.as_str(), prev);
             delayed_translations.extend(delayed);
+
             // then search for matching match patterns. Unless they have empty pre patterns they will all have
             // an offset. Split those off.
             let (match_candidates, match_delayed) = self.match_candidates(chars.as_str());
             delayed_translations.extend(match_delayed);
             // merge the candidates from the match patters with the candidates from the plain translations
             candidates.extend(match_candidates);
+
+            // then search for context patterns. Unless they have empty pre patterns they will all
+            // have an offset. Split those off.
+            let (context_candidates, context_delayed) =
+                self.context_candidates(chars.as_str(), &env);
+            delayed_translations.extend(context_delayed);
+            // merge the candidates from the context patters with the candidates from the plain translations
+            candidates.extend(context_candidates);
 
             // move delayed_translations with zero offset into candidates
             let (current, delayed) = self.partition_delayed_translations(delayed_translations);
@@ -636,6 +674,9 @@ impl PrimaryTable {
             // use the longest translation
             let candidate = candidates
                 .iter()
+                // drop translation candidates that we have applied already at this position in the
+                // input
+                .filter(|t| !seen.contains(&TranslationSubset::from(*t)))
                 .max_by_key(|translation| translation.weight());
             if let Some(t) = candidate {
                 if let Some(nocross) = nocross_candidate
@@ -649,13 +690,27 @@ impl PrimaryTable {
                     translations.push(translation);
                     delayed_translations = self.update_offsets(delayed_translations, t.length());
                 } else {
+                    if t.length() == 0 {
+                        // if there is a zero-length translation candiate we run the risk of an infinite
+                        // loop, so remember the current translation so we only apply it once
+                        seen.insert(TranslationSubset::from(t));
+                    } else {
+                        seen.clear();
+                        // move the iterator forward by the number of characters in the translation
+                        chars.nth(t.length() - 1);
+                        prev = t.input().chars().last();
+                    }
                     // there is a matching translation rule
                     let translation = t.clone();
-                    // move the iterator forward by the number of characters in the translation
-                    chars.nth(t.length() - 1);
-                    prev = translation.input().chars().last();
                     translations.push(translation);
                     delayed_translations = self.update_offsets(delayed_translations, t.length());
+
+                    // update the environment if needed
+                    if !t.effects().is_empty() {
+                        for effect in t.effects() {
+                            env.apply(effect);
+                        }
+                    }
                 }
             } else if let Some(next_char) = chars.next() {
                 prev = Some(next_char);
@@ -1142,5 +1197,24 @@ mod tests {
         assert_eq!(table.translate("⠇⠸"), "foobar");
         assert_eq!(table.translate("⠀⠀"), "  ");
         assert_eq!(table.translate("⠄⠈⠈"), "foo");
+    }
+
+    #[test]
+    fn context_with_variable() {
+        let rules = [
+            parse_rule("lowercase a 1"),
+            parse_rule("sign : 123"),
+            parse_rule("sign ; 456"),
+            parse_rule("context \":\" @123#1=1"),
+            parse_rule("context #1=1\"a\" @3#1=1"),
+            parse_rule("context \";\" @456#1=0"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        assert_eq!(table.translate("aa"), "⠁⠁");
+        assert_eq!(table.translate("aa;aa"), "⠁⠁⠸⠁⠁");
+        assert_eq!(table.translate("aa:aa;aa"), "⠁⠁⠇⠄⠄⠸⠁⠁");
     }
 }
