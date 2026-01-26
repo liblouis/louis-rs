@@ -3,7 +3,6 @@ use crate::{
     parser::{AnchoredRule, Rule},
     translator::{
         ResolvedTranslation, TranslationError, TranslationStage,
-        effect::Environment,
         table::{TableContext, context::ContextTable, primary::PrimaryTable},
     },
 };
@@ -15,19 +14,19 @@ pub enum Transformation {
 }
 
 impl Transformation {
-    pub fn trace(&self, input: &str, env: &Environment) -> Vec<ResolvedTranslation> {
+    pub fn trace(&self, input: &str) -> Vec<ResolvedTranslation> {
         match self {
-            Transformation::Pre(t) => t.trace(input, env),
+            Transformation::Pre(t) => t.trace(input),
             Transformation::Primary(t) => t.trace(input),
-            Transformation::Post(t) => t.trace(input, env),
+            Transformation::Post(t) => t.trace(input),
         }
     }
 
-    fn translate(&self, input: &str, env: &Environment) -> String {
+    fn translate(&self, input: &str) -> String {
         match self {
-            Transformation::Pre(t) => t.translate(input, env),
+            Transformation::Pre(t) => t.translate(input),
             Transformation::Primary(t) => t.translate(input),
-            Transformation::Post(t) => t.translate(input, env),
+            Transformation::Post(t) => t.translate(input),
         }
     }
 }
@@ -94,10 +93,9 @@ impl TranslationPipeline {
 
     pub fn trace(&self, input: &str) -> Vec<Vec<ResolvedTranslation>> {
         let mut input = input.to_string();
-        let env = Environment::new();
         let mut result: Vec<Vec<ResolvedTranslation>> = Vec::new();
         for step in &self.steps {
-            let translations = step.trace(&input, &env);
+            let translations = step.trace(&input);
             input = translations.iter().map(|t| t.output()).collect();
             result.push(translations);
         }
@@ -106,9 +104,8 @@ impl TranslationPipeline {
 
     pub fn translate(&self, input: &str) -> String {
         let mut result = input.to_string();
-        let env = Environment::new();
         for step in &self.steps {
-            result = step.translate(&result, &env);
+            result = step.translate(&result);
         }
         result
     }

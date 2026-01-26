@@ -71,8 +71,8 @@ impl ContextTable {
         Ok(builder.build(direction, stage))
     }
 
-    pub fn translate(&self, input: &str, env: &Environment) -> String {
-        self.trace(input, env).iter().map(|t| t.output()).collect()
+    pub fn translate(&self, input: &str) -> String {
+        self.trace(input).iter().map(|t| t.output()).collect()
     }
 
     fn translation_candidates(
@@ -84,15 +84,16 @@ impl ContextTable {
         self.patterns.find(input, env)
     }
 
-    pub fn trace(&self, input: &str, env: &Environment) -> Vec<ResolvedTranslation> {
+    pub fn trace(&self, input: &str) -> Vec<ResolvedTranslation> {
         let mut translations: Vec<ResolvedTranslation> = Vec::new();
+        let env = Environment::new();
         let mut chars = input.chars();
         let mut prev: Option<char> = None;
         let mut seen: HashSet<TranslationSubset> = HashSet::default();
 
         loop {
             // given an input query the trie for matching translations
-            let candidates = self.translation_candidates(chars.as_str(), prev, env);
+            let candidates = self.translation_candidates(chars.as_str(), prev, &env);
 
             // use the longest translation
             let candidate = candidates
@@ -148,52 +149,48 @@ mod tests {
 
     #[test]
     fn correct() {
-        let env = Environment::new();
         let rules = [parse_rule("correct \"corect\" \"correct\"")];
         let ctx = TableContext::default();
         let transform =
             ContextTable::compile(&rules, Direction::Forward, TranslationStage::Pre, &ctx).unwrap();
-        assert_eq!(transform.translate("foobar", &env), "foobar");
-        assert_eq!(transform.translate("corect", &env), "correct");
-        assert_eq!(transform.translate("🐂", &env), "🐂");
+        assert_eq!(transform.translate("foobar"), "foobar");
+        assert_eq!(transform.translate("corect"), "correct");
+        assert_eq!(transform.translate("🐂"), "🐂");
     }
 
     #[test]
     fn pass2() {
-        let env = Environment::new();
         let rules = [parse_rule("pass2 @123 @12")];
         let ctx = TableContext::default();
         let transform =
             ContextTable::compile(&rules, Direction::Forward, TranslationStage::Post1, &ctx)
                 .unwrap();
-        assert_eq!(transform.translate("⠇", &env), "⠃");
-        assert_eq!(transform.translate("⠙", &env), "⠙");
-        assert_eq!(transform.translate("🐂", &env), "🐂");
+        assert_eq!(transform.translate("⠇"), "⠃");
+        assert_eq!(transform.translate("⠙"), "⠙");
+        assert_eq!(transform.translate("🐂"), "🐂");
     }
 
     #[test]
     fn pass3() {
-        let env = Environment::new();
         let rules = [parse_rule("pass3 @123 @12")];
         let ctx = TableContext::default();
         let transform =
             ContextTable::compile(&rules, Direction::Forward, TranslationStage::Post2, &ctx)
                 .unwrap();
-        assert_eq!(transform.translate("⠇", &env), "⠃");
-        assert_eq!(transform.translate("⠙", &env), "⠙");
-        assert_eq!(transform.translate("🐂", &env), "🐂");
+        assert_eq!(transform.translate("⠇"), "⠃");
+        assert_eq!(transform.translate("⠙"), "⠙");
+        assert_eq!(transform.translate("🐂"), "🐂");
     }
 
     #[test]
     fn pass4() {
-        let env = Environment::new();
         let rules = [parse_rule("pass4 @123 @12")];
         let ctx = TableContext::default();
         let transform =
             ContextTable::compile(&rules, Direction::Forward, TranslationStage::Post3, &ctx)
                 .unwrap();
-        assert_eq!(transform.translate("⠇", &env), "⠃");
-        assert_eq!(transform.translate("⠙", &env), "⠙");
-        assert_eq!(transform.translate("🐂", &env), "🐂");
+        assert_eq!(transform.translate("⠇"), "⠃");
+        assert_eq!(transform.translate("⠙"), "⠙");
+        assert_eq!(transform.translate("🐂"), "🐂");
     }
 }
