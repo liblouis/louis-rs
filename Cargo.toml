@@ -1,6 +1,6 @@
 [package]
 name = "louis-rs"
-version = "0.2.4"
+version = "0.2.5"
 edition = "2024"
 description = "A pure Rust re-implementation of the liblouis braille translator and back-translator"
 repository = "https://github.com/liblouis/louis-rs"
