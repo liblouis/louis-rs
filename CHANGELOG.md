@@ -1,41 +1,20 @@
-
-
 # Changelog
+All notable changes to this project will be documented in this file.
 
+The format is based on [Keep a Changelog](https://keepachangelog.com/)
+and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## 0.2.5 - 2026-01-27
-
+<!-- next-header -->
+## [Unreleased] - ReleaseDate
 
 ### Added
-
 -   Add support for context opcodes. Everything works except for
     negation.
 -   Add support for variables in context and multipass opcodes.
 -   Add proper support to display `match`, `correct`, `context` and all the multipass rules
 
-
-### Changed
-
-
-### Deprecated
-
-
-### Removed
-
--   The NFA based regular expression engine
-
-
-### Fixed
-
-
-### Security
-
-
-## 0.2.4 - 2026-01-16
-
-
+## [0.2.4] - 2026-01-16
 ### Added
-
 -   Add support for a translation pipeline. This simplifies the code and
     improves back-translation, where the pipeline is just applied in
     reverse.
@@ -46,30 +25,11 @@
 -   Add support for what liblouis calls *character attributes* in match
     patterns. They are essentially named character classes, like
     *digit*, *letter*, *lowercase*, etc.
-
-
-### Changed
-
-
-### Deprecated
-
-
 ### Removed
-
 -   The NFA based regular expression engine
 
-
-### Fixed
-
-
-### Security
-
-
-## 0.2.3 - 2025-12-04
-
-
+## [0.2.3] - 2025-12-04
 ### Added
-
 -   Implement support for the multipass opcodes, at least for the ones
     that do not require regular expressions, e.g. rules like
     
@@ -80,19 +40,16 @@
     pre and post translations are defined these translations are also
     shown.
 
-
-## 0.2.2 - 2025-12-01
-
-
+## [0.2.2] - 2025-12-01
 ### Fixed
-
 -   Fix an infinite loop when back-translating `correct` rules
 
-
 ## 0.2.1
-
-
 ### Changed
-
 -   Make it clear that the library API is unstable
 
+<!-- next-url -->
+[Unreleased]: https://github.com/liblouis/louis-rs/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/liblouis/louis-rs/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/liblouis/louis-rs/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/liblouis/louis-rs/compare/v0.1.0...v0.2.2
