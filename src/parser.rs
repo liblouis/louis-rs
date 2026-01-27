@@ -880,7 +880,7 @@ impl std::fmt::Display for Rule {
                 post,
                 dots,
                 ..
-            } => write!(f, "match {:?} {} {:?} {}", pre, chars, post, dots),
+            } => write!(f, "match {} {} {} {}", pre, chars, post, dots),
             _ => todo!(),
         }
     }

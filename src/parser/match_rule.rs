@@ -33,7 +33,61 @@ pub enum Pattern {
     Either(Box<Pattern>, Box<Pattern>),
 }
 
-pub type Patterns = Vec<Pattern>;
+#[derive(Debug, PartialEq, Clone)]
+pub struct Patterns(Vec<Pattern>);
+
+impl std::ops::Deref for Patterns {
+    type Target = Vec<Pattern>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Patterns {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl std::fmt::Display for Patterns {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for pattern in &self.0 {
+            write!(f, "{}", pattern)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for Pattern {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Pattern::Empty => write!(f, "-"),
+            Pattern::Characters(s) => write!(f, "{}", s),
+            Pattern::Boundary => todo!(),
+            Pattern::Any => write!(f, "."),
+            Pattern::Set(chars) => {
+                write!(f, "[")?;
+                for c in chars {
+                    write!(f, "{}", c)?;
+                }
+                write!(f, "]")?;
+                Ok(())
+            }
+            Pattern::Attributes(attributes) => {
+                for attr in attributes {
+                    write!(f, "{}", attr)?;
+                }
+                Ok(())
+            }
+            Pattern::Group(patterns) => write!(f, "({})", patterns),
+            Pattern::Negate(pattern) => write!(f, "!{}", pattern),
+            Pattern::Optional(pattern) => write!(f, "{}?", pattern),
+            Pattern::ZeroOrMore(pattern) => write!(f, "{}*", pattern),
+            Pattern::OneOrMore(pattern) => write!(f, "{}+", pattern),
+            Pattern::Either(p1, p2) => write!(f, "{}|{}", p1, p2),
+        }
+    }
+}
 
 pub struct PatternParser<'a> {
     chars: Peekable<Chars<'a>>,
@@ -159,7 +213,7 @@ impl<'a> PatternParser<'a> {
 
     fn group(&mut self) -> Result<Pattern, ParseError> {
         self.consume('(')?;
-        let mut patterns: Patterns = Vec::new();
+        let mut patterns = Patterns(Vec::new());
         while self.chars.peek() != Some(&')') {
             patterns.push(self.pattern_with_quantifier()?);
         }
@@ -221,7 +275,7 @@ impl<'a> PatternParser<'a> {
     }
 
     pub fn pattern(&mut self) -> Result<Patterns, ParseError> {
-        let mut patterns: Patterns = Vec::new();
+        let mut patterns = Patterns(Vec::new());
         if self.chars.next_if(|&c| c == '-').is_some() {
             patterns.push(Pattern::Empty);
         } else {
@@ -322,13 +376,15 @@ mod tests {
     fn group() {
         assert_eq!(
             PatternParser::new("(abc)").group(),
-            Ok(Pattern::Group(vec![Pattern::Characters("abc".into())]))
+            Ok(Pattern::Group(Patterns(vec![Pattern::Characters(
+                "abc".into()
+            )])))
         );
         assert_eq!(
             PatternParser::new("([abc])").group(),
-            Ok(Pattern::Group(vec![Pattern::Set(HashSet::from([
-                'a', 'b', 'c'
-            ]))]))
+            Ok(Pattern::Group(Patterns(vec![Pattern::Set(HashSet::from(
+                ['a', 'b', 'c']
+            ))])))
         );
         assert_eq!(
             PatternParser::new("()").group(),
@@ -340,32 +396,35 @@ mod tests {
     fn pattern() {
         assert_eq!(
             PatternParser::new("(abc)").pattern(),
-            Ok(vec![Pattern::Group(vec![Pattern::Characters(
-                "abc".into()
-            )])])
+            Ok(Patterns(vec![Pattern::Group(Patterns(vec![
+                Pattern::Characters("abc".into())
+            ]))]))
         );
         assert_eq!(
             PatternParser::new("(abc)?").pattern(),
-            Ok(vec![Pattern::Optional(Box::new(Pattern::Group(vec![
-                Pattern::Characters("abc".into())
-            ])))])
+            Ok(Patterns(vec![Pattern::Optional(Box::new(Pattern::Group(
+                Patterns(vec![Pattern::Characters("abc".into())])
+            )))]))
         );
         assert_eq!(
             PatternParser::new("(abc)+").pattern(),
-            Ok(vec![Pattern::OneOrMore(Box::new(Pattern::Group(vec![
-                Pattern::Characters("abc".into())
-            ])))])
+            Ok(Patterns(vec![Pattern::OneOrMore(Box::new(
+                Pattern::Group(Patterns(vec![Pattern::Characters("abc".into())]))
+            ))]))
         );
         assert_eq!(
             PatternParser::new("(abc)*").pattern(),
-            Ok(vec![Pattern::ZeroOrMore(Box::new(Pattern::Group(vec![
-                Pattern::Characters("abc".into())
-            ])))])
+            Ok(Patterns(vec![Pattern::ZeroOrMore(Box::new(
+                Pattern::Group(Patterns(vec![Pattern::Characters("abc".into())]))
+            ))]))
         );
         assert_eq!(
             PatternParser::new("a**").pattern(),
             Err(ParseError::MissingPatternBeforeQuantifier('*'))
         );
-        assert_eq!(PatternParser::new("-").pattern(), Ok(vec![Pattern::Empty]));
+        assert_eq!(
+            PatternParser::new("-").pattern(),
+            Ok(Patterns(vec![Pattern::Empty]))
+        );
     }
 }

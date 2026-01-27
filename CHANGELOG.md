@@ -3,6 +3,34 @@
 # Changelog
 
 
+## 0.2.5 - 2026-01-27
+
+
+### Added
+
+-   Add support for context opcodes. Everything works except for
+    negation.
+-   Add support for variables in context and multipass opcodes.
+-   Add proper support to display `match`, `correct`, `context` and all the multipass rules
+
+
+### Changed
+
+
+### Deprecated
+
+
+### Removed
+
+-   The NFA based regular expression engine
+
+
+### Fixed
+
+
+### Security
+
+
 ## 0.2.4 - 2026-01-16
 
 
