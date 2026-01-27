@@ -5,7 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 <!-- next-header -->
+
 ## [Unreleased] - ReleaseDate
+## [0.2.6] - 2026-01-27
 
 ### Changed
 - Migrate to `cargo release`
@@ -54,7 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 -   Make it clear that the library API is unstable
 
 <!-- next-url -->
-[Unreleased]: https://github.com/liblouis/louis-rs/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/assert-rs/predicates-rs/compare/v0.2.6...HEAD
+[0.2.6]: https://github.com/liblouis/louis-rs/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/liblouis/louis-rs/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/liblouis/louis-rs/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/liblouis/louis-rs/compare/v0.2.2...v0.2.3
