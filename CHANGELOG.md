@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 
 ## [Unreleased] - ReleaseDate
+### Fixed
+- Fixed the parsing of in alternation expressions `match` rules, i.e.
+  `match a|b foo - 26`
+
 ## [0.2.6] - 2026-01-27
 
 ### Changed
@@ -18,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 -   Add support for context opcodes. Everything works except for
     negation.
 -   Add support for variables in context and multipass opcodes.
--   Add proper support to display `match`, `correct`, `context` and all the multipass rules
+-   Add proper support to display `match`, `correct`, `context` and
+    all the multipass rules
 
 ## [0.2.4] - 2026-01-16
 ### Added

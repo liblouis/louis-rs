@@ -9,6 +9,8 @@ pub enum ParseError {
     InvalidAttribute(Option<char>),
     #[error("Quantifier '{0}' not allowed without pattern")]
     MissingPatternBeforeQuantifier(char),
+    #[error("Either not allowed without pattern")]
+    MissingPatternBeforeEither,
     #[error("Pattern cannot be empty")]
     EmptyPattern,
     #[error("Group cannot be empty")]
@@ -215,7 +217,7 @@ impl<'a> PatternParser<'a> {
         self.consume('(')?;
         let mut patterns = Patterns(Vec::new());
         while self.chars.peek() != Some(&')') {
-            patterns.push(self.pattern_with_quantifier()?);
+            patterns.push(self.either()?);
         }
         self.consume(')')?;
         if patterns.is_empty() {
@@ -251,9 +253,8 @@ impl<'a> PatternParser<'a> {
             Some('[') => self.set(),
             Some('(') => self.group(),
             // FIXME: handle escaped special chars
-            Some(c @ ('?' | '*' | '+' | '|')) => {
-                Err(ParseError::MissingPatternBeforeQuantifier(*c))
-            }
+            Some('|') => Err(ParseError::MissingPatternBeforeEither),
+            Some(c @ ('?' | '*' | '+')) => Err(ParseError::MissingPatternBeforeQuantifier(*c)),
             Some(_) => self.characters(),
             None => Err(ParseError::EmptyPattern),
         }
@@ -267,11 +268,17 @@ impl<'a> PatternParser<'a> {
             return Ok(Pattern::ZeroOrMore(Box::new(inner)));
         } else if self.chars.next_if(|&c| c == '+').is_some() {
             return Ok(Pattern::OneOrMore(Box::new(inner)));
-        } else if self.chars.next_if(|&c| c == '|').is_some() {
-            let outer = self.pattern_with_quantifier()?;
-            return Ok(Pattern::Either(Box::new(inner), Box::new(outer)));
         }
         Ok(inner)
+    }
+
+    fn either(&mut self) -> Result<Pattern, ParseError> {
+        let mut left = self.pattern_with_quantifier()?;
+        while self.chars.next_if(|&c| c == '|').is_some() {
+            let right = self.pattern_with_quantifier()?;
+            left = Pattern::Either(Box::new(left), Box::new(right));
+        }
+        Ok(left)
     }
 
     pub fn pattern(&mut self) -> Result<Patterns, ParseError> {
@@ -280,7 +287,7 @@ impl<'a> PatternParser<'a> {
             patterns.push(Pattern::Empty);
         } else {
             while self.chars.peek().is_some() {
-                patterns.push(self.pattern_with_quantifier()?);
+                patterns.push(self.either()?);
             }
         }
         Ok(patterns)
@@ -389,6 +396,53 @@ mod tests {
         assert_eq!(
             PatternParser::new("()").group(),
             Err(ParseError::EmptyGroup)
+        );
+    }
+
+    #[test]
+    fn either() {
+        assert_eq!(
+            PatternParser::new("a|b").either(),
+            Ok(Pattern::Either(
+                Box::new(Pattern::Characters("a".into())),
+                Box::new(Pattern::Characters("b".into()))
+            ))
+        );
+        assert_eq!(
+            PatternParser::new("a|b|c").either(),
+            Ok(Pattern::Either(
+                Box::new(Pattern::Either(
+                    Box::new(Pattern::Characters("a".into())),
+                    Box::new(Pattern::Characters("b".into()))
+                )),
+                Box::new(Pattern::Characters("c".into())),
+            ))
+        );
+        assert_eq!(
+            PatternParser::new("a+|[bc]?").either(),
+            Ok(Pattern::Either(
+                Box::new(Pattern::OneOrMore(Box::new(Pattern::Characters(
+                    "a".into()
+                )))),
+                Box::new(Pattern::Optional(Box::new(Pattern::Set(HashSet::from([
+                    'b', 'c'
+                ])))))
+            ))
+        );
+        assert_eq!(
+            PatternParser::new("(a|b)").either(),
+            Ok(Pattern::Group(Patterns(vec![Pattern::Either(
+                Box::new(Pattern::Characters("a".into())),
+                Box::new(Pattern::Characters("b".into()))
+            )])))
+        );
+        assert_eq!(
+            PatternParser::new("|a").either(),
+            Err(ParseError::MissingPatternBeforeEither)
+        );
+        assert_eq!(
+            PatternParser::new("a|").either(),
+            Err(ParseError::EmptyPattern)
         );
     }
 
