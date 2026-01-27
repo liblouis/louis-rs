@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Changed
+- Migrate to `cargo release`
+
+## [0.2.5] - 2026-01-27
+
 ### Added
 -   Add support for context opcodes. Everything works except for
     negation.
@@ -49,7 +54,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 -   Make it clear that the library API is unstable
 
 <!-- next-url -->
-[Unreleased]: https://github.com/liblouis/louis-rs/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/liblouis/louis-rs/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/liblouis/louis-rs/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/liblouis/louis-rs/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/liblouis/louis-rs/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/liblouis/louis-rs/compare/v0.1.0...v0.2.2
