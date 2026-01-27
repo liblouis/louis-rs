@@ -853,6 +853,12 @@ impl std::fmt::Display for Rule {
             Rule::Midendword { chars, dots, .. } => write!(f, "midendword {} {}", chars, dots),
             Rule::Endword { chars, dots, .. } => write!(f, "endword {} {}", chars, dots),
             Rule::Partword { chars, dots, .. } => write!(f, "partword {} {}", chars, dots),
+            Rule::Begnum { chars, dots, .. } => {
+                write!(f, "begnum {} {}", chars, dots_to_unicode(dots))
+            }
+            Rule::Midnum { chars, dots, .. } => {
+                write!(f, "midnum {} {}", chars, dots_to_unicode(dots))
+            }
             Rule::Endnum { chars, dots, .. } => write!(f, "endnum {} {}", chars, dots),
             Rule::Capsletter { dots, .. } => write!(f, "capsletter {}", dots_to_unicode(dots)),
             Rule::Begcapsword { dots, .. } => write!(f, "begcapsword {}", dots_to_unicode(dots)),
@@ -860,6 +866,21 @@ impl std::fmt::Display for Rule {
             Rule::Begcaps { dots } => write!(f, "begcaps {}", dots_to_unicode(dots)),
             Rule::Endcaps { dots } => write!(f, "endcaps {}", dots_to_unicode(dots)),
             Rule::Correct { test, action, .. } => write!(f, "correct {} {}", test, action),
+            Rule::Sufword { chars, dots, .. } => write!(f, "sufword {} {}", chars, dots),
+            Rule::Prfword { chars, dots, .. } => write!(f, "prfword {} {}", chars, dots),
+            Rule::Context { test, action, .. } => write!(f, "context {} {}", test, action),
+            Rule::Pass2 { test, action, .. } => write!(f, "pass2 {} {}", test, action),
+            Rule::Pass3 { test, action, .. } => write!(f, "pass3 {} {}", test, action),
+            Rule::Pass4 { test, action, .. } => write!(f, "pass4 {} {}", test, action),
+            Rule::Attribute { name, chars } => write!(f, "attribute {} {}", name, chars),
+            Rule::Literal { chars } => write!(f, "literal {}", chars),
+            Rule::Match {
+                pre,
+                chars,
+                post,
+                dots,
+                ..
+            } => write!(f, "match {:?} {} {:?} {}", pre, chars, post, dots),
             _ => todo!(),
         }
     }
