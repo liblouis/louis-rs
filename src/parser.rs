@@ -376,7 +376,8 @@ pub enum Rule {
     Grouping {
         name: String,
         chars: String,
-        dots: BrailleChars,
+        left: BrailleChar,
+        right: BrailleChar,
     },
     Letter {
         character: char,
@@ -1600,10 +1601,19 @@ impl<'a> RuleParser<'a> {
             }
             Opcode::Grouping => {
                 fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
+                let name = self.name()?;
+                let chars = self.chars()?;
+                let dots = self.many_braillechar()?;
+                if dots.len() != 2 {
+                    return Err(ParseError::DotsTupleExpected);
+                }
+                let left = dots.iter().next().unwrap().clone();
+                let right = dots.iter().last().unwrap().clone();
                 Rule::Grouping {
-                    name: self.name()?,
-                    chars: self.chars()?,
-                    dots: self.explicit_dots()?,
+                    name,
+                    chars,
+                    left,
+                    right,
                 }
             }
             Opcode::Letter => {
@@ -2660,6 +2670,27 @@ mod tests {
 		    BrailleChar::from(enum_set!(BrailleDot::Dot1|BrailleDot::Dot2|BrailleDot::Dot3|BrailleDot::Dot5))]),
 	    ]}),
             RuleParser::new("swapdd cancelcontraction 2a,23a,25a,256a,26a,35a,236a 1-12,12-1235,14-1235,145-1235,15-1345,24-1345,15-1235").rule()
+        );
+    }
+
+    #[test]
+    fn grouping() {
+        assert_eq!(
+            Ok(Rule::Grouping {
+                name: "brackets".to_string(),
+                chars: "()".to_string(),
+                left: BrailleChar::from(enum_set!(
+                    BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot3
+                )),
+                right: BrailleChar::from(enum_set!(
+                    BrailleDot::Dot1 | BrailleDot::Dot4 | BrailleDot::Dot5
+                ))
+            }),
+            RuleParser::new("grouping brackets () 123,145").rule()
+        );
+        assert_eq!(
+            Err(ParseError::DotsTupleExpected),
+            RuleParser::new("grouping brackets () 123").rule()
         );
     }
 }
