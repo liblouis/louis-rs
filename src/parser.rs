@@ -2423,36 +2423,36 @@ pub fn expand_includes(rules: Vec<AnchoredRule>) -> Result<Vec<AnchoredRule>, Ve
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::braille::BrailleChar;
+    use crate::parser::braille::{BrailleChar, BrailleDot};
 
     use super::*;
     use enumset::enum_set;
 
     #[test]
     fn nocross() {
-        assert_eq!(true, RuleParser::new(&"nocross").nocross());
-        assert_eq!(true, RuleParser::new(&"nocross nofor").nocross());
-        assert_eq!(false, RuleParser::new(&"nofor nocross").nocross());
-        assert_eq!(false, RuleParser::new(&"nofor").nocross());
+        assert_eq!(true, RuleParser::new("nocross").nocross());
+        assert_eq!(true, RuleParser::new("nocross nofor").nocross());
+        assert_eq!(false, RuleParser::new("nofor nocross").nocross());
+        assert_eq!(false, RuleParser::new("nofor").nocross());
     }
 
     #[test]
     fn nofor() {
-        assert_eq!(true, RuleParser::new(&" nofor ").nofor());
-        assert_eq!(true, RuleParser::new(&"nofor nocross").nofor());
-        assert_eq!(false, RuleParser::new(&"nocross nofor").nofor());
-        assert_eq!(false, RuleParser::new(&"").nofor());
+        assert_eq!(true, RuleParser::new(" nofor ").nofor());
+        assert_eq!(true, RuleParser::new("nofor nocross").nofor());
+        assert_eq!(false, RuleParser::new("nocross nofor").nofor());
+        assert_eq!(false, RuleParser::new("").nofor());
     }
 
     #[test]
     fn constraints() {
         assert_eq!(
             constraint_set!(Constraint::Nofor),
-            RuleParser::new(&" nofor ").constraints()
+            RuleParser::new(" nofor ").constraints()
         );
         assert_eq!(
             constraint_set!(Constraint::Nofor | Constraint::Nocross),
-            RuleParser::new(&"nofor nocross").constraints()
+            RuleParser::new("nofor nocross").constraints()
         );
     }
 
@@ -2503,17 +2503,17 @@ mod tests {
             Ok(Some(WithClass::Before {
                 class: "foo".into()
             })),
-            RuleParser::new(&"before foo ").with_class()
+            RuleParser::new("before foo ").with_class()
         );
         assert_eq!(
             Ok(Some(WithClass::After {
                 class: "foo".into()
             })),
-            RuleParser::new(&" after foo ").with_class()
+            RuleParser::new(" after foo ").with_class()
         );
         assert_eq!(
             Err(ParseError::ClassNameExpected { found: None }),
-            RuleParser::new(&" after ").with_class()
+            RuleParser::new(" after ").with_class()
         );
     }
 
@@ -2528,34 +2528,34 @@ mod tests {
                     class: "bar".into()
                 },
             ])),
-            RuleParser::new(&"before foo after bar").with_classes()
+            RuleParser::new("before foo after bar").with_classes()
         );
 
         assert_eq!(
             Err(ParseError::ClassNameExpected { found: None }),
-            RuleParser::new(&"before foo after").with_classes()
+            RuleParser::new("before foo after").with_classes()
         );
     }
 
     #[test]
     fn opcode() {
-        assert_eq!(Ok(Opcode::Include), RuleParser::new(&"include").opcode());
+        assert_eq!(Ok(Opcode::Include), RuleParser::new("include").opcode());
         assert_eq!(
             Ok(Opcode::Always),
-            RuleParser::new(&"always foo after").opcode()
+            RuleParser::new("always foo after").opcode()
         );
 
         assert_eq!(
             Err(ParseError::OpcodeExpected {
                 found: Some("h".into())
             }),
-            RuleParser::new(&"h").opcode()
+            RuleParser::new("h").opcode()
         );
         assert_eq!(
             Err(ParseError::OpcodeExpected {
                 found: Some("hello".into())
             }),
-            RuleParser::new(&"hello world").opcode()
+            RuleParser::new("hello world").opcode()
         );
     }
 
@@ -2563,16 +2563,16 @@ mod tests {
     fn with_matches() {
         assert_eq!(
             Some(HashSet::from([WithMatch::After])),
-            RuleParser::new(&"empmatchafter match").with_matches()
+            RuleParser::new("empmatchafter match").with_matches()
         );
         assert_eq!(
             Some(HashSet::from([WithMatch::Before])),
-            RuleParser::new(&"empmatchbefore match").with_matches()
+            RuleParser::new("empmatchbefore match").with_matches()
         );
         assert_eq!(None, RuleParser::new(&"match").with_matches());
         assert_eq!(
             Some(HashSet::from([WithMatch::After, WithMatch::Before])),
-            RuleParser::new(&"empmatchbefore empmatchafter match").with_matches()
+            RuleParser::new("empmatchbefore empmatchafter match").with_matches()
         );
     }
 
@@ -2582,17 +2582,17 @@ mod tests {
             Ok(Rule::Include {
                 file: "foo.ctb".into()
             }),
-            RuleParser::new(&"include foo.ctb").rule()
+            RuleParser::new("include foo.ctb").rule()
         );
         assert_eq!(
             Err(ParseError::FilenameExpected),
-            RuleParser::new(&"include").rule()
+            RuleParser::new("include").rule()
         );
         assert_eq!(
             Err(ParseError::OpcodeExpected {
                 found: Some("Include".into())
             }),
-            RuleParser::new(&"Include foo.ctb").rule()
+            RuleParser::new("Include foo.ctb").rule()
         );
     }
 
@@ -2605,7 +2605,7 @@ mod tests {
                 dots: BrailleChars::from(vec![BrailleChar::from(enum_set!(BrailleDot::Dot1))]),
                 constraints: Constraints::empty()
             }),
-            RuleParser::new(&"display a 1").rule()
+            RuleParser::new("display a 1").rule()
         );
     }
 
@@ -2621,7 +2621,10 @@ mod tests {
                 action: Action::new(vec![ActionInstruction::String { s: "b".into() }]),
                 constraints: constraint_set!(Constraint::Noback)
             }),
-            RuleParser::new(&"noback correct \"a\" \"b\"").rule()
+            RuleParser::new("noback correct \"a\" \"b\"").rule()
+        );
+    }
+
     #[test]
     fn swapdd() {
         assert_eq!(
