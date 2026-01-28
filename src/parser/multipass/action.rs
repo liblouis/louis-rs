@@ -1,7 +1,7 @@
 //! A Parser for the action operand of context and multipass opcodes
 use std::{iter::Peekable, str::Chars};
 
-use super::braille::{self, BrailleChars, braille_chars, is_braille_dot};
+use super::braille::{self, BrailleChars, is_braille_dot};
 use crate::parser::multipass::ConsumesInput;
 use crate::parser::multipass::ConversionError;
 use crate::parser::multipass::IsLiteral;
@@ -158,7 +158,7 @@ impl<'a> Parser<'a> {
             ))
         } else {
             Ok(ActionInstruction::Dots {
-                dots: braille_chars(&dots)?,
+                dots: BrailleChars::try_from(dots.as_str())?,
             })
         }
     }

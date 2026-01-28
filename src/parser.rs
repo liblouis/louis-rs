@@ -16,7 +16,9 @@ use enumset::{EnumSet, EnumSetType};
 
 use search_path::SearchPath;
 
-use self::braille::{BrailleChars, braille_chars, chars_to_dots};
+use crate::parser::braille::BrailleChar;
+
+use self::braille::BrailleChars;
 
 pub use attribute::Attribute;
 pub use braille::fallback;
@@ -1449,7 +1451,7 @@ impl<'a> RuleParser<'a> {
         if token == "=" {
             Ok(Braille::Implicit)
         } else {
-            Ok(Braille::Explicit(braille_chars(token)?))
+            Ok(Braille::Explicit(BrailleChars::try_from(token)?))
         }
     }
 
@@ -1458,7 +1460,7 @@ impl<'a> RuleParser<'a> {
             .next()
             .ok_or(ParseError::DotsExpected)?
             .split('-')
-            .map(chars_to_dots)
+            .map(BrailleChar::try_from)
             // FIXME: it feels really weird that we manually have to
             // map braille::ParseError to ParseError. I thought the
             // thisError crate implements the from trait between the
@@ -1475,7 +1477,7 @@ impl<'a> RuleParser<'a> {
             .map(|chars| {
                 chars
                     .split('-')
-                    .map(chars_to_dots)
+                    .map(BrailleChar::try_from)
                     // FIXME: it feels really weird that we manually have to
                     // map braille::ParseError to ParseError.
                     .map(|r| r.map_err(ParseError::InvalidBraille))
@@ -1490,7 +1492,9 @@ impl<'a> RuleParser<'a> {
             .next()
             .ok_or(ParseError::DotsExpected)?
             .chars()
-            .map(|c| chars_to_dots(&c.to_string()).map_err(ParseError::InvalidBraille))
+            .map(|c| {
+                BrailleChar::try_from(c.to_string().as_str()).map_err(ParseError::InvalidBraille)
+            })
             .collect()
     }
 

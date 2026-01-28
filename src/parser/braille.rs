@@ -28,6 +28,57 @@ pub enum BrailleDot {
     DotF,
 }
 
+impl BrailleDot {
+    fn to_hex(self) -> u32 {
+        match self {
+            BrailleDot::Dot0 => 0x0000,
+            BrailleDot::Dot1 => 0x0001,
+            BrailleDot::Dot2 => 0x0002,
+            BrailleDot::Dot3 => 0x0004,
+            BrailleDot::Dot4 => 0x0008,
+            BrailleDot::Dot5 => 0x0010,
+            BrailleDot::Dot6 => 0x0020,
+            BrailleDot::Dot7 => 0x0040,
+            BrailleDot::Dot8 => 0x0080,
+            BrailleDot::Dot9 => 0x0100,
+            BrailleDot::DotA => 0x0200,
+            BrailleDot::DotB => 0x0400,
+            BrailleDot::DotC => 0x0800,
+            BrailleDot::DotD => 0x1000,
+            BrailleDot::DotE => 0x2000,
+            BrailleDot::DotF => 0x4000,
+        }
+    }
+}
+
+impl TryFrom<char> for BrailleDot {
+    type Error = ParseError;
+
+    fn try_from(value: char) -> Result<Self, Self::Error> {
+        match value {
+            '0' => Ok(BrailleDot::Dot0),
+            '1' => Ok(BrailleDot::Dot1),
+            '2' => Ok(BrailleDot::Dot2),
+            '3' => Ok(BrailleDot::Dot3),
+            '4' => Ok(BrailleDot::Dot4),
+            '5' => Ok(BrailleDot::Dot5),
+            '6' => Ok(BrailleDot::Dot6),
+            '7' => Ok(BrailleDot::Dot7),
+            '8' => Ok(BrailleDot::Dot8),
+            '9' => Ok(BrailleDot::Dot9),
+            'a' => Ok(BrailleDot::DotA),
+            'b' => Ok(BrailleDot::DotB),
+            'c' => Ok(BrailleDot::DotC),
+            'd' => Ok(BrailleDot::DotD),
+            'e' => Ok(BrailleDot::DotE),
+            'f' => Ok(BrailleDot::DotF),
+            invalid => Err(ParseError::InvalidBraille {
+                character: Some(invalid),
+            }),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrailleChar(EnumSet<BrailleDot>);
 
@@ -60,7 +111,7 @@ impl BrailleChar {
         let unicode = self
             .0
             .iter()
-            .map(|dot| dot_to_hex(&dot))
+            .map(|dot| dot.to_hex())
             .fold(unicode_plane, |acc, x| acc | x);
         char::from_u32(unicode).unwrap()
     }
@@ -69,6 +120,18 @@ impl BrailleChar {
 impl std::fmt::Display for BrailleChar {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.to_unicode())
+    }
+}
+
+impl TryFrom<&str> for BrailleChar {
+    type Error = ParseError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if value.is_empty() {
+            Err(ParseError::InvalidBraille { character: None })
+        } else {
+            value.chars().map(BrailleDot::try_from).collect()
+        }
     }
 }
 
@@ -97,6 +160,14 @@ impl From<Vec<BrailleChar>> for BrailleChars {
     }
 }
 
+impl TryFrom<&str> for BrailleChars {
+    type Error = ParseError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        value.split('-').map(BrailleChar::try_from).collect()
+    }
+}
+
 impl std::fmt::Display for BrailleChars {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -115,63 +186,6 @@ impl FromIterator<BrailleChar> for BrailleChars {
 
 pub fn is_braille_dot(c: char) -> bool {
     matches!(c, '0'..='9' | 'a'..='f')
-}
-
-fn char_to_dot(char: char) -> Result<BrailleDot, ParseError> {
-    match char {
-        '0' => Ok(BrailleDot::Dot0),
-        '1' => Ok(BrailleDot::Dot1),
-        '2' => Ok(BrailleDot::Dot2),
-        '3' => Ok(BrailleDot::Dot3),
-        '4' => Ok(BrailleDot::Dot4),
-        '5' => Ok(BrailleDot::Dot5),
-        '6' => Ok(BrailleDot::Dot6),
-        '7' => Ok(BrailleDot::Dot7),
-        '8' => Ok(BrailleDot::Dot8),
-        '9' => Ok(BrailleDot::Dot9),
-        'a' => Ok(BrailleDot::DotA),
-        'b' => Ok(BrailleDot::DotB),
-        'c' => Ok(BrailleDot::DotC),
-        'd' => Ok(BrailleDot::DotD),
-        'e' => Ok(BrailleDot::DotE),
-        'f' => Ok(BrailleDot::DotF),
-        invalid => Err(ParseError::InvalidBraille {
-            character: Some(invalid),
-        }),
-    }
-}
-
-pub fn chars_to_dots(chars: &str) -> Result<BrailleChar, ParseError> {
-    if chars.is_empty() {
-        Err(ParseError::InvalidBraille { character: None })
-    } else {
-        chars.chars().map(char_to_dot).collect()
-    }
-}
-
-pub fn braille_chars(chars: &str) -> Result<BrailleChars, ParseError> {
-    chars.split('-').map(chars_to_dots).collect()
-}
-
-fn dot_to_hex(dot: &BrailleDot) -> u32 {
-    match dot {
-        BrailleDot::Dot0 => 0x0000,
-        BrailleDot::Dot1 => 0x0001,
-        BrailleDot::Dot2 => 0x0002,
-        BrailleDot::Dot3 => 0x0004,
-        BrailleDot::Dot4 => 0x0008,
-        BrailleDot::Dot5 => 0x0010,
-        BrailleDot::Dot6 => 0x0020,
-        BrailleDot::Dot7 => 0x0040,
-        BrailleDot::Dot8 => 0x0080,
-        BrailleDot::Dot9 => 0x0100,
-        BrailleDot::DotA => 0x0200,
-        BrailleDot::DotB => 0x0400,
-        BrailleDot::DotC => 0x0800,
-        BrailleDot::DotD => 0x1000,
-        BrailleDot::DotE => 0x2000,
-        BrailleDot::DotF => 0x4000,
-    }
 }
 
 /// Map char to dots according to North American Braille Computer Code (NABCC)
@@ -240,21 +254,21 @@ mod tests {
     #[test]
     fn test_chars_to_dots() {
         assert_eq!(
-            chars_to_dots("123"),
+            BrailleChar::try_from("123"),
             Ok(BrailleChar(enum_set!(
                 BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot3
             )))
         );
         assert_eq!(
-            chars_to_dots("1a"),
+            BrailleChar::try_from("1a"),
             Ok(BrailleChar(enum_set!(BrailleDot::Dot1 | BrailleDot::DotA)))
         );
         assert_eq!(
-            chars_to_dots("a"),
+            BrailleChar::try_from("a"),
             Ok(BrailleChar(enum_set!(BrailleDot::DotA)))
         );
         assert_eq!(
-            chars_to_dots("z"),
+            BrailleChar::try_from("z"),
             Err(ParseError::InvalidBraille {
                 character: Some('z')
             })
@@ -264,26 +278,26 @@ mod tests {
     #[test]
     fn test_braille_chars() {
         assert_eq!(
-            braille_chars("1-1"),
+            BrailleChars::try_from("1-1"),
             Ok(BrailleChars(vec![
                 BrailleChar(enum_set!(BrailleDot::Dot1)),
                 BrailleChar(enum_set!(BrailleDot::Dot1))
             ]))
         );
         assert_eq!(
-            braille_chars("1-"),
+            BrailleChars::try_from("1-"),
             Err(ParseError::InvalidBraille { character: None })
         );
         assert_eq!(
-            braille_chars("-1"),
+            BrailleChars::try_from("-1"),
             Err(ParseError::InvalidBraille { character: None })
         );
         assert_eq!(
-            braille_chars("-"),
+            BrailleChars::try_from("-"),
             Err(ParseError::InvalidBraille { character: None })
         );
         assert_eq!(
-            braille_chars(""),
+            BrailleChars::try_from(""),
             Err(ParseError::InvalidBraille { character: None })
         );
     }

@@ -4,7 +4,7 @@ use std::{collections::HashSet, iter::Peekable, str::Chars};
 
 use crate::parser::multipass::{ConversionError, IsLiteral, ParseError};
 
-use super::braille::{self, BrailleChars, braille_chars, is_braille_dot};
+use super::braille::{self, BrailleChars, is_braille_dot};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Test {
@@ -266,7 +266,7 @@ impl<'a> Parser<'a> {
             ))
         } else {
             Ok(TestInstruction::Dots {
-                dots: braille_chars(&dots)?,
+                dots: BrailleChars::try_from(dots.as_str())?,
             })
         }
     }
