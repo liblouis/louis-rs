@@ -1491,10 +1491,8 @@ impl<'a> RuleParser<'a> {
         self.tokens
             .next()
             .ok_or(ParseError::DotsExpected)?
-            .chars()
-            .map(|c| {
-                BrailleChar::try_from(c.to_string().as_str()).map_err(ParseError::InvalidBraille)
-            })
+            .split(',')
+            .map(|chars| BrailleChar::try_from(chars).map_err(ParseError::InvalidBraille))
             .collect()
     }
 
@@ -2624,6 +2622,41 @@ mod tests {
                 constraints: constraint_set!(Constraint::Noback)
             }),
             RuleParser::new(&"noback correct \"a\" \"b\"").rule()
+    #[test]
+    fn swapdd() {
+        assert_eq!(
+            Ok(Rule::Swapdd { name: "cancelcontraction".to_string(), dots: BrailleChars::from(vec![
+		BrailleChar::from(enum_set!(BrailleDot::Dot2|BrailleDot::DotA)),
+		BrailleChar::from(enum_set!(BrailleDot::Dot2|BrailleDot::Dot3|BrailleDot::DotA)),
+		BrailleChar::from(enum_set!(BrailleDot::Dot2|BrailleDot::Dot5|BrailleDot::DotA)),
+		BrailleChar::from(enum_set!(BrailleDot::Dot2|BrailleDot::Dot5|BrailleDot::Dot6|BrailleDot::DotA)),
+		BrailleChar::from(enum_set!(BrailleDot::Dot2|BrailleDot::Dot6|BrailleDot::DotA)),
+		BrailleChar::from(enum_set!(BrailleDot::Dot3|BrailleDot::Dot5|BrailleDot::DotA)),
+		BrailleChar::from(enum_set!(BrailleDot::Dot2|BrailleDot::Dot3|BrailleDot::Dot6|BrailleDot::DotA)),
+	    ]), replacement: vec![
+		BrailleChars::from(vec![
+		    BrailleChar::from(enum_set!(BrailleDot::Dot1)),
+		    BrailleChar::from(enum_set!(BrailleDot::Dot1|BrailleDot::Dot2))]),
+		BrailleChars::from(vec![
+		    BrailleChar::from(enum_set!(BrailleDot::Dot1|BrailleDot::Dot2)),
+		    BrailleChar::from(enum_set!(BrailleDot::Dot1|BrailleDot::Dot2|BrailleDot::Dot3|BrailleDot::Dot5))]),
+		BrailleChars::from(vec![
+		    BrailleChar::from(enum_set!(BrailleDot::Dot1|BrailleDot::Dot4)),
+		    BrailleChar::from(enum_set!(BrailleDot::Dot1|BrailleDot::Dot2|BrailleDot::Dot3|BrailleDot::Dot5))]),
+		BrailleChars::from(vec![
+		    BrailleChar::from(enum_set!(BrailleDot::Dot1|BrailleDot::Dot4|BrailleDot::Dot5)),
+		    BrailleChar::from(enum_set!(BrailleDot::Dot1|BrailleDot::Dot2|BrailleDot::Dot3|BrailleDot::Dot5))]),
+		BrailleChars::from(vec![
+		    BrailleChar::from(enum_set!(BrailleDot::Dot1|BrailleDot::Dot5)),
+		    BrailleChar::from(enum_set!(BrailleDot::Dot1|BrailleDot::Dot3|BrailleDot::Dot4|BrailleDot::Dot5))]),
+		BrailleChars::from(vec![
+		    BrailleChar::from(enum_set!(BrailleDot::Dot2|BrailleDot::Dot4)),
+		    BrailleChar::from(enum_set!(BrailleDot::Dot1|BrailleDot::Dot3|BrailleDot::Dot4|BrailleDot::Dot5))]),
+		BrailleChars::from(vec![
+		    BrailleChar::from(enum_set!(BrailleDot::Dot1|BrailleDot::Dot5)),
+		    BrailleChar::from(enum_set!(BrailleDot::Dot1|BrailleDot::Dot2|BrailleDot::Dot3|BrailleDot::Dot5))]),
+	    ]}),
+            RuleParser::new("swapdd cancelcontraction 2a,23a,25a,256a,26a,35a,236a 1-12,12-1235,14-1235,145-1235,15-1345,24-1345,15-1235").rule()
         );
     }
 }

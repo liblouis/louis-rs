@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - Fixed the parsing of in alternation expressions `match` rules, i.e.
   `match a|b foo - 26`
+- Fix the parsing of `swapdd` operands
 
 ## [0.2.6] - 2026-01-27
 
