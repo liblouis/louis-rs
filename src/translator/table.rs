@@ -2,9 +2,7 @@ pub mod multipass;
 pub mod primary;
 
 use crate::{
-    parser::{
-        AnchoredRule, CharacterClass, CharacterClasses, Rule, dot_to_unicode, dots_to_unicode,
-    },
+    parser::{AnchoredRule, CharacterClass, CharacterClasses, Rule, dot_to_unicode},
     translator::{CharacterDefinition, TranslationError, swap::SwapClasses},
 };
 
@@ -46,57 +44,57 @@ impl TableContext {
                 Rule::Space {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots_to_unicode(dots));
+                    character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Space, *character);
                 }
                 Rule::Punctuation {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots_to_unicode(dots));
+                    character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Punctuation, *character);
                 }
                 Rule::Digit {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots_to_unicode(dots));
+                    character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Digit, *character);
                 }
                 Rule::Litdigit {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots_to_unicode(dots));
+                    character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Litdigit, *character);
                 }
                 Rule::Letter {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots_to_unicode(dots));
+                    character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Letter, *character);
                 }
                 Rule::Lowercase {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots_to_unicode(dots));
+                    character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Lowercase, *character);
                     character_classes.insert(CharacterClass::Letter, *character);
                 }
                 Rule::Uppercase {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots_to_unicode(dots));
+                    character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Uppercase, *character);
                     character_classes.insert(CharacterClass::Letter, *character);
                 }
                 Rule::Sign {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots_to_unicode(dots));
+                    character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Sign, *character);
                 }
                 Rule::Math {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots_to_unicode(dots));
+                    character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Math, *character);
                 }
                 Rule::Attribute { name, chars } => {
@@ -142,7 +140,7 @@ impl TableContext {
                     for c in chars.chars() {
                         character_classes.insert(class.clone(), c);
                     }
-                    let replacements: Vec<String> = dots.iter().map(dots_to_unicode).collect();
+                    let replacements: Vec<String> = dots.iter().map(|b| b.to_string()).collect();
                     let mapping: Vec<(char, &str)> = chars
                         .chars()
                         .zip(replacements.iter().map(|s| s.as_str()))
@@ -155,11 +153,11 @@ impl TableContext {
                     replacement,
                 } => {
                     let class = CharacterClass::from(name.as_str());
-                    for c in dots_to_unicode(dots).chars() {
+                    for c in dots.to_string().chars() {
                         character_classes.insert(class.clone(), c);
                     }
                     let replacements: Vec<String> =
-                        replacement.iter().map(dots_to_unicode).collect();
+                        replacement.iter().map(|b| b.to_string()).collect();
                     let mapping: Vec<(char, &str)> = dots
                         .iter()
                         .map(dot_to_unicode)

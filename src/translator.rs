@@ -7,7 +7,7 @@ pub use translation::{ResolvedTranslation, TranslationStage};
 
 use crate::{
     Direction,
-    parser::{AnchoredRule, Braille, HasDirection, Rule, dots_to_unicode},
+    parser::{AnchoredRule, Braille, HasDirection, Rule},
 };
 
 mod boundaries;
@@ -82,7 +82,7 @@ impl CharacterDefinition {
     fn braille_to_unicode(&self, dots: &Braille, chars: &str) -> Result<String, TranslationError> {
         let dots = match dots {
             Braille::Implicit => self.resolve_implicit_dots(chars)?,
-            Braille::Explicit(dots) => dots_to_unicode(dots),
+            Braille::Explicit(dots) => dots.to_string(),
         };
         Ok(dots)
     }
@@ -105,11 +105,11 @@ impl DisplayTable {
                 } => {
                     if cfg!(feature = "backwards_compatibility") {
                         // first rule wins
-                        let key = dots_to_unicode(dots).chars().nth(0).unwrap();
+                        let key = dots.to_string().chars().nth(0).unwrap();
                         mapping.entry(key).or_insert(*character);
                     } else {
                         // last rule wins
-                        mapping.insert(dots_to_unicode(dots).chars().nth(0).unwrap(), *character);
+                        mapping.insert(dots.to_string().chars().nth(0).unwrap(), *character);
                     }
                 }
                 _ => (), // ignore all other rules for display tables

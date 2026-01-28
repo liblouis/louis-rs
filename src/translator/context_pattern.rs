@@ -3,9 +3,7 @@
 use std::collections::HashSet;
 
 use crate::parser::multipass::test::Operator;
-use crate::parser::{
-    Action, ActionInstruction, HasPrecedence, Quantifier, Test, TestInstruction, dots_to_unicode,
-};
+use crate::parser::{Action, ActionInstruction, HasPrecedence, Quantifier, Test, TestInstruction};
 
 use crate::parser::{AnchoredRule, Attribute, CharacterClass, CharacterClasses};
 use crate::translator::effect::{Effect, Environment};
@@ -48,7 +46,7 @@ impl Regexp {
                 _ => todo!(),
             },
             TestInstruction::String { s } => Regexp::String(s.to_string()),
-            TestInstruction::Dots { dots } => Regexp::String(dots_to_unicode(dots)),
+            TestInstruction::Dots { dots } => Regexp::String(dots.to_string()),
             TestInstruction::Attributes { attrs, quantifier } => {
                 Regexp::from_multipass_attributes(attrs, quantifier, ctx)
             }
@@ -125,9 +123,7 @@ impl TranslationTarget {
     ) -> Result<Self, TranslationError> {
         match value {
             ActionInstruction::String { s } => Ok(TranslationTarget::Literal(s)),
-            ActionInstruction::Dots { dots } => {
-                Ok(TranslationTarget::Literal(dots_to_unicode(&dots)))
-            }
+            ActionInstruction::Dots { dots } => Ok(TranslationTarget::Literal(dots.to_string())),
             ActionInstruction::SwapClass { name } => {
                 let swapper = ctx
                     .get(&name)

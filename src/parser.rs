@@ -16,11 +16,11 @@ use enumset::{EnumSet, EnumSetType};
 
 use search_path::SearchPath;
 
-use self::braille::{BrailleChar, BrailleChars, braille_chars, chars_to_dots};
+use self::braille::{BrailleChars, braille_chars, chars_to_dots};
 
 pub use attribute::Attribute;
+pub use braille::dot_to_unicode;
 pub use braille::fallback;
-pub use braille::{dot_to_unicode, dots_to_unicode};
 pub use character_class::{CharacterClass, CharacterClasses};
 pub use match_rule::{Pattern, PatternParser, Patterns};
 pub use multipass::action::ActionInstruction;
@@ -727,7 +727,7 @@ pub enum Rule {
     },
     Swapdd {
         name: String,
-        dots: Vec<BrailleChar>,
+        dots: BrailleChars,
         replacement: Vec<BrailleChars>,
     },
     Swapcc {
@@ -782,26 +782,26 @@ pub enum Rule {
 impl std::fmt::Display for Rule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Rule::Undefined { dots } => write!(f, "undefined {}", dots_to_unicode(dots)),
+            Rule::Undefined { dots } => write!(f, "undefined {}", dots),
             Rule::Space {
                 character, dots, ..
             } => {
-                write!(f, "space {} {}", character, dots_to_unicode(dots))
+                write!(f, "space {} {}", character, dots)
             }
             Rule::Punctuation {
                 character, dots, ..
             } => {
-                write!(f, "punctuation {} {}", character, dots_to_unicode(dots))
+                write!(f, "punctuation {} {}", character, dots)
             }
             Rule::Digit {
                 character, dots, ..
             } => {
-                write!(f, "digit {} {}", character, dots_to_unicode(dots))
+                write!(f, "digit {} {}", character, dots)
             }
             Rule::Letter {
                 character, dots, ..
             } => {
-                write!(f, "letter {} {}", character, dots_to_unicode(dots))
+                write!(f, "letter {} {}", character, dots)
             }
             Rule::Base {
                 name,
@@ -813,37 +813,37 @@ impl std::fmt::Display for Rule {
             Rule::Lowercase {
                 character, dots, ..
             } => {
-                write!(f, "lowercase {} {}", character, dots_to_unicode(dots))
+                write!(f, "lowercase {} {}", character, dots)
             }
             Rule::Uppercase {
                 character, dots, ..
             } => {
-                write!(f, "uppercase {} {}", character, dots_to_unicode(dots))
+                write!(f, "uppercase {} {}", character, dots)
             }
             Rule::Litdigit {
                 character, dots, ..
             } => {
-                write!(f, "litdigit {} {}", character, dots_to_unicode(dots))
+                write!(f, "litdigit {} {}", character, dots)
             }
             Rule::Sign {
                 character, dots, ..
             } => {
-                write!(f, "sign {} {}", character, dots_to_unicode(dots))
+                write!(f, "sign {} {}", character, dots)
             }
             Rule::Math {
                 character, dots, ..
             } => {
-                write!(f, "math {} {}", character, dots_to_unicode(dots))
+                write!(f, "math {} {}", character, dots)
             }
-            Rule::Letsign { dots } => write!(f, "letsign {}", dots_to_unicode(dots)),
+            Rule::Letsign { dots } => write!(f, "letsign {}", dots),
             Rule::Noletsign { chars } => write!(f, "noletsign {}", chars),
-            Rule::Numsign { dots } => write!(f, "numsign {}", dots_to_unicode(dots)),
-            Rule::Nonumsign { dots } => write!(f, "nonumsign {}", dots_to_unicode(dots)),
+            Rule::Numsign { dots } => write!(f, "numsign {}", dots),
+            Rule::Nonumsign { dots } => write!(f, "nonumsign {}", dots),
             Rule::Compbrl { chars, .. } => write!(f, "compbrl {}", chars),
             Rule::Comp6 { chars, dots } => write!(f, "comp6 {} {}", chars, dots),
             Rule::Always { chars, dots, .. } => write!(f, "always {} {}", chars, dots),
             Rule::Largesign { chars, dots } => {
-                write!(f, "largesign {} {}", chars, dots_to_unicode(dots))
+                write!(f, "largesign {} {}", chars, dots)
             }
             Rule::Word { chars, dots, .. } => write!(f, "word {} {}", chars, dots),
             Rule::Contraction { chars } => write!(f, "contraction {}", chars),
@@ -854,17 +854,17 @@ impl std::fmt::Display for Rule {
             Rule::Endword { chars, dots, .. } => write!(f, "endword {} {}", chars, dots),
             Rule::Partword { chars, dots, .. } => write!(f, "partword {} {}", chars, dots),
             Rule::Begnum { chars, dots, .. } => {
-                write!(f, "begnum {} {}", chars, dots_to_unicode(dots))
+                write!(f, "begnum {} {}", chars, dots)
             }
             Rule::Midnum { chars, dots, .. } => {
-                write!(f, "midnum {} {}", chars, dots_to_unicode(dots))
+                write!(f, "midnum {} {}", chars, dots)
             }
             Rule::Endnum { chars, dots, .. } => write!(f, "endnum {} {}", chars, dots),
-            Rule::Capsletter { dots, .. } => write!(f, "capsletter {}", dots_to_unicode(dots)),
-            Rule::Begcapsword { dots, .. } => write!(f, "begcapsword {}", dots_to_unicode(dots)),
-            Rule::Endcapsword { dots, .. } => write!(f, "endcapsword {}", dots_to_unicode(dots)),
-            Rule::Begcaps { dots } => write!(f, "begcaps {}", dots_to_unicode(dots)),
-            Rule::Endcaps { dots } => write!(f, "endcaps {}", dots_to_unicode(dots)),
+            Rule::Capsletter { dots, .. } => write!(f, "capsletter {}", dots),
+            Rule::Begcapsword { dots, .. } => write!(f, "begcapsword {}", dots),
+            Rule::Endcapsword { dots, .. } => write!(f, "endcapsword {}", dots),
+            Rule::Begcaps { dots } => write!(f, "begcaps {}", dots),
+            Rule::Endcaps { dots } => write!(f, "endcaps {}", dots),
             Rule::Correct { test, action, .. } => write!(f, "correct {} {}", test, action),
             Rule::Sufword { chars, dots, .. } => write!(f, "sufword {} {}", chars, dots),
             Rule::Prfword { chars, dots, .. } => write!(f, "prfword {} {}", chars, dots),
@@ -1040,7 +1040,7 @@ impl std::fmt::Display for Braille {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Braille::Implicit => write!(f, "="),
-            Braille::Explicit(dots) => write!(f, "{}", dots_to_unicode(dots)),
+            Braille::Explicit(dots) => write!(f, "{}", dots),
         }
     }
 }
@@ -1486,7 +1486,7 @@ impl<'a> RuleParser<'a> {
     }
 
     /// Parse many single cell braille chars separated by ','
-    fn many_braillechar(&mut self) -> Result<Vec<BrailleChar>, ParseError> {
+    fn many_braillechar(&mut self) -> Result<BrailleChars, ParseError> {
         self.tokens
             .next()
             .ok_or(ParseError::DotsExpected)?
@@ -2599,7 +2599,7 @@ mod tests {
         assert_eq!(
             Ok(Rule::Display {
                 character: 'a',
-                dots: vec![enum_set!(BrailleDot::Dot1)],
+                dots: BrailleChars::from(vec![enum_set!(BrailleDot::Dot1)]),
                 constraints: Constraints::empty()
             }),
             RuleParser::new(&"display a 1").rule()

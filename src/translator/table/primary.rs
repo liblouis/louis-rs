@@ -11,7 +11,6 @@ use crate::{
     translator::{
         CharacterDefinition, ResolvedTranslation, Rule, TranslationError, TranslationStage,
         context_pattern::{ContextPatterns, ContextPatternsBuilder},
-        dots_to_unicode,
         effect::Environment,
         indication::{lettersign, nocontract, numeric, uppercase},
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
@@ -131,62 +130,58 @@ impl PrimaryTable {
         for rule in rules {
             match &rule.rule {
                 Rule::Undefined { dots } => {
-                    builder.undefined = Some(dots_to_unicode(dots));
+                    builder.undefined = Some(dots.to_string());
                 }
                 Rule::Space {
                     character, dots, ..
                 } => {
-                    builder.insert_character(*character, &dots_to_unicode(dots), direction, rule);
+                    builder.insert_character(*character, &dots.to_string(), direction, rule);
                 }
                 Rule::Punctuation {
                     character, dots, ..
                 } => {
-                    builder.insert_character(*character, &dots_to_unicode(dots), direction, rule);
+                    builder.insert_character(*character, &dots.to_string(), direction, rule);
                 }
                 Rule::Digit {
                     character, dots, ..
                 } => {
-                    builder.insert_character(*character, &dots_to_unicode(dots), direction, rule);
+                    builder.insert_character(*character, &dots.to_string(), direction, rule);
                 }
                 Rule::Litdigit {
                     character, dots, ..
                 } => {
-                    builder.insert_character(*character, &dots_to_unicode(dots), direction, rule);
+                    builder.insert_character(*character, &dots.to_string(), direction, rule);
                 }
                 Rule::Letter {
                     character, dots, ..
                 } => {
-                    builder.insert_character(*character, &dots_to_unicode(dots), direction, rule);
+                    builder.insert_character(*character, &dots.to_string(), direction, rule);
                 }
                 Rule::Lowercase {
                     character, dots, ..
                 } => {
-                    builder.insert_character(*character, &dots_to_unicode(dots), direction, rule);
+                    builder.insert_character(*character, &dots.to_string(), direction, rule);
                 }
                 Rule::Uppercase {
                     character, dots, ..
                 } => {
-                    builder.insert_character(*character, &dots_to_unicode(dots), direction, rule);
+                    builder.insert_character(*character, &dots.to_string(), direction, rule);
                 }
                 Rule::Sign {
                     character, dots, ..
                 } => {
-                    builder.insert_character(*character, &dots_to_unicode(dots), direction, rule);
+                    builder.insert_character(*character, &dots.to_string(), direction, rule);
                 }
                 Rule::Math {
                     character, dots, ..
                 } => {
-                    builder.insert_character(*character, &dots_to_unicode(dots), direction, rule);
+                    builder.insert_character(*character, &dots.to_string(), direction, rule);
                 }
                 Rule::Numsign { dots } => {
-                    builder
-                        .numeric_indicator
-                        .numsign(&dots_to_unicode(dots), rule);
+                    builder.numeric_indicator.numsign(&dots.to_string(), rule);
                 }
                 Rule::Nonumsign { dots } => {
-                    builder
-                        .numeric_indicator
-                        .nonumsign(&dots_to_unicode(dots), rule);
+                    builder.numeric_indicator.nonumsign(&dots.to_string(), rule);
                 }
                 Rule::Numericnocontchars { chars } => {
                     builder.numeric_indicator.numericnocontchars(chars);
@@ -197,27 +192,23 @@ impl PrimaryTable {
                 Rule::Capsletter { dots, .. } => {
                     builder
                         .uppercase_indicator
-                        .capsletter(&dots_to_unicode(dots), rule);
+                        .capsletter(&dots.to_string(), rule);
                 }
                 Rule::Begcapsword { dots, .. } => {
                     builder
                         .uppercase_indicator
-                        .begcapsword(&dots_to_unicode(dots), rule);
+                        .begcapsword(&dots.to_string(), rule);
                 }
                 Rule::Endcapsword { dots, .. } => {
                     builder
                         .uppercase_indicator
-                        .endcapsword(&dots_to_unicode(dots), rule);
+                        .endcapsword(&dots.to_string(), rule);
                 }
                 Rule::Begcaps { dots } => {
-                    builder
-                        .uppercase_indicator
-                        .begcaps(&dots_to_unicode(dots), rule);
+                    builder.uppercase_indicator.begcaps(&dots.to_string(), rule);
                 }
                 Rule::Endcaps { dots } => {
-                    builder
-                        .uppercase_indicator
-                        .endcaps(&dots_to_unicode(dots), rule);
+                    builder.uppercase_indicator.endcaps(&dots.to_string(), rule);
                 }
                 Rule::Capsmodechars { chars } => {
                     builder.uppercase_indicator.capsmodechars(chars);
@@ -225,7 +216,7 @@ impl PrimaryTable {
                 Rule::Letsign { dots } => {
                     builder
                         .lettersign_indicator
-                        .letsign(&dots_to_unicode(dots), rule);
+                        .letsign(&dots.to_string(), rule);
                 }
                 // Treat a contraction rule similarly to a word rule. Pretend the dots have been
                 // defined implicitely
@@ -249,7 +240,7 @@ impl PrimaryTable {
                 Rule::Nocontractsign { dots } => {
                     builder
                         .nocontract_indicator
-                        .nocontractsign(&dots_to_unicode(dots), rule);
+                        .nocontractsign(&dots.to_string(), rule);
                 }
                 Rule::Base {
                     derived,
@@ -439,7 +430,7 @@ impl PrimaryTable {
                 Rule::Joinword { chars, dots, .. } | Rule::Lowword { chars, dots, .. } => {
                     builder.get_trie_mut(rule).insert(
                         chars,
-                        &dots_to_unicode(dots),
+                        &dots.to_string(),
                         Boundary::Word,
                         Boundary::Word,
                         direction,
@@ -450,7 +441,7 @@ impl PrimaryTable {
                 }
                 Rule::Begnum { chars, dots, .. } => builder.get_trie_mut(rule).insert(
                     chars,
-                    &dots_to_unicode(dots),
+                    &dots.to_string(),
                     Boundary::Word,
                     Boundary::WordNumber,
                     direction,
@@ -460,7 +451,7 @@ impl PrimaryTable {
                 ),
                 Rule::Midnum { chars, dots, .. } => builder.get_trie_mut(rule).insert(
                     chars,
-                    &dots_to_unicode(dots),
+                    &dots.to_string(),
                     Boundary::Number,
                     Boundary::Number,
                     direction,

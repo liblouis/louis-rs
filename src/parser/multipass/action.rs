@@ -2,7 +2,6 @@
 use std::{iter::Peekable, str::Chars};
 
 use super::braille::{self, BrailleChars, braille_chars, is_braille_dot};
-use crate::parser::dots_to_unicode;
 use crate::parser::multipass::ConsumesInput;
 use crate::parser::multipass::ConversionError;
 use crate::parser::multipass::IsLiteral;
@@ -106,7 +105,7 @@ impl TryFrom<&ActionInstruction> for String {
     fn try_from(instruction: &ActionInstruction) -> Result<String, Self::Error> {
         match instruction {
             ActionInstruction::String { s } => Ok(s.clone()),
-            ActionInstruction::Dots { dots } => Ok(dots_to_unicode(dots)),
+            ActionInstruction::Dots { dots } => Ok(dots.to_string()),
             ActionInstruction::Ignore => Ok("".to_string()),
             _ => Err(ConversionError::ActionNotLiteral),
         }
@@ -290,7 +289,6 @@ impl<'a> Parser<'a> {
 /// `Display` implementation for [`Action`]
 mod display {
     use super::*;
-    use crate::parser::dots_to_unicode;
 
     impl std::fmt::Display for Action {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -305,7 +303,7 @@ mod display {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
                 ActionInstruction::String { s } => write!(f, "{}", s),
-                ActionInstruction::Dots { dots } => write!(f, "{}", dots_to_unicode(dots)),
+                ActionInstruction::Dots { dots } => write!(f, "{}", dots),
                 ActionInstruction::Replace => write!(f, "*"),
                 ActionInstruction::Ignore => write!(f, "?"),
                 ActionInstruction::SwapClass { name } => write!(f, "%{}", name),
@@ -331,9 +329,9 @@ mod tests {
         assert_eq!(
             Parser::new("@123").dots(),
             Ok(ActionInstruction::Dots {
-                dots: vec![enum_set!(
+                dots: BrailleChars::from(vec![enum_set!(
                     BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot3
-                )]
+                )])
             })
         );
         assert_eq!(
@@ -351,7 +349,10 @@ mod tests {
         assert_eq!(
             Parser::new("@1-2").dots(),
             Ok(ActionInstruction::Dots {
-                dots: vec![enum_set!(BrailleDot::Dot1), enum_set!(BrailleDot::Dot2)]
+                dots: BrailleChars::from(vec![
+                    enum_set!(BrailleDot::Dot1),
+                    enum_set!(BrailleDot::Dot2)
+                ])
             })
         );
     }

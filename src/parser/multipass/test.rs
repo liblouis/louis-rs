@@ -2,10 +2,7 @@
 use crate::parser::{Attribute, CharacterClass};
 use std::{collections::HashSet, iter::Peekable, str::Chars};
 
-use crate::parser::{
-    dots_to_unicode,
-    multipass::{ConversionError, IsLiteral, ParseError},
-};
+use crate::parser::multipass::{ConversionError, IsLiteral, ParseError};
 
 use super::braille::{self, BrailleChars, braille_chars, is_braille_dot};
 
@@ -137,7 +134,7 @@ impl TryFrom<&TestInstruction> for String {
     fn try_from(instruction: &TestInstruction) -> Result<String, Self::Error> {
         match instruction {
             TestInstruction::String { s } => Ok(s.clone()),
-            TestInstruction::Dots { dots } => Ok(dots_to_unicode(dots)),
+            TestInstruction::Dots { dots } => Ok(dots.to_string()),
             _ => Err(ConversionError::TestNotLiteral),
         }
     }
@@ -449,7 +446,6 @@ impl<'a> Parser<'a> {
 /// `Display` implementation for [`Test`]
 mod display {
     use super::*;
-    use crate::parser::dots_to_unicode;
 
     impl std::fmt::Display for Test {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -537,7 +533,7 @@ mod display {
                     write!(f, "\"{}\"", s)
                 }
                 TestInstruction::Dots { dots } => {
-                    write!(f, "@{}", dots_to_unicode(dots))
+                    write!(f, "@{}", dots)
                 }
                 TestInstruction::Attributes { attrs, quantifier } => {
                     write!(f, "$")?;
@@ -593,9 +589,9 @@ mod tests {
         assert_eq!(
             Parser::new("@123").dots(),
             Ok(TestInstruction::Dots {
-                dots: vec![enum_set!(
+                dots: BrailleChars::from(vec![enum_set!(
                     BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot3
-                )]
+                )])
             })
         );
         assert_eq!(
@@ -613,7 +609,10 @@ mod tests {
         assert_eq!(
             Parser::new("@1-2").dots(),
             Ok(TestInstruction::Dots {
-                dots: vec![enum_set!(BrailleDot::Dot1), enum_set!(BrailleDot::Dot2)]
+                dots: BrailleChars::from(vec![
+                    enum_set!(BrailleDot::Dot1),
+                    enum_set!(BrailleDot::Dot2)
+                ])
             })
         );
     }

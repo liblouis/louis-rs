@@ -29,7 +29,38 @@ pub enum BrailleDot {
 }
 
 pub type BrailleChar = EnumSet<BrailleDot>;
-pub type BrailleChars = Vec<BrailleChar>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BrailleChars(Vec<BrailleChar>);
+
+impl std::ops::Deref for BrailleChars {
+    type Target = Vec<BrailleChar>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<Vec<BrailleChar>> for BrailleChars {
+    fn from(value: Vec<BrailleChar>) -> Self {
+        BrailleChars(value)
+    }
+}
+
+impl std::fmt::Display for BrailleChars {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.0.iter().map(dot_to_unicode).collect::<String>()
+        )
+    }
+}
+
+impl FromIterator<EnumSet<BrailleDot>> for BrailleChars {
+    fn from_iter<T: IntoIterator<Item = EnumSet<BrailleDot>>>(iter: T) -> Self {
+        BrailleChars(iter.into_iter().collect())
+    }
+}
 
 pub fn is_braille_dot(c: char) -> bool {
     matches!(c, '0'..='9' | 'a'..='f')
@@ -126,11 +157,6 @@ pub fn dot_to_unicode(dot: &BrailleChar) -> char {
     char::from_u32(unicode).unwrap()
 }
 
-/// Map `BrailleChars` to a string containing unicode braille
-pub fn dots_to_unicode(dots: &BrailleChars) -> String {
-    dots.iter().map(dot_to_unicode).collect()
-}
-
 /// Map char to dots according to North American Braille Computer Code (NABCC)
 ///
 /// A fallback mapping for character to braille in case the table does
@@ -201,10 +227,10 @@ mod tests {
     fn test_braille_chars() {
         assert_eq!(
             braille_chars("1-1"),
-            Ok(vec![
+            Ok(BrailleChars(vec![
                 enum_set!(BrailleDot::Dot1),
                 enum_set!(BrailleDot::Dot1)
-            ])
+            ]))
         );
         assert_eq!(
             braille_chars("1-"),
@@ -227,11 +253,11 @@ mod tests {
     #[test]
     fn test_dots_to_unicode() {
         assert_eq!(
-            dots_to_unicode(&vec![enum_set!(BrailleDot::Dot1 | BrailleDot::Dot8)]),
+            BrailleChars(vec![enum_set!(BrailleDot::Dot1 | BrailleDot::Dot8)]).to_string(),
             "⢁".to_string()
         );
         assert_eq!(
-            dots_to_unicode(&vec![enum_set!(BrailleDot::Dot1 | BrailleDot::Dot9)]),
+            BrailleChars(vec![enum_set!(BrailleDot::Dot1 | BrailleDot::Dot9)]).to_string(),
             "\u{f0101}".to_string()
         );
     }
