@@ -31,13 +31,6 @@ pub enum BrailleDot {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrailleChar(EnumSet<BrailleDot>);
 
-impl std::ops::Deref for BrailleChar {
-    type Target = EnumSet<BrailleDot>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 impl From<EnumSet<BrailleDot>> for BrailleChar {
     fn from(value: EnumSet<BrailleDot>) -> Self {
         BrailleChar(value)
@@ -65,6 +58,7 @@ impl BrailleChar {
             0x2800 // braille patterns
         };
         let unicode = self
+            .0
             .iter()
             .map(|dot| dot_to_hex(&dot))
             .fold(unicode_plane, |acc, x| acc | x);
