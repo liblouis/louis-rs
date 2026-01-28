@@ -28,7 +28,61 @@ pub enum BrailleDot {
     DotF,
 }
 
-pub type BrailleChar = EnumSet<BrailleDot>;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BrailleChar(EnumSet<BrailleDot>);
+
+impl std::ops::Deref for BrailleChar {
+    type Target = EnumSet<BrailleDot>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<EnumSet<BrailleDot>> for BrailleChar {
+    fn from(value: EnumSet<BrailleDot>) -> Self {
+        BrailleChar(value)
+    }
+}
+
+impl BrailleChar {
+    fn has_virtual_dots(&self) -> bool {
+        let virtual_dots = enum_set!(
+            BrailleDot::Dot9 |
+            BrailleDot::DotA |
+            BrailleDot::DotB |
+            BrailleDot::DotC |
+                BrailleDot::DotD |
+                BrailleDot::DotE |
+                BrailleDot::DotF |
+        );
+        !virtual_dots.intersection(self.0).is_empty()
+    }
+
+    pub fn to_unicode(&self) -> char {
+        let unicode_plane = if self.has_virtual_dots() {
+            0xF0000 // Unicode Supplementary Private Use Area-A
+        } else {
+            0x2800 // braille patterns
+        };
+        let unicode = self
+            .iter()
+            .map(|dot| dot_to_hex(&dot))
+            .fold(unicode_plane, |acc, x| acc | x);
+        char::from_u32(unicode).unwrap()
+    }
+}
+
+impl std::fmt::Display for BrailleChar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_unicode())
+    }
+}
+
+impl FromIterator<BrailleDot> for BrailleChar {
+    fn from_iter<T: IntoIterator<Item = BrailleDot>>(iter: T) -> Self {
+        BrailleChar(EnumSet::from_iter(iter))
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrailleChars(Vec<BrailleChar>);
@@ -51,13 +105,13 @@ impl std::fmt::Display for BrailleChars {
         write!(
             f,
             "{}",
-            self.0.iter().map(dot_to_unicode).collect::<String>()
+            self.0.iter().map(|b| b.to_unicode()).collect::<String>()
         )
     }
 }
 
-impl FromIterator<EnumSet<BrailleDot>> for BrailleChars {
-    fn from_iter<T: IntoIterator<Item = EnumSet<BrailleDot>>>(iter: T) -> Self {
+impl FromIterator<BrailleChar> for BrailleChars {
+    fn from_iter<T: IntoIterator<Item = BrailleChar>>(iter: T) -> Self {
         BrailleChars(iter.into_iter().collect())
     }
 }
@@ -123,40 +177,6 @@ fn dot_to_hex(dot: &BrailleDot) -> u32 {
     }
 }
 
-// rustfmt always seems to mangle the following enum_set macro, so we
-// disable it here
-#[rustfmt::skip::macros(enum_set)]
-fn has_virtual_dots(char: &BrailleChar) -> bool {
-    let virtual_dots = enum_set!(
-	BrailleDot::Dot9 |
-	BrailleDot::DotA |
-	BrailleDot::DotB |
-	BrailleDot::DotC |
-        BrailleDot::DotD |
-        BrailleDot::DotE |
-        BrailleDot::DotF |
-    );
-    !virtual_dots.intersection(*char).is_empty()
-}
-
-// FIXME: the following two functions should be defined as associated
-// functions, i.e. inside an impl block for BrailleChar or as an
-// implementation of the From trait. Both solutions would probably
-// require the newtype pattern as we do not own these types, see
-// https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#using-the-newtype-pattern-to-implement-external-traits-on-external-types
-pub fn dot_to_unicode(dot: &BrailleChar) -> char {
-    let unicode_plane = if has_virtual_dots(dot) {
-        0xF0000 // Unicode Supplementary Private Use Area-A
-    } else {
-        0x2800 // braille patterns
-    };
-    let unicode = dot
-        .iter()
-        .map(|dot| dot_to_hex(&dot))
-        .fold(unicode_plane, |acc, x| acc | x);
-    char::from_u32(unicode).unwrap()
-}
-
 /// Map char to dots according to North American Braille Computer Code (NABCC)
 ///
 /// A fallback mapping for character to braille in case the table does
@@ -165,37 +185,55 @@ pub fn dot_to_unicode(dot: &BrailleChar) -> char {
 /// define the character mappings that are needed.
 pub fn fallback(ch: char) -> char {
     let north_american_braille_computer_code: HashMap<char, BrailleChar> = HashMap::from([
-        ('0', BrailleDot::Dot3 | BrailleDot::Dot5 | BrailleDot::Dot6),
-        ('1', enum_set!(BrailleDot::Dot2)),
-        ('2', BrailleDot::Dot2 | BrailleDot::Dot3),
-        ('3', BrailleDot::Dot2 | BrailleDot::Dot5),
-        ('4', BrailleDot::Dot2 | BrailleDot::Dot5 | BrailleDot::Dot6),
-        ('5', BrailleDot::Dot2 | BrailleDot::Dot6),
-        ('6', BrailleDot::Dot2 | BrailleDot::Dot3 | BrailleDot::Dot5),
+        (
+            '0',
+            BrailleChar(BrailleDot::Dot3 | BrailleDot::Dot5 | BrailleDot::Dot6),
+        ),
+        ('1', BrailleChar(enum_set!(BrailleDot::Dot2))),
+        ('2', BrailleChar(BrailleDot::Dot2 | BrailleDot::Dot3)),
+        ('3', BrailleChar(BrailleDot::Dot2 | BrailleDot::Dot5)),
+        (
+            '4',
+            BrailleChar(BrailleDot::Dot2 | BrailleDot::Dot5 | BrailleDot::Dot6),
+        ),
+        ('5', BrailleChar(BrailleDot::Dot2 | BrailleDot::Dot6)),
+        (
+            '6',
+            BrailleChar(BrailleDot::Dot2 | BrailleDot::Dot3 | BrailleDot::Dot5),
+        ),
         (
             '7',
-            BrailleDot::Dot2 | BrailleDot::Dot3 | BrailleDot::Dot5 | BrailleDot::Dot6,
+            BrailleChar(BrailleDot::Dot2 | BrailleDot::Dot3 | BrailleDot::Dot5 | BrailleDot::Dot6),
         ),
-        ('8', BrailleDot::Dot2 | BrailleDot::Dot3 | BrailleDot::Dot6),
-        ('9', BrailleDot::Dot2 | BrailleDot::Dot5),
-        ('a', enum_set!(BrailleDot::Dot1)),
-        ('b', BrailleDot::Dot1 | BrailleDot::Dot2),
-        ('c', BrailleDot::Dot1 | BrailleDot::Dot4),
-        ('d', BrailleDot::Dot1 | BrailleDot::Dot4 | BrailleDot::Dot5),
-        ('e', BrailleDot::Dot1 | BrailleDot::Dot5),
-        ('f', BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot4),
+        (
+            '8',
+            BrailleChar(BrailleDot::Dot2 | BrailleDot::Dot3 | BrailleDot::Dot6),
+        ),
+        ('9', BrailleChar(BrailleDot::Dot2 | BrailleDot::Dot5)),
+        ('a', BrailleChar(enum_set!(BrailleDot::Dot1))),
+        ('b', BrailleChar(BrailleDot::Dot1 | BrailleDot::Dot2)),
+        ('c', BrailleChar(BrailleDot::Dot1 | BrailleDot::Dot4)),
+        (
+            'd',
+            BrailleChar(BrailleDot::Dot1 | BrailleDot::Dot4 | BrailleDot::Dot5),
+        ),
+        ('e', BrailleChar(BrailleDot::Dot1 | BrailleDot::Dot5)),
+        (
+            'f',
+            BrailleChar(BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot4),
+        ),
         (
             '\\',
-            BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot5 | BrailleDot::Dot6,
+            BrailleChar(BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot5 | BrailleDot::Dot6),
         ),
         (
             'x',
-            BrailleDot::Dot1 | BrailleDot::Dot3 | BrailleDot::Dot4 | BrailleDot::Dot6,
+            BrailleChar(BrailleDot::Dot1 | BrailleDot::Dot3 | BrailleDot::Dot4 | BrailleDot::Dot6),
         ),
     ]);
 
     let dots = north_american_braille_computer_code.get(&ch).unwrap();
-    dot_to_unicode(dots)
+    dots.to_unicode()
 }
 
 #[cfg(test)]
@@ -206,15 +244,18 @@ mod tests {
     fn test_chars_to_dots() {
         assert_eq!(
             chars_to_dots("123"),
-            Ok(enum_set!(
+            Ok(BrailleChar(enum_set!(
                 BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot3
-            ))
+            )))
         );
         assert_eq!(
             chars_to_dots("1a"),
-            Ok(enum_set!(BrailleDot::Dot1 | BrailleDot::DotA))
+            Ok(BrailleChar(enum_set!(BrailleDot::Dot1 | BrailleDot::DotA)))
         );
-        assert_eq!(chars_to_dots("a"), Ok(enum_set!(BrailleDot::DotA)));
+        assert_eq!(
+            chars_to_dots("a"),
+            Ok(BrailleChar(enum_set!(BrailleDot::DotA)))
+        );
         assert_eq!(
             chars_to_dots("z"),
             Err(ParseError::InvalidBraille {
@@ -228,8 +269,8 @@ mod tests {
         assert_eq!(
             braille_chars("1-1"),
             Ok(BrailleChars(vec![
-                enum_set!(BrailleDot::Dot1),
-                enum_set!(BrailleDot::Dot1)
+                BrailleChar(enum_set!(BrailleDot::Dot1)),
+                BrailleChar(enum_set!(BrailleDot::Dot1))
             ]))
         );
         assert_eq!(
@@ -253,11 +294,17 @@ mod tests {
     #[test]
     fn test_dots_to_unicode() {
         assert_eq!(
-            BrailleChars(vec![enum_set!(BrailleDot::Dot1 | BrailleDot::Dot8)]).to_string(),
+            BrailleChars(vec![BrailleChar(enum_set!(
+                BrailleDot::Dot1 | BrailleDot::Dot8
+            ))])
+            .to_string(),
             "⢁".to_string()
         );
         assert_eq!(
-            BrailleChars(vec![enum_set!(BrailleDot::Dot1 | BrailleDot::Dot9)]).to_string(),
+            BrailleChars(vec![BrailleChar(enum_set!(
+                BrailleDot::Dot1 | BrailleDot::Dot9
+            ))])
+            .to_string(),
             "\u{f0101}".to_string()
         );
     }

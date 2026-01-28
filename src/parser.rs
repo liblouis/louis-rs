@@ -19,7 +19,6 @@ use search_path::SearchPath;
 use self::braille::{BrailleChars, braille_chars, chars_to_dots};
 
 pub use attribute::Attribute;
-pub use braille::dot_to_unicode;
 pub use braille::fallback;
 pub use character_class::{CharacterClass, CharacterClasses};
 pub use match_rule::{Pattern, PatternParser, Patterns};
@@ -2422,6 +2421,8 @@ pub fn expand_includes(rules: Vec<AnchoredRule>) -> Result<Vec<AnchoredRule>, Ve
 
 #[cfg(test)]
 mod tests {
+    use crate::parser::braille::BrailleChar;
+
     use super::*;
     use enumset::enum_set;
 
@@ -2599,7 +2600,7 @@ mod tests {
         assert_eq!(
             Ok(Rule::Display {
                 character: 'a',
-                dots: BrailleChars::from(vec![enum_set!(BrailleDot::Dot1)]),
+                dots: BrailleChars::from(vec![BrailleChar::from(enum_set!(BrailleDot::Dot1))]),
                 constraints: Constraints::empty()
             }),
             RuleParser::new(&"display a 1").rule()

@@ -321,6 +321,8 @@ mod display {
 mod tests {
     use enumset::enum_set;
 
+    use crate::parser::braille::BrailleChar;
+
     use super::braille::BrailleDot;
     use super::*;
 
@@ -329,9 +331,9 @@ mod tests {
         assert_eq!(
             Parser::new("@123").dots(),
             Ok(ActionInstruction::Dots {
-                dots: BrailleChars::from(vec![enum_set!(
+                dots: BrailleChars::from(vec![BrailleChar::from(enum_set!(
                     BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot3
-                )])
+                ))])
             })
         );
         assert_eq!(
@@ -350,8 +352,8 @@ mod tests {
             Parser::new("@1-2").dots(),
             Ok(ActionInstruction::Dots {
                 dots: BrailleChars::from(vec![
-                    enum_set!(BrailleDot::Dot1),
-                    enum_set!(BrailleDot::Dot2)
+                    BrailleChar::from(enum_set!(BrailleDot::Dot1)),
+                    BrailleChar::from(enum_set!(BrailleDot::Dot2))
                 ])
             })
         );

@@ -2,7 +2,7 @@ pub mod multipass;
 pub mod primary;
 
 use crate::{
-    parser::{AnchoredRule, CharacterClass, CharacterClasses, Rule, dot_to_unicode},
+    parser::{AnchoredRule, CharacterClass, CharacterClasses, Rule},
     translator::{CharacterDefinition, TranslationError, swap::SwapClasses},
 };
 
@@ -160,7 +160,7 @@ impl TableContext {
                         replacement.iter().map(|b| b.to_string()).collect();
                     let mapping: Vec<(char, &str)> = dots
                         .iter()
-                        .map(dot_to_unicode)
+                        .map(|b| b.to_unicode())
                         .zip(replacements.iter().map(|s| s.as_str()))
                         .collect();
                     swap_classes.insert(name, &mapping);
