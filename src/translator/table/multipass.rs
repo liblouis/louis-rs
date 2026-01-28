@@ -98,10 +98,10 @@ impl MultipassTable {
             // use the longest translation
             let candidate = candidates
                 .iter()
-                .cloned()
                 // drop translation candidates that we have applied already at this position in the
                 // input
-                .filter(|t| !seen.contains(&TranslationSubset::from(t)))
+                .filter(|&t| !seen.contains(&TranslationSubset::from(t)))
+                .cloned()
                 .max_by_key(|translation| translation.weight());
             if let Some(t) = candidate {
                 if t.length() == 0 {

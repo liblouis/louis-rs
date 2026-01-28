@@ -67,8 +67,8 @@ impl TranslationPipeline {
         }
         let pass3_rules: Vec<AnchoredRule> = rules
             .iter()
-            .cloned()
             .filter(|r| matches!(r.rule, Rule::Pass3 { .. }))
+            .cloned()
             .collect();
         if !pass3_rules.is_empty() {
             let transform =

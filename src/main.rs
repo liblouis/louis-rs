@@ -122,9 +122,7 @@ impl Trace {
             Some(AnchoredRule { rule, .. }) => {
                 format!("{}", rule)
             }
-            None => {
-                format!("")
-            }
+            None => String::new(),
         }
     }
 }
