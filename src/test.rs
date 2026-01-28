@@ -11,8 +11,8 @@ use crate::{
 
 #[derive(thiserror::Error, Debug)]
 pub enum TestError {
-    #[error("Not implemented (yet)")]
-    NotImplemented,
+    #[error("{0} have not been implemented (yet)")]
+    NotImplemented(String),
     #[error("Errors in table {0:?}")]
     TableErrors(Vec<TableError>),
     #[error("Error when compiling table {0:?}")]
@@ -136,7 +136,7 @@ impl<'a> TestMatrix<'a> {
                 let rules = parser::table(text, None)?;
                 parser::expand_includes(rules)?
             }
-            Table::Query(..) => return Err(TestError::NotImplemented),
+            Table::Query(..) => return Err(TestError::NotImplemented("Table queries".to_string())),
         };
         Ok(TranslationPipeline::compile(&rules, direction)?)
     }
