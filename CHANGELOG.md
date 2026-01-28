@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 
 ## [Unreleased] - ReleaseDate
+
+### Changed
+- Convert all the Braille types into their own types using the [new
+  type pattern](https://effective-rust.com/newtype.html)
+
 ### Fixed
 - Fixed the parsing of in alternation expressions `match` rules, i.e.
   `match a|b foo - 26`
