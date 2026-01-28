@@ -81,10 +81,13 @@ impl FromIterator<BrailleDot> for BrailleChar {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrailleChars(Vec<BrailleChar>);
 
-impl std::ops::Deref for BrailleChars {
-    type Target = Vec<BrailleChar>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl BrailleChars {
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, BrailleChar> {
+        self.0.iter()
     }
 }
 
