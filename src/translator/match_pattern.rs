@@ -18,7 +18,9 @@ impl Regexp {
             Pattern::Any => Regexp::Any,
             Pattern::Set(hash_set) => Regexp::CharacterClass(hash_set.clone()),
             Pattern::Attributes(hash_set) => Regexp::from_attributes(hash_set, ctx),
-            Pattern::Group(_vec) => Regexp::NotImplemented,
+            Pattern::Group(patterns) => {
+                Regexp::Group(Box::new(Regexp::from_patterns(patterns, ctx)))
+            }
             Pattern::Negate(_pattern) => Regexp::NotImplemented,
             Pattern::Optional(pattern) => {
                 Regexp::Optional(Box::new(Regexp::from_pattern(pattern, ctx)))

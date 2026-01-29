@@ -8,20 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+- Implement regexp grouping as it is used in match opcodes.
+
 ### Changed
 - Convert all the Braille types into their own types using the [new
-  type pattern](https://effective-rust.com/newtype.html)
+  type pattern](https://effective-rust.com/newtype.html).
 
 ### Fixed
 - Fixed the parsing of in alternation expressions `match` rules, i.e.
-  `match a|b foo - 26`
-- Fix the parsing of the `swapdd` operands
-- Fix the parsing of the `grouping` braille tuple
+  `match a|b foo - 26`.
+- Fix the parsing of the `swapdd` operands.
+- Fix the parsing of the `grouping` braille tuple.
 
 ## [0.2.6] - 2026-01-27
 
 ### Changed
-- Migrate to `cargo release`
+- Migrate to `cargo release`.
 
 ## [0.2.5] - 2026-01-27
 
@@ -30,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
     negation.
 -   Add support for variables in context and multipass opcodes.
 -   Add proper support to display `match`, `correct`, `context` and
-    all the multipass rules
+    all the multipass rules.
 
 ## [0.2.4] - 2026-01-16
 ### Added
@@ -45,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
     patterns. They are essentially named character classes, like
     *digit*, *letter*, *lowercase*, etc.
 ### Removed
--   The NFA based regular expression engine
+-   The NFA based regular expression engine.
 
 ## [0.2.3] - 2025-12-04
 ### Added
@@ -61,11 +64,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [0.2.2] - 2025-12-01
 ### Fixed
--   Fix an infinite loop when back-translating `correct` rules
+-   Fix an infinite loop when back-translating `correct` rules.
 
 ## 0.2.1
 ### Changed
--   Make it clear that the library API is unstable
+-   Make it clear that the library API is unstable.
 
 <!-- next-url -->
 [Unreleased]: https://github.com/assert-rs/predicates-rs/compare/v0.2.6...HEAD

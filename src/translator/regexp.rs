@@ -38,6 +38,7 @@ pub enum Regexp {
     String(String),
     /// Check whether variable at index is equal to given value
     VariableEqual(VariableIndex, u8),
+    Group(Box<Regexp>),
     /// To support empty captures, we need an empty AST
     Empty,
     /// Stop-gap blanket "implementation" for things that might be needed but are not yet
@@ -205,6 +206,9 @@ impl Regexp {
             }
             Regexp::VariableEqual(index, value) => {
                 instructions.push(Instruction::VariableEqual(*index, *value))
+            }
+            Regexp::Group(regexp) => {
+                regexp.emit(instructions, character_classes);
             }
             Regexp::Empty => (),
             Regexp::NotImplemented => (),
