@@ -535,7 +535,7 @@ impl PrimaryTable {
     ) -> Vec<ResolvedTranslation> {
         translations
             .into_iter()
-	    // drop translations where the offet is smaller than the decrement
+            // drop translations where the offet is smaller than the decrement
             .filter(|t| t.offset() >= decrement)
             .map(|t| t.decrement_offset(decrement))
             .collect()

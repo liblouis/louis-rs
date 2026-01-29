@@ -81,7 +81,8 @@ impl MultipassTable {
         prev: Option<char>,
         env: &Environment,
     ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
-        self.patterns.find(input, env)
+        self.patterns
+            .find(input, env)
             .into_iter()
             .partition(|t| t.offset() == 0)
     }
@@ -93,7 +94,7 @@ impl MultipassTable {
     ) -> Vec<ResolvedTranslation> {
         translations
             .into_iter()
-	    // drop translations where the offet is smaller than the decrement
+            // drop translations where the offet is smaller than the decrement
             .filter(|t| t.offset() >= decrement)
             .map(|t| t.decrement_offset(decrement))
             .collect()
@@ -115,7 +116,7 @@ impl MultipassTable {
         let mut seen: HashSet<TranslationSubset> = HashSet::default();
 
         loop {
-	    // given an input query the patterns for matching translations. Then split off the
+            // given an input query the patterns for matching translations. Then split off the
             // translations that are delayed, i.e. have an offset because they have a pre-pattern
             let (mut candidates, delayed) = self.translation_candidates(chars.as_str(), prev, &env);
             delayed_translations.extend(delayed);
