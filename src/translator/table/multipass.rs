@@ -80,20 +80,50 @@ impl MultipassTable {
         input: &str,
         prev: Option<char>,
         env: &Environment,
-    ) -> Vec<ResolvedTranslation> {
+    ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
         self.patterns.find(input, env)
+            .into_iter()
+            .partition(|t| t.offset() == 0)
+    }
+
+    fn update_offsets(
+        &self,
+        translations: Vec<ResolvedTranslation>,
+        decrement: usize,
+    ) -> Vec<ResolvedTranslation> {
+        translations
+            .into_iter()
+	    // drop translations where the offet is smaller than the decrement
+            .filter(|t| t.offset() >= decrement)
+            .map(|t| t.decrement_offset(decrement))
+            .collect()
+    }
+
+    fn partition_delayed_translations(
+        &self,
+        delayed: Vec<ResolvedTranslation>,
+    ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
+        delayed.into_iter().partition(|t| t.offset() == 0)
     }
 
     pub fn trace(&self, input: &str) -> Vec<ResolvedTranslation> {
         let mut translations: Vec<ResolvedTranslation> = Vec::new();
+        let mut delayed_translations: Vec<ResolvedTranslation> = Vec::new();
         let mut env = Environment::new();
         let mut chars = input.chars();
         let mut prev: Option<char> = None;
         let mut seen: HashSet<TranslationSubset> = HashSet::default();
 
         loop {
-            // given an input query the trie for matching translations
-            let candidates = self.translation_candidates(chars.as_str(), prev, &env);
+	    // given an input query the patterns for matching translations. Then split off the
+            // translations that are delayed, i.e. have an offset because they have a pre-pattern
+            let (mut candidates, delayed) = self.translation_candidates(chars.as_str(), prev, &env);
+            delayed_translations.extend(delayed);
+
+            // move delayed_translations with zero offset into candidates
+            let (current, delayed) = self.partition_delayed_translations(delayed_translations);
+            delayed_translations = delayed;
+            candidates.extend(current);
 
             // use the longest translation
             let candidate = candidates
@@ -117,6 +147,7 @@ impl MultipassTable {
                 // there is a matching translation rule
                 let translation = t.clone();
                 translations.push(translation);
+                delayed_translations = self.update_offsets(delayed_translations, t.length());
 
                 // update the environment if needed
                 if !t.effects().is_empty() {
@@ -135,6 +166,7 @@ impl MultipassTable {
                     None,
                 );
                 translations.push(translation);
+                delayed_translations = self.update_offsets(delayed_translations, 1);
             } else {
                 // the chars iterator is exhausted
                 break;
