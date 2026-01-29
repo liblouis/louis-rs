@@ -1,6 +1,6 @@
 use crate::{
     Direction,
-    parser::{AnchoredRule, Rule},
+    parser::{AnchoredRule, HasDirection, Rule},
     translator::{
         ResolvedTranslation, TranslationError, TranslationStage,
         table::{TableContext, multipass::MultipassTable, primary::PrimaryTable},
@@ -42,6 +42,13 @@ impl TranslationPipeline {
         let ctx = TableContext::compile(rules)?;
         let mut steps = Vec::new();
 
+        // ignore rules that aren't meant for the given direction
+        let rules: Vec<_> = rules
+            .iter()
+            .filter(|r| r.is_direction(direction))
+            .cloned()
+            .collect();
+
         let correct_rules: Vec<AnchoredRule> = rules
             .iter()
             .filter(|r| matches!(r.rule, Rule::Correct { .. }))
@@ -52,8 +59,13 @@ impl TranslationPipeline {
                 MultipassTable::compile(&correct_rules, direction, TranslationStage::Pre, &ctx)?;
             steps.push(Transformation::Pre(transform));
         }
-        let context = TableContext::compile(rules)?;
-        let transform = PrimaryTable::compile(rules, direction, TranslationStage::Main, &context)?;
+        let context = TableContext::compile(rules.as_slice())?;
+        let transform = PrimaryTable::compile(
+            rules.as_slice(),
+            direction,
+            TranslationStage::Main,
+            &context,
+        )?;
         steps.push(Transformation::Primary(transform));
         let pass2_rules: Vec<AnchoredRule> = rules
             .iter()
