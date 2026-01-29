@@ -535,6 +535,8 @@ impl PrimaryTable {
     ) -> Vec<ResolvedTranslation> {
         translations
             .into_iter()
+	    // drop translations where the offet is smaller than the decrement
+            .filter(|t| t.offset() >= decrement)
             .map(|t| t.decrement_offset(decrement))
             .collect()
     }
@@ -551,9 +553,6 @@ impl PrimaryTable {
         self.trie
             .find_translations(input, prev)
             .into_iter()
-            // TODO: figure out what to do with delayed rules that have a negative offset, i.e.
-            // if there was a matching rule that consumed so much input that the delayed rule is
-            // no longer applicable
             .partition(|t| t.offset() == 0)
     }
 
