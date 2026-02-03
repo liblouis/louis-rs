@@ -14,7 +14,7 @@
 use std::collections::HashSet;
 
 use crate::translator::{
-    ResolvedTranslation, TranslationStage,
+    ResolvedTranslation,
     effect::Environment,
     translation::{Resolve, Translation},
 };
@@ -48,74 +48,15 @@ pub enum Regexp {
 
 impl Regexp {
     pub fn compile(&self) -> CompiledRegexp {
-        let payload = Translation::Resolved(ResolvedTranslation::new(
-            "",
-            "",
-            0,
-            TranslationStage::Main,
-            None,
-        ));
-        self.compile_with_payload(payload)
+        self.compile_with_payload(Translation::default())
     }
 
-    fn compile_with_payload(&self, payload: Translation) -> CompiledRegexp {
+    pub fn compile_with_payload(&self, payload: Translation) -> CompiledRegexp {
         let mut instructions = Vec::new();
         let mut character_classes = Vec::new();
         let translations = Vec::from([payload]);
         self.emit(&mut instructions, &mut character_classes);
         instructions.push(Instruction::Match(0));
-        CompiledRegexp {
-            instructions,
-            character_classes,
-            translations,
-        }
-    }
-
-    fn compile_many_accepting_internal(
-        pairs: &[(Regexp, Translation)],
-        instructions: &mut Vec<Instruction>,
-        character_classes: &mut Vec<HashSet<char>>,
-        translations: &mut Vec<Translation>,
-    ) {
-        match pairs.len() {
-            0 => (), // we're done
-            1 => {
-                let (regexp, payload) = &pairs[0];
-                regexp.emit(instructions, character_classes);
-                translations.push(payload.clone());
-                instructions.push(Instruction::Match(translations.len() - 1));
-            }
-            _ => {
-                let p1 = instructions.len();
-                instructions.push(Instruction::Split(p1 + 1, 0));
-                let (regexp, payload) = &pairs[0];
-                regexp.emit(instructions, character_classes);
-                translations.push(payload.clone());
-                instructions.push(Instruction::Match(translations.len() - 1));
-                let p2 = instructions.len();
-                instructions.push(Instruction::Jump(0));
-                instructions[p1] = Instruction::Split(p1 + 1, p2 + 1);
-                Regexp::compile_many_accepting_internal(
-                    &pairs[1..],
-                    instructions,
-                    character_classes,
-                    translations,
-                );
-                instructions[p2] = Instruction::Jump(instructions.len());
-            }
-        }
-    }
-
-    pub fn compile_many_accepting(pairs: &[(Regexp, Translation)]) -> CompiledRegexp {
-        let mut instructions = Vec::new();
-        let mut character_classes = Vec::new();
-        let mut translations = Vec::new();
-        Regexp::compile_many_accepting_internal(
-            pairs,
-            &mut instructions,
-            &mut character_classes,
-            &mut translations,
-        );
         CompiledRegexp {
             instructions,
             character_classes,
@@ -429,6 +370,7 @@ mod tests {
     use crate::{
         parser::Precedence,
         translator::{
+            TranslationStage,
             effect::Effect,
             translation::{TranslationTarget, UnresolvedTranslation},
         },
@@ -841,46 +783,5 @@ mod tests {
         );
         assert_eq!(re.find("aaaaaa", &env), []);
         assert_eq!(re.find("bbb", &env), []);
-    }
-
-    #[test]
-    fn compile_many() {
-        let env = Environment::new();
-        let re = Regexp::compile_many_accepting(&[
-            (
-                Regexp::Literal('a'),
-                Translation::Resolved(ResolvedTranslation::new(
-                    "a",
-                    "1",
-                    1,
-                    TranslationStage::Main,
-                    None,
-                )),
-            ),
-            (
-                Regexp::Literal('b'),
-                Translation::Resolved(ResolvedTranslation::new(
-                    "b",
-                    "2",
-                    1,
-                    TranslationStage::Main,
-                    None,
-                )),
-            ),
-            (
-                Regexp::Literal('c'),
-                Translation::Resolved(ResolvedTranslation::new(
-                    "c",
-                    "3",
-                    1,
-                    TranslationStage::Main,
-                    None,
-                )),
-            ),
-        ]);
-        assert!(re.is_match("a", &env));
-        assert!(re.is_match("b", &env));
-        assert!(re.is_match("c", &env));
-        assert!(!re.is_match("d", &env));
     }
 }

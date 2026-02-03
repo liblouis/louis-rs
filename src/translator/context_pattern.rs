@@ -177,12 +177,14 @@ impl Effects {
 
 #[derive(Debug)]
 pub struct ContextPatternsBuilder {
-    pairs: Vec<(Regexp, Translation)>,
+    regexps: Vec<CompiledRegexp>,
 }
 
 impl ContextPatternsBuilder {
     pub fn new() -> Self {
-        Self { pairs: Vec::new() }
+        Self {
+            regexps: Vec::new(),
+        }
     }
 
     /// Create a translation based on `test`, `action`, `origin` and `swap_classes`
@@ -215,26 +217,30 @@ impl ContextPatternsBuilder {
         let translation =
             Translation::Unresolved(self.translation(action, origin, stage, ctx.swap_classes())?);
         let test = test.clone().add_implicit_replace();
-        let re = Regexp::from_test(&test, ctx.character_classes());
-        self.pairs.push((re, translation));
+        let re =
+            Regexp::from_test(&test, ctx.character_classes()).compile_with_payload(translation);
+        self.regexps.push(re);
         Ok(())
     }
 
     pub fn build(self) -> ContextPatterns {
         ContextPatterns {
-            re: Regexp::compile_many_accepting(&self.pairs),
+            regexps: self.regexps,
         }
     }
 }
 
 #[derive(Debug)]
 pub struct ContextPatterns {
-    re: CompiledRegexp,
+    regexps: Vec<CompiledRegexp>,
 }
 
 impl ContextPatterns {
     pub fn find(&self, input: &str, env: &Environment) -> Vec<ResolvedTranslation> {
-        self.re.find(input, env)
+        self.regexps
+            .iter()
+            .flat_map(|r| r.find(input, env))
+            .collect()
     }
 }
 
@@ -282,7 +288,7 @@ mod tests {
             None,
         ));
         let regexp = Regexp::from_test(&tests, &ctx);
-        let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
+        let re = regexp.compile_with_payload(translation);
         assert_eq!(
             re.find("1", &env),
             [ResolvedTranslation::new("", "", 1, stage, None)]
@@ -312,7 +318,7 @@ mod tests {
             None,
         ));
         let regexp = Regexp::from_test(&tests, &ctx);
-        let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
+        let re = regexp.compile_with_payload(translation);
         assert_eq!(
             re.find("A", &env),
             [ResolvedTranslation::new("", "", 1, stage, None)]
@@ -351,7 +357,7 @@ mod tests {
             None,
         ));
         let regexp = Regexp::from_test(&tests, &ctx);
-        let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
+        let re = regexp.compile_with_payload(translation);
         assert_eq!(
             re.find("%", &env),
             [ResolvedTranslation::new("", "", 1, stage, None)]
@@ -381,7 +387,7 @@ mod tests {
             None,
         ));
         let regexp = Regexp::from_test(&tests, &ctx);
-        let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
+        let re = regexp.compile_with_payload(translation);
         assert_eq!(
             re.find("a", &env),
             [ResolvedTranslation::new("", "", 1, stage, None)]
@@ -411,7 +417,7 @@ mod tests {
             None,
         ));
         let regexp = Regexp::from_test(&tests, &ctx);
-        let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
+        let re = regexp.compile_with_payload(translation);
         assert_eq!(
             re.find("abc", &env),
             [ResolvedTranslation::new("", "", 3, stage, None)]
@@ -442,7 +448,7 @@ mod tests {
             None,
         ));
         let regexp = Regexp::from_test(&tests, &ctx);
-        let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
+        let re = regexp.compile_with_payload(translation);
         assert_eq!(
             re.find("a1b", &env),
             [ResolvedTranslation::new("1", "", 3, TranslationStage::Main, None).with_offset(1)]
@@ -478,7 +484,7 @@ mod tests {
             None,
         ));
         let regexp = Regexp::from_test(&tests, &ctx);
-        let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
+        let re = regexp.compile_with_payload(translation);
         assert_eq!(
             re.find("a1b", &env),
             [ResolvedTranslation::new("1", "", 3, TranslationStage::Main, None).with_offset(1)]
@@ -526,7 +532,7 @@ mod tests {
             None,
         ));
         let regexp = Regexp::from_test(&tests, &ctx);
-        let re = Regexp::compile_many_accepting(&[(regexp, translation)]);
+        let re = regexp.compile_with_payload(translation);
         assert_eq!(re.find("a1b", &env), []);
         assert_eq!(re.find("a22b", &env), []);
         assert_eq!(re.find("a31b", &env), []);

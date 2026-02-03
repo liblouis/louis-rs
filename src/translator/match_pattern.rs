@@ -90,12 +90,14 @@ impl Regexp {
 
 #[derive(Debug)]
 pub struct MatchPatternsBuilder {
-    pairs: Vec<(Regexp, Translation)>,
+    regexps: Vec<CompiledRegexp>,
 }
 
 impl MatchPatternsBuilder {
     pub fn new() -> Self {
-        Self { pairs: Vec::new() }
+        Self {
+            regexps: Vec::new(),
+        }
     }
 
     pub fn insert(
@@ -114,25 +116,29 @@ impl MatchPatternsBuilder {
             TranslationStage::Main,
             origin.clone(),
         ));
-        let re = Regexp::from_match_rule(pre, chars.to_string(), post, ctx);
-        self.pairs.push((re, translation));
+        let re = Regexp::from_match_rule(pre, chars.to_string(), post, ctx)
+            .compile_with_payload(translation);
+        self.regexps.push(re);
     }
 
     pub fn build(self) -> MatchPatterns {
         MatchPatterns {
-            re: Regexp::compile_many_accepting(&self.pairs),
+            regexps: self.regexps,
         }
     }
 }
 
 #[derive(Debug)]
 pub struct MatchPatterns {
-    re: CompiledRegexp,
+    regexps: Vec<CompiledRegexp>,
 }
 
 impl MatchPatterns {
     pub fn find(&self, input: &str) -> Vec<ResolvedTranslation> {
-        self.re.find(input, &Environment::new())
+        self.regexps
+            .iter()
+            .flat_map(|r| r.find(input, &Environment::new()))
+            .collect()
     }
 }
 
@@ -358,7 +364,6 @@ mod tests {
 
     #[test]
     fn find_multiple_match() {
-        let env = Environment::new();
         let pre = PatternParser::new("[abc]+").pattern().unwrap();
         let post = PatternParser::new("[1234567890]").pattern().unwrap();
         let ctx = CharacterClasses::default();

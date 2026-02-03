@@ -143,6 +143,12 @@ pub enum Translation {
     Unresolved(UnresolvedTranslation),
 }
 
+impl Default for Translation {
+    fn default() -> Self {
+        Translation::Resolved(ResolvedTranslation::default())
+    }
+}
+
 impl Resolve for Translation {
     fn resolve(self, capture: &str, weight: usize, offset: usize) -> ResolvedTranslation {
         match self {
