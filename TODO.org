@@ -1,4 +1,28 @@
-* Todo [8/16]
+* Todo [10/21]
+- [ ] Move the display tables into the Pipeline
+- [ ] implement regexp negation
+- [ ] implement "libhyphen"
+- [ ] guard against "()+" regexp?
+- [-] Indication [2/3]
+  - presumably this could be done independently of translation, i.e.
+    find indication locations and put them in the typeform array
+    before even translating.
+  - [X] Numeric indication
+  - [X] Caps indication
+  - [ ] Emphasis indication
+- [ ] Typeforms
+- [ ] Cursor handling
+- [ ] Hyphenation
+  - will probably be delegated to the [[https://docs.rs/hyphenation/latest/hyphenation/][hyphenation crate]]
+  - this doesn't seem to work
+    - [ ] test it
+- [ ] Add an API so that the functionality can be used as a library
+  - end expose it as a C ABI so that it can be used from other
+    languages (see also [[https://github.com/mozilla/cbindgen][cbindgen]] or even better [[https://github.com/rust-diplomat/diplomat][Diplomat]])
+- [ ] Display tables
+  - When testing the YAML files the display tables are used.
+  - However normal translation has currently no way to specify a
+    display table
 - [X] Parse with context
   - currently tables are parsed line by line. Opcodes have no idea
     whether a character or a class has been defined before
@@ -8,21 +32,14 @@
     collects all relevant information and the second pass consequently
     uses that.
 - [X] Support for nocross
-- [-] Indication [2/3]
-  - presumably this could be done independently of translation, i.e.
-    find indication locations and put them in the typeform array
-    before even translating.
-  - [X] Numeric indication
-  - [X] Caps indication
-  - [ ] Emphasis indication
 - [X] Add support for virtual dots
   - Virtual dots are supported and are converted to Unicode Supplementary Private Use Area-A
-- [-] The correct, multipass and match opcodes [1/3]
+- [X] The correct, multipass and match opcodes [3/3]
   - [X] Match opcode
     - A basic regexp engine has been implemented and aside from
       negation the match opcode basically works
-  - [ ] Correct opcode
-  - [ ] Multipass opcode
+  - [X] Correct opcode
+  - [X] Multipass opcode
 - [X] Currently the matching of input text against the rules is case
   sensitive.
   - [X] Make it case insensitive.
@@ -35,19 +52,22 @@
     functions like [[https://docs.rs/unicode-segmentation/latest/unicode_segmentation/trait.UnicodeSegmentation.html#tymethod.split_word_bound_indices][split_word_bound_indices]], that give you word bounds
     based on the Unicode standard.
 - [X] Handle implicit braille definitions, i.e. '='
-- [ ] Typeforms
-- [ ] Cursor handling
-- [ ] Hyphenation
-  - will probably be delegated to the [[https://docs.rs/hyphenation/latest/hyphenation/][hyphenation crate]]
-- [ ] Add an API so that the functionality can be used as a library
-  - end expose it as a C ABI so that it can be used from other
-    languages (see also [[https://github.com/mozilla/cbindgen][cbindgen]] or even better [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 - [X] Table resolution based on metadata
-- [ ] Display tables
-  - When testing the YAML files the display tables are used.
-  - However normal translation has currently no way to specify a
-    display table
 - [X] Handle undefined characters similarly to liblouis
-- [ ] Instead of hand-rolling an finite state machine to implement
+- [X] Instead of hand-rolling an finite state machine to implement
   regular expressions we should use [[https://docs.rs/regex-automata/latest/regex_automata/][regex_automata]].
+  - no, for now keep the hand-rolled regexp engine
+  - as we need to support effects and negation
+- [ ] performance
+  - put translations into offset buckets
+  - measure performance
+  - reduce the regexp opcode operand to only 32 bit
 
+* Known gaps
+- hyphen (nocross)
+- indication + backtranslation
+- indication
+- computer braille
+- inpos + outpos mapping
+- typeform (emphasis input)
+- regexp infinite loop
