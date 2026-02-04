@@ -163,10 +163,10 @@ mod tests {
         let ctx = CharacterClasses::default();
         let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            re.find("abc", &env),
-            vec![ResolvedTranslation::new("", "", 3, stage, None)]
+            re.find("abc", &env).unwrap(),
+            ResolvedTranslation::new("", "", 3, stage, None)
         );
-        assert!(re.find("def", &env).is_empty());
+        assert_eq!(re.find("def", &env), None);
     }
 
     #[test]
@@ -177,15 +177,15 @@ mod tests {
         let ctx = CharacterClasses::default();
         let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            re.find("a", &env),
-            vec![ResolvedTranslation::new("", "", 1, stage, None)]
+            re.find("a", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
         );
         assert_eq!(
-            re.find("b", &env),
-            vec![ResolvedTranslation::new("", "", 1, stage, None)]
+            re.find("b", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
         );
-        assert_eq!(re.find("c", &env), vec![]);
-        assert!(re.find("def", &env).is_empty());
+        assert_eq!(re.find("c", &env), None);
+        assert_eq!(re.find("def", &env), None);
     }
 
     #[test]
@@ -199,18 +199,18 @@ mod tests {
         }
         let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            re.find("1", &env),
-            vec![ResolvedTranslation::new("", "", 1, stage, None)]
+            re.find("1", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
         );
         assert_eq!(
-            re.find("2", &env),
-            vec![ResolvedTranslation::new("", "", 1, stage, None)]
+            re.find("2", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
         );
         assert_eq!(
-            re.find("3", &env),
-            vec![ResolvedTranslation::new("", "", 1, stage, None)]
+            re.find("3", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
         );
-        assert!(re.find("def", &env).is_empty());
+        assert_eq!(re.find("def", &env), None);
     }
 
     #[test]
@@ -224,18 +224,18 @@ mod tests {
         }
         let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            re.find("A", &env),
-            vec![ResolvedTranslation::new("", "", 1, stage, None)]
+            re.find("A", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
         );
         assert_eq!(
-            re.find("A", &env),
-            vec![ResolvedTranslation::new("", "", 1, stage, None)]
+            re.find("A", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
         );
         assert_eq!(
-            re.find("C", &env),
-            vec![ResolvedTranslation::new("", "", 1, stage, None)]
+            re.find("C", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
         );
-        assert!(re.find("def", &env).is_empty());
+        assert_eq!(re.find("def", &env), None);
     }
 
     #[test]
@@ -255,18 +255,18 @@ mod tests {
         }
         let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            re.find("%", &env),
-            vec![ResolvedTranslation::new("", "", 1, stage, None)]
+            re.find("%", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
         );
         assert_eq!(
-            re.find(".", &env),
-            vec![ResolvedTranslation::new("", "", 1, stage, None)]
+            re.find(".", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
         );
         assert_eq!(
-            re.find("A", &env),
-            vec![ResolvedTranslation::new("", "", 1, stage, None)]
+            re.find("A", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
         );
-        assert!(re.find("def", &env).is_empty());
+        assert_eq!(re.find("def", &env), None);
     }
 
     #[test]
@@ -277,18 +277,18 @@ mod tests {
         let ctx = CharacterClasses::default();
         let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            re.find("a", &env),
-            vec![ResolvedTranslation::new("", "", 1, stage, None)]
+            re.find("a", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
         );
         assert_eq!(
-            re.find("b", &env),
-            vec![ResolvedTranslation::new("", "", 1, stage, None)]
+            re.find("b", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
         );
         assert_eq!(
-            re.find("c", &env),
-            vec![ResolvedTranslation::new("", "", 1, stage, None)]
+            re.find("c", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
         );
-        assert!(re.find("def", &env).is_empty());
+        assert_eq!(re.find("def", &env), None);
     }
 
     #[test]
@@ -299,18 +299,18 @@ mod tests {
         let ctx = CharacterClasses::default();
         let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
-            re.find("a", &env),
-            vec![ResolvedTranslation::new("", "", 1, stage, None)]
+            re.find("a", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
         );
         assert_eq!(
-            re.find("b", &env),
-            vec![ResolvedTranslation::new("", "", 1, stage, None)]
+            re.find("b", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
         );
         assert_eq!(
-            re.find("c", &env),
-            vec![ResolvedTranslation::new("", "", 1, stage, None)]
+            re.find("c", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
         );
-        assert!(re.find("def", &env).is_empty());
+        assert_eq!(re.find("def", &env), None);
     }
 
     #[test]
@@ -337,22 +337,6 @@ mod tests {
                 "foo".into(),
                 "".into(),
                 9,
-                TranslationStage::Main,
-                rule.clone(),
-            )
-            .with_offset(3),
-            ResolvedTranslation::new(
-                "foo".into(),
-                "".into(),
-                8,
-                TranslationStage::Main,
-                rule.clone(),
-            )
-            .with_offset(3),
-            ResolvedTranslation::new(
-                "foo".into(),
-                "".into(),
-                7,
                 TranslationStage::Main,
                 rule.clone(),
             )

@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - Convert all the Braille types into their own types using the [new
   type pattern](https://effective-rust.com/newtype.html).
+- Since we no longer combine all regexps into one big one each regexp
+  now just optionaly returns one Translation. So
+  `CompiledRegexp::find` returns Option now instead of a (possibly
+  empty) Vec.
 
 ### Fixed
 - Fixed the parsing of in alternation expressions `match` rules, i.e.

@@ -267,10 +267,9 @@ impl CompiledRegexp {
         length: usize,
         env: &Environment,
         capture: (usize, usize),
-        translations: &mut Vec<ResolvedTranslation>,
-    ) {
+    ) -> Option<ResolvedTranslation> {
         if pc >= self.instructions.len() {
-            return;
+            return None;
         }
 
         match self.instructions[pc] {
@@ -286,8 +285,9 @@ impl CompiledRegexp {
                         length + 1,
                         env,
                         capture,
-                        translations,
                     )
+                } else {
+                    None
                 }
             }
             Instruction::Class(index) => {
@@ -302,8 +302,9 @@ impl CompiledRegexp {
                         length + 1,
                         env,
                         capture,
-                        translations,
                     )
+                } else {
+                    None
                 }
             }
             Instruction::Any => {
@@ -316,52 +317,44 @@ impl CompiledRegexp {
                         length + 1,
                         env,
                         capture,
-                        translations,
                     )
+                } else {
+                    None
                 }
             }
             Instruction::Match(index) => {
                 let (start, end) = capture;
                 let capture = &input[start..end];
-                translations.push(
+                Some(
                     self.translations[index]
                         .clone()
                         .resolve(capture, length, start),
-                );
+                )
             }
-            Instruction::Jump(index) => {
-                self.find_internal(index, input, sp, length, env, capture, translations)
-            }
-            Instruction::Split(index1, index2) => {
-                self.find_internal(index1, input, sp, length, env, capture, translations);
-                self.find_internal(index2, input, sp, length, env, capture, translations);
-            }
+            Instruction::Jump(index) => self.find_internal(index, input, sp, length, env, capture),
+            Instruction::Split(index1, index2) => self
+                .find_internal(index1, input, sp, length, env, capture)
+                .or_else(|| self.find_internal(index2, input, sp, length, env, capture)),
             Instruction::CaptureStart => {
-                self.find_internal(pc + 1, input, sp, length, env, (sp, 0), translations)
+                self.find_internal(pc + 1, input, sp, length, env, (sp, 0))
             }
-            Instruction::CaptureEnd => self.find_internal(
-                pc + 1,
-                input,
-                sp,
-                length,
-                env,
-                (capture.0, sp),
-                translations,
-            ),
+            Instruction::CaptureEnd => {
+                self.find_internal(pc + 1, input, sp, length, env, (capture.0, sp))
+            }
             Instruction::VariableEqual(var, expected) => {
                 if let Some(&actual) = env.get(var)
                     && actual == expected
                 {
-                    self.find_internal(pc + 1, input, sp, length, env, capture, translations)
+                    self.find_internal(pc + 1, input, sp, length, env, capture)
+                } else {
+                    None
                 }
             }
         }
     }
 
-    pub fn find(&self, input: &str, env: &Environment) -> Vec<ResolvedTranslation> {
-        let mut translations = Vec::new();
-        self.find_internal(0, input, 0, 0, env, (0, 0), &mut translations);
-        translations
+    pub fn find(&self, input: &str, env: &Environment) -> Option<ResolvedTranslation> {
+        self.find_internal(0, input, 0, 0, env, (0, 0))
     }
 }
 
@@ -646,34 +639,28 @@ mod tests {
         )
         .compile_with_payload(translation);
 
-        assert_eq!(re.find("foo", &env), []);
-        assert_eq!(re.find("foobar", &env), []);
+        assert_eq!(re.find("foo", &env), None);
+        assert_eq!(re.find("foobar", &env), None);
         assert_eq!(
-            re.find("foobarfoo", &env),
-            [
-                ResolvedTranslation::new("bar", "bar", 3, TranslationStage::Main, None)
-                    .with_offset(3)
-                    .with_weight(9)
-            ]
+            re.find("foobarfoo", &env).unwrap(),
+            ResolvedTranslation::new("bar", "bar", 3, TranslationStage::Main, None)
+                .with_offset(3)
+                .with_weight(9)
         );
         assert_eq!(
-            re.find("fooxarfoo", &env),
-            [
-                ResolvedTranslation::new("xar", "xar", 3, TranslationStage::Main, None)
-                    .with_offset(3)
-                    .with_weight(9)
-            ]
+            re.find("fooxarfoo", &env).unwrap(),
+            ResolvedTranslation::new("xar", "xar", 3, TranslationStage::Main, None)
+                .with_offset(3)
+                .with_weight(9)
         );
         assert_eq!(
-            re.find("foobarfoobar", &env),
-            [
-                ResolvedTranslation::new("bar", "bar", 3, TranslationStage::Main, None)
-                    .with_offset(3)
-                    .with_weight(9)
-            ]
+            re.find("foobarfoobar", &env).unwrap(),
+            ResolvedTranslation::new("bar", "bar", 3, TranslationStage::Main, None)
+                .with_offset(3)
+                .with_weight(9)
         );
-        assert_eq!(re.find("aaaaaa", &env), []);
-        assert_eq!(re.find("bbb", &env), []);
+        assert_eq!(re.find("aaaaaa", &env), None);
+        assert_eq!(re.find("bbb", &env), None);
     }
 
     #[test]
@@ -698,31 +685,25 @@ mod tests {
         )
         .compile_with_payload(translation);
 
-        assert_eq!(re.find("foo", &env), []);
-        assert_eq!(re.find("foobar", &env), []);
+        assert_eq!(re.find("foo", &env), None);
+        assert_eq!(re.find("foobar", &env), None);
         assert_eq!(
-            re.find("foobarfoo", &env),
-            [
-                ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
-                    .with_offset(3)
-                    .with_weight(9)
-            ]
+            re.find("foobarfoo", &env).unwrap(),
+            ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
+                .with_offset(3)
+                .with_weight(9)
         );
         assert_eq!(
-            re.find("fooxarfoo", &env),
-            [
-                ResolvedTranslation::new("xar", "baz", 3, TranslationStage::Main, None)
-                    .with_offset(3)
-                    .with_weight(9)
-            ]
+            re.find("fooxarfoo", &env).unwrap(),
+            ResolvedTranslation::new("xar", "baz", 3, TranslationStage::Main, None)
+                .with_offset(3)
+                .with_weight(9)
         );
         assert_eq!(
-            re.find("foobarfoobar", &env),
-            [
-                ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
-                    .with_offset(3)
-                    .with_weight(9)
-            ]
+            re.find("foobarfoobar", &env).unwrap(),
+            ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
+                .with_offset(3)
+                .with_weight(9)
         );
     }
 
@@ -763,25 +744,21 @@ mod tests {
         )
         .compile_with_payload(translation);
 
-        assert_eq!(re.find("foo", &env), []);
-        assert_eq!(re.find("foobar", &env), []);
+        assert_eq!(re.find("foo", &env), None);
+        assert_eq!(re.find("foobar", &env), None);
         assert_eq!(
-            re.find("foobarfoo", &env),
-            [
-                ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
-                    .with_offset(3)
-                    .with_weight(9)
-            ]
+            re.find("foobarfoo", &env).unwrap(),
+            ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
+                .with_offset(3)
+                .with_weight(9)
         );
         assert_eq!(
-            re.find("foobarfoobar", &env),
-            [
-                ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
-                    .with_offset(3)
-                    .with_weight(9)
-            ]
+            re.find("foobarfoobar", &env).unwrap(),
+            ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
+                .with_offset(3)
+                .with_weight(9)
         );
-        assert_eq!(re.find("aaaaaa", &env), []);
-        assert_eq!(re.find("bbb", &env), []);
+        assert_eq!(re.find("aaaaaa", &env), None);
+        assert_eq!(re.find("bbb", &env), None);
     }
 }
