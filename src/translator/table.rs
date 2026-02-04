@@ -1,3 +1,4 @@
+pub mod display;
 pub mod multipass;
 pub mod primary;
 

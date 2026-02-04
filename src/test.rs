@@ -5,8 +5,8 @@ use std::{collections::HashMap, path::PathBuf};
 use enumset::{EnumSet, EnumSetType};
 
 use crate::{
-    parser::{self, Direction, TableError},
-    translator::{self, DisplayTable, TranslationPipeline},
+    parser::{self, AnchoredRule, Direction, TableError},
+    translator::{self, TranslationPipeline},
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -99,7 +99,7 @@ impl<'a> TestMatrix<'a> {
         }
     }
 
-    fn display_table(&self, direction: Direction) -> Result<DisplayTable, TestError> {
+    fn display_rules(&self) -> Result<Vec<AnchoredRule>, TestError> {
         let display_rules = match self.display {
             Some(Display::Simple(path)) => parser::table_expanded(path.as_path())?,
             Some(Display::Inline(text)) => {
@@ -115,15 +115,16 @@ impl<'a> TestMatrix<'a> {
             }
             None => vec![],
         };
-        Ok(DisplayTable::compile(&display_rules, direction))
+        Ok(display_rules)
     }
 
     fn translation_table(
         &self,
         table: &Table,
+        display_rules: &Vec<AnchoredRule>,
         direction: Direction,
     ) -> Result<TranslationPipeline, TestError> {
-        let rules = match table {
+        let mut rules = match table {
             Table::Simple(path) => parser::table_expanded(path.as_path())?,
             Table::List(paths) => {
                 let mut rules = Vec::new();
@@ -138,6 +139,7 @@ impl<'a> TestMatrix<'a> {
             }
             Table::Query(..) => return Err(TestError::NotImplemented("Table queries".to_string())),
         };
+        rules.extend(display_rules.iter().cloned());
         Ok(TranslationPipeline::compile(&rules, direction)?)
     }
 
@@ -145,42 +147,45 @@ impl<'a> TestMatrix<'a> {
         let mut results = Vec::new();
         match self.mode {
             TestMode::Forward => {
-                let display_table = self.display_table(Direction::Forward)?;
+                let display_rules = self.display_rules()?;
                 for table in self.tables {
-                    let table = self.translation_table(table, Direction::Forward)?;
+                    let table =
+                        self.translation_table(table, &display_rules, Direction::Forward)?;
                     for test in self.tests {
-                        results.push(test.check(&table, &display_table, Direction::Forward));
+                        results.push(test.check(&table, Direction::Forward));
                     }
                 }
             }
             TestMode::Backward => {
                 // ignore the backward test if LOUIS_TEST_FOWARD_ONLY is defined
                 if option_env!("LOUIS_TEST_FORWARD_ONLY").is_none() {
-                    let display_table = self.display_table(Direction::Backward)?;
+                    let display_rules = self.display_rules()?;
                     for table in self.tables {
-                        let table = self.translation_table(table, Direction::Backward)?;
+                        let table =
+                            self.translation_table(table, &display_rules, Direction::Backward)?;
                         for test in self.tests {
-                            results.push(test.check(&table, &display_table, Direction::Backward));
+                            results.push(test.check(&table, Direction::Backward));
                         }
                     }
                 }
             }
             TestMode::BothDirections => {
-                let display_table = self.display_table(Direction::Forward)?;
+                let display_rules = self.display_rules()?;
                 for table in self.tables {
-                    let table = self.translation_table(table, Direction::Forward)?;
+                    let table =
+                        self.translation_table(table, &display_rules, Direction::Forward)?;
                     for test in self.tests {
-                        results.push(test.check(&table, &display_table, Direction::Forward));
+                        results.push(test.check(&table, Direction::Forward));
                     }
                 }
                 // ignore the backward test if LOUIS_TEST_FOWARD_ONLY is defined
                 if option_env!("LOUIS_TEST_FORWARD_ONLY").is_none() {
-                    let display_table = self.display_table(Direction::Backward)?;
                     for table in self.tables {
-                        let table = self.translation_table(table, Direction::Backward)?;
+                        let table =
+                            self.translation_table(table, &display_rules, Direction::Backward)?;
                         // reverse the tests, i.e. swap `input` and `expected`
                         for test in self.tests.iter().cloned().map(|t| t.reverse()) {
-                            results.push(test.check(&table, &display_table, Direction::Backward));
+                            results.push(test.check(&table, Direction::Backward));
                         }
                     }
                 }
@@ -273,15 +278,9 @@ pub struct Test {
 }
 
 impl Test {
-    fn check(
-        &self,
-        table: &TranslationPipeline,
-        display_table: &DisplayTable,
-        direction: Direction,
-    ) -> TestResult {
+    fn check(&self, table: &TranslationPipeline, direction: Direction) -> TestResult {
         let translated = table.translate(&self.input);
-        let displayed = display_table.translate(&translated);
-        if displayed == self.expected {
+        if translated == self.expected {
             if !self.xfail.is_failure(direction) {
                 TestResult::Success
             } else {
@@ -294,14 +293,14 @@ impl Test {
             TestResult::ExpectedFailure {
                 input: self.input.to_string(),
                 expected: self.expected.to_string(),
-                actual: displayed,
+                actual: translated,
                 direction,
             }
         } else {
             TestResult::Failure {
                 input: self.input.to_string(),
                 expected: self.expected.to_string(),
-                actual: displayed,
+                actual: translated,
                 direction,
             }
         }

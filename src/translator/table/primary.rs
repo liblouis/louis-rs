@@ -5,11 +5,11 @@ use hyphenation::{Hyphenator, Load, Standard};
 use crate::{
     Direction,
     parser::{
-        AnchoredRule, Braille, CharacterClass, CharacterClasses, HasNocross, HasPrecedence,
+        AnchoredRule, Braille, CharacterClass, CharacterClasses, HasNocross, HasPrecedence, Rule,
         fallback,
     },
     translator::{
-        CharacterDefinition, ResolvedTranslation, Rule, TranslationError, TranslationStage,
+        CharacterDefinition, ResolvedTranslation, TranslationError, TranslationStage,
         context_pattern::{ContextPatterns, ContextPatternsBuilder},
         effect::Environment,
         indication::{lettersign, nocontract, numeric, uppercase},

@@ -5,10 +5,7 @@ use std::{collections::HashMap, io};
 pub use pipeline::TranslationPipeline;
 pub use translation::{ResolvedTranslation, TranslationStage};
 
-use crate::{
-    Direction,
-    parser::{AnchoredRule, Braille, HasDirection, Rule},
-};
+use crate::parser::Braille;
 
 mod boundaries;
 mod context_pattern;
@@ -88,59 +85,11 @@ impl CharacterDefinition {
     }
 }
 
-#[derive(Debug)]
-pub struct DisplayTable {
-    dots_to_char: HashMap<char, char>,
-}
-
-impl DisplayTable {
-    pub fn compile(rules: &[AnchoredRule], direction: Direction) -> DisplayTable {
-        let mut mapping = HashMap::new();
-        let rules: Vec<_> = rules.iter().filter(|r| r.is_direction(direction)).collect();
-
-        for rule in rules {
-            match &rule.rule {
-                Rule::Display {
-                    character, dots, ..
-                } => {
-                    if cfg!(feature = "backwards_compatibility") {
-                        // first rule wins
-                        let key = dots.to_string().chars().nth(0).unwrap();
-                        mapping.entry(key).or_insert(*character);
-                    } else {
-                        // last rule wins
-                        mapping.insert(dots.to_string().chars().nth(0).unwrap(), *character);
-                    }
-                }
-                _ => (), // ignore all other rules for display tables
-            }
-        }
-        DisplayTable {
-            dots_to_char: mapping,
-        }
-    }
-
-    /// Map the `input` to the output using the display rules in the
-    /// `DisplayTable`.
-    ///
-    /// If the `DisplayTable` does not contain a mapping for a
-    /// specific char then the original character is returned
-    pub fn translate(&self, input: &str) -> String {
-        input
-            .chars()
-            .map(|ref c| *self.dots_to_char.get(c).unwrap_or(c))
-            .collect()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use crate::{
-        parser::RuleParser, translator::table::TableContext,
-        translator::table::primary::PrimaryTable,
-    };
+    use crate::parser::{AnchoredRule, RuleParser};
 
     fn parse_rule(source: &str) -> AnchoredRule {
         RuleParser::new(source).rule().unwrap().into()
@@ -154,29 +103,5 @@ mod tests {
         char_defs.insert('a', "A");
         char_defs.insert('h', "H");
         assert_eq!(char_defs.resolve_implicit_dots("haha").unwrap(), "HAHA");
-    }
-
-    #[test]
-    fn display_table() {
-        let display_rules = [parse_rule("display a 1"), parse_rule("display \\s 0")];
-        let display_table = DisplayTable::compile(&display_rules, Direction::Forward);
-        assert_eq!(display_table.translate("⠁"), "a");
-        assert_eq!(display_table.translate("⠀"), " ");
-        assert_eq!(display_table.translate(""), "");
-        assert_eq!(display_table.translate("x"), "x"); // unknown chars are translated to themselves
-    }
-
-    #[test]
-    fn translate_with_display() {
-        let display_rules = [parse_rule("display A 1"), parse_rule("display \\s 0")];
-        let rules = [parse_rule("letter a 1"), parse_rule("space \\s 0")];
-        let display_table = DisplayTable::compile(&display_rules, Direction::Forward);
-        let context = TableContext::compile(&rules).unwrap();
-        let table =
-            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
-                .unwrap();
-        assert_eq!(display_table.translate(&table.translate("a")), "A");
-        assert_eq!(display_table.translate(&table.translate(" ")), " ");
-        assert_eq!(display_table.translate(&table.translate("a a")), "A A");
     }
 }

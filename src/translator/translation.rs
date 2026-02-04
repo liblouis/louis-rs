@@ -21,6 +21,7 @@ pub enum TranslationStage {
     Post2,
     /// The fourth post-translation stage where the `pass4` rules are applied
     Post3,
+    Display,
 }
 
 impl std::fmt::Display for TranslationStage {
@@ -31,6 +32,7 @@ impl std::fmt::Display for TranslationStage {
             TranslationStage::Post1 => write!(f, "Pass2"),
             TranslationStage::Post2 => write!(f, "Pass3"),
             TranslationStage::Post3 => write!(f, "Pass4"),
+            TranslationStage::Display => write!(f, "Display"),
         }
     }
 }

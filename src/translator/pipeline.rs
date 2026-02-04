@@ -3,7 +3,9 @@ use crate::{
     parser::{AnchoredRule, HasDirection, Rule},
     translator::{
         ResolvedTranslation, TranslationError, TranslationStage,
-        table::{TableContext, multipass::MultipassTable, primary::PrimaryTable},
+        table::{
+            TableContext, display::DisplayTable, multipass::MultipassTable, primary::PrimaryTable,
+        },
     },
 };
 
@@ -12,6 +14,7 @@ pub enum Transformation {
     Pre(MultipassTable),
     Primary(PrimaryTable),
     Post(MultipassTable),
+    Display(DisplayTable),
 }
 
 impl Transformation {
@@ -20,6 +23,7 @@ impl Transformation {
             Transformation::Pre(t) => t.trace(input),
             Transformation::Primary(t) => t.trace(input),
             Transformation::Post(t) => t.trace(input),
+            Transformation::Display(t) => t.trace(input),
         }
     }
 
@@ -28,6 +32,7 @@ impl Transformation {
             Transformation::Pre(t) => t.translate(input),
             Transformation::Primary(t) => t.translate(input),
             Transformation::Post(t) => t.translate(input),
+            Transformation::Display(t) => t.translate(input),
         }
     }
 }
@@ -96,6 +101,15 @@ impl TranslationPipeline {
             let transform =
                 MultipassTable::compile(&pass4_rules, direction, TranslationStage::Post3, &ctx)?;
             steps.push(Transformation::Post(transform));
+        }
+        let display_rules: Vec<AnchoredRule> = rules
+            .iter()
+            .filter(|r| matches!(r.rule, Rule::Display { .. }))
+            .cloned()
+            .collect();
+        if !display_rules.is_empty() {
+            let transform = DisplayTable::compile(&display_rules, direction);
+            steps.push(Transformation::Display(transform));
         }
         match direction {
             Direction::Forward => Ok(Self { steps }),
@@ -197,5 +211,18 @@ mod tests {
         assert_eq!(pipeline.translate("foobar"), "⠁⠸");
         assert_eq!(pipeline.translate("  "), "⠀⠀");
         assert_eq!(pipeline.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
+    }
+
+    #[test]
+    fn display() {
+        let rules = [
+	    parse_rule("display A 1"), parse_rule("display \\s 0"),
+	    parse_rule("letter a 1"), parse_rule("space \\s 0")];
+        let pipeline =
+            TranslationPipeline::compile(&rules, Direction::Forward)
+                .unwrap();
+        assert_eq!(pipeline.translate("a"), "A");
+        assert_eq!(pipeline.translate(" "), " ");
+        assert_eq!(pipeline.translate("a a"), "A A");
     }
 }
