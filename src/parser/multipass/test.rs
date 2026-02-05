@@ -84,7 +84,7 @@ pub enum Operator {
 pub enum Quantifier {
     Number(u8),
     Range(u8, u8),
-    Any,
+    OneOrMore,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -194,7 +194,7 @@ impl<'a> Parser<'a> {
         match self.chars.peek() {
             Some('.') => {
                 self.chars.next();
-                Ok(Some(Quantifier::Any))
+                Ok(Some(Quantifier::OneOrMore))
             }
             Some(c) if c.is_ascii_digit() => {
                 let min = self.ascii_number()?;
@@ -515,7 +515,7 @@ mod display {
             match self {
                 Quantifier::Number(number) => write!(f, "{}", number),
                 Quantifier::Range(from, to) => write!(f, "{}-{}", from, to),
-                Quantifier::Any => write!(f, "."),
+                Quantifier::OneOrMore => write!(f, "."),
             }
         }
     }
@@ -728,7 +728,7 @@ mod tests {
             Parser::new("%foo.").class(),
             Ok(TestInstruction::Class {
                 name: "foo".into(),
-                quantifier: Some(Quantifier::Any)
+                quantifier: Some(Quantifier::OneOrMore)
             })
         );
         assert_eq!(
@@ -771,7 +771,7 @@ mod tests {
             Parser::new("$a.").attributes(),
             Ok(TestInstruction::Attributes {
                 attrs: HashSet::from([Attribute::Any]),
-                quantifier: Some(Quantifier::Any)
+                quantifier: Some(Quantifier::OneOrMore)
             })
         );
         assert_eq!(

@@ -73,7 +73,7 @@ impl Regexp {
                     *max,
                     Box::new(Regexp::CharacterClass(characters)),
                 ),
-                Quantifier::Any => Regexp::ZeroOrMore(Box::new(Regexp::CharacterClass(characters))),
+                Quantifier::OneOrMore => Regexp::OneOrMore(Box::new(Regexp::CharacterClass(characters))),
             }
         } else {
             Regexp::CharacterClass(characters)
@@ -108,7 +108,7 @@ impl Regexp {
                     *max,
                     Box::new(Regexp::CharacterClass(characters)),
                 ),
-                Quantifier::Any => Regexp::ZeroOrMore(Box::new(Regexp::CharacterClass(characters))),
+                Quantifier::OneOrMore => Regexp::OneOrMore(Box::new(Regexp::CharacterClass(characters))),
             }
         } else {
             Regexp::CharacterClass(characters)
@@ -432,6 +432,47 @@ mod tests {
         );
         assert_eq!(re.find("a", &env), None);
         assert_eq!(re.find("aa", &env), None);
+        assert_eq!(re.find("def", &env), None);
+    }
+
+    #[test]
+    fn find_character_class_any() {
+        let env = Environment::new();
+        let tests = test::Parser::new("%letter.").tests().unwrap();
+        let stage = TranslationStage::Main;
+        let ctx = context(CharacterClass::Letter, &['a', 'b', 'c']);
+        let translation = Translation::Unresolved(UnresolvedTranslation::new(
+            &[TranslationTarget::Literal("".to_string())],
+            Precedence::Default,
+            stage,
+            &[],
+            None,
+        ));
+        let regexp = Regexp::from_test(&tests, &ctx);
+        let re = regexp.compile_with_payload(translation);
+        assert_eq!(
+            re.find("a", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
+        );
+        assert_eq!(
+            re.find("b", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
+        );
+        assert_eq!(
+            re.find("c", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None)
+        );
+        assert_eq!(
+            re.find("y", &env), None
+        );
+        assert_eq!(
+            re.find("bbb", &env).unwrap(),
+            ResolvedTranslation::new("", "", 3, stage, None)
+        );
+        assert_eq!(
+            re.find("ccc", &env).unwrap(),
+            ResolvedTranslation::new("", "", 3, stage, None)
+        );
         assert_eq!(re.find("def", &env), None);
     }
 
