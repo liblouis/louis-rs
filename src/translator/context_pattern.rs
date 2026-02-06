@@ -221,8 +221,8 @@ impl ContextPatternsBuilder {
         let translation =
             Translation::Unresolved(self.translation(action, origin, stage, ctx.swap_classes())?);
         let test = test.clone().add_implicit_replace();
-	// for the multipass stages where we translate from braille to braille the character classes
-	// need to be the dots_classes
+        // for the multipass stages where we translate from braille to braille the character classes
+        // need to be the dots_classes
         let character_classes = match stage {
             TranslationStage::Pre | TranslationStage::Main => ctx.character_classes(),
             TranslationStage::Post1 | TranslationStage::Post2 | TranslationStage::Post3 => {

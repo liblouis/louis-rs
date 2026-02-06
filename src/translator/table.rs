@@ -320,4 +320,42 @@ mod tests {
             Some(HashSet::from(['a', 'b', 'c']))
         );
     }
+
+    #[test]
+    fn dots_classes() {
+        let rules = [
+            parse_rule("lowercase o 135"),
+            parse_rule("lowercase ύ 5-13456"),
+            parse_rule("sign ΄ 5"),
+            parse_rule("attribute accent ΄"),
+            parse_rule("pass2 @135[%accent]@13456 *@136"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+
+        assert_eq!(
+            context.dots_classes.get(&CharacterClass::Letter),
+            Some(HashSet::from(['⠕']))
+        );
+        assert_eq!(
+            context.dots_classes.get(&CharacterClass::Lowercase),
+            Some(HashSet::from(['⠕']))
+        );
+        assert_eq!(
+            context.dots_classes.get(&CharacterClass::Sign),
+            Some(HashSet::from(['⠐']))
+        );
+        assert_eq!(context.dots_classes.get(&CharacterClass::Uppercase), None);
+        assert_eq!(context.dots_classes.get(&CharacterClass::Space), None);
+        assert_eq!(context.dots_classes.get(&CharacterClass::Litdigit), None);
+        assert_eq!(
+            context.dots_classes.get(&CharacterClass::Seqbeforechars),
+            None
+        );
+        assert_eq!(
+            context
+                .dots_classes
+                .get(&CharacterClass::UserDefined("accent".to_string())),
+            Some(HashSet::from(['⠐']))
+        );
+    }
 }
