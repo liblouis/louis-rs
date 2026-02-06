@@ -10,15 +10,21 @@ use crate::{
 pub struct TableContext {
     character_definitions: CharacterDefinition,
     character_classes: CharacterClasses,
+    dots_classes: CharacterClasses,
     swap_classes: SwapClasses,
 }
 
 impl TableContext {
     // used for testing
-    pub fn new(character_classes: CharacterClasses, swap_classes: SwapClasses) -> Self {
+    pub fn new(
+        character_classes: CharacterClasses,
+        dots_classes: CharacterClasses,
+        swap_classes: SwapClasses,
+    ) -> Self {
         Self {
             character_definitions: CharacterDefinition::default(),
             character_classes,
+            dots_classes,
             swap_classes,
         }
     }
@@ -31,6 +37,10 @@ impl TableContext {
         &self.character_classes
     }
 
+    pub fn dots_classes(&self) -> &CharacterClasses {
+        &self.dots_classes
+    }
+
     pub fn swap_classes(&self) -> &SwapClasses {
         &self.swap_classes
     }
@@ -38,6 +48,7 @@ impl TableContext {
     pub fn compile(rules: &[AnchoredRule]) -> Result<TableContext, TranslationError> {
         let mut character_definitions = CharacterDefinition::new();
         let mut character_classes = CharacterClasses::default();
+        let mut dots_classes = CharacterClasses::default();
         let mut swap_classes = SwapClasses::default();
         for rule in rules {
             match &rule.rule {
@@ -46,30 +57,35 @@ impl TableContext {
                 } => {
                     character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Space, *character);
+                    dots_classes.insert_dots(CharacterClass::Space, dots);
                 }
                 Rule::Punctuation {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Punctuation, *character);
+                    dots_classes.insert_dots(CharacterClass::Punctuation, dots);
                 }
                 Rule::Digit {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Digit, *character);
+                    dots_classes.insert_dots(CharacterClass::Digit, dots);
                 }
                 Rule::Litdigit {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Litdigit, *character);
+                    dots_classes.insert_dots(CharacterClass::Litdigit, dots);
                 }
                 Rule::Letter {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Letter, *character);
+                    dots_classes.insert_dots(CharacterClass::Letter, dots);
                 }
                 Rule::Lowercase {
                     character, dots, ..
@@ -77,6 +93,8 @@ impl TableContext {
                     character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Lowercase, *character);
                     character_classes.insert(CharacterClass::Letter, *character);
+                    dots_classes.insert_dots(CharacterClass::Lowercase, dots);
+                    dots_classes.insert_dots(CharacterClass::Letter, dots);
                 }
                 Rule::Uppercase {
                     character, dots, ..
@@ -84,90 +102,27 @@ impl TableContext {
                     character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Uppercase, *character);
                     character_classes.insert(CharacterClass::Letter, *character);
+                    dots_classes.insert_dots(CharacterClass::Uppercase, dots);
+                    dots_classes.insert_dots(CharacterClass::Letter, dots);
                 }
                 Rule::Sign {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Sign, *character);
+                    dots_classes.insert_dots(CharacterClass::Sign, dots);
                 }
                 Rule::Math {
                     character, dots, ..
                 } => {
                     character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Math, *character);
-                }
-                Rule::Attribute { name, chars } => {
-                    let class = CharacterClass::from(name.as_str());
-                    for c in chars.chars() {
-                        character_classes.insert(class.clone(), c);
-                    }
-                }
-                Rule::Seqdelimiter { chars } => {
-                    for c in chars.chars() {
-                        character_classes.insert(CharacterClass::Seqdelimiter, c);
-                    }
-                }
-                Rule::Seqbeforechars { chars } => {
-                    for c in chars.chars() {
-                        character_classes.insert(CharacterClass::Seqbeforechars, c);
-                    }
-                }
-                Rule::Seqafterchars { chars } => {
-                    for c in chars.chars() {
-                        character_classes.insert(CharacterClass::Seqafterchars, c);
-                    }
-                }
-                Rule::Swapcc {
-                    name,
-                    chars,
-                    replacement,
-                } => {
-                    let class = CharacterClass::from(name.as_str());
-                    for c in chars.chars() {
-                        character_classes.insert(class.clone(), c);
-                    }
-                    let replacements: Vec<String> =
-                        replacement.chars().map(|c| c.to_string()).collect();
-                    let mapping: Vec<(char, &str)> = chars
-                        .chars()
-                        .zip(replacements.iter().map(|s| s.as_str()))
-                        .collect();
-                    swap_classes.insert(name, &mapping);
-                }
-                Rule::Swapcd { name, chars, dots } => {
-                    let class = CharacterClass::from(name.as_str());
-                    for c in chars.chars() {
-                        character_classes.insert(class.clone(), c);
-                    }
-                    let replacements: Vec<String> = dots.iter().map(|b| b.to_string()).collect();
-                    let mapping: Vec<(char, &str)> = chars
-                        .chars()
-                        .zip(replacements.iter().map(|s| s.as_str()))
-                        .collect();
-                    swap_classes.insert(name, &mapping);
-                }
-                Rule::Swapdd {
-                    name,
-                    dots,
-                    replacement,
-                } => {
-                    let class = CharacterClass::from(name.as_str());
-                    for c in dots.to_string().chars() {
-                        character_classes.insert(class.clone(), c);
-                    }
-                    let replacements: Vec<String> =
-                        replacement.iter().map(|b| b.to_string()).collect();
-                    let mapping: Vec<(char, &str)> = dots
-                        .iter()
-                        .map(|b| b.to_unicode())
-                        .zip(replacements.iter().map(|s| s.as_str()))
-                        .collect();
-                    swap_classes.insert(name, &mapping);
+                    dots_classes.insert_dots(CharacterClass::Math, dots);
                 }
                 _ => (),
             }
         }
+        // go through the rules again with all the character_definitions sorted out
         for rule in rules {
             match &rule.rule {
                 Rule::Base {
@@ -190,12 +145,116 @@ impl TableContext {
                         }
                     }
                 }
+                Rule::Attribute { name, chars } => {
+                    let class = CharacterClass::from(name.as_str());
+                    for c in chars.chars() {
+                        character_classes.insert(class.clone(), c);
+                        dots_classes.insert_associated_dot(
+                            class.clone(),
+                            c,
+                            &character_definitions,
+                        );
+                    }
+                }
+                Rule::Seqdelimiter { chars } => {
+                    for c in chars.chars() {
+                        character_classes.insert(CharacterClass::Seqdelimiter, c);
+                        dots_classes.insert_associated_dot(
+                            CharacterClass::Seqdelimiter,
+                            c,
+                            &character_definitions,
+                        );
+                    }
+                }
+                Rule::Seqbeforechars { chars } => {
+                    for c in chars.chars() {
+                        character_classes.insert(CharacterClass::Seqbeforechars, c);
+                        dots_classes.insert_associated_dot(
+                            CharacterClass::Seqbeforechars,
+                            c,
+                            &character_definitions,
+                        );
+                    }
+                }
+                Rule::Seqafterchars { chars } => {
+                    for c in chars.chars() {
+                        character_classes.insert(CharacterClass::Seqafterchars, c);
+                        dots_classes.insert_associated_dot(
+                            CharacterClass::Seqafterchars,
+                            c,
+                            &character_definitions,
+                        );
+                    }
+                }
+                Rule::Swapcc {
+                    name,
+                    chars,
+                    replacement,
+                } => {
+                    let class = CharacterClass::from(name.as_str());
+                    for c in chars.chars() {
+                        character_classes.insert(class.clone(), c);
+                        dots_classes.insert_associated_dot(
+                            CharacterClass::Seqafterchars,
+                            c,
+                            &character_definitions,
+                        );
+                    }
+                    let replacements: Vec<String> =
+                        replacement.chars().map(|c| c.to_string()).collect();
+                    let mapping: Vec<(char, &str)> = chars
+                        .chars()
+                        .zip(replacements.iter().map(|s| s.as_str()))
+                        .collect();
+                    swap_classes.insert(name, &mapping);
+                }
+                Rule::Swapcd { name, chars, dots } => {
+                    let class = CharacterClass::from(name.as_str());
+                    for c in chars.chars() {
+                        character_classes.insert(class.clone(), c);
+                        dots_classes.insert_associated_dot(
+                            CharacterClass::Seqafterchars,
+                            c,
+                            &character_definitions,
+                        );
+                    }
+                    let replacements: Vec<String> = dots.iter().map(|b| b.to_string()).collect();
+                    let mapping: Vec<(char, &str)> = chars
+                        .chars()
+                        .zip(replacements.iter().map(|s| s.as_str()))
+                        .collect();
+                    swap_classes.insert(name, &mapping);
+                }
+                Rule::Swapdd {
+                    name,
+                    dots,
+                    replacement,
+                } => {
+                    let class = CharacterClass::from(name.as_str());
+                    for c in dots.to_string().chars() {
+                        character_classes.insert(class.clone(), c);
+                        dots_classes.insert_associated_dot(
+                            CharacterClass::Seqafterchars,
+                            c,
+                            &character_definitions,
+                        );
+                    }
+                    let replacements: Vec<String> =
+                        replacement.iter().map(|b| b.to_string()).collect();
+                    let mapping: Vec<(char, &str)> = dots
+                        .iter()
+                        .map(|b| b.to_unicode())
+                        .zip(replacements.iter().map(|s| s.as_str()))
+                        .collect();
+                    swap_classes.insert(name, &mapping);
+                }
                 _ => (),
             }
         }
         Ok(TableContext {
             character_definitions,
             character_classes,
+            dots_classes,
             swap_classes,
         })
     }

@@ -37,7 +37,7 @@ pub enum TranslationError {
 }
 
 #[derive(Debug, Default, Clone)]
-struct CharacterDefinition(HashMap<char, String>);
+pub struct CharacterDefinition(HashMap<char, String>);
 
 impl CharacterDefinition {
     fn new() -> Self {
@@ -54,7 +54,7 @@ impl CharacterDefinition {
         }
     }
 
-    fn get(&self, from: &char) -> Option<&String> {
+    pub fn get(&self, from: &char) -> Option<&String> {
         self.0.get(from)
     }
 

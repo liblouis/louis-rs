@@ -73,7 +73,9 @@ impl Regexp {
                     *max,
                     Box::new(Regexp::CharacterClass(characters)),
                 ),
-                Quantifier::OneOrMore => Regexp::OneOrMore(Box::new(Regexp::CharacterClass(characters))),
+                Quantifier::OneOrMore => {
+                    Regexp::OneOrMore(Box::new(Regexp::CharacterClass(characters)))
+                }
             }
         } else {
             Regexp::CharacterClass(characters)
@@ -108,7 +110,9 @@ impl Regexp {
                     *max,
                     Box::new(Regexp::CharacterClass(characters)),
                 ),
-                Quantifier::OneOrMore => Regexp::OneOrMore(Box::new(Regexp::CharacterClass(characters))),
+                Quantifier::OneOrMore => {
+                    Regexp::OneOrMore(Box::new(Regexp::CharacterClass(characters)))
+                }
             }
         } else {
             Regexp::CharacterClass(characters)
@@ -217,8 +221,15 @@ impl ContextPatternsBuilder {
         let translation =
             Translation::Unresolved(self.translation(action, origin, stage, ctx.swap_classes())?);
         let test = test.clone().add_implicit_replace();
-        let re =
-            Regexp::from_test(&test, ctx.character_classes()).compile_with_payload(translation);
+	// for the multipass stages where we translate from braille to braille the character classes
+	// need to be the dots_classes
+        let character_classes = match stage {
+            TranslationStage::Pre | TranslationStage::Main => ctx.character_classes(),
+            TranslationStage::Post1 | TranslationStage::Post2 | TranslationStage::Post3 => {
+                ctx.dots_classes()
+            }
+        };
+        let re = Regexp::from_test(&test, character_classes).compile_with_payload(translation);
         self.regexps.push(re);
         Ok(())
     }
@@ -462,9 +473,7 @@ mod tests {
             re.find("c", &env).unwrap(),
             ResolvedTranslation::new("", "", 1, stage, None)
         );
-        assert_eq!(
-            re.find("y", &env), None
-        );
+        assert_eq!(re.find("y", &env), None);
         assert_eq!(
             re.find("bbb", &env).unwrap(),
             ResolvedTranslation::new("", "", 3, stage, None)
@@ -657,6 +666,7 @@ mod tests {
         let action = action::Parser::new(r#""<"*">""#).actions().unwrap();
         let context = TableContext::new(
             CharacterClasses::new(&[(CharacterClass::Punctuation, &['{', '}'])]),
+            CharacterClasses::default(),
             SwapClasses::default(),
         );
         let origin = origin(r#"context $p3"abc"$p3 "<"*">""#);
@@ -680,6 +690,7 @@ mod tests {
         let action = action::Parser::new(r#""<"%foo">""#).actions().unwrap();
         let context = TableContext::new(
             CharacterClasses::new(&[(CharacterClass::Punctuation, &['{', '}'])]),
+            CharacterClasses::default(),
             SwapClasses::new(&[("foo", &[('a', "A"), ('b', "B"), ('c', "C")])]),
         );
         let origin = origin(r#"context $p3"abc"$p3 "<"%foo">""#);

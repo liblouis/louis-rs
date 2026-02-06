@@ -5,6 +5,9 @@
 
 use std::collections::{HashMap, HashSet};
 
+use crate::parser::braille::{BrailleChar, BrailleChars};
+use crate::translator::CharacterDefinition;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CharacterClassReference {
     Class(CharacterClass),
@@ -61,6 +64,37 @@ impl CharacterClasses {
 
     pub fn insert(&mut self, class: CharacterClass, c: char) -> bool {
         self.0.entry(class).or_default().insert(c)
+    }
+
+    pub fn insert_dot(&mut self, class: CharacterClass, dot: &BrailleChar) -> bool {
+        self.0.entry(class).or_default().insert(dot.to_unicode())
+    }
+
+    pub fn insert_dots(&mut self, class: CharacterClass, dots: &BrailleChars) -> bool {
+        if dots.len() == 1 {
+            let dot = dots.iter().next().unwrap();
+            self.insert_dot(class, dot)
+        } else {
+            false
+        }
+    }
+
+    pub fn insert_associated_dot(
+        &mut self,
+        class: CharacterClass,
+        c: char,
+        character_definitions: &CharacterDefinition,
+    ) -> bool {
+        // if there is an associated single cell braille dot for the character add it to the
+        // dots_classes
+        if let Some(dots) = character_definitions.get(&c)
+            && dots.chars().count() == 1
+        {
+            let dot = dots.chars().next().unwrap();
+            self.insert(class, dot)
+        } else {
+            false
+        }
     }
 
     pub fn get(&self, class: &CharacterClass) -> Option<HashSet<char>> {
