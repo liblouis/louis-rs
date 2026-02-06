@@ -167,6 +167,20 @@ mod tests {
     }
 
     #[test]
+    fn pass2_with_capture() {
+        let rules = [
+            parse_rule("lowercase o 135"),
+            parse_rule("lowercase ύ 5-13456"),
+            parse_rule("sign ΄ 5"),
+            parse_rule("attribute accent ΄"),
+            parse_rule("noback pass2 @135[%accent]@13456 *@136"),
+        ];
+        let pipeline = TranslationPipeline::compile(&rules, Direction::Forward).unwrap();
+        assert_eq!(pipeline.translate("o"), "⠕");
+        assert_eq!(pipeline.translate("oύ"), "⠕⠐⠥⠽");
+    }
+
+    #[test]
     fn pass3() {
         let rules = [
             parse_rule("always foo 123"),

@@ -660,6 +660,30 @@ mod tests {
     }
 
     #[test]
+    fn context_capture_with_class() {
+        let env = Environment::new();
+        let tests = test::Parser::new("@135[%accent]@13456").tests().unwrap();
+        let action = action::Parser::new("*@136").actions().unwrap();
+        let origin = origin("pass2 @135[%accent]@13456 *@136");
+        let stage = TranslationStage::Post1;
+        let ctx = TableContext::new(
+            CharacterClasses::new(&[(CharacterClass::UserDefined("accent".to_string()), &['΄'])]),
+            CharacterClasses::new(&[(CharacterClass::UserDefined("accent".to_string()), &['⠐'])]),
+            SwapClasses::default(),
+        );
+        let mut builder = ContextPatternsBuilder::new();
+        builder
+            .insert(&tests, &action, &origin, stage, &ctx)
+            .unwrap();
+        let translation =
+            ResolvedTranslation::new("⠐", "⠐⠥", 3, TranslationStage::Post1, origin.clone())
+                .with_offset(1);
+        let patterns = builder.build();
+        assert_eq!(patterns.find("⠕⠐⠽", &env), [translation]);
+        assert!(patterns.find("⠕", &env).is_empty());
+    }
+
+    #[test]
     fn context_capture_advanced() {
         let env = Environment::new();
         let tests = test::Parser::new(r#"$p3["abc"]$p3"#).tests().unwrap();
