@@ -265,7 +265,6 @@ impl CompiledRegexp {
         input: &str,
         sp: usize,
         length: usize,
-        offset: usize,
         env: &Environment,
         capture: (usize, usize),
     ) -> Option<ResolvedTranslation> {
@@ -284,7 +283,6 @@ impl CompiledRegexp {
                         input,
                         sp + actual.len_utf8(),
                         length + 1,
-                        offset,
                         env,
                         capture,
                     )
@@ -302,7 +300,6 @@ impl CompiledRegexp {
                         input,
                         sp + actual.len_utf8(),
                         length + 1,
-                        offset,
                         env,
                         capture,
                     )
@@ -318,7 +315,6 @@ impl CompiledRegexp {
                         input,
                         sp + actual.len_utf8(),
                         length + 1,
-                        offset,
                         env,
                         capture,
                     )
@@ -329,29 +325,29 @@ impl CompiledRegexp {
             Instruction::Match(index) => {
                 let (start, end) = capture;
                 let capture = &input[start..end];
+                // offset is in number of chars not a byte offset
+                let offset = &input[..start].chars().count();
                 Some(
                     self.translations[index]
                         .clone()
-                        .resolve(capture, length, offset),
+                        .resolve(capture, length, *offset),
                 )
             }
-            Instruction::Jump(index) => {
-                self.find_internal(index, input, sp, length, offset, env, capture)
-            }
+            Instruction::Jump(index) => self.find_internal(index, input, sp, length, env, capture),
             Instruction::Split(index1, index2) => self
-                .find_internal(index1, input, sp, length, offset, env, capture)
-                .or_else(|| self.find_internal(index2, input, sp, length, offset, env, capture)),
+                .find_internal(index1, input, sp, length, env, capture)
+                .or_else(|| self.find_internal(index2, input, sp, length, env, capture)),
             Instruction::CaptureStart => {
-                self.find_internal(pc + 1, input, sp, length, length, env, (sp, 0))
+                self.find_internal(pc + 1, input, sp, length, env, (sp, 0))
             }
             Instruction::CaptureEnd => {
-                self.find_internal(pc + 1, input, sp, length, offset, env, (capture.0, sp))
+                self.find_internal(pc + 1, input, sp, length, env, (capture.0, sp))
             }
             Instruction::VariableEqual(var, expected) => {
                 if let Some(&actual) = env.get(var)
                     && actual == expected
                 {
-                    self.find_internal(pc + 1, input, sp, length, offset, env, capture)
+                    self.find_internal(pc + 1, input, sp, length, env, capture)
                 } else {
                     None
                 }
@@ -360,7 +356,7 @@ impl CompiledRegexp {
     }
 
     pub fn find(&self, input: &str, env: &Environment) -> Option<ResolvedTranslation> {
-        self.find_internal(0, input, 0, 0, 0, env, (0, 0))
+        self.find_internal(0, input, 0, 0, env, (0, 0))
     }
 }
 
