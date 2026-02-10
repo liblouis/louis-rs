@@ -249,7 +249,6 @@ mod tests {
         let transform =
             MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Post1, &ctx)
                 .unwrap();
-        dbg!(&transform);
         assert_eq!(transform.translate("⠁⠁⠇⠁⠁⠸⠁⠁"), "⠁⠁⠇⠠⠠⠸⠁⠁");
         assert_eq!(transform.translate("🐂"), "🐂");
     }
