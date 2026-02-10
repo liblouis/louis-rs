@@ -53,7 +53,10 @@ impl Regexp {
             TestInstruction::Class { name, quantifier } => {
                 Regexp::from_class(name, quantifier, ctx)
             }
-            TestInstruction::Negate { .. } => Regexp::NotImplemented,
+            // FIXME: for now we just pretend we didn't see the negation and treat it as a group
+            TestInstruction::Negate { test } => {
+                Regexp::Group(Box::new(Regexp::from_instruction(test, ctx)))
+            }
             TestInstruction::Replace { tests } => {
                 Regexp::Capture(Box::new(Regexp::from_instructions(tests, ctx)))
             }
