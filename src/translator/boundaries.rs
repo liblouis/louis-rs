@@ -4,6 +4,8 @@
 //! on Unicode properties. The original liblouis uses the character
 //! definitions instead.
 
+use crate::parser::{CharacterClasses, is_punctuation, is_whitespace};
+
 /// Return true if a character is part of a word
 fn is_word(c: char) -> bool {
     // TODO: the definition of what really constitutes a word is a bit
@@ -26,6 +28,44 @@ pub fn word_end(prev: Option<char>, current: Option<char>) -> bool {
     match (prev, current) {
         (Some(c), None) => is_word(c),
         (Some(p), Some(c)) if is_word(p) => !is_word(c),
+        (_, _) => false,
+    }
+}
+
+/// Return true if a character is at the beginning of punctuation
+pub fn punctuation_start(
+    ctx: &CharacterClasses,
+    prev: Option<char>,
+    current: Option<char>,
+) -> bool {
+    match (prev, current) {
+        (None, Some(c)) => is_punctuation(ctx, c),
+        (Some(p), Some(c)) if is_punctuation(ctx, c) => is_whitespace(ctx, p),
+        (_, _) => false,
+    }
+}
+
+/// Return true if a character is at the end of a punctuation
+pub fn punctuation_end(ctx: &CharacterClasses, prev: Option<char>, current: Option<char>) -> bool {
+    match (prev, current) {
+        (Some(c), None) => is_punctuation(ctx, c),
+        (Some(p), Some(c)) if is_punctuation(ctx, p) => is_whitespace(ctx, c),
+        (_, _) => false,
+    }
+}
+
+/// Return true if a character is at the boundary between a word and punctuation
+pub fn word_punctuation(ctx: &CharacterClasses, prev: Option<char>, current: Option<char>) -> bool {
+    match (prev, current) {
+        (Some(c1), Some(c2)) => is_word(c1) && is_punctuation(ctx, c2),
+        (_, _) => false,
+    }
+}
+
+/// Return true if a character is at the boundary between punctuation and a word
+pub fn punctuation_word(ctx: &CharacterClasses, prev: Option<char>, current: Option<char>) -> bool {
+    match (prev, current) {
+        (Some(c1), Some(c2)) => is_punctuation(ctx, c1) && is_word(c2),
         (_, _) => false,
     }
 }
@@ -66,6 +106,8 @@ pub fn number_word(prev: Option<char>, current: Option<char>) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use crate::parser::CharacterClass;
+
     use super::*;
 
     #[test]
@@ -144,5 +186,83 @@ mod tests {
         assert!(!number_word(Some('a'), Some('a')));
         assert!(!number_word(Some(' '), Some(' ')));
         assert!(!number_word(None, Some('a')));
+    }
+
+    #[test]
+    fn test_punctuation_start() {
+        let ctx = CharacterClasses::new(&[
+            (CharacterClass::Punctuation, &['(', ')']),
+            (CharacterClass::Space, &[' ']),
+        ]);
+        assert!(punctuation_start(&ctx, Some(' '), Some('(')));
+        assert!(punctuation_start(&ctx, Some(' '), Some(')')));
+        assert!(punctuation_start(&ctx, None, Some('(')));
+        assert!(punctuation_start(&ctx, None, Some(')')));
+        assert!(!punctuation_start(&ctx, Some('('), Some('(')));
+        assert!(!punctuation_start(&ctx, Some(')'), Some('(')));
+        assert!(!punctuation_start(&ctx, Some('a'), Some('(')));
+        assert!(!punctuation_start(&ctx, Some('1'), Some('(')));
+        assert!(!punctuation_start(&ctx, Some('('), Some(' ')));
+        assert!(!punctuation_start(&ctx, Some('('), Some('a')));
+        assert!(!punctuation_start(&ctx, Some('('), Some('1')));
+        assert!(!punctuation_start(&ctx, Some('('), Some(')')));
+    }
+
+    #[test]
+    fn test_punctuation_end() {
+        let ctx = CharacterClasses::new(&[
+            (CharacterClass::Punctuation, &['(', ')']),
+            (CharacterClass::Space, &[' ']),
+        ]);
+        assert!(punctuation_end(&ctx, Some(')'), Some(' ')));
+        assert!(punctuation_end(&ctx, Some('('), Some(' ')));
+        assert!(punctuation_end(&ctx, Some('('), None));
+        assert!(punctuation_end(&ctx, Some(')'), None));
+        assert!(!punctuation_end(&ctx, Some('('), Some('(')));
+        assert!(!punctuation_end(&ctx, Some(')'), Some('(')));
+        assert!(!punctuation_end(&ctx, Some('a'), Some('(')));
+        assert!(!punctuation_end(&ctx, Some('1'), Some('(')));
+        assert!(!punctuation_end(&ctx, Some(' '), Some(')')));
+        assert!(!punctuation_end(&ctx, Some('('), Some('a')));
+        assert!(!punctuation_end(&ctx, Some('('), Some('1')));
+        assert!(!punctuation_end(&ctx, Some('('), Some(')')));
+    }
+
+    #[test]
+    fn test_word_punctuation() {
+        let ctx = CharacterClasses::new(&[
+            (CharacterClass::Punctuation, &['(', ')']),
+            (CharacterClass::Space, &[' ']),
+        ]);
+        assert!(word_punctuation(&ctx, Some('a'), Some(')')));
+        assert!(!word_punctuation(&ctx, Some(' '), Some(')')));
+        assert!(!word_punctuation(&ctx, Some('('), None));
+        assert!(!word_punctuation(&ctx, Some(')'), None));
+        assert!(!word_punctuation(&ctx, Some('('), Some('(')));
+        assert!(!word_punctuation(&ctx, Some(')'), Some('(')));
+        assert!(!word_punctuation(&ctx, Some('1'), Some('(')));
+        assert!(!word_punctuation(&ctx, Some('('), Some('a')));
+        assert!(!word_punctuation(&ctx, Some('('), Some('1')));
+        assert!(!word_punctuation(&ctx, Some('('), Some(')')));
+    }
+
+    #[test]
+    fn test_punctuation_word() {
+        let ctx = CharacterClasses::new(&[
+            (CharacterClass::Punctuation, &['(', ')']),
+            (CharacterClass::Space, &[' ']),
+        ]);
+        assert!(punctuation_word(&ctx, Some('('), Some('a')));
+        assert!(punctuation_word(&ctx, Some(')'), Some('a')));
+        assert!(!punctuation_word(&ctx, Some(' '), Some('a')));
+        assert!(!punctuation_word(&ctx, Some('('), None));
+        assert!(!punctuation_word(&ctx, Some(')'), None));
+        assert!(!punctuation_word(&ctx, None, Some('(')));
+        assert!(!punctuation_word(&ctx, None, Some(')')));
+        assert!(!punctuation_word(&ctx, Some('('), Some('(')));
+        assert!(!punctuation_word(&ctx, Some(')'), Some('(')));
+        assert!(!punctuation_word(&ctx, Some('1'), Some('(')));
+        assert!(!punctuation_word(&ctx, Some('('), Some('1')));
+        assert!(!punctuation_word(&ctx, Some('('), Some(')')));
     }
 }

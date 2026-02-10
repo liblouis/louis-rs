@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Implement regexp grouping as it is used in match opcodes.
+- Add support for the `prepunc` and `postpunc` opcode.
 
 ### Changed
 - Convert all the Braille types into their own types using the [new

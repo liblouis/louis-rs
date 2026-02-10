@@ -22,7 +22,7 @@ use self::braille::BrailleChars;
 
 pub use attribute::Attribute;
 pub use braille::fallback;
-pub use character_class::{CharacterClass, CharacterClasses};
+pub use character_class::{CharacterClass, CharacterClasses, is_punctuation, is_whitespace};
 pub use match_rule::{Pattern, PatternParser, Patterns};
 pub use multipass::action::ActionInstruction;
 pub use multipass::test::{Quantifier, TestInstruction};

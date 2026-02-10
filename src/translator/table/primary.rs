@@ -105,8 +105,10 @@ impl PrimaryTableBuilder {
             stage: TranslationStage::Main,
             character_definitions: ctx.character_definitions().clone(),
             character_classes: ctx.character_classes().clone(),
-            trie: self.trie,
-            nocross_trie: self.nocross_trie,
+            trie: self.trie.with_context(ctx.character_classes.clone()),
+            nocross_trie: self
+                .nocross_trie
+                .with_context(ctx.character_classes.clone()),
             hyphenator: self.hyphenator,
             match_patterns: self.match_patterns.build(),
             context_patterns: self.context_patterns.build(),
@@ -473,6 +475,44 @@ impl PrimaryTable {
                         TranslationStage::Main,
                         rule,
                     );
+                }
+                Rule::Prepunc { chars, dots, .. } => {
+                    // are all the characters punctuation?
+                    if chars.chars().all(|c| {
+                        ctx.character_classes
+                            .get(&CharacterClass::Punctuation)
+                            .is_some_and(|class| class.contains(&c))
+                    }) {
+                        builder.get_trie_mut(rule).insert(
+                            chars,
+                            &dots.to_string(),
+                            Boundary::Punctuation,
+                            Boundary::PunctuationWord,
+                            direction,
+                            rule.precedence(),
+                            TranslationStage::Main,
+                            rule,
+                        );
+                    }
+                }
+                Rule::Postpunc { chars, dots, .. } => {
+                    // are all the characters punctuation?
+                    if chars.chars().all(|c| {
+                        ctx.character_classes
+                            .get(&CharacterClass::Punctuation)
+                            .is_some_and(|class| class.contains(&c))
+                    }) {
+                        builder.get_trie_mut(rule).insert(
+                            chars,
+                            &dots.to_string(),
+                            Boundary::WordPunctuation,
+                            Boundary::Punctuation,
+                            direction,
+                            rule.precedence(),
+                            TranslationStage::Main,
+                            rule,
+                        );
+                    }
                 }
                 Rule::Match {
                     pre,
@@ -964,6 +1004,28 @@ mod tests {
         assert_eq!(table.translate("th"), "⠉");
         assert_eq!(table.translate("1th"), "⠁⠑");
         assert_eq!(table.translate("1th."), "⠁⠑⠠");
+    }
+
+    #[test]
+    fn prepunc_postpunc() {
+        let rules = [
+            parse_rule("lowercase f 3"),
+            parse_rule("lowercase o 4"),
+            parse_rule("punctuation ( 23678"),
+            parse_rule("prepunc     ( 2356"),
+            parse_rule("punctuation ) 35678"),
+            parse_rule("postpunc    ) 2356"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        assert_eq!(table.translate(")"), "⣴");
+        assert_eq!(table.translate("("), "⣦");
+        assert_eq!(table.translate("()"), "⣦⣴");
+        assert_eq!(table.translate("foo)"), "⠄⠈⠈⠶");
+        assert_eq!(table.translate("(foo"), "⠶⠄⠈⠈");
+        assert_eq!(table.translate("(foo)"), "⠶⠄⠈⠈⠶");
     }
 
     #[test]

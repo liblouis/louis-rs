@@ -101,3 +101,13 @@ impl CharacterClasses {
         self.0.get(class).cloned()
     }
 }
+
+pub fn is_punctuation(ctx: &CharacterClasses, c: char) -> bool {
+    ctx.get(&CharacterClass::Punctuation)
+        .is_some_and(|class| class.contains(&c))
+}
+
+pub fn is_whitespace(ctx: &CharacterClasses, c: char) -> bool {
+    ctx.get(&CharacterClass::Space)
+        .is_some_and(|class| class.contains(&c))
+}

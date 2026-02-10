@@ -3,10 +3,13 @@
 use std::collections::HashMap;
 
 use crate::{
-    parser::{AnchoredRule, Direction, Precedence},
+    parser::{AnchoredRule, CharacterClasses, Direction, Precedence},
     translator::{
         TranslationStage,
-        boundaries::{number_word, word_end, word_number, word_start},
+        boundaries::{
+            number_word, punctuation_end, punctuation_start, punctuation_word, word_end,
+            word_number, word_punctuation, word_start,
+        },
     },
 };
 
@@ -19,6 +22,9 @@ pub enum Boundary {
     Number,
     NumberWord,
     WordNumber,
+    Punctuation,
+    PunctuationWord,
+    WordPunctuation,
     None,
 }
 
@@ -75,20 +81,41 @@ impl TrieNode {
         self.transitions
             .get(&Transition::Start(Boundary::NumberWord))
     }
+    fn punctuation_start_transition(&self) -> Option<&TrieNode> {
+        self.transitions
+            .get(&Transition::Start(Boundary::Punctuation))
+    }
+    fn punctuation_end_transition(&self) -> Option<&TrieNode> {
+        self.transitions
+            .get(&Transition::End(Boundary::Punctuation))
+    }
+    fn word_punc_transition(&self) -> Option<&TrieNode> {
+        self.transitions
+            .get(&Transition::Start(Boundary::WordPunctuation))
+    }
+    fn punc_word_transition(&self) -> Option<&TrieNode> {
+        self.transitions
+            .get(&Transition::End(Boundary::PunctuationWord))
+    }
 }
 
 #[derive(Default, Debug)]
 pub struct Trie {
     root: TrieNode,
+    ctx: CharacterClasses,
 }
 
 impl Trie {
     pub fn new() -> Self {
         Trie {
             root: TrieNode::default(),
+            ctx: CharacterClasses::default(),
         }
     }
 
+    pub fn with_context(self, ctx: CharacterClasses) -> Self {
+        Trie { ctx, ..self }
+    }
     pub fn insert_char(
         &mut self,
         from: char,
@@ -297,6 +324,46 @@ impl Trie {
                 match_length,
             ));
         }
+        if let Some(node) = node.punctuation_start_transition()
+            && punctuation_start(&self.ctx, prev, c)
+        {
+            matching_rules.extend(self.find_translations_from_node(
+                input,
+                prev,
+                node,
+                match_length,
+            ));
+        }
+        if let Some(node) = node.punctuation_end_transition()
+            && punctuation_end(&self.ctx, prev, c)
+        {
+            matching_rules.extend(self.find_translations_from_node(
+                input,
+                prev,
+                node,
+                match_length,
+            ));
+        }
+        if let Some(node) = node.word_punc_transition()
+            && word_punctuation(&self.ctx, prev, c)
+        {
+            matching_rules.extend(self.find_translations_from_node(
+                input,
+                prev,
+                node,
+                match_length,
+            ));
+        }
+        if let Some(node) = node.punc_word_transition()
+            && punctuation_word(&self.ctx, prev, c)
+        {
+            matching_rules.extend(self.find_translations_from_node(
+                input,
+                prev,
+                node,
+                match_length,
+            ));
+        }
         matching_rules
     }
 
@@ -311,7 +378,7 @@ impl Trie {
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::RuleParser;
+    use crate::parser::{CharacterClass, RuleParser};
 
     use super::*;
 
@@ -612,6 +679,72 @@ mod tests {
         assert_eq!(trie.find_translations("st", Some('.')), empty);
         assert_eq!(trie.find_translations("st", Some('1')), vec![foo]);
         assert_eq!(trie.find_translations("sta", Some('1')), empty);
+    }
+
+    #[test]
+    fn find_translations_with_word_punc_boundary() {
+        let ctx = CharacterClasses::new(&[
+            (CharacterClass::Punctuation, &['(', ')']),
+            (CharacterClass::Space, &[' ']),
+        ]);
+        let mut trie = Trie::new().with_context(ctx);
+        let empty = Vec::<ResolvedTranslation>::new();
+        let rule = fake_rule();
+        let foo = ResolvedTranslation::new(
+            "(".into(),
+            "[".into(),
+            2,
+            TranslationStage::Main,
+            rule.clone(),
+        );
+        trie.insert(
+            "(".into(),
+            "[".into(),
+            Boundary::WordPunctuation,
+            Boundary::None,
+            Direction::Forward,
+            Precedence::Default,
+            TranslationStage::Main,
+            &rule,
+        );
+        assert_eq!(trie.find_translations("(", None), empty);
+        assert_eq!(trie.find_translations("(", Some(' ')), empty);
+        assert_eq!(trie.find_translations("(", Some('.')), empty);
+        assert_eq!(trie.find_translations("(", Some('a')), vec![foo]);
+    }
+
+    #[test]
+    fn find_translations_with_punc_word_boundary() {
+        let ctx = CharacterClasses::new(&[
+            (CharacterClass::Punctuation, &['(', ')']),
+            (CharacterClass::Space, &[' ']),
+        ]);
+        let mut trie = Trie::new().with_context(ctx);
+        let empty = Vec::<ResolvedTranslation>::new();
+        let rule = fake_rule();
+        let foo = ResolvedTranslation::new(
+            "(".into(),
+            "[".into(),
+            2,
+            TranslationStage::Main,
+            rule.clone(),
+        );
+        trie.insert(
+            "(".into(),
+            "[".into(),
+            Boundary::None,
+            Boundary::PunctuationWord,
+            Direction::Forward,
+            Precedence::Default,
+            TranslationStage::Main,
+            &rule,
+        );
+        assert_eq!(trie.find_translations("(", None), empty);
+        assert_eq!(trie.find_translations("(", Some(' ')), empty);
+        assert_eq!(trie.find_translations("(", Some('.')), empty);
+        assert_eq!(trie.find_translations("(", Some('a')), empty);
+        assert_eq!(trie.find_translations("(a", None), vec![foo.clone()]);
+        assert_eq!(trie.find_translations("(a", Some('(')), vec![foo.clone()]);
     }
 
     #[test]
