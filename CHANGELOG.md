@@ -19,14 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   now just optionaly returns one Translation. So
   `CompiledRegexp::find` returns Option now instead of a (possibly
   empty) Vec.
-- Fix a problem with the '.' quantifier in Context and Multipass
-  regular expressions.
 
 ### Fixed
 - Fixed the parsing of in alternation expressions `match` rules, i.e.
   `match a|b foo - 26`.
 - Fix the parsing of the `swapdd` operands.
 - Fix the parsing of the `grouping` braille tuple.
+- Fix a problem with the '.' quantifier in Context and Multipass
+  regular expressions.
 
 ## [0.2.6] - 2026-01-27
 
