@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - Implement regexp grouping as it is used in match opcodes.
 - Add support for the `prepunc` and `postpunc` opcode.
+- Implement regexp negation simply by rewriting the regexp AST into
+  more basic negations like *not a character* or *not a character
+  class*.
 
 ### Changed
 - Convert all the Braille types into their own types using the [new

@@ -30,14 +30,19 @@ pub enum Regexp {
     OneOrMore(Box<Regexp>),
     Any,
     CharacterClass(HashSet<char>),
+    NotCharacterClass(HashSet<char>),
     RepeatExactly(u8, Box<Regexp>),
     RepeatAtLeast(u8, Box<Regexp>),
     RepeatAtLeastAtMost(u8, u8, Box<Regexp>),
     Capture(Box<Regexp>),
-    /// Convenience that is unrolled into a sequence of [`Literal`](Regexp#variant.Literal)
+    /// Convenience that is unrolled into a sequence of [`Char`](Instruction#variant.Char)
     String(String),
+    /// Convenience that is unrolled into a sequence of [`NotChar`](Instruction#variant.NotChar)
+    NotString(String),
     /// Check whether variable at index is equal to given value
     VariableEqual(VariableIndex, u8),
+    /// Check whether variable at index is not equal to given value
+    NotVariableEqual(VariableIndex, u8),
     Group(Box<Regexp>),
     /// To support empty captures, we need an empty AST
     Empty,
@@ -49,6 +54,37 @@ pub enum Regexp {
 impl Regexp {
     pub fn compile(&self) -> CompiledRegexp {
         self.compile_with_payload(Translation::default())
+    }
+
+    pub fn negate(self) -> Regexp {
+        match self {
+            Regexp::Literal(_) => todo!(),
+            Regexp::Concat(left, right) => {
+                Regexp::Concat(Box::new(left.negate()), Box::new(right.negate()))
+            }
+            Regexp::Either(left, right) => {
+                Regexp::Either(Box::new(left.negate()), Box::new(right.negate()))
+            }
+            Regexp::Optional(regexp) => Regexp::Optional(Box::new(regexp.negate())),
+            Regexp::ZeroOrMore(regexp) => Regexp::ZeroOrMore(Box::new(regexp.negate())),
+            Regexp::OneOrMore(regexp) => Regexp::OneOrMore(Box::new(regexp.negate())),
+            Regexp::Any => todo!(), // how are you supposed to negate any?
+            Regexp::CharacterClass(class) => Regexp::NotCharacterClass(class),
+            Regexp::NotCharacterClass(_) => unreachable!(),
+            Regexp::RepeatExactly(n, regexp) => Regexp::RepeatExactly(n, Box::new(regexp.negate())),
+            Regexp::RepeatAtLeast(n, regexp) => Regexp::RepeatAtLeast(n, Box::new(regexp.negate())),
+            Regexp::RepeatAtLeastAtMost(n, m, regexp) => {
+                Regexp::RepeatAtLeastAtMost(n, m, Box::new(regexp.negate()))
+            }
+            Regexp::Capture(regexp) => unreachable!(), // negating a capture makes no sense
+            Regexp::String(s) => Regexp::NotString(s),
+            Regexp::NotString(s) => unreachable!(),
+            Regexp::VariableEqual(slot, value) => Regexp::NotVariableEqual(slot, value),
+            Regexp::NotVariableEqual(_, _) => unreachable!(),
+            Regexp::Group(regexp) => Regexp::Group(Box::new(regexp.negate())),
+            Regexp::Empty => unreachable!(), // sorry you cannot negate an empty regexp
+            Regexp::NotImplemented => unreachable!(),
+        }
     }
 
     pub fn compile_with_payload(&self, payload: Translation) -> CompiledRegexp {
@@ -108,6 +144,10 @@ impl Regexp {
                 character_classes.push(characters.clone());
                 instructions.push(Instruction::Class(character_classes.len() - 1));
             }
+            Regexp::NotCharacterClass(characters) => {
+                character_classes.push(characters.clone());
+                instructions.push(Instruction::NotClass(character_classes.len() - 1));
+            }
             Regexp::RepeatExactly(n, regexp) => {
                 for _ in 0..*n {
                     regexp.emit(instructions, character_classes);
@@ -145,8 +185,16 @@ impl Regexp {
                     instructions.push(Instruction::Char(c))
                 }
             }
+            Regexp::NotString(s) => {
+                for c in s.chars() {
+                    instructions.push(Instruction::NotChar(c))
+                }
+            }
             Regexp::VariableEqual(index, value) => {
                 instructions.push(Instruction::VariableEqual(*index, *value))
+            }
+            Regexp::NotVariableEqual(index, value) => {
+                instructions.push(Instruction::NotVariableEqual(*index, *value))
             }
             Regexp::Group(regexp) => {
                 regexp.emit(instructions, character_classes);
@@ -167,8 +215,10 @@ type VariableIndex = u8;
 pub enum Instruction {
     /// Match a single char
     Char(char),
+    NotChar(char),
     /// Match a set of chars. Contains a reference to the character class.
     Class(CharacterClassIndex),
+    NotClass(CharacterClassIndex),
     /// Match any character
     Any,
     /// Mark a successful match of the regexp. Contains a reference to the
@@ -184,6 +234,7 @@ pub enum Instruction {
     CaptureEnd,
     /// Test whether a variable is equal to a value
     VariableEqual(VariableIndex, u8),
+    NotVariableEqual(VariableIndex, u8),
 }
 
 /// Compiled version of [`Regexp`]. Contains bytecode and associated data structures
@@ -216,10 +267,30 @@ impl CompiledRegexp {
                     false
                 }
             }
+            Instruction::NotChar(expected) => {
+                let mut chars = input.chars().peekable();
+                if let Some(actual) = chars.peek()
+                    && expected != *actual
+                {
+                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..], env)
+                } else {
+                    false
+                }
+            }
             Instruction::Class(index) => {
                 let mut chars = input.chars().peekable();
                 if let Some(actual) = chars.peek()
                     && self.character_classes[index].contains(actual)
+                {
+                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..], env)
+                } else {
+                    false
+                }
+            }
+            Instruction::NotClass(index) => {
+                let mut chars = input.chars().peekable();
+                if let Some(actual) = chars.peek()
+                    && !self.character_classes[index].contains(actual)
                 {
                     self.is_match_internal(pc + 1, &input[actual.len_utf8()..], env)
                 } else {
@@ -246,6 +317,15 @@ impl CompiledRegexp {
             Instruction::VariableEqual(var, expected) => {
                 if let Some(&actual) = env.get(var)
                     && actual == expected
+                {
+                    self.is_match_internal(pc + 1, input, env)
+                } else {
+                    false
+                }
+            }
+            Instruction::NotVariableEqual(var, expected) => {
+                if let Some(&actual) = env.get(var)
+                    && actual != expected
                 {
                     self.is_match_internal(pc + 1, input, env)
                 } else {
@@ -290,10 +370,44 @@ impl CompiledRegexp {
                     None
                 }
             }
+            Instruction::NotChar(expected) => {
+                let mut chars = input[sp..].chars().peekable();
+                if let Some(actual) = chars.peek()
+                    && expected != *actual
+                {
+                    self.find_internal(
+                        pc + 1,
+                        input,
+                        sp + actual.len_utf8(),
+                        length + 1,
+                        env,
+                        capture,
+                    )
+                } else {
+                    None
+                }
+            }
             Instruction::Class(index) => {
                 let mut chars = input[sp..].chars().peekable();
                 if let Some(actual) = chars.peek()
                     && self.character_classes[index].contains(actual)
+                {
+                    self.find_internal(
+                        pc + 1,
+                        input,
+                        sp + actual.len_utf8(),
+                        length + 1,
+                        env,
+                        capture,
+                    )
+                } else {
+                    None
+                }
+            }
+            Instruction::NotClass(index) => {
+                let mut chars = input[sp..].chars().peekable();
+                if let Some(actual) = chars.peek()
+                    && !self.character_classes[index].contains(actual)
                 {
                     self.find_internal(
                         pc + 1,
@@ -346,6 +460,15 @@ impl CompiledRegexp {
             Instruction::VariableEqual(var, expected) => {
                 if let Some(&actual) = env.get(var)
                     && actual == expected
+                {
+                    self.find_internal(pc + 1, input, sp, length, env, capture)
+                } else {
+                    None
+                }
+            }
+            Instruction::NotVariableEqual(var, expected) => {
+                if let Some(&actual) = env.get(var)
+                    && actual != expected
                 {
                     self.find_internal(pc + 1, input, sp, length, env, capture)
                 } else {

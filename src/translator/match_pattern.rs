@@ -21,8 +21,7 @@ impl Regexp {
             Pattern::Group(patterns) => {
                 Regexp::Group(Box::new(Regexp::from_patterns(patterns, ctx)))
             }
-            // FIXME: for now we just pretend we didn't see the negation and treat it as a group
-            Pattern::Negate(pattern) => Regexp::Group(Box::new(Regexp::from_pattern(pattern, ctx))),
+            Pattern::Negate(pattern) => Regexp::from_pattern(pattern, ctx).negate(),
             Pattern::Optional(pattern) => {
                 Regexp::Optional(Box::new(Regexp::from_pattern(pattern, ctx)))
             }
