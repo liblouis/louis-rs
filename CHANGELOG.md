@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - ReleaseDate
 
+## [0.2.7] - 2026-02-10
+
 ### Added
 - Implement regexp grouping as it is used in match opcodes.
 - Add support for the `prepunc` and `postpunc` opcode.
@@ -81,7 +83,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 -   Make it clear that the library API is unstable.
 
 <!-- next-url -->
-[Unreleased]: https://github.com/assert-rs/predicates-rs/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/assert-rs/predicates-rs/compare/v0.2.7...HEAD
+[0.2.7]: https://github.com/assert-rs/predicates-rs/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/liblouis/louis-rs/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/liblouis/louis-rs/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/liblouis/louis-rs/compare/v0.2.3...v0.2.4
