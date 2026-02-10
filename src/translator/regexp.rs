@@ -76,9 +76,9 @@ impl Regexp {
             Regexp::RepeatAtLeastAtMost(n, m, regexp) => {
                 Regexp::RepeatAtLeastAtMost(n, m, Box::new(regexp.negate()))
             }
-            Regexp::Capture(regexp) => unreachable!(), // negating a capture makes no sense
+            Regexp::Capture(_) => unreachable!(), // negating a capture makes no sense
             Regexp::String(s) => Regexp::NotString(s),
-            Regexp::NotString(s) => unreachable!(),
+            Regexp::NotString(_) => unreachable!(),
             Regexp::VariableEqual(slot, value) => Regexp::NotVariableEqual(slot, value),
             Regexp::NotVariableEqual(_, _) => unreachable!(),
             Regexp::Group(regexp) => Regexp::Group(Box::new(regexp.negate())),
