@@ -39,6 +39,11 @@ The goal is to be as compatible as possible with liblouis, when it
 makes sense.
 
 
+## Installation
+
+    $ cargo install louis-rs
+
+
 ## Usage
 
 Get help:
@@ -132,7 +137,8 @@ Build a release version:
 
 Run the tests in a YAML file:
 
-    $ LOUIS_TABLE_PATH=~/src/liblouis/tables louis check --summary ~/src/liblouis/tests/braille-specs/de-de-comp8.yaml
+    $ export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
+    $ louis check --summary ~/src/liblouis/tests/braille-specs/de-de-comp8.yaml
     ┌──────────────────┬───────┬───────────┬──────────┬──────────┬────────────┐
     │ YAML File        │ Tests │ Successes │ Failures │ Expected │ Unexpected │
     │                  │       │           │          │ Failures │ Successes  │
@@ -144,7 +150,8 @@ Run the tests in a YAML file:
 
 Run all YAML tests:
 
-    $ LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis louis check --summary ~/src/liblouis/tests/braille-specs/*.yaml ~/src/liblouis/tests/yaml/*.yaml 2> /dev/null
+    $ export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
+    $ louis check --summary ~/src/liblouis/tests/braille-specs/*.yaml ~/src/liblouis/tests/yaml/*.yaml 2> /dev/null
     ┌─────────────────────────────────────────────┬────────┬───────────┬──────────┬──────────┬────────────┐
     │ YAML File                                   │ Tests  │ Successes │ Failures │ Expected │ Unexpected │
     │                                             │        │           │          │ Failures │ Successes  │
@@ -309,7 +316,8 @@ Run all YAML tests:
 
 Test the table query functionality:
 
-    $ LOUIS_TABLE_PATH=~/src/liblouis/tables louis query language=de,contraction=full
+    $ export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
+    $ louis query language=de,contraction=full
     {"[...]/liblouis/tables/de-g2-detailed.ctb", "[...]/liblouis/tables/de-g2.ctb"}
 
 
