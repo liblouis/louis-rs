@@ -1,6 +1,5 @@
-* Todo [10/21]
+* Todo [11/21]
 - [ ] Move the display tables into the Pipeline
-- [ ] implement regexp negation
 - [ ] implement "libhyphen"
 - [ ] guard against "()+" regexp?
 - [-] Indication [2/3]
@@ -23,6 +22,7 @@
   - When testing the YAML files the display tables are used.
   - However normal translation has currently no way to specify a
     display table
+- [X] implement regexp negation
 - [X] Parse with context
   - currently tables are parsed line by line. Opcodes have no idea
     whether a character or a class has been defined before
