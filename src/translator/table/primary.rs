@@ -285,6 +285,18 @@ impl PrimaryTable {
                         rule,
                     );
                 }
+		Rule::Largesign { chars, dots } => {
+                    builder.get_trie_mut(rule).insert(
+                        chars,
+                        &dots.to_string(),
+                        Boundary::None,
+                        Boundary::None,
+                        direction,
+                        rule.precedence(),
+                        TranslationStage::Main,
+                        rule,
+                    );
+		}
                 Rule::Word { chars, dots, .. } => {
                     let dots = ctx
                         .character_definitions()
