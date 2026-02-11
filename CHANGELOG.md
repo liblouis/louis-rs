@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+- Implement (at least partly) the `largesign` opcode.
+
 ## [0.2.7] - 2026-02-10
 
 ### Added
