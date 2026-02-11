@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - Implement (at least partly) the `largesign` opcode.
 
+### Changed
+- Change the style of the trace to be hopefully more friendly to
+  braille readers
+
 ## [0.2.7] - 2026-02-10
 
 ### Added
