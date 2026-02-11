@@ -137,7 +137,7 @@ fn print_trace(all_translations: &Vec<Vec<ResolvedTranslation>>) {
             .enumerate()
         {
             traces.push(Trace {
-                sequence_id: id,
+                sequence_id: id + 1,
                 rule: translation.origin(),
                 from: translation.input(),
                 to: translation.output(),
