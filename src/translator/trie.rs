@@ -368,11 +368,7 @@ impl Trie {
     }
 
     pub fn find_translations(&self, input: &str, prev: Option<char>) -> Vec<ResolvedTranslation> {
-        let mut matching_rules = Vec::new();
-
-        matching_rules.extend(self.find_translations_from_node(input, prev, &self.root, 0));
-        //matching_rules.sort_by_key(|translation| translation.weight);
-        matching_rules
+        self.find_translations_from_node(input, prev, &self.root, 0)
     }
 }
 
