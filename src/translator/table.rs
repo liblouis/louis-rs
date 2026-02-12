@@ -50,6 +50,7 @@ impl TableContext {
         let mut character_classes = CharacterClasses::default();
         let mut dots_classes = CharacterClasses::default();
         let mut swap_classes = SwapClasses::default();
+
         for rule in rules {
             match &rule.rule {
                 Rule::Space {
@@ -118,6 +119,18 @@ impl TableContext {
                     character_definitions.insert(*character, &dots.to_string());
                     character_classes.insert(CharacterClass::Math, *character);
                     dots_classes.insert_dots(CharacterClass::Math, dots);
+                }
+		Rule::Hyphen { character, dots, .. } => {
+                    character_definitions.insert(*character, &dots.to_string());
+		    // FIXME: In what character class is the hyphen (if any)?
+                    character_classes.insert(CharacterClass::Punctuation, *character);
+                    dots_classes.insert_dots(CharacterClass::Punctuation, dots);
+                }
+		Rule::Decpoint { character, dots }  => {
+                    character_definitions.insert(*character, &dots.to_string());
+		    // FIXME: In what character class is the decimal point (if any)?
+                    character_classes.insert(CharacterClass::Punctuation, *character);
+                    dots_classes.insert_dots(CharacterClass::Punctuation, dots);
                 }
                 _ => (),
             }

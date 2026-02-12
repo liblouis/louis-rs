@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Implement (at least partly) the `largesign` opcode.
+- Implement the basic behaviour of the `decpoint` and `hyphen` opcode.
 
 ### Changed
 - Change the style of the trace to be hopefully more friendly to
