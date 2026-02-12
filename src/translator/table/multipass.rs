@@ -78,7 +78,7 @@ impl MultipassTable {
     fn translation_candidates(
         &self,
         input: &str,
-        prev: Option<char>,
+        _prev: Option<char>,
         env: &Environment,
     ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
         self.patterns

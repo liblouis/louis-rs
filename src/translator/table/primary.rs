@@ -124,7 +124,7 @@ impl PrimaryTable {
     pub fn compile(
         rules: &[AnchoredRule],
         direction: Direction,
-        stage: TranslationStage,
+        _stage: TranslationStage,
         ctx: &TableContext,
     ) -> Result<Self, TranslationError> {
         let mut builder = PrimaryTableBuilder::new();
@@ -261,11 +261,7 @@ impl PrimaryTable {
                         .nocontract_indicator
                         .nocontractsign(&dots.to_string(), rule);
                 }
-                Rule::Base {
-                    derived,
-                    base,
-                    name,
-                } => {
+                Rule::Base { derived, base, .. } => {
                     if let Some(translation) = ctx.character_definitions().get(base).cloned() {
                         builder.trie.insert_char(
                             *derived,
