@@ -120,15 +120,17 @@ impl TableContext {
                     character_classes.insert(CharacterClass::Math, *character);
                     dots_classes.insert_dots(CharacterClass::Math, dots);
                 }
-		Rule::Hyphen { character, dots, .. } => {
+                Rule::Hyphen {
+                    character, dots, ..
+                } => {
                     character_definitions.insert(*character, &dots.to_string());
-		    // FIXME: In what character class is the hyphen (if any)?
+                    // FIXME: In what character class is the hyphen (if any)?
                     character_classes.insert(CharacterClass::Punctuation, *character);
                     dots_classes.insert_dots(CharacterClass::Punctuation, dots);
                 }
-		Rule::Decpoint { character, dots }  => {
+                Rule::Decpoint { character, dots } => {
                     character_definitions.insert(*character, &dots.to_string());
-		    // FIXME: In what character class is the decimal point (if any)?
+                    // FIXME: In what character class is the decimal point (if any)?
                     character_classes.insert(CharacterClass::Punctuation, *character);
                     dots_classes.insert_dots(CharacterClass::Punctuation, dots);
                 }

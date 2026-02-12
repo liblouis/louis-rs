@@ -129,8 +129,8 @@ impl PrimaryTable {
     ) -> Result<Self, TranslationError> {
         let mut builder = PrimaryTableBuilder::new();
 
-	// decpoint and hyphen take precedence over other character definition rules, so insert them
-	// first
+        // decpoint and hyphen take precedence over other character definition rules, so insert them
+        // first
         for rule in rules {
             match &rule.rule {
                 Rule::Decpoint {
@@ -143,9 +143,9 @@ impl PrimaryTable {
                 } => {
                     builder.insert_character(*character, &dots.to_string(), direction, rule);
                 }
-		_ => ()
-	    }
-	}
+                _ => (),
+            }
+        }
         for rule in rules {
             match &rule.rule {
                 Rule::Undefined { dots } => {
@@ -302,7 +302,7 @@ impl PrimaryTable {
                         rule,
                     );
                 }
-		Rule::Largesign { chars, dots } => {
+                Rule::Largesign { chars, dots } => {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots.to_string(),
@@ -313,7 +313,7 @@ impl PrimaryTable {
                         TranslationStage::Main,
                         rule,
                     );
-		}
+                }
                 Rule::Word { chars, dots, .. } => {
                     let dots = ctx
                         .character_definitions()

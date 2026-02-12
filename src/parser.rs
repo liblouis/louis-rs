@@ -876,8 +876,12 @@ impl std::fmt::Display for Rule {
             Rule::Pass4 { test, action, .. } => write!(f, "pass4 {} {}", test, action),
             Rule::Attribute { name, chars } => write!(f, "attribute {} {}", name, chars),
             Rule::Literal { chars } => write!(f, "literal {}", chars),
-	    Rule::Decpoint { character, dots, .. }=> write!(f, "decpoint {} {}", character, dots),
-	    Rule::Hyphen { character, dots, .. }=> write!(f, "hyphen {} {}", character, dots),
+            Rule::Decpoint {
+                character, dots, ..
+            } => write!(f, "decpoint {} {}", character, dots),
+            Rule::Hyphen {
+                character, dots, ..
+            } => write!(f, "hyphen {} {}", character, dots),
             Rule::Match {
                 pre,
                 chars,
@@ -1967,7 +1971,7 @@ impl<'a> RuleParser<'a> {
             Opcode::Decpoint => {
                 fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Decpoint {
-		    character: self.one_char()?,
+                    character: self.one_char()?,
 
                     dots: self.explicit_dots()?,
                 }
@@ -1975,7 +1979,7 @@ impl<'a> RuleParser<'a> {
             Opcode::Hyphen => {
                 fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Hyphen {
-		    character: self.one_char()?,
+                    character: self.one_char()?,
                     dots: self.explicit_dots()?,
                     constraints,
                 }
