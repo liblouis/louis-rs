@@ -14,7 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - Change the style of the trace to be hopefully more friendly to
-  braille readers
+  braille readers.
+
+### Fixed
+- Make sure the matching of word and always rules is case insensitive
+  (and gets precedence).
 
 ## [0.2.7] - 2026-02-10
 

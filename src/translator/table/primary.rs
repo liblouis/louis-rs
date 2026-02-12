@@ -1294,4 +1294,26 @@ mod tests {
         assert_eq!(table.translate("aa;aa"), "⠁⠁⠸⠁⠁");
         assert_eq!(table.translate("aa:aa;aa"), "⠁⠁⠇⠄⠄⠸⠁⠁");
     }
+
+    #[test]
+    fn always_with_uppercase() {
+        let rules = [
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 12"),
+            parse_rule("lowercase c 14"),
+            parse_rule("base uppercase A a"),
+            parse_rule("base uppercase B b"),
+            parse_rule("base uppercase C c"),
+            parse_rule("capsletter 46"),
+            parse_rule("begcapsword 6-6"),
+            parse_rule("always abc 78"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+            .unwrap();
+        assert_eq!(table.translate("abc"), "⣀");
+        assert_eq!(table.translate("Abc"), "⠨⣀");
+        assert_eq!(table.translate("ABC"), "⠠⠠⣀");
+    }
 }
