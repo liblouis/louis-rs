@@ -241,7 +241,7 @@ impl Trie {
         let c = chars.next();
         if let Some(c) = c {
             let bytes = c.len_utf8();
-	    if let Some(node) = node.char_case_insensitive_transition(c) {
+            if let Some(node) = node.char_case_insensitive_transition(c) {
                 matching_rules.extend(self.find_translations_from_node(
                     &input[bytes..],
                     Some(c),

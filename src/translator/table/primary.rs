@@ -1311,7 +1311,7 @@ mod tests {
         let context = TableContext::compile(&rules).unwrap();
         let table =
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
-            .unwrap();
+                .unwrap();
         assert_eq!(table.translate("abc"), "⣀");
         assert_eq!(table.translate("Abc"), "⠨⣀");
         assert_eq!(table.translate("ABC"), "⠠⠠⣀");
