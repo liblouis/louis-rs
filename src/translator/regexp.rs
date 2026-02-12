@@ -60,9 +60,13 @@ impl Regexp {
         match self {
             Regexp::Literal(_) => todo!(),
             Regexp::Concat(left, right) => {
+                // FIXME: Unfortunatelly this is wrong: !(e1e2) is not the same as (!e1!e2)
                 Regexp::Concat(Box::new(left.negate()), Box::new(right.negate()))
             }
             Regexp::Either(left, right) => {
+                // FIXME: Unfortunatelly this is wrong as well: !(e1|e2) is not the same as
+                // (!e1|!e2). The following would be true: !(e1|e2) ≡ (!e1&!e2), but alas we do not
+                // have &
                 Regexp::Either(Box::new(left.negate()), Box::new(right.negate()))
             }
             Regexp::Optional(regexp) => Regexp::Optional(Box::new(regexp.negate())),
