@@ -29,6 +29,12 @@ use tabled::{
 };
 use yaml::YAMLParser;
 
+#[derive(Debug, Clone, clap::ValueEnum)]
+enum TraceStyle {
+    Blank,
+    Table,
+}
+
 /// The commands available in the command line tool.
 #[derive(Debug, Subcommand)]
 enum Commands {
@@ -66,6 +72,8 @@ enum Commands {
         /// Direction of translation
         #[arg(value_enum, short, long, default_value_t=Direction::Forward)]
         direction: Direction,
+        #[arg(value_enum, short, long, default_value_t=TraceStyle::Table)]
+        style: TraceStyle,
     },
     /// Test braille translations from given YAML file(s).
     Check {
@@ -141,7 +149,7 @@ impl Trace {
     }
 }
 
-fn print_trace(all_translations: &Vec<Vec<ResolvedTranslation>>) {
+fn print_trace(all_translations: &Vec<Vec<ResolvedTranslation>>, style: &TraceStyle) {
     let mut traces: Vec<Trace> = Vec::new();
     for (id, translation) in all_translations
         .iter()
@@ -158,19 +166,28 @@ fn print_trace(all_translations: &Vec<Vec<ResolvedTranslation>>) {
             stage: translation.stage(),
         });
     }
-    let mut table = Table::new(traces);
-    table.with(Style::sharp());
-    println!("{}", table);
+    match style {
+        TraceStyle::Blank => {
+            let mut table = Table::new(traces);
+            table.with(Style::blank());
+            println!("{}", table);
+        }
+        TraceStyle::Table => {
+            let mut table = Table::new(traces);
+            table.with(Style::sharp());
+            println!("{}", table);
+        }
+    }
 }
 
-fn trace(table: &Path, direction: Direction, input: &str) {
+fn trace(table: &Path, direction: Direction, input: &str, style: &TraceStyle) {
     let rules = parser::table_expanded(table);
     match rules {
         Ok(rules) => {
             match TranslationPipeline::compile(&rules, direction) {
                 Ok(table) => {
                     println!("{}", table.translate(input));
-                    print_trace(&table.trace(input));
+                    print_trace(&table.trace(input), style);
                 }
                 Err(e) => eprintln!("Could not compile table: {:?}", e),
             };
@@ -384,9 +401,10 @@ fn main() {
             table,
             input,
             direction,
+            style,
         } => match input {
             Some(input) => {
-                trace(&table, direction, &input);
+                trace(&table, direction, &input, &style);
             }
             None => {
                 let rules = parser::table_expanded(&table);
@@ -394,7 +412,7 @@ fn main() {
                     Ok(rules) => match TranslationPipeline::compile(&rules, direction) {
                         Ok(table) => repl(Box::new(move |input| {
                             println!("{}", table.translate(&input));
-                            print_trace(&table.trace(&input));
+                            print_trace(&table.trace(&input), &style);
                         })),
                         Err(e) => eprintln!("Could not compile table: {:?}", e),
                     },
