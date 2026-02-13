@@ -4,10 +4,7 @@ use hyphenation::{Hyphenator, Load, Standard};
 
 use crate::{
     Direction,
-    parser::{
-        AnchoredRule, Braille, CharacterClass, CharacterClasses, HasNocross, HasPrecedence,
-        fallback,
-    },
+    parser::{AnchoredRule, Braille, CharacterClass, HasNocross, HasPrecedence, fallback},
     translator::{
         CharacterDefinition, ResolvedTranslation, Rule, TranslationError, TranslationStage,
         context_pattern::{ContextPatterns, ContextPatternsBuilder},
@@ -24,7 +21,6 @@ use crate::{
 pub struct PrimaryTable {
     undefined: Option<String>,
     character_definitions: CharacterDefinition,
-    character_classes: CharacterClasses,
     /// A prefix tree that contains all the translation rules and their [`ResolvedTranslations`](ResolvedTranslation)
     trie: Trie,
     match_patterns: MatchPatterns,
@@ -104,7 +100,6 @@ impl PrimaryTableBuilder {
             direction,
             stage: TranslationStage::Main,
             character_definitions: ctx.character_definitions().clone(),
-            character_classes: ctx.character_classes().clone(),
             trie: self.trie.with_context(ctx.character_classes.clone()),
             nocross_trie: self
                 .nocross_trie
