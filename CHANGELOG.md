@@ -13,8 +13,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Implement the basic behaviour of the `decpoint` and `hyphen` opcode.
 
 ### Changed
-- Change the style of the trace to be hopefully more friendly to
-  braille readers.
 
 ### Fixed
 - Make sure the matching of word and always rules is case insensitive

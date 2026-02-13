@@ -146,10 +146,10 @@ fn print_trace(all_translations: &Vec<Vec<ResolvedTranslation>>) {
         }
         if !traces.is_empty() {
             let mut table = Table::new(traces);
-            table.with(Style::psql());
             println!("{}", table);
         }
     }
+    table.with(Style::sharp());
 }
 
 fn trace(table: &Path, direction: Direction, input: &str) {
@@ -329,9 +329,9 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool) {
         total.yaml_file = "Total".to_string();
         yaml_results.push(total);
         let mut table = Table::new(yaml_results);
-        table.with(Style::psql());
+        table.with(Style::sharp());
         // add a special separator above the Total row
-        table.modify(Rows::last(), Border::inherit(Style::psql()));
+        table.modify(Rows::last(), Border::inherit(Style::sharp()));
         println!("{}", table);
     }
 }
