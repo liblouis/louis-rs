@@ -38,8 +38,10 @@ enum Commands {
         /// is opened and each line you enter is parsed.
         table: Option<PathBuf>,
     },
-    /// Translate `input` using the specified braille `table`. If `direction` is not specified the
-    /// `input` is translated to braille, otherwise the `input` is translated from braille to text.
+    /// Translate `input` using the specified braille `table`.
+    ///
+    /// If `direction` is not specified the `input` is translated to braille, otherwise the `input`
+    /// is translated from braille to text.
     Translate {
         /// Braille table to use for the translation
         table: PathBuf,
@@ -49,9 +51,21 @@ enum Commands {
         /// Direction of translation
         #[arg(value_enum, short, long, default_value_t=Direction::Forward)]
         direction: Direction,
-        /// List all the applied translation rules that were used for the translation
-        #[arg(short, long)]
-        tracing: bool,
+    },
+    /// List all the rules that were applied for the translation of `input` using the specified
+    /// braille `table`.
+    ///
+    /// If `direction` is not specified the `input` is translated to braille, otherwise the `input`
+    /// is translated from braille to text.
+    Trace {
+        /// Braille table to use for the translation
+        table: PathBuf,
+        /// String to translate. If no input is specified, a REPL is
+        /// opened and each line you enter is translated.
+        input: Option<String>,
+        /// Direction of translation
+        #[arg(value_enum, short, long, default_value_t=Direction::Forward)]
+        direction: Direction,
     },
     /// Test braille translations from given YAML file(s).
     Check {
@@ -347,21 +361,40 @@ fn main() {
             table,
             input,
             direction,
-            tracing,
         } => match input {
-            Some(input) => match tracing {
-                true => trace(&table, direction, &input),
-                false => translate(&table, direction, &input),
-            },
+            Some(input) => {
+                translate(&table, direction, &input);
+            }
             None => {
                 let rules = parser::table_expanded(&table);
                 match rules {
                     Ok(rules) => match TranslationPipeline::compile(&rules, direction) {
                         Ok(table) => repl(Box::new(move |input| {
                             println!("{}", table.translate(&input));
-                            if tracing {
-                                print_trace(&table.trace(&input));
-                            }
+                        })),
+                        Err(e) => eprintln!("Could not compile table: {:?}", e),
+                    },
+                    Err(errors) => {
+                        print_errors(errors);
+                    }
+                }
+            }
+        },
+        Commands::Trace {
+            table,
+            input,
+            direction,
+        } => match input {
+            Some(input) => {
+                trace(&table, direction, &input);
+            }
+            None => {
+                let rules = parser::table_expanded(&table);
+                match rules {
+                    Ok(rules) => match TranslationPipeline::compile(&rules, direction) {
+                        Ok(table) => repl(Box::new(move |input| {
+                            println!("{}", table.translate(&input));
+                            print_trace(&table.trace(&input));
                         })),
                         Err(e) => eprintln!("Could not compile table: {:?}", e),
                     },

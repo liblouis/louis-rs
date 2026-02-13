@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - Implement (at least partly) the `largesign` opcode.
 - Implement the basic behaviour of the `decpoint` and `hyphen` opcode.
+- Add `trace` as a separate command (instead of `translate --tracing`)
 
 ### Changed
 - When showing a trace of a translation show all rules in one table,
