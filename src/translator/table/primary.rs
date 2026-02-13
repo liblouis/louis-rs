@@ -1,4 +1,8 @@
-use std::{collections::HashSet, fs::File, io};
+use std::{
+    collections::{HashMap, HashSet},
+    fs::File,
+    io,
+};
 
 use hyphenation::{Hyphenator, Load, Standard};
 
@@ -18,10 +22,40 @@ use crate::{
 };
 
 #[derive(Debug)]
+/// Character Translations map characters to a [`ResolvedTranslation`]. This cannot be done using
+/// the [`Trie`] as the trie provides a case insensitive mapping only. The [`CharacterTranslation`]
+/// on the other hand is case sensitive
+struct CharacterTranslation(HashMap<char, ResolvedTranslation>);
+impl CharacterTranslation {
+    fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    fn insert(&mut self, from: char, translation: ResolvedTranslation) {
+        if cfg!(feature = "backwards_compatibility") {
+            // first rule wins
+            self.0.entry(from).or_insert(translation);
+        } else {
+            // last rule wins
+            self.0.insert(from, translation);
+        }
+    }
+
+    fn get(&self, from: &char) -> Option<&ResolvedTranslation> {
+        self.0.get(from)
+    }
+}
+
+#[derive(Debug)]
 pub struct PrimaryTable {
     undefined: Option<String>,
-    character_definitions: CharacterDefinition,
-    /// A prefix tree that contains all the translation rules and their [`ResolvedTranslations`](ResolvedTranslation)
+    /// Fallback character definitions that are used as a last resort to translate unknown
+    /// characters to their hex representation
+    fallback_definitions: CharacterDefinition,
+    /// A mapping of characters and their respective [`ResolvedTranslation`]
+    character_translations: CharacterTranslation,
+    /// A prefix tree that contains all the translation rules and their
+    /// [`ResolvedTranslations`](ResolvedTranslation)
     trie: Trie,
     match_patterns: MatchPatterns,
     context_patterns: ContextPatterns,
@@ -32,7 +66,6 @@ pub struct PrimaryTable {
     uppercase_indicator: uppercase::Indicator,
     lettersign_indicator: lettersign::Indicator,
     nocontract_indicator: nocontract::Indicator,
-    stage: TranslationStage,
     direction: Direction,
 }
 
@@ -40,6 +73,7 @@ pub struct PrimaryTable {
 #[derive(Debug)]
 struct PrimaryTableBuilder {
     undefined: Option<String>,
+    character_translations: CharacterTranslation,
     trie: Trie,
     nocross_trie: Trie,
     hyphenator: Option<Standard>,
@@ -55,6 +89,7 @@ impl PrimaryTableBuilder {
     fn new() -> Self {
         Self {
             undefined: None,
+            character_translations: CharacterTranslation::new(),
             trie: Trie::new(),
             nocross_trie: Trie::new(),
             hyphenator: None,
@@ -76,30 +111,41 @@ impl PrimaryTableBuilder {
     }
 
     fn insert_character(&mut self, c: char, dots: &str, direction: Direction, rule: &AnchoredRule) {
-        self.trie.insert_char(
-            c,
-            dots,
-            direction,
-            rule.precedence(),
-            TranslationStage::Main,
-            rule,
-        );
-        self.nocross_trie.insert_char(
-            c,
-            dots,
-            direction,
-            rule.precedence(),
-            TranslationStage::Main,
-            rule,
-        );
+        match direction {
+            Direction::Forward => {
+                // Forward translation is case sensitive, so we cannot solely rely on the trie which
+                // is case insensitive. We also need to keep the rules in a case sensitive storage
+                let translation = ResolvedTranslation::new(
+                    c.to_string().as_str(),
+                    dots,
+                    1,
+                    TranslationStage::Main,
+                    rule.clone(),
+                );
+                self.character_translations.insert(c, translation);
+            }
+            Direction::Backward => {
+                // Backward translation is not case sensitive, so we do not need a separate case
+                // sensitive storage for translations. We can handle them like other rules via the
+                // trie
+                self.trie.insert_char(
+                    c,
+                    dots,
+                    direction,
+                    rule.precedence(),
+                    TranslationStage::Main,
+                    rule,
+                )
+            }
+        }
     }
 
     fn build(self, direction: Direction, ctx: &TableContext) -> PrimaryTable {
         PrimaryTable {
             undefined: self.undefined,
+            character_translations: self.character_translations,
             direction,
-            stage: TranslationStage::Main,
-            character_definitions: ctx.character_definitions().clone(),
+            fallback_definitions: ctx.character_definitions().clone(),
             trie: self.trie.with_context(ctx.character_classes.clone()),
             nocross_trie: self
                 .nocross_trie
@@ -258,14 +304,7 @@ impl PrimaryTable {
                 }
                 Rule::Base { derived, base, .. } => {
                     if let Some(translation) = ctx.character_definitions().get(base).cloned() {
-                        builder.trie.insert_char(
-                            *derived,
-                            &translation,
-                            direction,
-                            rule.precedence(),
-                            TranslationStage::Main,
-                            rule,
-                        );
+                        builder.insert_character(*derived, &translation, direction, rule);
                     } else {
                         // hm, there is no character definition for the base character.
                         // If we are backwards compatible ignore the problem, otherwise
@@ -765,7 +804,10 @@ impl PrimaryTable {
             } else if let Some(next_char) = chars.next() {
                 prev = Some(next_char);
                 // no translation rule found
-                if let Some(ref replacement) = self.undefined {
+                if let Some(translation) = self.character_translations.get(&next_char) {
+                    translations.push(translation.clone());
+                    delayed_translations = self.update_offsets(delayed_translations, 1);
+                } else if let Some(ref replacement) = self.undefined {
                     // there is a rule for undefined characters
                     let translation = ResolvedTranslation::new(
                         &next_char.to_string(),
@@ -803,7 +845,7 @@ impl PrimaryTable {
             .replace(['{', '}'], "") // drop the curly braces
             .chars()
             .map(|c| {
-                if let Some(t) = self.character_definitions.get(&c) {
+                if let Some(t) = self.fallback_definitions.get(&c) {
                     t.clone()
                 } else {
                     fallback(c).to_string()

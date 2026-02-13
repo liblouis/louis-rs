@@ -44,21 +44,16 @@ struct TrieNode {
 
 impl TrieNode {
     fn char_transition(&self, c: char) -> Option<&TrieNode> {
-        self.transitions.get(&Transition::Character(c))
-    }
-    fn char_case_insensitive_transition(&self, c: char) -> Option<&TrieNode> {
-        // if the character is already lowercase we can ignore it
-        if c.is_lowercase() {
-            return None;
-        };
         // FIXME: we ignore characters that do not map to a single
         // character lowercase character
         if c.to_lowercase().count() != 1 {
             return None;
         };
+        // character transitions are always case insensitive
         let lowercase = c.to_lowercase().next().unwrap();
-        self.char_transition(lowercase)
+        self.transitions.get(&Transition::Character(lowercase))
     }
+
     fn any_transition(&self) -> Option<&TrieNode> {
         self.transitions.get(&Transition::Any)
     }
@@ -241,14 +236,7 @@ impl Trie {
         let c = chars.next();
         if let Some(c) = c {
             let bytes = c.len_utf8();
-            if let Some(node) = node.char_case_insensitive_transition(c) {
-                matching_rules.extend(self.find_translations_from_node(
-                    &input[bytes..],
-                    Some(c),
-                    node,
-                    match_length + 1,
-                ));
-            } else if let Some(node) = node.char_transition(c) {
+            if let Some(node) = node.char_transition(c) {
                 matching_rules.extend(self.find_translations_from_node(
                     &input[bytes..],
                     Some(c),
