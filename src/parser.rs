@@ -876,6 +876,8 @@ impl std::fmt::Display for Rule {
             Rule::Pass4 { test, action, .. } => write!(f, "pass4 {} {}", test, action),
             Rule::Attribute { name, chars } => write!(f, "attribute {} {}", name, chars),
             Rule::Literal { chars } => write!(f, "literal {}", chars),
+            Rule::Prepunc { chars, dots, .. } => write!(f, "prepunc {} {}", chars, dots),
+            Rule::Postpunc { chars, dots, .. } => write!(f, "postpunc {} {}", chars, dots),
             Rule::Decpoint {
                 character, dots, ..
             } => write!(f, "decpoint {} {}", character, dots),
