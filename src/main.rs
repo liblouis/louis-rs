@@ -128,28 +128,25 @@ impl Trace {
 }
 
 fn print_trace(all_translations: &Vec<Vec<ResolvedTranslation>>) {
-    for translations in all_translations {
-        let mut traces: Vec<Trace> = Vec::new();
-        for (id, translation) in translations
-            .iter()
-            // Only show translations witout an originating rule for the main translation stage
-            .filter(|t| t.stage() == TranslationStage::Main || t.origin().is_some())
-            .enumerate()
-        {
-            traces.push(Trace {
-                sequence_id: id + 1,
-                rule: translation.origin(),
-                from: translation.input(),
-                to: translation.output(),
-                stage: translation.stage(),
-            });
-        }
-        if !traces.is_empty() {
-            let mut table = Table::new(traces);
-            println!("{}", table);
-        }
+    let mut traces: Vec<Trace> = Vec::new();
+    for (id, translation) in all_translations
+        .iter()
+        .flatten()
+        // Only show translations witout an originating rule for the main translation stage
+        .filter(|t| t.stage() == TranslationStage::Main || t.origin().is_some())
+        .enumerate()
+    {
+        traces.push(Trace {
+            sequence_id: id + 1,
+            rule: translation.origin(),
+            from: translation.input(),
+            to: translation.output(),
+            stage: translation.stage(),
+        });
     }
+    let mut table = Table::new(traces);
     table.with(Style::sharp());
+    println!("{}", table);
 }
 
 fn trace(table: &Path, direction: Direction, input: &str) {

@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Implement the basic behaviour of the `decpoint` and `hyphen` opcode.
 
 ### Changed
+- When showing a trace of a translation show all rules in one table,
+  instead a table for each stage.
 
 ### Fixed
 - Make sure the matching of word and always rules is case insensitive
