@@ -1,4 +1,4 @@
-* Todo [11/21]
+* Todo [11/22]
 - [ ] Move the display tables into the Pipeline
 - [ ] implement "libhyphen"
 - [ ] guard against "()+" regexp?
@@ -22,6 +22,8 @@
   - When testing the YAML files the display tables are used.
   - However normal translation has currently no way to specify a
     display table
+- [ ] The boundary functions (~word_start~, etc) only work in forward
+  translation
 - [X] implement regexp negation
 - [X] Parse with context
   - currently tables are parsed line by line. Opcodes have no idea
