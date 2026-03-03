@@ -254,7 +254,7 @@ impl ExpectedFailure {
     }
 }
 
-/// A test to verify a braille translation.$
+/// A test to verify a braille translation.
 #[derive(Debug, Clone)]
 pub struct Test {
     /// Input for the test
