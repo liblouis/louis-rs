@@ -323,6 +323,7 @@ impl YAMLParser<'_> {
         // let expected = self.scalar()?;
         let mut xfail = ExpectedFailure::Simple(false);
         let mut typeform = HashMap::new();
+        let mut expected_typeform = HashMap::new();
         let mut input_pos: Vec<u16> = Vec::new();
         let mut output_pos: Vec<u16> = Vec::new();
         let mut cursor_pos = None;
@@ -339,6 +340,9 @@ impl YAMLParser<'_> {
                     }
                     "typeform" => {
                         typeform = self.typeform_value()?;
+                    }
+                    "expected_typeform" => {
+                        expected_typeform = self.typeform_value()?;
                     }
                     "inputPos" => {
                         input_pos = self.pos_values()?;
@@ -374,6 +378,7 @@ impl YAMLParser<'_> {
             expected,
             xfail,
             typeform,
+	    expected_typeform,
             input_pos,
             output_pos,
             cursor_pos,
