@@ -13,7 +13,7 @@ use crate::{
         CharacterDefinition, ResolvedTranslation, Rule, TranslationError, TranslationStage,
         context_pattern::{ContextPatterns, ContextPatternsBuilder},
         effect::Environment,
-        indication::{lettersign, nocontract, numeric, uppercase},
+        indication::{Indicator, Indicators, lettersign, nocontract, numeric, uppercase},
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
         table::TableContext,
         translation::TranslationSubset,
@@ -62,10 +62,7 @@ pub struct PrimaryTable {
     /// All the nocross translation rules are stored in a separate trie
     nocross_trie: Trie,
     hyphenator: Option<Standard>,
-    numeric_indicator: numeric::Indicator,
-    uppercase_indicator: uppercase::Indicator,
-    lettersign_indicator: lettersign::Indicator,
-    nocontract_indicator: nocontract::Indicator,
+    indicators: Indicators,
     direction: Direction,
 }
 
@@ -153,10 +150,12 @@ impl PrimaryTableBuilder {
             hyphenator: self.hyphenator,
             match_patterns: self.match_patterns.build(),
             context_patterns: self.context_patterns.build(),
-            numeric_indicator: self.numeric_indicator.build(),
-            uppercase_indicator: self.uppercase_indicator.build(),
-            lettersign_indicator: self.lettersign_indicator.build(),
-            nocontract_indicator: self.nocontract_indicator.build(),
+            indicators: Indicators::new(vec![
+                Indicator::Numeric(self.numeric_indicator.build()),
+                Indicator::LetterSign(self.lettersign_indicator.build()),
+                Indicator::Uppercase(self.uppercase_indicator.build()),
+                Indicator::NoContract(self.nocontract_indicator.build()),
+            ]),
         }
     }
 }
@@ -709,26 +708,15 @@ impl PrimaryTable {
         let mut prev: Option<char> = None;
         let mut seen: HashSet<TranslationSubset> = HashSet::default();
 
-        // FIXME: the following seems weird, but the indicator is a mutable state machine. Since
-        // self (the translation table) is immutable we build a mutable copy of the indicator for
+        // FIXME: the following seems weird, but the indicators are mutable state machines. Since
+        // self (the translation table) is immutable we build a mutable copy of the indicators for
         // each translation
-        let mut numeric_indicator = self.numeric_indicator.clone();
-        let mut uppercase_indicator = self.uppercase_indicator.clone();
+        let mut indicators = self.indicators.clone();
 
         loop {
-            // Check if there is a need for an indication
-            if let Some(translation) = self.lettersign_indicator.next(chars.as_str(), prev) {
-                translations.push(translation);
-            }
-            if let Some(translation) = self.nocontract_indicator.next(chars.as_str(), prev) {
-                translations.push(translation);
-            }
-            if let Some(translation) = numeric_indicator.next(chars.as_str()) {
-                translations.push(translation);
-            }
-            if let Some(translation) = uppercase_indicator.next(chars.as_str()) {
-                translations.push(translation);
-            }
+            // Check for indications
+            translations.extend(indicators.next(chars.as_str(), prev));
+
             // First check for nocross candidates
             let nocross_candidate = self
                 .nocross_candidates(chars.as_str(), prev)
