@@ -326,7 +326,7 @@ impl Test {
             expected,
             xfail,
             typeform,
-	    expected_typeform,
+            expected_typeform,
             input_pos,
             output_pos,
             cursor_pos,
