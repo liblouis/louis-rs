@@ -46,8 +46,12 @@ impl IndicatorBuilder {
         })
     }
 
-    pub fn build(self) -> Indicator {
-        self.0
+    pub fn build(self) -> Option<Indicator> {
+        if self.0.is_indicating() {
+            Some(self.0)
+        } else {
+            None
+        }
     }
 
     pub fn capsletter(&mut self, s: &str, origin: &AnchoredRule) {
@@ -198,7 +202,7 @@ mod tests {
         builder.capsletter("⠇", &rule);
         builder.uppercase_characters(HashSet::from(['A', 'B', 'C']));
         builder.letter_characters(HashSet::from(['a', 'b', 'c']));
-        let mut indicator = builder.build();
+        let mut indicator = builder.build().unwrap();
         assert_eq!(
             indicator.next("Abc ".into()),
             Some(ResolvedTranslation::new(
@@ -226,7 +230,7 @@ mod tests {
         builder.endcapsword("⠠", &endcapsword_rule);
         builder.uppercase_characters(HashSet::from(['A', 'B', 'C']));
         builder.letter_characters(HashSet::from(['a', 'b', 'c']));
-        let mut indicator = builder.build();
+        let mut indicator = builder.build().unwrap();
         assert_eq!(
             indicator.next("ABCa".into()),
             Some(ResolvedTranslation::new(

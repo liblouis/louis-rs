@@ -35,26 +35,33 @@ impl IndicatorBuilder {
     }
 
     /// Build an [`Indicator`]
-    pub fn build(self) -> Indicator {
-        let mut trie = Trie::new();
+    pub fn build(self) -> Option<Indicator> {
         if !self.contractions.is_empty() && self.lettersign.is_some() {
-            warn!("Table contains contractions but no letsign");
-        }
-        if let Some((lettersign, origin)) = self.lettersign {
-            for (contraction, _origin) in self.contractions {
-                trie.insert(
-                    &contraction,
-                    &lettersign,
-                    Boundary::Word,
-                    Boundary::Word,
-                    Direction::Forward,
-                    Precedence::Default,
-                    TranslationStage::Main,
-                    &origin,
-                );
+            let mut trie = Trie::new();
+            if let Some((lettersign, origin)) = self.lettersign {
+                for (contraction, _origin) in self.contractions {
+                    trie.insert(
+                        &contraction,
+                        &lettersign,
+                        Boundary::Word,
+                        Boundary::Word,
+                        Direction::Forward,
+                        Precedence::Default,
+                        TranslationStage::Main,
+                        &origin,
+                    );
+                }
             }
+            Some(Indicator { contractions: trie })
+        } else if !self.contractions.is_empty() && self.lettersign.is_none() {
+            warn!("Table contains contractions but no letsign");
+            None
+        } else if self.contractions.is_empty() && self.lettersign.is_some() {
+            warn!("Table contains letsign but no contractions");
+            None
+        } else {
+            None
         }
-        Indicator { contractions: trie }
     }
 
     pub fn letsign(&mut self, s: &str, origin: &AnchoredRule) {
@@ -101,7 +108,7 @@ mod tests {
         builder.letsign("⠠", &rule("letsign 6"));
         builder.contraction("ab", &rule("contraction ab"));
         builder.contraction("cd", &rule("contraction cd"));
-        let indicator = builder.build();
+        let indicator = builder.build().unwrap();
         assert_eq!(indicator.next("aa".into(), None), None);
         assert_eq!(
             indicator.next("ab".into(), None),

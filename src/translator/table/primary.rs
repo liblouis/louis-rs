@@ -138,6 +138,15 @@ impl PrimaryTableBuilder {
     }
 
     fn build(self, direction: Direction, ctx: &TableContext) -> PrimaryTable {
+        let indicators = [
+            self.numeric_indicator.build().map(Indicator::Numeric),
+            self.lettersign_indicator.build().map(Indicator::LetterSign),
+            self.uppercase_indicator.build().map(Indicator::Uppercase),
+            self.nocontract_indicator.build().map(Indicator::NoContract),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
         PrimaryTable {
             undefined: self.undefined,
             character_translations: self.character_translations,
@@ -150,12 +159,7 @@ impl PrimaryTableBuilder {
             hyphenator: self.hyphenator,
             match_patterns: self.match_patterns.build(),
             context_patterns: self.context_patterns.build(),
-            indicators: Indicators::new(vec![
-                Indicator::Numeric(self.numeric_indicator.build()),
-                Indicator::LetterSign(self.lettersign_indicator.build()),
-                Indicator::Uppercase(self.uppercase_indicator.build()),
-                Indicator::NoContract(self.nocontract_indicator.build()),
-            ]),
+            indicators: Indicators::new(indicators),
         }
     }
 }

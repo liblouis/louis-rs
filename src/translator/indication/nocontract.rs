@@ -41,26 +41,33 @@ impl IndicatorBuilder {
     }
 
     /// Build an [`Indicator`]
-    pub fn build(self) -> Indicator {
-        let mut trie = Trie::new();
+    pub fn build(self) -> Option<Indicator> {
         if !self.contractions.is_empty() && self.nocontractsign.is_some() {
-            warn!("Table contains contractions but no nocontractionsign");
-        }
-        if let Some((nocontractsign, origin)) = self.nocontractsign {
-            for (contraction, _origin) in self.contractions {
-                trie.insert(
-                    &contraction,
-                    &nocontractsign,
-                    Boundary::Word,
-                    Boundary::Word,
-                    Direction::Forward,
-                    Precedence::Default,
-                    TranslationStage::Main,
-                    &origin,
-                );
+            let mut trie = Trie::new();
+            if let Some((nocontractsign, origin)) = self.nocontractsign {
+                for (contraction, _origin) in self.contractions {
+                    trie.insert(
+                        &contraction,
+                        &nocontractsign,
+                        Boundary::Word,
+                        Boundary::Word,
+                        Direction::Forward,
+                        Precedence::Default,
+                        TranslationStage::Main,
+                        &origin,
+                    );
+                }
             }
+            Some(Indicator { contractions: trie })
+        } else if !self.contractions.is_empty() && self.nocontractsign.is_none() {
+            warn!("Table contains contractions but no nocontractionsign");
+            None
+        } else if self.contractions.is_empty() && self.nocontractsign.is_some() {
+            warn!("Table contains nocontractionsign but no contractions");
+            None
+        } else {
+            None
         }
-        Indicator { contractions: trie }
     }
 
     pub fn nocontractsign(&mut self, s: &str, origin: &AnchoredRule) {
@@ -107,7 +114,7 @@ mod tests {
         builder.nocontractsign("⡀", &rule("nocontractsign 7"));
         builder.contraction("ab", &rule("contraction ab"));
         builder.contraction("cd", &rule("contraction cd"));
-        let indicator = builder.build();
+        let indicator = builder.build().unwrap();
         assert_eq!(indicator.next("aa".into(), None), None);
         assert_eq!(
             indicator.next("ab".into(), None),

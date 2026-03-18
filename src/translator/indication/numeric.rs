@@ -43,8 +43,12 @@ impl IndicatorBuilder {
         })
     }
 
-    pub fn build(self) -> Indicator {
-        self.0
+    pub fn build(self) -> Option<Indicator> {
+        if self.0.start_translation.is_some() && !self.0.numeric_chars.is_empty() {
+            Some(self.0)
+        } else {
+            None
+        }
     }
 
     pub fn numsign(&mut self, s: &str, origin: &AnchoredRule) {
@@ -163,7 +167,7 @@ mod tests {
         builder.numsign("⠼", &rule);
         builder.nonumsign("⠰", &rule);
         builder.numericnocontchars("abc");
-        let mut indicator = builder.build();
+        let mut indicator = builder.build().unwrap();
         assert_eq!(indicator.next("ab12 a".into()), None);
         assert_eq!(indicator.next("b12 a".into()), None);
         assert_eq!(
@@ -194,7 +198,7 @@ mod tests {
         builder.numsign("⠼", &numsign_rule);
         builder.nonumsign("⠰", &nonumsign_rule);
         builder.numericnocontchars("abc");
-        let mut indicator = builder.build();
+        let mut indicator = builder.build().unwrap();
         assert_eq!(indicator.next("ab12a".into()), None);
         assert_eq!(indicator.next("b12a".into()), None);
         assert_eq!(
