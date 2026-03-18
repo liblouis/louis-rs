@@ -15,7 +15,7 @@ use crate::{
 
 use super::ResolvedTranslation;
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Boundary {
     Word,
     NotWord,
@@ -28,7 +28,7 @@ pub enum Boundary {
     None,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 enum Transition {
     Character(char),
     Start(Boundary),
@@ -36,7 +36,7 @@ enum Transition {
     Any,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 struct TrieNode {
     translation: Option<ResolvedTranslation>,
     transitions: HashMap<Transition, TrieNode>,
@@ -94,7 +94,7 @@ impl TrieNode {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Trie {
     root: TrieNode,
     ctx: CharacterClasses,

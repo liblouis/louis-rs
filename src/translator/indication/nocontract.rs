@@ -72,7 +72,7 @@ impl IndicatorBuilder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Indicator {
     contractions: Trie,
 }
