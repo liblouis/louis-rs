@@ -6,10 +6,6 @@ use crate::{
     parser::{AnchoredRule, CharacterClasses, Direction, Precedence},
     translator::{
         TranslationStage,
-        boundaries::{
-            number_word, punctuation_end, punctuation_start, punctuation_word, word_end,
-            word_number, word_punctuation, word_start,
-        },
     },
 };
 
@@ -253,7 +249,7 @@ impl Trie {
             }
         }
         if let Some(node) = node.word_start_transition()
-            && word_start(&self.ctx, prev, c)
+            && self.ctx.word_start(prev, c)
         {
             matching_rules.extend(self.find_translations_from_node(
                 input,
@@ -263,7 +259,7 @@ impl Trie {
             ));
         }
         if let Some(node) = node.not_word_start_transition()
-            && !word_start(&self.ctx, prev, c)
+            && !self.ctx.word_start(prev, c)
         {
             matching_rules.extend(self.find_translations_from_node(
                 input,
@@ -273,7 +269,7 @@ impl Trie {
             ));
         }
         if let Some(node) = node.word_end_transition()
-            && word_end(&self.ctx, prev, c)
+            && self.ctx.word_end(prev, c)
         {
             matching_rules.extend(self.find_translations_from_node(
                 input,
@@ -283,7 +279,7 @@ impl Trie {
             ));
         }
         if let Some(node) = node.not_word_end_transition()
-            && !word_end(&self.ctx, prev, c)
+            && !self.ctx.word_end(prev, c)
         {
             matching_rules.extend(self.find_translations_from_node(
                 input,
@@ -293,7 +289,7 @@ impl Trie {
             ));
         }
         if let Some(node) = node.word_num_transition()
-            && word_number(&self.ctx, prev, c)
+            && self.ctx.word_number(prev, c)
         {
             matching_rules.extend(self.find_translations_from_node(
                 input,
@@ -303,7 +299,7 @@ impl Trie {
             ));
         }
         if let Some(node) = node.num_word_transition()
-            && number_word(&self.ctx, prev, c)
+            && self.ctx.number_word(prev, c)
         {
             matching_rules.extend(self.find_translations_from_node(
                 input,
@@ -313,7 +309,7 @@ impl Trie {
             ));
         }
         if let Some(node) = node.punctuation_start_transition()
-            && punctuation_start(&self.ctx, prev, c)
+            && self.ctx.punctuation_start(prev, c)
         {
             matching_rules.extend(self.find_translations_from_node(
                 input,
@@ -323,7 +319,7 @@ impl Trie {
             ));
         }
         if let Some(node) = node.punctuation_end_transition()
-            && punctuation_end(&self.ctx, prev, c)
+            && self.ctx.punctuation_end(prev, c)
         {
             matching_rules.extend(self.find_translations_from_node(
                 input,
@@ -333,7 +329,7 @@ impl Trie {
             ));
         }
         if let Some(node) = node.word_punc_transition()
-            && word_punctuation(&self.ctx, prev, c)
+            && self.ctx.word_punctuation(prev, c)
         {
             matching_rules.extend(self.find_translations_from_node(
                 input,
@@ -343,7 +339,7 @@ impl Trie {
             ));
         }
         if let Some(node) = node.punc_word_transition()
-            && punctuation_word(&self.ctx, prev, c)
+            && self.ctx.punctuation_word(prev, c)
         {
             matching_rules.extend(self.find_translations_from_node(
                 input,
