@@ -253,7 +253,7 @@ impl Trie {
             }
         }
         if let Some(node) = node.word_start_transition()
-            && word_start(prev, c)
+            && word_start(&self.ctx, prev, c)
         {
             matching_rules.extend(self.find_translations_from_node(
                 input,
@@ -263,7 +263,7 @@ impl Trie {
             ));
         }
         if let Some(node) = node.not_word_start_transition()
-            && !word_start(prev, c)
+            && !word_start(&self.ctx, prev, c)
         {
             matching_rules.extend(self.find_translations_from_node(
                 input,
@@ -273,7 +273,7 @@ impl Trie {
             ));
         }
         if let Some(node) = node.word_end_transition()
-            && word_end(prev, c)
+            && word_end(&self.ctx, prev, c)
         {
             matching_rules.extend(self.find_translations_from_node(
                 input,
@@ -283,7 +283,7 @@ impl Trie {
             ));
         }
         if let Some(node) = node.not_word_end_transition()
-            && !word_end(prev, c)
+            && !word_end(&self.ctx, prev, c)
         {
             matching_rules.extend(self.find_translations_from_node(
                 input,
@@ -293,7 +293,7 @@ impl Trie {
             ));
         }
         if let Some(node) = node.word_num_transition()
-            && word_number(prev, c)
+            && word_number(&self.ctx, prev, c)
         {
             matching_rules.extend(self.find_translations_from_node(
                 input,
@@ -303,7 +303,7 @@ impl Trie {
             ));
         }
         if let Some(node) = node.num_word_transition()
-            && number_word(prev, c)
+            && number_word(&self.ctx, prev, c)
         {
             matching_rules.extend(self.find_translations_from_node(
                 input,
@@ -499,7 +499,8 @@ mod tests {
 
     #[test]
     fn find_translations_with_boundaries() {
-        let mut trie = Trie::new();
+        let ctx = CharacterClasses::new(&[(CharacterClass::Letter, &['a', 'h'])]);
+        let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
         let a = ResolvedTranslation::new(
@@ -525,7 +526,12 @@ mod tests {
 
     #[test]
     fn find_translations_with_negative_boundary_after() {
-        let mut trie = Trie::new();
+        let ctx = CharacterClasses::new(&[
+            (CharacterClass::Letter, &['f', 'o', 'b', 'a', 'r']),
+            (CharacterClass::Space, &[' ']),
+            (CharacterClass::Punctuation, &['.']),
+        ]);
+        let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
         let foo = ResolvedTranslation::new(
@@ -553,7 +559,12 @@ mod tests {
 
     #[test]
     fn find_translations_with_negative_boundary_before() {
-        let mut trie = Trie::new();
+        let ctx = CharacterClasses::new(&[
+            (CharacterClass::Letter, &['f', 'o', 'c']),
+            (CharacterClass::Space, &[' ']),
+            (CharacterClass::Punctuation, &['.']),
+        ]);
+        let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
         let foo = ResolvedTranslation::new(
@@ -581,7 +592,12 @@ mod tests {
 
     #[test]
     fn find_translations_with_negative_boundaries() {
-        let mut trie = Trie::new();
+        let ctx = CharacterClasses::new(&[
+            (CharacterClass::Letter, &['f', 'o', 'b', 'a', 'r', 'c']),
+            (CharacterClass::Space, &[' ']),
+            (CharacterClass::Punctuation, &['.']),
+        ]);
+        let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
         let foo = ResolvedTranslation::new(
@@ -610,7 +626,13 @@ mod tests {
 
     #[test]
     fn find_translations_with_word_num_boundary() {
-        let mut trie = Trie::new();
+        let ctx = CharacterClasses::new(&[
+            (CharacterClass::Letter, &['a', 'c']),
+            (CharacterClass::Litdigit, &['1']),
+            (CharacterClass::Space, &[' ']),
+            (CharacterClass::Punctuation, &['.']),
+        ]);
+        let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
         let foo = ResolvedTranslation::new(
@@ -638,7 +660,13 @@ mod tests {
 
     #[test]
     fn find_translations_with_num_word_boundary() {
-        let mut trie = Trie::new();
+        let ctx = CharacterClasses::new(&[
+            (CharacterClass::Letter, &['s', 't', 'a']),
+            (CharacterClass::Litdigit, &['1']),
+            (CharacterClass::Space, &[' ']),
+            (CharacterClass::Punctuation, &['.']),
+        ]);
+        let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
         let foo = ResolvedTranslation::new(
@@ -668,8 +696,9 @@ mod tests {
     #[test]
     fn find_translations_with_word_punc_boundary() {
         let ctx = CharacterClasses::new(&[
-            (CharacterClass::Punctuation, &['(', ')']),
+            (CharacterClass::Punctuation, &['(', ')', '.']),
             (CharacterClass::Space, &[' ']),
+            (CharacterClass::Letter, &['a']),
         ]);
         let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();
@@ -700,8 +729,9 @@ mod tests {
     #[test]
     fn find_translations_with_punc_word_boundary() {
         let ctx = CharacterClasses::new(&[
-            (CharacterClass::Punctuation, &['(', ')']),
             (CharacterClass::Space, &[' ']),
+            (CharacterClass::Punctuation, &['(', ')', '.']),
+            (CharacterClass::Letter, &['a']),
         ]);
         let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();

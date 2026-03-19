@@ -140,9 +140,13 @@ impl PrimaryTableBuilder {
     fn build(self, direction: Direction, ctx: &TableContext) -> PrimaryTable {
         let indicators = [
             self.numeric_indicator.build().map(Indicator::Numeric),
-            self.lettersign_indicator.build().map(Indicator::LetterSign),
+            self.lettersign_indicator
+                .build(ctx.character_classes.clone())
+                .map(Indicator::LetterSign),
             self.uppercase_indicator.build().map(Indicator::Uppercase),
-            self.nocontract_indicator.build().map(Indicator::NoContract),
+            self.nocontract_indicator
+                .build(ctx.character_classes.clone())
+                .map(Indicator::NoContract),
         ]
         .into_iter()
         .flatten()
@@ -1029,7 +1033,7 @@ mod tests {
     fn begnum() {
         let rules = [
             parse_rule("digit 1 1"),
-            parse_rule("sign a 3456"),
+            parse_rule("lowercase a 3456"),
             parse_rule("begnum a 4"),
         ];
         let context = TableContext::compile(&rules).unwrap();

@@ -8,6 +8,7 @@
 //! of contractions and matches the input against it. If a contraction appears in the input an
 //! indication is emitted.
 
+use crate::parser::CharacterClasses;
 use crate::translator::TranslationStage;
 use crate::translator::trie::Boundary;
 use crate::{
@@ -35,9 +36,9 @@ impl IndicatorBuilder {
     }
 
     /// Build an [`Indicator`]
-    pub fn build(self) -> Option<Indicator> {
+    pub fn build(self, ctx: CharacterClasses) -> Option<Indicator> {
         if !self.contractions.is_empty() && self.lettersign.is_some() {
-            let mut trie = Trie::new();
+            let mut trie = Trie::new().with_context(ctx);
             if let Some((lettersign, origin)) = self.lettersign {
                 for (contraction, _origin) in self.contractions {
                     trie.insert(
@@ -95,7 +96,10 @@ impl Indicator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{parser::RuleParser, translator::TranslationStage};
+    use crate::{
+        parser::{CharacterClass, RuleParser},
+        translator::TranslationStage,
+    };
 
     fn rule(rule: &str) -> AnchoredRule {
         let rule = RuleParser::new(rule).rule().unwrap();
@@ -108,7 +112,8 @@ mod tests {
         builder.letsign("⠠", &rule("letsign 6"));
         builder.contraction("ab", &rule("contraction ab"));
         builder.contraction("cd", &rule("contraction cd"));
-        let indicator = builder.build().unwrap();
+        let ctx = CharacterClasses::new(&[(CharacterClass::Letter, &['a', 'b', 'c', 'd'])]);
+        let indicator = builder.build(ctx).unwrap();
         assert_eq!(indicator.next("aa".into(), None), None);
         assert_eq!(
             indicator.next("ab".into(), None),

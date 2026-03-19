@@ -100,14 +100,30 @@ impl CharacterClasses {
     pub fn get(&self, class: &CharacterClass) -> Option<HashSet<char>> {
         self.0.get(class).cloned()
     }
-}
 
-pub fn is_punctuation(ctx: &CharacterClasses, c: char) -> bool {
-    ctx.get(&CharacterClass::Punctuation)
-        .is_some_and(|class| class.contains(&c))
-}
+    pub fn is_punctuation(&self, c: char) -> bool {
+        self.get(&CharacterClass::Punctuation)
+            .is_some_and(|class| class.contains(&c))
+    }
 
-pub fn is_whitespace(ctx: &CharacterClasses, c: char) -> bool {
-    ctx.get(&CharacterClass::Space)
-        .is_some_and(|class| class.contains(&c))
+    pub fn is_whitespace(&self, c: char) -> bool {
+        self.get(&CharacterClass::Space)
+            .is_some_and(|class| class.contains(&c))
+    }
+
+    pub fn is_numeric(&self, c: char) -> bool {
+        [CharacterClass::Litdigit, CharacterClass::Digit]
+            .iter()
+            .any(|class| self.get(class).is_some_and(|class| class.contains(&c)))
+    }
+
+    pub fn is_word(&self, c: char) -> bool {
+        [
+            CharacterClass::Letter,
+            CharacterClass::Uppercase,
+            CharacterClass::Lowercase,
+        ]
+        .iter()
+        .any(|class| self.get(class).is_some_and(|class| class.contains(&c)))
+    }
 }
