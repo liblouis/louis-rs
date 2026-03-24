@@ -4,13 +4,12 @@ use std::{collections::HashMap, fs::File, iter::Peekable, num::ParseIntError, pa
 
 use crate::{parser, parser::EscapingContext, parser::unescape};
 
-use enumset::EnumSet;
 use libyaml::{Encoding, Event, Parser, ParserIter};
 
 use crate::parser::Direction;
 use crate::test::{
     CursorPosition, Directions, Display, ExpectedFailure, Table, TableQuery, Test, TestError,
-    TestMatrix, TestMode, TestResult, TranslationMode, Typeform,
+    TestMatrix, TestMode, TestResult, TranslationMode, TranslationModes, Typeform,
 };
 
 type YAMLEventError = Option<Result<Event, libyaml::ParserError>>;
@@ -296,8 +295,8 @@ impl YAMLParser<'_> {
         Ok(mode)
     }
 
-    fn translation_modes(&mut self) -> Result<EnumSet<TranslationMode>, ParseError> {
-        let mut modes = EnumSet::new();
+    fn translation_modes(&mut self) -> Result<TranslationModes, ParseError> {
+        let mut modes = TranslationModes::empty();
         self.sequence_start()?;
         while let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
             let mode = self.translation_mode_value()?;
@@ -327,7 +326,7 @@ impl YAMLParser<'_> {
         let mut input_pos: Vec<u16> = Vec::new();
         let mut output_pos: Vec<u16> = Vec::new();
         let mut cursor_pos = None;
-        let mut modes = EnumSet::new();
+        let mut modes = TranslationModes::empty();
         let mut max_output_length = None;
         let mut real_input_length = None;
         if let Some(Ok(Event::MappingStart { .. })) = self.events.peek() {

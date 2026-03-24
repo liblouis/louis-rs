@@ -227,6 +227,19 @@ pub enum TranslationMode {
     PartialTrans,
 }
 
+#[derive(Debug, Clone)]
+pub struct TranslationModes(EnumSet<TranslationMode>);
+
+impl TranslationModes {
+    pub fn empty() -> Self {
+        TranslationModes(EnumSet::empty())
+    }
+
+    pub fn insert(&mut self, value: TranslationMode) -> bool {
+        self.0.insert(value)
+    }
+}
+
 pub type Typeform = HashMap<String, String>;
 
 #[derive(Debug, Clone)]
@@ -268,7 +281,7 @@ pub struct Test {
     input_pos: Vec<u16>,
     output_pos: Vec<u16>,
     cursor_pos: Option<CursorPosition>,
-    modes: EnumSet<TranslationMode>,
+    modes: TranslationModes,
     max_output_length: Option<u16>,
     real_input_length: Option<u16>,
 }
@@ -317,7 +330,7 @@ impl Test {
         input_pos: Vec<u16>,
         output_pos: Vec<u16>,
         cursor_pos: Option<CursorPosition>,
-        modes: EnumSet<TranslationMode>,
+        modes: TranslationModes,
         max_output_length: Option<u16>,
         real_input_length: Option<u16>,
     ) -> Self {
