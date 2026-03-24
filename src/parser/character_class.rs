@@ -129,92 +129,88 @@ impl CharacterClasses {
 
     /// Return true if character `c` is at the beginning of a word
     pub fn is_word_start(&self, previous: Option<char>, c: Option<char>) -> bool {
-	match (previous, c) {
+        match (previous, c) {
             (None, Some(c)) => self.is_word(c),
             (Some(p), Some(c)) if self.is_word(c) => !self.is_word(p),
             (_, _) => false,
-	}
+        }
     }
 
     /// Return true if character `c` is at the end of a word
     pub fn is_word_end(&self, previous: Option<char>, c: Option<char>) -> bool {
-	match (previous, c) {
+        match (previous, c) {
             (Some(c), None) => self.is_word(c),
             (Some(p), Some(c)) if self.is_word(p) => !self.is_word(c),
             (_, _) => false,
-	}
+        }
     }
 
     /// Return true if character `c` is at the beginning of punctuation
-    pub fn is_punctuation_start(
-	&self,
-	previous: Option<char>,
-	c: Option<char>,
-    ) -> bool {
-	match (previous, c) {
+    pub fn is_punctuation_start(&self, previous: Option<char>, c: Option<char>) -> bool {
+        match (previous, c) {
             (None, Some(c)) => self.is_punctuation(c),
             (Some(p), Some(c)) if self.is_punctuation(c) => self.is_whitespace(p),
             (_, _) => false,
-	}
+        }
     }
 
     /// Return true if character `c` is at the end of a punctuation
     pub fn is_punctuation_end(&self, previous: Option<char>, c: Option<char>) -> bool {
-	match (previous, c) {
+        match (previous, c) {
             (Some(c), None) => self.is_punctuation(c),
             (Some(p), Some(c)) if self.is_punctuation(p) => self.is_whitespace(c),
             (_, _) => false,
-	}
+        }
     }
 
     /// Return true if character `c` is at the boundary between a word and punctuation
     pub fn is_word_punctuation(&self, previous: Option<char>, c: Option<char>) -> bool {
-	match (previous, c) {
+        match (previous, c) {
             (Some(c1), Some(c2)) => self.is_word(c1) && self.is_punctuation(c2),
             (_, _) => false,
-	}
+        }
     }
 
     /// Return true if character `c` is at the boundary between punctuation and a word
     pub fn is_punctuation_word(&self, previous: Option<char>, c: Option<char>) -> bool {
-	match (previous, c) {
+        match (previous, c) {
             (Some(c1), Some(c2)) => self.is_punctuation(c1) && self.is_word(c2),
             (_, _) => false,
-	}
+        }
     }
 
     fn is_number_start(&self, previous: Option<char>, c: Option<char>) -> bool {
-	match (previous, c) {
+        match (previous, c) {
             (None, Some(c)) => self.is_numeric(c),
             (Some(p), Some(c)) if self.is_numeric(c) => !self.is_numeric(p),
             (_, _) => false,
-	}
+        }
     }
 
     fn is_number_end(&self, previous: Option<char>, c: Option<char>) -> bool {
-	match (previous, c) {
+        match (previous, c) {
             (Some(c), None) => self.is_numeric(c),
             (Some(c1), Some(c2)) => self.is_numeric(c1) && !self.is_numeric(c2),
             (_, _) => false,
-	}
+        }
     }
 
     /// Return true if character `c` is at the boundary between a word and a
     /// number
     pub fn is_word_number(&self, previous: Option<char>, c: Option<char>) -> bool {
-	match (previous, c) {
+        match (previous, c) {
             (Some(c1), Some(c2)) => self.is_word(c1) && self.is_numeric(c2),
             (_, _) => false,
-	}
+        }
     }
 
     /// Return true if character `c` is at the boundary between a number and a
     /// word
     pub fn is_number_word(&self, previous: Option<char>, c: Option<char>) -> bool {
-	match (previous, c) {
+        match (previous, c) {
             (Some(c1), Some(c2)) => self.is_numeric(c1) && self.is_word(c2),
             (_, _) => false,
-	}
+        }
     }
 }
 
@@ -413,4 +409,3 @@ mod tests {
         assert!(!ctx.is_punctuation_word(Some('('), Some(')')));
     }
 }
-

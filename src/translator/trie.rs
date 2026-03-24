@@ -4,9 +4,7 @@ use std::collections::HashMap;
 
 use crate::{
     parser::{AnchoredRule, CharacterClasses, Direction, Precedence},
-    translator::{
-        TranslationStage,
-    },
+    translator::TranslationStage,
 };
 
 use super::ResolvedTranslation;
