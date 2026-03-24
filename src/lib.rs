@@ -16,7 +16,7 @@ use louis::Translator;
 use louis::Direction;
 
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-let translator = Translator::new(&["en-us-g1.ctb"], Direction::Forward)?;
+let translator = Translator::new(&["en-us-g1.ctb"], Direction::Forward).expect("Failed to parse tables");
 let braille = translator.translate("hello world")?;
 assert_eq!(braille, "⠓⠑⠇⠇⠕⠀⠺⠕⠗⠇⠙");
 # Ok(())
@@ -32,8 +32,8 @@ mod translator;
 use std::path::Path;
 
 pub use parser::Direction;
-pub use test::{TranslationMode, TranslationModes};
 pub use test::Typeform;
+pub use test::{TranslationMode, TranslationModes};
 use translator::TranslationPipeline;
 
 #[derive(thiserror::Error, Debug)]
@@ -82,19 +82,24 @@ impl Translator {
     pub fn new<P: AsRef<Path>>(
         tables: &[P],
         direction: Direction,
-    ) -> Result<Self, TranslationError> {
+    ) -> Result<Self, Vec<TranslationError>> {
         let mut all_rules = Vec::new();
 
         for table_path in tables {
             let path = table_path.as_ref();
-            let rules = parser::table_expanded(path).map_err(|e| {
-		// FIXME: we should really return the error vector instead of creating a new error
-                TranslationError::ParseFailed(parser::TableError::TableNotFound(path.to_path_buf()))
+            let rules = parser::table_expanded(path).map_err(|errors| {
+                errors
+                    .into_iter()
+                    .map(|e| TranslationError::ParseFailed(e))
+                    .collect::<Vec<_>>()
             })?;
             all_rules.extend(rules);
         }
 
-        Ok(Self(TranslationPipeline::compile(&all_rules, direction)?))
+        match TranslationPipeline::compile(&all_rules, direction) {
+            Ok(pipeline) => Ok(Self(pipeline)),
+            Err(e) => Err(Vec::from([TranslationError::TranslationFailed(e)])),
+        }
     }
 
     /// Simple translation - just input text to braille
