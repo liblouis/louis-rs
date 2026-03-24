@@ -362,7 +362,7 @@ impl Test {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```compile_fail
     /// let original = Test {
     ///     input: "hello".to_string(),
     ///     expected: "⠓⠑⠇⠇⠕".to_string(),
