@@ -62,9 +62,11 @@ impl Regexp {
                         characters.extend(chars);
                     }
                 }
-                Attribute::Boundary => (),   // TODO
-                Attribute::ByOrder(_) => (), // TODO
-                Attribute::Any => (),        // TODO
+                Attribute::Boundary => (), // TODO
+                // attributes that match a character class by order of definition luckily do not
+                // exist in match regular expressions
+                Attribute::ByOrder(_) => unreachable!(),
+                Attribute::Any => (), // TODO
             }
         }
         Regexp::CharacterClass(characters)

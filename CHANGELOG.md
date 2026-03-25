@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   instead a table for each stage.
 
 ### Fixed
+- Handle numbered character classes in match regular expressions
+  correctly instead of treating them as by order of definition
+  character class.
 - Make sure the matching of word and always rules is case insensitive
   (and gets precedence).
 

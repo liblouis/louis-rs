@@ -133,14 +133,11 @@ impl<'a> PatternParser<'a> {
             Some('<') => Ok(Attribute::Class(CharacterClass::Seqbeforechars)),
             Some('>') => Ok(Attribute::Class(CharacterClass::Seqafterchars)),
             Some('^') => Ok(Attribute::Boundary),
-            Some('0') => Ok(Attribute::ByOrder(0)),
-            Some('1') => Ok(Attribute::ByOrder(1)),
-            Some('2') => Ok(Attribute::ByOrder(2)),
-            Some('3') => Ok(Attribute::ByOrder(3)),
-            Some('4') => Ok(Attribute::ByOrder(4)),
-            Some('5') => Ok(Attribute::ByOrder(5)),
-            Some('6') => Ok(Attribute::ByOrder(6)),
-            Some('7') => Ok(Attribute::ByOrder(7)),
+            // for some weird historical reason 0..7 are also allowed as class names
+            Some(c @ '0') | Some(c @ '1') | Some(c @ '2') | Some(c @ '3') | Some(c @ '4')
+            | Some(c @ '5') | Some(c @ '6') | Some(c @ '7') => {
+                Ok(Attribute::Class(CharacterClass::UserDefined(c.to_string())))
+            }
             Some(c) => Err(ParseError::InvalidAttribute(Some(c))),
             _ => Err(ParseError::InvalidAttribute(None)),
         }
