@@ -1,4 +1,4 @@
-* Todo [11/22]
+* Todo [12/22]
 - [ ] Move the display tables into the Pipeline
 - [ ] implement "libhyphen"
 - [ ] guard against "()+" regexp?
@@ -15,7 +15,7 @@
   - will probably be delegated to the [[https://docs.rs/hyphenation/latest/hyphenation/][hyphenation crate]]
   - this doesn't seem to work
     - [ ] test it
-- [ ] Add an API so that the functionality can be used as a library
+- [X] Add an API so that the functionality can be used as a library
   - end expose it as a C ABI so that it can be used from other
     languages (see also [[https://github.com/mozilla/cbindgen][cbindgen]] or even better [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 - [ ] Display tables

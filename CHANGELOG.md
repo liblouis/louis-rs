@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Added
+- The library now has a basic API that covers both simple and advanced
+  use cases. See `translator.translate` and
+  `translator.translate_with_options` in `lib.rs`.
 - Implement (at least partly) the `largesign` opcode.
 - Implement the basic behaviour of the `decpoint` and `hyphen` opcode.
 - Add `trace` as a separate command (instead of `translate --tracing`)
