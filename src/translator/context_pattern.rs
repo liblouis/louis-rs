@@ -95,9 +95,9 @@ impl Regexp {
                         characters.extend(chars);
                     }
                 }
-                Attribute::Boundary => (),
-                Attribute::ByOrder(_) => (),
-                Attribute::Any => (), // TODO
+                Attribute::Boundary => (),   // TODO
+                Attribute::ByOrder(_) => (), // TODO
+                Attribute::Any => (),        // TODO
             }
         }
         if let Some(quantifier) = quantifier {

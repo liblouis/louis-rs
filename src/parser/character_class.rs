@@ -8,6 +8,7 @@ use std::collections::{HashMap, HashSet};
 use crate::parser::braille::{BrailleChar, BrailleChars};
 use crate::translator::CharacterDefinition;
 
+// FIXME: isn't this the same as crate::parser::CharacterClass::Attribute?
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CharacterClassReference {
     Class(CharacterClass),
