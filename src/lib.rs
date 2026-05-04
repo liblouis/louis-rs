@@ -36,6 +36,8 @@ pub use test::Typeform;
 pub use test::{TranslationMode, TranslationModes};
 use translator::TranslationPipeline;
 
+use crate::translator::ResolvedTranslation;
+
 #[derive(thiserror::Error, Debug)]
 pub enum TranslationError {
     #[error(transparent)]
@@ -95,6 +97,38 @@ impl Translator {
         Ok(Self(TranslationPipeline::compile(&all_rules, direction)?))
     }
 
+    fn compute_output_positions(translations: &[ResolvedTranslation]) -> Vec<usize> {
+        let mut output_positions: Vec<usize> = Vec::new();
+        let mut output_offset: usize = 0;
+
+        for translation in translations {
+            let input_len = translation.input().chars().count();
+            let output_len = translation.output().chars().count();
+
+            for i in 0..input_len {
+                output_positions.push(output_offset + i.min(output_len.saturating_sub(1)));
+            }
+            output_offset += output_len;
+        }
+        output_positions
+    }
+
+    fn compute_input_positions(translations: &[ResolvedTranslation]) -> Vec<usize> {
+        let mut input_positions: Vec<usize> = Vec::new();
+        let mut input_offset: usize = 0;
+
+        for translation in translations {
+            let input_len = translation.input().chars().count();
+            let output_len = translation.output().chars().count();
+
+            for i in 0..output_len {
+                input_positions.push(input_offset + i.min(input_len.saturating_sub(1)));
+            }
+            input_offset += input_len;
+        }
+        input_positions
+    }
+
     /// Simple translation - just input text to braille
     pub fn translate(&self, input: &str) -> Result<String, TranslationError> {
         self.translate_with_options(input, TranslationOptions::default())
@@ -111,5 +145,98 @@ impl Translator {
             output: self.0.translate(input),
             ..Default::default()
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::translator::TranslationStage;
+
+    use super::*;
+
+    fn translation(input: &str, output: &str) -> ResolvedTranslation {
+        ResolvedTranslation::new(input, output, 0, TranslationStage::Main, None)
+    }
+
+    #[test]
+    fn output_positions() {
+        assert_eq!(
+            Translator::compute_output_positions(&[translation("abc", "⠁⠃⠇")]),
+            [0, 1, 2]
+        );
+        assert_eq!(
+            Translator::compute_output_positions(&[translation("foo", "⠁")]),
+            [0, 0, 0]
+        );
+        assert_eq!(
+            Translator::compute_output_positions(&[translation("foo", "⠁⠃")]),
+            [0, 1, 1]
+        );
+        assert_eq!(
+            Translator::compute_output_positions(&[translation("a", "⠁⠃⠇")]),
+            [0]
+        );
+        assert_eq!(
+            Translator::compute_output_positions(&[
+                translation("abc", "⠁⠃⠇"),
+                translation("abc", "⠁⠃⠇")
+            ]),
+            [0, 1, 2, 3, 4, 5]
+        );
+        assert_eq!(
+            Translator::compute_output_positions(&[
+                translation("foo", "⠁"),
+                translation("abc", "⠁⠃⠇")
+            ]),
+            [0, 0, 0, 1, 2, 3]
+        );
+        assert_eq!(
+            Translator::compute_output_positions(&[
+                translation("a", "⠁⠃⠇"),
+                translation("abc", "⠁⠃⠇")
+            ]),
+            [0, 3, 4, 5]
+        );
+    }
+
+    #[test]
+    fn input_positions() {
+        assert_eq!(
+            Translator::compute_input_positions(&[translation("abc", "⠁⠃⠇")]),
+            [0, 1, 2]
+        );
+        assert_eq!(
+            Translator::compute_input_positions(&[translation("foo", "⠁")]),
+            [0]
+        );
+        assert_eq!(
+            Translator::compute_input_positions(&[translation("foo", "⠁⠃")]),
+            [0, 1]
+        );
+        assert_eq!(
+            Translator::compute_input_positions(&[translation("a", "⠁⠃⠇")]),
+            [0, 0, 0]
+        );
+        assert_eq!(
+            Translator::compute_input_positions(&[
+                translation("abc", "⠁⠃⠇"),
+                translation("abc", "⠁⠃⠇")
+            ]),
+            [0, 1, 2, 3, 4, 5]
+        );
+        assert_eq!(
+            Translator::compute_input_positions(&[
+                translation("foo", "⠁"),
+                translation("abc", "⠁⠃⠇")
+            ]),
+            [0, 3, 4, 5]
+        );
+        assert_eq!(
+            Translator::compute_input_positions(&[
+                translation("a", "⠁⠃⠇"),
+                translation("abc", "⠁⠃⠇")
+            ]),
+            [0, 0, 0, 1, 2, 3]
+        );
     }
 }
