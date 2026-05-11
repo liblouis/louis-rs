@@ -855,6 +855,8 @@ impl PrimaryTable {
 mod tests {
     use super::*;
 
+    use search_path::SearchPath;
+
     use crate::parser::{RuleParser, expand_includes};
 
     fn parse_rule(source: &str) -> AnchoredRule {
@@ -1278,7 +1280,7 @@ mod tests {
             parse_rule("nocross always fff 456"),
             parse_rule("space \\s 0"),
         ];
-        let rules = expand_includes(rules).unwrap();
+        let rules = expand_includes(rules, &SearchPath::new_or("LOUIS_TABLE_PATH", ".")).unwrap();
         let context = TableContext::compile(&rules).unwrap();
         let table =
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)

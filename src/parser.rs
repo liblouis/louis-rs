@@ -2385,20 +2385,27 @@ pub fn table_file(path: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
 }
 
 pub fn table_expanded(file: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
-    let search_path = &SearchPath::new_or("LOUIS_TABLE_PATH", ".");
-    let path = search_path.find_file(file);
-    match path {
+    let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
+    table_expanded_with(file, &search_path)
+}
+
+fn table_expanded_with(
+    file: &Path,
+    search_path: &SearchPath,
+) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
+    match search_path.find_file(file) {
         Some(path) => {
             let rules = table_file(path.as_path())?;
-            let rules = expand_includes(rules)?;
-            Ok(rules)
+            expand_includes(rules, search_path)
         }
-        _ => Err(vec![TableError::TableNotFound(file.into())]),
+        None => Err(vec![TableError::TableNotFound(file.into())]),
     }
 }
 
-fn expand_include(rule: AnchoredRule) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
-    let search_path = &SearchPath::new_or("LOUIS_TABLE_PATH", ".");
+fn expand_include(
+    rule: AnchoredRule,
+    search_path: &SearchPath,
+) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     match rule.rule {
         Rule::Include { ref file } => {
             let path = Path::new(file);
@@ -2419,17 +2426,19 @@ fn expand_include(rule: AnchoredRule) -> Result<Vec<AnchoredRule>, Vec<TableErro
             let path = search_path
                 .find_file(path)
                 .ok_or(vec![TableError::TableNotFound(path.into())])?;
-            let rules = table_expanded(&path)?;
-            Ok(rules)
+            table_expanded_with(&path, search_path)
         }
         _ => Ok(vec![rule]),
     }
 }
 
-pub fn expand_includes(rules: Vec<AnchoredRule>) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
+pub fn expand_includes(
+    rules: Vec<AnchoredRule>,
+    search_path: &SearchPath,
+) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     let (rules, errors): (Vec<_>, Vec<_>) = rules
         .into_iter()
-        .map(expand_include)
+        .map(|r| expand_include(r, search_path))
         .partition(Result::is_ok);
     let rules: Vec<_> = rules.into_iter().flat_map(Result::unwrap).collect();
     let errors: Vec<_> = errors.into_iter().flat_map(Result::unwrap_err).collect();
@@ -2437,6 +2446,61 @@ pub fn expand_includes(rules: Vec<AnchoredRule>) -> Result<Vec<AnchoredRule>, Ve
         Ok(rules)
     } else {
         Err(errors)
+    }
+}
+
+#[cfg(feature = "bundled-tables")]
+pub mod bundled {
+    use std::path::Path;
+
+    use include_dir::{Dir, include_dir};
+
+    use super::{AnchoredRule, OsStr, Rule, TableError};
+
+    static TABLES: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/liblouis/tables");
+
+    /// Resolve a table by name from the tables bundled at compile time.
+    ///
+    /// `name` should be a bare filename, e.g. `"en-us-g1.ctb"`.
+    pub fn table_expanded(name: &str) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
+        let text = TABLES
+            .get_file(name)
+            .and_then(|f| f.contents_utf8())
+            .ok_or_else(|| vec![TableError::TableNotFound(name.into())])?;
+        let rules = super::table(text, Some(name.into()))?;
+        expand_includes(rules)
+    }
+
+    fn expand_includes(rules: Vec<AnchoredRule>) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
+        let (rules, errors): (Vec<_>, Vec<_>) = rules
+            .into_iter()
+            .map(expand_include)
+            .partition(Result::is_ok);
+        let rules: Vec<_> = rules.into_iter().flat_map(Result::unwrap).collect();
+        let errors: Vec<_> = errors.into_iter().flat_map(Result::unwrap_err).collect();
+        if errors.is_empty() {
+            Ok(rules)
+        } else {
+            Err(errors)
+        }
+    }
+
+    fn expand_include(rule: AnchoredRule) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
+        match rule.rule {
+            Rule::Include { ref file } => {
+                let path = Path::new(file);
+                // Hyphenation dictionaries require pre-processed bincode files, which are not
+                // bundled. Skip them silently; hyphenation is not yet fully implemented anyway.
+                if path.extension().and_then(OsStr::to_str) == Some("dic") {
+                    return Ok(vec![]);
+                }
+                let name = path
+                    .to_str()
+                    .ok_or_else(|| vec![TableError::TableNotFound(path.into())])?;
+                table_expanded(name)
+            }
+            _ => Ok(vec![rule]),
+        }
     }
 }
 
