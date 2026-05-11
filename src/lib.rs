@@ -97,6 +97,27 @@ impl Translator {
         Ok(Self(TranslationPipeline::compile(&all_rules, direction)?))
     }
 
+    /// Create a translator using tables bundled at compile time.
+    ///
+    /// `tables` should be bare filenames, e.g. `&["en-us-g1.ctb"]`. This constructor is only
+    /// available when the `bundled-tables` feature is enabled, which embeds the liblouis table
+    /// files directly into the binary.
+    #[cfg(feature = "bundled-tables")]
+    pub fn new_bundled(
+        tables: &[&str],
+        direction: Direction,
+    ) -> Result<Self, TranslationError> {
+        let mut all_rules = Vec::new();
+
+        for name in tables {
+            let rules = parser::bundled::table_expanded(name)
+                .map_err(TranslationError::ParseFailed)?;
+            all_rules.extend(rules);
+        }
+
+        Ok(Self(TranslationPipeline::compile(&all_rules, direction)?))
+    }
+
     fn compute_output_positions(translations: &[ResolvedTranslation]) -> Vec<usize> {
         let mut output_positions: Vec<usize> = Vec::new();
         let mut output_offset: usize = 0;
@@ -240,3 +261,5 @@ mod tests {
         );
     }
 }
+#[cfg(feature = "bundled-tables")]
+mod bundled_smoke;
