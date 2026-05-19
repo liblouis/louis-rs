@@ -2289,6 +2289,8 @@ pub enum TableError {
         line: usize,
         error: ParseError,
     },
+    #[error("Include directives are not supported when parsing table source in memory")]
+    IncludesNotSupportedInMemory,
     #[error("Cannot read table")]
     TableNotReadable(#[from] io::Error),
     #[error("Cannot find table {0:?}")]

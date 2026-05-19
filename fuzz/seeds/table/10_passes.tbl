@@ -1,0 +1,6 @@
+always foo 123
+always bar 456
+noback pass2 @123 @67
+noback pass3 @67 @78
+noback pass4 @78 @1
+space \s 0
