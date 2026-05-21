@@ -1,0 +1,7 @@
+[licenses]  
+allow = ["MIT", "Apache-2.0", "LGPL-2.1-or-later", "Unicode-3.0"]  
+
+[advisories]
+ignore = [
+   { id = "RUSTSEC-2025-0141", reason = "this dependency is needed at the moment" },
+]

@@ -1,0 +1,21 @@
+name: SBOM  
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  
+jobs:  
+  sbom:  
+    runs-on: ubuntu-latest  
+    steps:  
+      - uses: actions/checkout@v6  
+      - name: Generate SBOM  
+        run: |  
+          cargo install cargo-cyclonedx  
+          cargo cyclonedx --format json --override-filename bom
+      - name: Upload SBOM  
+        uses: actions/upload-artifact@v7
+        with:  
+          name: bom  
+          path: bom.json
