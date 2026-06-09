@@ -4,6 +4,8 @@ use std::{collections::HashMap, path::PathBuf};
 
 use enumset::{EnumSet, EnumSetType};
 
+use search_path::SearchPath;
+
 use crate::{
     parser::{self, Direction, TableError},
     translator::{self, DisplayTable, TranslationPipeline},
@@ -100,11 +102,12 @@ impl<'a> TestMatrix<'a> {
     }
 
     fn display_table(&self, direction: Direction) -> Result<DisplayTable, TestError> {
+        let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
         let display_rules = match self.display {
             Some(Display::Simple(path)) => parser::table_expanded(path.as_path())?,
             Some(Display::Inline(text)) => {
                 let rules = parser::table(text, None)?;
-                parser::expand_includes(rules)?
+                parser::expand_includes(rules, &search_path)?
             }
             Some(Display::List(paths)) => {
                 let mut rules = Vec::new();
@@ -123,6 +126,7 @@ impl<'a> TestMatrix<'a> {
         table: &Table,
         direction: Direction,
     ) -> Result<TranslationPipeline, TestError> {
+        let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
         let rules = match table {
             Table::Simple(path) => parser::table_expanded(path.as_path())?,
             Table::List(paths) => {
@@ -134,7 +138,7 @@ impl<'a> TestMatrix<'a> {
             }
             Table::Inline(text) => {
                 let rules = parser::table(text, None)?;
-                parser::expand_includes(rules)?
+                parser::expand_includes(rules, &search_path)?
             }
             Table::Query(..) => return Err(TestError::NotImplemented("Table queries".to_string())),
         };
