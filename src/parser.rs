@@ -2385,20 +2385,27 @@ pub fn table_file(path: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
 }
 
 pub fn table_expanded(file: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
-    let search_path = &SearchPath::new_or("LOUIS_TABLE_PATH", ".");
-    let path = search_path.find_file(file);
-    match path {
+    let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
+    table_expanded_with(file, &search_path)
+}
+
+fn table_expanded_with(
+    file: &Path,
+    search_path: &SearchPath,
+) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
+    match search_path.find_file(file) {
         Some(path) => {
             let rules = table_file(path.as_path())?;
-            let rules = expand_includes(rules)?;
-            Ok(rules)
+            expand_includes(rules, search_path)
         }
-        _ => Err(vec![TableError::TableNotFound(file.into())]),
+        None => Err(vec![TableError::TableNotFound(file.into())]),
     }
 }
 
-fn expand_include(rule: AnchoredRule) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
-    let search_path = &SearchPath::new_or("LOUIS_TABLE_PATH", ".");
+fn expand_include(
+    rule: AnchoredRule,
+    search_path: &SearchPath,
+) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     match rule.rule {
         Rule::Include { ref file } => {
             let path = Path::new(file);
@@ -2419,17 +2426,19 @@ fn expand_include(rule: AnchoredRule) -> Result<Vec<AnchoredRule>, Vec<TableErro
             let path = search_path
                 .find_file(path)
                 .ok_or(vec![TableError::TableNotFound(path.into())])?;
-            let rules = table_expanded(&path)?;
-            Ok(rules)
+            table_expanded_with(&path, search_path)
         }
         _ => Ok(vec![rule]),
     }
 }
 
-pub fn expand_includes(rules: Vec<AnchoredRule>) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
+pub fn expand_includes(
+    rules: Vec<AnchoredRule>,
+    search_path: &SearchPath,
+) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     let (rules, errors): (Vec<_>, Vec<_>) = rules
         .into_iter()
-        .map(expand_include)
+        .map(|r| expand_include(r, search_path))
         .partition(Result::is_ok);
     let rules: Vec<_> = rules.into_iter().flat_map(Result::unwrap).collect();
     let errors: Vec<_> = errors.into_iter().flat_map(Result::unwrap_err).collect();
