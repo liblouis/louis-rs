@@ -19,11 +19,10 @@ pub enum Boundary {
     Punctuation,
     PunctuationWord,
     WordPunctuation,
-    None,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-enum Transition {
+pub enum Transition {
     Character(char),
     Start(Boundary),
     End(Boundary),
@@ -117,8 +116,8 @@ impl Trie {
         self.insert(
             &from.to_string(),
             to,
-            Boundary::None,
-            Boundary::None,
+            None,
+            None,
             direction,
             precedence,
             stage,
@@ -130,8 +129,8 @@ impl Trie {
         &mut self,
         from: &str,
         to: &str,
-        before: Boundary,
-        after: Boundary,
+        before: Option<Transition>,
+        after: Option<Transition>,
         direction: Direction,
         precedence: Precedence,
         stage: TranslationStage,
@@ -156,11 +155,11 @@ impl Trie {
         let mut current_node = &mut self.root;
         let mut length = from.chars().count();
 
-        if before != Boundary::None {
+        if let Some(t) = before {
             length += 1;
             current_node = current_node
                 .transitions
-                .entry(Transition::Start(before))
+                .entry(t)
                 .or_default();
         }
 
@@ -171,11 +170,11 @@ impl Trie {
                 .or_default();
         }
 
-        if after != Boundary::None {
+        if let Some(t) = after {
             length += 1;
             current_node = current_node
                 .transitions
-                .entry(Transition::End(after))
+                .entry(t)
                 .or_default();
         }
 
@@ -418,8 +417,8 @@ mod tests {
         trie.insert(
             "a".into(),
             "A".into(),
-            Boundary::None,
-            Boundary::None,
+            None,
+            None,
             Direction::Forward,
             Precedence::Default,
             TranslationStage::Main,
@@ -428,8 +427,8 @@ mod tests {
         trie.insert(
             "f".into(),
             "F".into(),
-            Boundary::None,
-            Boundary::None,
+            None,
+            None,
             Direction::Forward,
             Precedence::Default,
             TranslationStage::Main,
@@ -438,8 +437,8 @@ mod tests {
         trie.insert(
             "fo".into(),
             "FO".into(),
-            Boundary::None,
-            Boundary::None,
+            None,
+            None,
             Direction::Forward,
             Precedence::Default,
             TranslationStage::Main,
@@ -448,8 +447,8 @@ mod tests {
         trie.insert(
             "foo".into(),
             "FOO".into(),
-            Boundary::None,
-            Boundary::None,
+            None,
+            None,
             Direction::Forward,
             Precedence::Default,
             TranslationStage::Main,
@@ -458,8 +457,8 @@ mod tests {
         trie.insert(
             "foobar".into(),
             "FOOBAR".into(),
-            Boundary::None,
-            Boundary::None,
+            None,
+            None,
             Direction::Forward,
             Precedence::Default,
             TranslationStage::Main,
@@ -507,8 +506,8 @@ mod tests {
         trie.insert(
             "a".into(),
             "A".into(),
-            Boundary::Word,
-            Boundary::Word,
+            Some(Transition::Start(Boundary::Word)),
+            Some(Transition::End(Boundary::Word)),
             Direction::Forward,
             Precedence::Default,
             TranslationStage::Main,
@@ -538,8 +537,8 @@ mod tests {
         trie.insert(
             "foo".into(),
             "FOO".into(),
-            Boundary::Word,
-            Boundary::NotWord,
+            Some(Transition::Start(Boundary::Word)),
+            Some(Transition::End(Boundary::NotWord)),
             Direction::Forward,
             Precedence::Default,
             TranslationStage::Main,
@@ -571,8 +570,8 @@ mod tests {
         trie.insert(
             "foo".into(),
             "FOO".into(),
-            Boundary::NotWord,
-            Boundary::None,
+            Some(Transition::Start(Boundary::NotWord)),
+            None,
             Direction::Forward,
             Precedence::Default,
             TranslationStage::Main,
@@ -604,8 +603,8 @@ mod tests {
         trie.insert(
             "foo".into(),
             "FOO".into(),
-            Boundary::NotWord,
-            Boundary::NotWord,
+            Some(Transition::Start(Boundary::NotWord)),
+            Some(Transition::End(Boundary::NotWord)),
             Direction::Forward,
             Precedence::Default,
             TranslationStage::Main,
@@ -639,8 +638,8 @@ mod tests {
         trie.insert(
             "aaa".into(),
             "A".into(),
-            Boundary::Word,
-            Boundary::WordNumber,
+            Some(Transition::Start(Boundary::Word)),
+            Some(Transition::End(Boundary::WordNumber)),
             Direction::Forward,
             Precedence::Default,
             TranslationStage::Main,
@@ -673,8 +672,8 @@ mod tests {
         trie.insert(
             "st".into(),
             "S".into(),
-            Boundary::NumberWord,
-            Boundary::Word,
+            Some(Transition::Start(Boundary::NumberWord)),
+            Some(Transition::End(Boundary::Word)),
             Direction::Forward,
             Precedence::Default,
             TranslationStage::Main,
@@ -707,8 +706,8 @@ mod tests {
         trie.insert(
             "(".into(),
             "[".into(),
-            Boundary::WordPunctuation,
-            Boundary::None,
+            Some(Transition::Start(Boundary::WordPunctuation)),
+            None,
             Direction::Forward,
             Precedence::Default,
             TranslationStage::Main,
@@ -740,8 +739,8 @@ mod tests {
         trie.insert(
             "(".into(),
             "[".into(),
-            Boundary::None,
-            Boundary::PunctuationWord,
+            None,
+            Some(Transition::End(Boundary::PunctuationWord)),
             Direction::Forward,
             Precedence::Default,
             TranslationStage::Main,
@@ -769,8 +768,8 @@ mod tests {
         trie.insert(
             "foo".into(),
             "FOO".into(),
-            Boundary::None,
-            Boundary::None,
+            None,
+            None,
             Direction::Forward,
             Precedence::Default,
             TranslationStage::Main,

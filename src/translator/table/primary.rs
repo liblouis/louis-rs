@@ -17,7 +17,7 @@ use crate::{
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
         table::TableContext,
         translation::TranslationSubset,
-        trie::{Boundary, Trie},
+        trie::{Boundary, Transition, Trie},
     },
 };
 
@@ -294,8 +294,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
-                        Boundary::Word,
-                        Boundary::Word,
+                        Some(Transition::Start(Boundary::Word)),
+                        Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
                         TranslationStage::Main,
@@ -331,8 +331,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
-                        Boundary::None,
-                        Boundary::None,
+                        None,
+                        None,
                         direction,
                         rule.precedence(),
                         TranslationStage::Main,
@@ -343,8 +343,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots.to_string(),
-                        Boundary::None,
-                        Boundary::None,
+                        None,
+                        None,
                         direction,
                         rule.precedence(),
                         TranslationStage::Main,
@@ -358,8 +358,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
-                        Boundary::Word,
-                        Boundary::Word,
+                        Some(Transition::Start(Boundary::Word)),
+                        Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
                         TranslationStage::Main,
@@ -373,8 +373,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
-                        Boundary::Word,
-                        Boundary::NotWord,
+                        Some(Transition::Start(Boundary::Word)),
+                        Some(Transition::End(Boundary::NotWord)),
                         direction,
                         rule.precedence(),
                         TranslationStage::Main,
@@ -388,8 +388,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
-                        Boundary::NotWord,
-                        Boundary::NotWord,
+                        Some(Transition::Start(Boundary::NotWord)),
+                        Some(Transition::End(Boundary::NotWord)),
                         direction,
                         rule.precedence(),
                         TranslationStage::Main,
@@ -403,8 +403,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
-                        Boundary::NotWord,
-                        Boundary::None,
+                        Some(Transition::Start(Boundary::NotWord)),
+                        None,
                         direction,
                         rule.precedence(),
                         TranslationStage::Main,
@@ -418,8 +418,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
-                        Boundary::None,
-                        Boundary::Word,
+                        None,
+                        Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
                         TranslationStage::Main,
@@ -435,8 +435,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
-                        Boundary::Word,
-                        Boundary::Word,
+                        Some(Transition::Start(Boundary::Word)),
+                        Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
                         TranslationStage::Main,
@@ -445,8 +445,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
-                        Boundary::None,
-                        Boundary::Word,
+                        None,
+                        Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
                         TranslationStage::Main,
@@ -462,8 +462,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
-                        Boundary::Word,
-                        Boundary::Word,
+                        Some(Transition::Start(Boundary::Word)),
+                        Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
                         TranslationStage::Main,
@@ -472,8 +472,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
-                        Boundary::Word,
-                        Boundary::None,
+                        Some(Transition::Start(Boundary::Word)),
+                        None,
                         direction,
                         rule.precedence(),
                         TranslationStage::Main,
@@ -487,8 +487,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
-                        Boundary::None,
-                        Boundary::NotWord,
+                        None,
+                        Some(Transition::End(Boundary::NotWord)),
                         direction,
                         rule.precedence(),
                         TranslationStage::Main,
@@ -499,8 +499,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots.to_string(),
-                        Boundary::Word,
-                        Boundary::Word,
+                        Some(Transition::Start(Boundary::Word)),
+                        Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
                         TranslationStage::Main,
@@ -510,23 +510,26 @@ impl PrimaryTable {
                 Rule::Begnum { chars, dots, .. } => builder.get_trie_mut(rule).insert(
                     chars,
                     &dots.to_string(),
-                    Boundary::Word,
-                    Boundary::WordNumber,
+                    Some(Transition::Start(Boundary::Word)),
+                    Some(Transition::End(Boundary::WordNumber)),
                     direction,
                     rule.precedence(),
                     TranslationStage::Main,
                     rule,
                 ),
-                Rule::Midnum { chars, dots, .. } => builder.get_trie_mut(rule).insert(
-                    chars,
-                    &dots.to_string(),
-                    Boundary::Number,
-                    Boundary::Number,
-                    direction,
-                    rule.precedence(),
-                    TranslationStage::Main,
-                    rule,
-                ),
+                Rule::Midnum { chars, dots, .. } => {
+                    builder.numeric_indicator.midnum(chars);
+                    builder.get_trie_mut(rule).insert(
+                        chars,
+                        &dots.to_string(),
+                        Some(Transition::End(Boundary::Number)),
+                        Some(Transition::Start(Boundary::Number)),
+                        direction,
+                        rule.precedence(),
+                        TranslationStage::Main,
+                        rule,
+                    );
+                }
                 Rule::Endnum { chars, dots, .. } => {
                     let dots = ctx
                         .character_definitions()
@@ -534,8 +537,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
-                        Boundary::NumberWord,
-                        Boundary::Word,
+                        Some(Transition::Start(Boundary::NumberWord)),
+                        Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
                         TranslationStage::Main,
@@ -552,8 +555,8 @@ impl PrimaryTable {
                         builder.get_trie_mut(rule).insert(
                             chars,
                             &dots.to_string(),
-                            Boundary::Punctuation,
-                            Boundary::PunctuationWord,
+                            Some(Transition::Start(Boundary::Punctuation)),
+                            Some(Transition::End(Boundary::PunctuationWord)),
                             direction,
                             rule.precedence(),
                             TranslationStage::Main,
@@ -571,8 +574,8 @@ impl PrimaryTable {
                         builder.get_trie_mut(rule).insert(
                             chars,
                             &dots.to_string(),
-                            Boundary::WordPunctuation,
-                            Boundary::Punctuation,
+                            Some(Transition::Start(Boundary::WordPunctuation)),
+                            Some(Transition::End(Boundary::Punctuation)),
                             direction,
                             rule.precedence(),
                             TranslationStage::Main,

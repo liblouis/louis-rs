@@ -71,6 +71,10 @@ impl IndicatorBuilder {
         ));
     }
 
+    pub fn midnum(&mut self, s: &str) {
+        self.0.extra_numeric_chars = HashSet::from_iter(s.chars());
+    }
+
     pub fn numericnocontchars(&mut self, s: &str) {
         self.0.terminating_chars = HashSet::from_iter(s.chars());
     }
@@ -136,14 +140,18 @@ impl Indicator {
                 self.start_translation.clone()
             }
             (State::Numeric, false) => {
-                self.state = State::Default;
-                // only indicate the end of a number if the character is contained in
-                // terminating_chars
-                if self.terminating_chars.contains(&c.unwrap()) {
-                    // FIXME: end indication should only occur within a word
-                    self.end_translation.clone()
-                } else {
+                if self.extra_numeric_chars.contains(&c.unwrap()) {
                     None
+                } else {
+                    self.state = State::Default;
+                    // only indicate the end of a number if the character is contained in
+                    // terminating_chars
+                    if self.terminating_chars.contains(&c.unwrap()) {
+                        // FIXME: end indication should only occur within a word
+                        self.end_translation.clone()
+                    } else {
+                        None
+                    }
                 }
             }
             _ => None,

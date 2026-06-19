@@ -180,7 +180,7 @@ impl CharacterClasses {
         }
     }
 
-    fn is_number_start(&self, previous: Option<char>, c: Option<char>) -> bool {
+    pub fn is_number_start(&self, previous: Option<char>, c: Option<char>) -> bool {
         match (previous, c) {
             (None, Some(c)) => self.is_numeric(c),
             (Some(p), Some(c)) if self.is_numeric(c) => !self.is_numeric(p),
@@ -188,7 +188,7 @@ impl CharacterClasses {
         }
     }
 
-    fn is_number_end(&self, previous: Option<char>, c: Option<char>) -> bool {
+    pub fn is_number_end(&self, previous: Option<char>, c: Option<char>) -> bool {
         match (previous, c) {
             (Some(c), None) => self.is_numeric(c),
             (Some(c1), Some(c2)) => self.is_numeric(c1) && !self.is_numeric(c2),

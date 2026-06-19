@@ -16,7 +16,7 @@
 
 use crate::parser::CharacterClasses;
 use crate::translator::TranslationStage;
-use crate::translator::trie::Boundary;
+use crate::translator::trie::{Boundary, Transition};
 use crate::{
     parser::{AnchoredRule, Direction, Precedence},
     translator::{ResolvedTranslation, trie::Trie},
@@ -50,8 +50,8 @@ impl IndicatorBuilder {
                     trie.insert(
                         &contraction,
                         &nocontractsign,
-                        Boundary::Word,
-                        Boundary::Word,
+                        Some(Transition::Start(Boundary::Word)),
+                        Some(Transition::End(Boundary::Word)),
                         Direction::Forward,
                         Precedence::Default,
                         TranslationStage::Main,
