@@ -510,8 +510,8 @@ impl PrimaryTable {
                 Rule::Begnum { chars, dots, .. } => builder.get_trie_mut(rule).insert(
                     chars,
                     &dots.to_string(),
-                    Some(Transition::Start(Boundary::Word)),
-                    Some(Transition::End(Boundary::WordNumber)),
+                    Some(Transition::Start(Boundary::SpacePunctuation)),
+                    Some(Transition::Start(Boundary::Number)),
                     direction,
                     rule.precedence(),
                     TranslationStage::Main,
@@ -537,8 +537,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
-                        Some(Transition::Start(Boundary::NumberWord)),
-                        Some(Transition::End(Boundary::Word)),
+                        Some(Transition::End(Boundary::Number)),
+                        None,
                         direction,
                         rule.precedence(),
                         TranslationStage::Main,

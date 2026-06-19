@@ -37,6 +37,7 @@ impl IndicatorBuilder {
             state: State::Default,
             numeric_chars: HashSet::default(),
             extra_numeric_chars: HashSet::default(),
+            mid_numeric_chars: HashSet::default(),
             start_translation: None,
             end_translation: None,
             terminating_chars: HashSet::default(),
@@ -72,7 +73,7 @@ impl IndicatorBuilder {
     }
 
     pub fn midnum(&mut self, s: &str) {
-        self.0.extra_numeric_chars = HashSet::from_iter(s.chars());
+        self.0.mid_numeric_chars.extend(s.chars());
     }
 
     pub fn numericnocontchars(&mut self, s: &str) {
@@ -109,6 +110,9 @@ pub struct Indicator {
     /// The set of characters that will prevent a state change to the
     /// [State::Default] mode
     extra_numeric_chars: HashSet<char>,
+    /// The set of `midnum` characters. They keep the indicator in
+    /// [State::Numeric] only when sandwiched between two numeric characters.
+    mid_numeric_chars: HashSet<char>,
     /// The translation to indicate the start of a sequence of numerical characters
     start_translation: Option<ResolvedTranslation>,
     /// The characters to indicate the end of a sequence of numerical characters
@@ -141,6 +145,16 @@ impl Indicator {
             }
             (State::Numeric, false) => {
                 if self.extra_numeric_chars.contains(&c.unwrap()) {
+                    None
+                // a midnum character between two digits keeps the number going,
+                // but only in plain number-sign mode (with numericmodechars the
+                // midnum terminates the number and the sign is re-emitted)
+                } else if self.extra_numeric_chars.is_empty()
+                    && self.mid_numeric_chars.contains(&c.unwrap())
+                    && s.chars()
+                        .nth(1)
+                        .is_some_and(|next| self.numeric_chars.contains(&next))
+                {
                     None
                 } else {
                     self.state = State::Default;

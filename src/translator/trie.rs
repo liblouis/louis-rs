@@ -19,6 +19,7 @@ pub enum Boundary {
     Punctuation,
     PunctuationWord,
     WordPunctuation,
+    SpacePunctuation,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -68,6 +69,16 @@ impl TrieNode {
     fn num_word_transition(&self) -> Option<&TrieNode> {
         self.transitions
             .get(&Transition::Start(Boundary::NumberWord))
+    }
+    fn num_start_transition(&self) -> Option<&TrieNode> {
+        self.transitions.get(&Transition::Start(Boundary::Number))
+    }
+    fn num_end_transition(&self) -> Option<&TrieNode> {
+        self.transitions.get(&Transition::End(Boundary::Number))
+    }
+    fn space_punc_start_transition(&self) -> Option<&TrieNode> {
+        self.transitions
+            .get(&Transition::Start(Boundary::SpacePunctuation))
     }
     fn punctuation_start_transition(&self) -> Option<&TrieNode> {
         self.transitions
@@ -297,6 +308,36 @@ impl Trie {
         }
         if let Some(node) = node.num_word_transition()
             && self.ctx.is_number_word(prev, c)
+        {
+            matching_rules.extend(self.find_translations_from_node(
+                input,
+                prev,
+                node,
+                match_length,
+            ));
+        }
+        if let Some(node) = node.num_end_transition()
+            && self.ctx.is_number_end(prev, c)
+        {
+            matching_rules.extend(self.find_translations_from_node(
+                input,
+                prev,
+                node,
+                match_length,
+            ));
+        }
+        if let Some(node) = node.num_start_transition()
+            && self.ctx.is_number_start(prev, c)
+        {
+            matching_rules.extend(self.find_translations_from_node(
+                input,
+                prev,
+                node,
+                match_length,
+            ));
+        }
+        if let Some(node) = node.space_punc_start_transition()
+            && prev.is_none_or(|p| self.ctx.is_whitespace(p) || self.ctx.is_punctuation(p))
         {
             matching_rules.extend(self.find_translations_from_node(
                 input,
