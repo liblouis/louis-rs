@@ -412,6 +412,95 @@ Chosen option: "TBD", because ...
 
 ** Links
 
+* ACCEPTED Normalize input text to NFC Unicode form
+- Deciders :: CE
+- Date :: [2026-06-22 Su]
+
+** Context and Problem Statement
+
+Unicode text can represent the same character in multiple equivalent
+forms. For example, the Portuguese letter ~à~ can be encoded as a
+single precomposed code point (U+00E0, NFC form) or as a base letter
+~a~ followed by a combining grave accent (U+0061 U+0300, NFD form).
+Translation tables define rules for precomposed characters. When input
+arrives in decomposed form, each code point is translated separately,
+producing garbage output.
+
+This problem is tracked in [[https://github.com/liblouis/liblouis/issues/98][liblouis issue #98]] and has been known since
+at least 2015.
+
+** Decision Drivers
+
+- Table authors should write rules for precomposed characters only —
+  that is the natural, Unicode-idiomatic approach
+- Users should not need to know about NFC vs NFD when providing input
+- louis-rs aims to provide a cleaner contract than liblouis
+- Braille codepoints (U+2800–U+28FF) have no canonical decompositions,
+  so NFC on braille input (backward translation) is a no-op
+
+** Considered Options
+
+- Normalize input to NFC at the library boundary
+- Leave normalization to the caller (the liblouis approach)
+- Let table authors add ~correct~ rules to convert decomposed forms
+  to precomposed forms
+
+** Decision Outcome
+
+Chosen option: "Normalize input to NFC at the library boundary".
+The pipeline normalizes its input to NFC before any translation stage
+runs, using the ~unicode-normalization~ crate.
+
+We specifically use NFC (not NFKC). NFKC performs additional
+compatibility decompositions (e.g. ligature ~ĳ~ → ~ij~) that change
+character counts more aggressively and are outside the scope of what
+table authors expect.
+
+Liblouis effectively chose the second option, for two reasons. First,
+the original author wanted liblouis to be self-contained with no
+external dependencies, using gnulib for any utility code; at the time
+there was no obvious library to depend on for Unicode normalization in
+C without significant effort. Second, as documented in issue #98,
+normalization changes character counts for decomposed input (e.g.
+~a\x0300~ = 2 chars becomes ~à~ = 1 char), which breaks the
+raw-to-braille / braille-to-raw cursor position mappings that
+liblouis provides. Faced with both constraints, the liblouis approach
+was to document the expectation via a ~#-unicode-form:nfc~ table
+metadata field and leave each table author to add explicit ~correct~
+rules. The Portuguese table alone required 63 such rules.
+
+In Rust the ~unicode-normalization~ crate makes this trivial. And
+louis-rs does not currently implement position mapping, so the
+character-count concern does not apply today.
+
+** Positive Consequences
+
+- Users can supply text in any Unicode normalization form
+- Table authors write rules for precomposed characters only
+- The ~#-unicode-form:nfc~ metadata hint becomes unnecessary
+- Normalization ~correct~ rules in tables become unnecessary
+
+** Negative Consequences
+
+- Translation rules that explicitly target isolated combining
+  diacritics will never fire; table authors should use precomposed
+  characters instead
+
+** Future Considerations
+
+If position mapping (cursors/typeforms) is ever added, the
+normalization step will need to also produce a character-index mapping
+so callers can relate positions in the original input to positions in
+the normalized input. This is solved — NVDA implemented exactly this
+mapping (see [[https://github.com/nvaccess/nvda/pull/16521][nvaccess/nvda#16521]]) — but it adds complexity that is out of
+scope for now.
+
+** Links
+
+- [[https://github.com/liblouis/liblouis/issues/98][liblouis issue #98: glyph vs diaeresis]]
+- [[https://github.com/nvaccess/nvda/pull/16521][nvaccess/nvda#16521: normalization mapping in NVDA]]
+- [[https://unicode.org/reports/tr15/][Unicode Standard Annex #15: Unicode Normalization Forms]]
+
 * COMMENT [short title of solved problem and solution]                     :Template:
 # - Status :: [proposed | rejected | accepted | deprecated | ... |
 #   superseded by [[file:0005-example.md][ADR-0005]]]
