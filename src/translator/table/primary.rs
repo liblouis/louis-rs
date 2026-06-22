@@ -510,8 +510,8 @@ impl PrimaryTable {
                 Rule::Begnum { chars, dots, .. } => builder.get_trie_mut(rule).insert(
                     chars,
                     &dots.to_string(),
-                    Some(Transition::Start(Boundary::Word)),
-                    Some(Transition::End(Boundary::WordNumber)),
+                    Some(Transition::Start(Boundary::AfterSpaceOrPunct)),
+                    Some(Transition::Start(Boundary::Number)),
                     direction,
                     rule.precedence(),
                     TranslationStage::Main,
@@ -537,8 +537,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
-                        Some(Transition::Start(Boundary::NumberWord)),
-                        Some(Transition::End(Boundary::Word)),
+                        Some(Transition::End(Boundary::Number)),
+                        None,
                         direction,
                         rule.precedence(),
                         TranslationStage::Main,
@@ -1067,6 +1067,57 @@ mod tests {
         assert_eq!(table.translate("th"), "⠉");
         assert_eq!(table.translate("1th"), "⠁⠑");
         assert_eq!(table.translate("1th."), "⠁⠑⠠");
+    }
+
+    #[test]
+    fn begnum_punctuation_indicator() {
+        // '#' is punctuation, not a word char. The old Start(Word) boundary would have
+        // missed it; Start(AfterSpaceOrPunct) correctly fires when preceded by
+        // punctuation or at start-of-string.
+        let rules = [
+            parse_rule("digit 1 1"),
+            parse_rule("punctuation # 3456"),
+            parse_rule("punctuation . 256"),
+            parse_rule("lowercase a 14"),
+            parse_rule("begnum # 4"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        // fires at start of string (prev = None)
+        assert_eq!(table.translate("#1"), "⠈⠁");
+        // fires when preceded by punctuation
+        assert_eq!(table.translate(".#1"), "⠲⠈⠁");
+        // does NOT fire when preceded by a letter
+        assert_eq!(table.translate("a#1"), "⠉⠼⠁");
+        // does NOT fire when not followed by a digit
+        assert_eq!(table.translate("#a"), "⠼⠉");
+    }
+
+    #[test]
+    fn endnum_punctuation_indicator() {
+        // '#' is punctuation. End(Number) only checks that the preceding char is a
+        // digit; there is no constraint on what follows (unlike the old End(Word)).
+        let rules = [
+            parse_rule("digit 1 1"),
+            parse_rule("lowercase a 14"),
+            parse_rule("punctuation # 3456"),
+            parse_rule("endnum # 4"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        // fires when preceded by a digit
+        assert_eq!(table.translate("1#"), "⠁⠈");
+        // does NOT fire when preceded by a letter
+        assert_eq!(table.translate("a#"), "⠉⠼");
+        // does NOT fire at start of string
+        assert_eq!(table.translate("#"), "⠼");
+        // no constraint on what follows the indicator
+        assert_eq!(table.translate("1#1"), "⠁⠈⠁");
+        assert_eq!(table.translate("1#a"), "⠁⠈⠉");
     }
 
     #[test]

@@ -19,6 +19,10 @@ pub enum Boundary {
     Punctuation,
     PunctuationWord,
     WordPunctuation,
+    /// Checks only the preceding character (space, punctuation, or start of string).
+    /// Unlike the other variants, this is a lookbehind-only condition and does not
+    /// encode a two-class transition in the usual XY naming convention.
+    AfterSpaceOrPunct,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -223,8 +227,9 @@ impl Trie {
             (Transition::End(Boundary::Number),            self.ctx.is_number_end(prev, c)),
             (Transition::Start(Boundary::Punctuation),     self.ctx.is_punctuation_start(prev, c)),
             (Transition::End(Boundary::Punctuation),       self.ctx.is_punctuation_end(prev, c)),
-            (Transition::Start(Boundary::WordPunctuation), self.ctx.is_word_punctuation(prev, c)),
-            (Transition::End(Boundary::PunctuationWord),   self.ctx.is_punctuation_word(prev, c)),
+            (Transition::Start(Boundary::WordPunctuation),  self.ctx.is_word_punctuation(prev, c)),
+            (Transition::End(Boundary::PunctuationWord),    self.ctx.is_punctuation_word(prev, c)),
+            (Transition::Start(Boundary::AfterSpaceOrPunct), self.ctx.is_after_space_or_punct(prev)),
         ];
         for (transition, matches) in &boundary_checks {
             if *matches {

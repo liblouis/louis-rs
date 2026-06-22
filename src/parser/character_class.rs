@@ -213,6 +213,13 @@ impl CharacterClasses {
             (_, _) => false,
         }
     }
+
+    /// Return true if the preceding character is space, punctuation, or absent (start of string).
+    /// Unlike the other boundary predicates this is lookbehind-only and does not constrain the
+    /// current character.
+    pub fn is_after_space_or_punct(&self, previous: Option<char>) -> bool {
+        previous.map_or(true, |p| self.is_whitespace(p) || self.is_punctuation(p))
+    }
 }
 
 #[cfg(test)]
