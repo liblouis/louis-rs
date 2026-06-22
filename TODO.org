@@ -1,4 +1,4 @@
-* Todo [12/22]
+* Todo [13/23]
 - [ ] Move the display tables into the Pipeline
 - [ ] implement "libhyphen"
 - [ ] guard against "()+" regexp?
@@ -56,6 +56,11 @@
 - [X] Handle implicit braille definitions, i.e. '='
 - [X] Table resolution based on metadata
 - [X] Handle undefined characters similarly to liblouis
+- [X] Normalize input text to NFC Unicode form
+  - Input is normalized to NFC at the start of the translation
+    pipeline so users can supply NFD or NFC text and table authors
+    need not add ~correct~ rules for combining characters.
+  - See ADR in [[file:doc/Architecture_Decision_Records.org][Architecture Decision Records]]
 - [X] Instead of hand-rolling an finite state machine to implement
   regular expressions we should use [[https://docs.rs/regex-automata/latest/regex_automata/][regex_automata]].
   - no, for now keep the hand-rolled regexp engine
