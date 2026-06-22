@@ -50,46 +50,9 @@ impl TrieNode {
     fn any_transition(&self) -> Option<&TrieNode> {
         self.transitions.get(&Transition::Any)
     }
-    fn word_start_transition(&self) -> Option<&TrieNode> {
-        self.transitions.get(&Transition::Start(Boundary::Word))
-    }
-    fn not_word_start_transition(&self) -> Option<&TrieNode> {
-        self.transitions.get(&Transition::Start(Boundary::NotWord))
-    }
-    fn word_end_transition(&self) -> Option<&TrieNode> {
-        self.transitions.get(&Transition::End(Boundary::Word))
-    }
-    fn not_word_end_transition(&self) -> Option<&TrieNode> {
-        self.transitions.get(&Transition::End(Boundary::NotWord))
-    }
-    fn word_num_transition(&self) -> Option<&TrieNode> {
-        self.transitions.get(&Transition::End(Boundary::WordNumber))
-    }
-    fn num_word_transition(&self) -> Option<&TrieNode> {
-        self.transitions
-            .get(&Transition::Start(Boundary::NumberWord))
-    }
-    fn num_start_transition(&self) -> Option<&TrieNode> {
-        self.transitions.get(&Transition::Start(Boundary::Number))
-    }
-    fn num_end_transition(&self) -> Option<&TrieNode> {
-        self.transitions.get(&Transition::End(Boundary::Number))
-    }
-    fn punctuation_start_transition(&self) -> Option<&TrieNode> {
-        self.transitions
-            .get(&Transition::Start(Boundary::Punctuation))
-    }
-    fn punctuation_end_transition(&self) -> Option<&TrieNode> {
-        self.transitions
-            .get(&Transition::End(Boundary::Punctuation))
-    }
-    fn word_punc_transition(&self) -> Option<&TrieNode> {
-        self.transitions
-            .get(&Transition::Start(Boundary::WordPunctuation))
-    }
-    fn punc_word_transition(&self) -> Option<&TrieNode> {
-        self.transitions
-            .get(&Transition::End(Boundary::PunctuationWord))
+
+    fn boundary_transition(&self, t: &Transition) -> Option<&TrieNode> {
+        self.transitions.get(t)
     }
 }
 
@@ -251,125 +214,31 @@ impl Trie {
                 ));
             }
         }
-        if let Some(node) = node.word_start_transition()
-            && self.ctx.is_word_start(prev, c)
-        {
-            matching_rules.extend(self.find_translations_from_node(
-                input,
-                prev,
-                node,
-                match_length,
-            ));
-        }
-        if let Some(node) = node.not_word_start_transition()
-            && !self.ctx.is_word_start(prev, c)
-        {
-            matching_rules.extend(self.find_translations_from_node(
-                input,
-                prev,
-                node,
-                match_length,
-            ));
-        }
-        if let Some(node) = node.word_end_transition()
-            && self.ctx.is_word_end(prev, c)
-        {
-            matching_rules.extend(self.find_translations_from_node(
-                input,
-                prev,
-                node,
-                match_length,
-            ));
-        }
-        if let Some(node) = node.not_word_end_transition()
-            && !self.ctx.is_word_end(prev, c)
-        {
-            matching_rules.extend(self.find_translations_from_node(
-                input,
-                prev,
-                node,
-                match_length,
-            ));
-        }
-        if let Some(node) = node.word_num_transition()
-            && self.ctx.is_word_number(prev, c)
-        {
-            matching_rules.extend(self.find_translations_from_node(
-                input,
-                prev,
-                node,
-                match_length,
-            ));
-        }
-        if let Some(node) = node.num_word_transition()
-            && self.ctx.is_number_word(prev, c)
-        {
-            matching_rules.extend(self.find_translations_from_node(
-                input,
-                prev,
-                node,
-                match_length,
-            ));
-        }
-        if let Some(node) = node.num_start_transition()
-            && self.ctx.is_number_start(prev, c)
-        {
-            matching_rules.extend(self.find_translations_from_node(
-                input,
-                prev,
-                node,
-                match_length,
-            ));
-        }
-        if let Some(node) = node.num_end_transition()
-            && self.ctx.is_number_end(prev, c)
-        {
-            matching_rules.extend(self.find_translations_from_node(
-                input,
-                prev,
-                node,
-                match_length,
-            ));
-        }
-        if let Some(node) = node.punctuation_start_transition()
-            && self.ctx.is_punctuation_start(prev, c)
-        {
-            matching_rules.extend(self.find_translations_from_node(
-                input,
-                prev,
-                node,
-                match_length,
-            ));
-        }
-        if let Some(node) = node.punctuation_end_transition()
-            && self.ctx.is_punctuation_end(prev, c)
-        {
-            matching_rules.extend(self.find_translations_from_node(
-                input,
-                prev,
-                node,
-                match_length,
-            ));
-        }
-        if let Some(node) = node.word_punc_transition()
-            && self.ctx.is_word_punctuation(prev, c)
-        {
-            matching_rules.extend(self.find_translations_from_node(
-                input,
-                prev,
-                node,
-                match_length,
-            ));
-        }
-        if let Some(node) = node.punc_word_transition()
-            && self.ctx.is_punctuation_word(prev, c)
-        {
-            matching_rules.extend(self.find_translations_from_node(
-                input,
-                prev,
-                node,
-                match_length,
-            ));
+        let boundary_checks = [
+            (Transition::Start(Boundary::Word),            self.ctx.is_word_start(prev, c)),
+            (Transition::Start(Boundary::NotWord),        !self.ctx.is_word_start(prev, c)),
+            (Transition::End(Boundary::Word),              self.ctx.is_word_end(prev, c)),
+            (Transition::End(Boundary::NotWord),          !self.ctx.is_word_end(prev, c)),
+            (Transition::End(Boundary::WordNumber),        self.ctx.is_word_number(prev, c)),
+            (Transition::Start(Boundary::NumberWord),      self.ctx.is_number_word(prev, c)),
+            (Transition::Start(Boundary::Number),          self.ctx.is_number_start(prev, c)),
+            (Transition::End(Boundary::Number),            self.ctx.is_number_end(prev, c)),
+            (Transition::Start(Boundary::Punctuation),     self.ctx.is_punctuation_start(prev, c)),
+            (Transition::End(Boundary::Punctuation),       self.ctx.is_punctuation_end(prev, c)),
+            (Transition::Start(Boundary::WordPunctuation), self.ctx.is_word_punctuation(prev, c)),
+            (Transition::End(Boundary::PunctuationWord),   self.ctx.is_punctuation_word(prev, c)),
+        ];
+        for (transition, matches) in &boundary_checks {
+            if *matches {
+                if let Some(node) = node.boundary_transition(transition) {
+                    matching_rules.extend(self.find_translations_from_node(
+                        input,
+                        prev,
+                        node,
+                        match_length,
+                    ));
+                }
+            }
         }
         matching_rules
     }
