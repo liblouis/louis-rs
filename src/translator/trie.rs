@@ -126,10 +126,7 @@ impl Trie {
 
         if let Some(t) = before {
             length += 1;
-            current_node = current_node
-                .transitions
-                .entry(t)
-                .or_default();
+            current_node = current_node.transitions.entry(t).or_default();
         }
 
         for c in from.chars() {
@@ -141,10 +138,7 @@ impl Trie {
 
         if let Some(t) = after {
             length += 1;
-            current_node = current_node
-                .transitions
-                .entry(t)
-                .or_default();
+            current_node = current_node.transitions.entry(t).or_default();
         }
 
         if let Some(translation) = &current_node.translation {
@@ -214,6 +208,10 @@ impl Trie {
                 ));
             }
         }
+        // TODO: all 12 conditions are evaluated eagerly even when the node has no boundary
+        // branches. Lazy evaluation (closures, check trie first) would be cheaper for the common
+        // case, but needs benchmarks to justify the added complexity.
+        #[rustfmt::skip]
         let boundary_checks = [
             (Transition::Start(Boundary::Word),            self.ctx.is_word_start(prev, c)),
             (Transition::Start(Boundary::NotWord),        !self.ctx.is_word_start(prev, c)),
