@@ -173,7 +173,9 @@ impl Indicator {
 
     fn next_is_numeric(&self, s: &str) -> bool {
         // s starts with the current (midnum) char; check the char after it
-        s.chars().nth(1).is_some_and(|c| self.numeric_chars.contains(&c))
+        s.chars()
+            .nth(1)
+            .is_some_and(|c| self.numeric_chars.contains(&c))
     }
 }
 
