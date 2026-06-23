@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   evaluated as a better alternative.
 
 ### Changed
+- `always` rules now correctly take precedence over character-definition
+  opcodes (`letter`, `punctuation`, `sign`, etc.), matching liblouis
+  behaviour. Previously both had equal precedence, so whichever appeared
+  first in the table won — meaning `always` rules intended to override a
+  character definition were silently ignored when the definition came from
+  an included file. This fixes translation for many tables; the overall
+  test suite improves from 71.6% to 79.7%.
 - When showing a trace of a translation show all rules in one table,
   instead a table for each stage.
 - `begnum` now correctly matches non-word indicator characters (e.g.

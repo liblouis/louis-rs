@@ -1034,7 +1034,8 @@ impl HasPrecedence for Rule {
             | Rule::Joinword { .. }
             | Rule::Begnum { .. }
             | Rule::Midnum { .. }
-            | Rule::Endnum { .. } => Precedence::Translation,
+            | Rule::Endnum { .. }
+            | Rule::Always { .. } => Precedence::Translation,
             _ => Precedence::Default,
         }
     }
