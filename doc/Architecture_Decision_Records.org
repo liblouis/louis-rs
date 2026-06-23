@@ -9,7 +9,7 @@
 
 * DRAFT Normalize input text and translation rules to a canonical Unicode form
 - Deciders :: CE
-- Date :: [2026-06-22 Su]
+- Date :: [2026-06-23 Di]
 
 ** Context and Problem Statement
 
@@ -174,6 +174,198 @@ and louis-rs does not currently implement position mapping.
 - [[https://github.com/liblouis/liblouis/issues/98][liblouis issue #98: glyph vs diaeresis]]
 - [[https://github.com/nvaccess/nvda/pull/16521][nvaccess/nvda#16521: normalization mapping in NVDA]]
 - [[https://unicode.org/reports/tr15/][Unicode Standard Annex #15: Unicode Normalization Forms]]
+
+* DRAFT Pre-compute indication events before translation
+- Deciders :: CE
+- Date :: [2026-06-23 Di]
+
+** Context and Problem Statement
+
+Braille indication — the insertion of indicator cells to signal
+numeric sequences, uppercase runs, letter signs, and emphasis — is
+currently implemented as a set of mutable state machines
+(~numeric::Indicator~, ~uppercase::Indicator~, ~lettersign::Indicator~,
+~nocontract::Indicator~) that walk the input in parallel with the
+translation loop. At each position the translation loop calls
+~indicators.next()~, which advances all state machines and returns any
+indication translations to emit.
+
+This works for built-in indication, but two problems remain unsolved:
+
+1. *Typeform integration.* Users can supply a per-character ~typeforms~
+   array annotating emphasis (italic, bold, …). These annotations also
+   require start/end indicators in the braille output, but the typeform
+   array is entirely separate from the indicator state machines. There
+   is no clean mechanism to merge the two sources of indication.
+
+2. *Awkward mutable clone.* The translation table (~PrimaryTable~) is
+   intended to be immutable and shared, but the indicators carry mutable
+   state, so they must be cloned for every translation call (see the
+   FIXME at ~primary.rs:722~). This is a structural smell.
+
+The question is whether indication events can be *pre-computed* from
+the input text before the translation loop begins, producing an
+immutable per-position event array that both the built-in state
+machines and the typeform array populate, and that the translation loop
+consults by simple indexed lookup.
+
+*** Does indicator state affect rule selection?
+
+This is the key correctness concern: if which rules fire depends on
+indicator state, pre-computing events before translation may produce a
+different answer than computing them on the fly.
+
+Investigation of the liblouis C source (~lou_translateString.c~) reveals
+that indicator state *does* influence rule selection via a ~dontContract~
+flag:
+
+- ~checkNumericMode()~ is called at every position before
+  ~for_selectRule()~. When it detects entry into numeric mode (a digit
+  or ~numericmodechars~ character followed by a digit) it sets both
+  ~numericMode = 1~ and, when the table's ~noContractSign~ equals its
+  ~noNumberSign~, ~dontContract = 1~.
+- ~dontContract~ is passed into ~for_selectRule()~ and suppresses about
+  15 contraction-type rules (~CTO_Always~, ~CTO_WholeWord~,
+  ~CTO_BegWord~, ~CTO_EndWord~, ~CTO_Match~, and others).
+- The ~no_contract~ bit in the user-supplied ~typebuf~ (typeforms) also
+  sets ~dontContract~ directly (~lou_translateString.c:3684~).
+
+Crucially, both the indication emission (numsign) and the
+contraction-suppression (~dontContract~) are computed from the *same
+source*: character class membership of the input characters (~CTC_Digit~,
+~CTC_LitDigit~, ~CTC_NumericMode~, ~CTC_NumericNoContract~). Neither
+depends on what braille has already been output. The two effects happen
+together as consequences of the same input-character analysis, not as a
+causal chain where emitting the indicator changes subsequent rule
+selection.
+
+Therefore both the indication events and the ~dontContract~ spans are
+*pre-computable* from the input text and the character class
+definitions.
+
+*** The ~prevTransOpcode~ / ~exactdots~ edge case
+
+~for_selectRule()~ also checks ~prevTransOpcode != CTO_ExactDots~ before
+accepting ~CTO_MidNum~ and ~CTO_EndNum~ rules. This looks like a genuine
+translation-decision dependency. However:
+
+- ~exactdots~ is an opcode intended exclusively for
+  [[https://github.com/liblouis/liblouisutdml][liblouisutdml]] semantic-action files, which inject raw dot patterns
+  into a translation mid-stream via ~@dots~ sequences in the source
+  document.
+- No standard braille table shipped with liblouis uses ~exactdots~.
+- Louis-rs operates on plain text input with table-driven translation;
+  there is no mechanism to inject raw dot patterns mid-stream.
+
+The ~prevTransOpcode == CTO_ExactDots~ guard is therefore outside the
+scope of louis-rs and can be disregarded for this decision.
+
+** Decision Drivers
+
+- Built-in indication (numeric, uppercase, lettersign, nocontract) and
+  user-supplied typeform indication are the same phenomenon and should
+  be handled by the same mechanism
+- The mutable-clone pattern for indicators should be eliminated
+- The translation loop should be simplified: indication should not
+  require threaded mutable state alongside rule selection
+- Contraction suppression in numeric mode (~dontContract~) must remain
+  correct under the new design
+- The data structure should be cache-friendly (no heap allocation per
+  character position)
+
+** Considered Options
+
+1. *Status quo with typeform state machine added* — keep the existing
+   mutable state machines, add a parallel state machine over the
+   typeform array, merge outputs at each position in the loop.
+
+2. *Pre-computed events array* — run all state machines (and the
+   typeform array) as a single preprocessing pass before translation
+   begins, producing an immutable ~Vec<IndicationFlags>~ indexed by
+   character position. The translation loop consults this array by index.
+
+** Decision Outcome
+
+Chosen option: *Pre-computed events array* (option 2).
+
+The preprocessing pass runs each indicator state machine and the
+typeform array once over the input string, recording at each character
+position a bitflag word that encodes:
+
+- Which indication events fire at this position (emit numsign, emit
+  capsletter, emit lettersign, emit emphasis start/end, …)
+- Whether contraction is suppressed at this position (~dontContract~
+  equivalent, derived from numeric mode and the ~no_contract~ typeform
+  bit)
+
+The translation loop replaces ~indicators.next(chars.as_str(), prev)~
+with a single array lookup. The indicators no longer need to be cloned;
+the array is immutable and cheaply shareable.
+
+The event type sketched in ~src/translator/indication/events.rs~ is the
+right starting point. The ~HashSet<IndicationEvent>~ noted there should
+be replaced by a bitflag word (e.g. using the ~bitflags!~ macro) — the
+number of distinct events per position is small and bounded, so a ~u16~
+or ~u32~ avoids any heap allocation per position.
+
+** Positive Consequences
+
+- Typeforms and built-in indication are unified: both populate the same
+  array during preprocessing, both are consumed identically in the
+  translation loop.
+- The mutable-clone FIXME in ~primary.rs~ is eliminated; ~PrimaryTable~
+  becomes fully immutable.
+- The translation loop is simpler: one array lookup per position instead
+  of calls into multiple state machines.
+- Indication logic is testable in isolation: the preprocessing pass can
+  be unit-tested independently of the translation loop.
+- Contraction suppression (~dontContract~) is also pre-computed,
+  keeping the liblouis-equivalent behavior correct without live state in
+  the loop.
+
+** Negative Consequences
+
+- An additional allocation proportional to input length is required
+  before translation begins. For typical inputs this is negligible.
+- The preprocessing pass is a second traversal of the input. This is
+  also negligible compared to the translation work, but it is a
+  structural change that new contributors will need to understand.
+- If a future liblouis feature introduces genuine feedback from
+  translation decisions back into indication state (analogous to
+  ~prevTransOpcode~ for ~midnum~, but without the ~exactdots~ escape
+  hatch), the pre-computation assumption would need to be revisited.
+
+** Pros and Cons of the Options
+
+*** Status quo with typeform state machine added
+
+- Good, because it is a minimal change and does not restructure the
+  translation loop
+- Bad, because it adds yet another parallel mutable iterator to an
+  already crowded loop
+- Bad, because built-in and typeform indication remain structurally
+  separate with no shared abstraction
+- Bad, because the mutable-clone pattern remains
+
+*** Pre-computed events array
+
+- Good, because it unifies built-in and typeform indication under one
+  abstraction
+- Good, because it eliminates mutable state from the translation hot loop
+- Good, because the preprocessing step is independently testable
+- Good, because the bitflag representation is cache-friendly with no
+  per-position heap allocation
+- Bad, because it requires a dedicated preprocessing pass and the
+  associated ~Vec~ allocation
+
+** Links
+
+- ~src/translator/indication/events.rs~ — initial sketch of the event
+  type (predates this ADR)
+- ~src/translator/indication/numeric.rs~ — current numeric indicator state machine
+- ~src/translator/indication/uppercase.rs~ — current uppercase indicator state machine
+- [[https://github.com/liblouis/liblouis/blob/master/liblouis/lou_translateString.c][liblouis lou_translateString.c]] — authoritative reference for
+  ~checkNumericMode~, ~dontContract~, and ~for_selectRule~
 
 * DRAFT Regexps duplicate character transitions
 - Deciders :: CE
