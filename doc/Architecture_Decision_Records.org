@@ -126,9 +126,27 @@ and louis-rs does not currently implement position mapping.
 ** Future Considerations
 
 - Evaluate NFD as a drop-in replacement for NFC in both ~pipeline.rs~ and
-  ~trie.rs~. The key questions are: does word-boundary detection work
-  correctly when a precomposed letter is split into base + combining mark?
-  Does case-insensitive trie matching handle decomposed uppercase correctly?
+  ~trie.rs~. Two open issues must be resolved first:
+
+  1. *Word-boundary detection at decomposed-sequence seams.* Under NFD,
+     a precomposed letter like ~á~ (U+00E1) is split into two codepoints:
+     base ~a~ + combining mark U+0301. After the trie consumes both
+     codepoints and returns the translation, the pipeline's ~prev~ pointer
+     is left at U+0301 — a combining mark, which is not a letter. When
+     the next character (say ~r~ in "árbol") is looked up, any
+     ~Start(Word)~ boundary check sees ~prev~ = U+0301 (non-letter) and
+     ~c~ = ~r~ (letter), and incorrectly fires a word-boundary in the
+     middle of the word. Under NFC, ~prev~ after translating ~á~ is the
+     precomposed letter ~á~ itself, so no false boundary fires. The fix
+     is to advance ~prev~ by grapheme cluster rather than by codepoint,
+     but this logic does not currently exist.
+
+  2. *Case-insensitive trie matching with decomposed uppercase.* The trie
+     normalises character transitions to lowercase via ~char::to_lowercase~.
+     Under NFD, uppercase ~Á~ decomposes to ~A~ + U+0301. ~A.to_lowercase()~
+     = ~a~, so the base is handled correctly, but it is unclear whether
+     multi-codepoint uppercase sequences (some scripts produce more than one
+     codepoint from ~to_lowercase~) are handled correctly in all cases.
 - If position mapping (cursors/typeforms) is added, the normalization step
   must also produce a character-index mapping so callers can relate
   positions in the original input to positions in the normalized input.
