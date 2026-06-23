@@ -56,10 +56,14 @@
 - [X] Handle implicit braille definitions, i.e. '='
 - [X] Table resolution based on metadata
 - [X] Handle undefined characters similarly to liblouis
-- [X] Normalize input text to NFC Unicode form
-  - Input is normalized to NFC at the start of the translation
-    pipeline so users can supply NFD or NFC text and table authors
-    need not add ~correct~ rules for combining characters.
+- [-] Normalize input text to a canonical Unicode form
+  - Input is currently normalized to NFC at the start of the
+    translation pipeline. This fixes tables that define rules for
+    precomposed characters (e.g. pt-pt-g1.utb), but breaks tables
+    that define rules for standalone combining characters (IPA, Hebrew,
+    Yiddish). NFD normalization is a promising alternative — it
+    decomposes all input, so combining marks stay explicit and
+    precomposed rules still match via longer trie paths.
   - See ADR in [[file:doc/Architecture_Decision_Records.org][Architecture Decision Records]]
 - [X] Instead of hand-rolling an finite state machine to implement
   regular expressions we should use [[https://docs.rs/regex-automata/latest/regex_automata/][regex_automata]].

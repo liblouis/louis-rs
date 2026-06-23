@@ -17,9 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Add `trace` as a separate command (instead of `translate --tracing`)
 - Add an option to change the style of the traces
 - Normalize all input text to NFC Unicode form before translation.
-  Users can now supply NFD or NFC text and get correct output without
-  any special handling. Table authors no longer need `correct` rules
-  to deal with combining diacritics.
+  Users can supply NFD or NFC text and get correct output for tables
+  that define rules for precomposed characters. Note: tables that
+  define rules for standalone combining characters (IPA, Hebrew,
+  Yiddish) are currently broken by NFC; NFD normalization is being
+  evaluated as a better alternative.
 
 ### Changed
 - When showing a trace of a translation show all rules in one table,
