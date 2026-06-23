@@ -117,9 +117,26 @@ and louis-rs does not currently implement position mapping.
 ** Negative Consequences (current NFC implementation)
 
 - Translation rules that explicitly target isolated combining diacritics
-  will never fire. This breaks the IPA table (~ipa.yaml~: 100% → 76.5%),
-  the Yiddish table (~yi.yaml~: 93.8% → 68.8%), the Hebrew Biblical table
-  (~hbo.yaml~), and the modern Greek table (~el-forward.yaml~).
+  will never fire. NFC canonical ordering reorders sequences of combining
+  marks by their Canonical Combining Class values, so input that was
+  written expecting a specific ordering is silently mis-translated.
+  Measured impact against the liblouis test suite (713,827 tests total):
+
+  | Table                | Before NFC | With NFC | Change | Tests |
+  |----------------------+------------+----------+--------+-------|
+  | ~ipa.yaml~           |     100.0% |    76.5% | −23.5% |    34 |
+  | ~yi.yaml~            |      93.8% |    68.8% | −25.0% |    16 |
+  | ~ar-ar-comp8.yaml~   |     100.0% |    95.8% |  −4.2% |    24 |
+  | ~el-forward.yaml~    |      84.9% |    82.8% |  −2.1% |    93 |
+  | ~hbo.yaml~           |      43.7% |    41.8% |  −1.9% |   469 |
+  | ~bn.yaml~            |      36.8% |    35.6% |  −1.2% |    87 |
+  | ~vi.yaml~ (improved) |      47.6% |    53.7% |  +6.1% |    82 |
+  | ~pt.yaml~ (improved) |      84.8% |    87.0% |  +2.2% | 1163  |
+
+  NFC is a net gain on the weighted total (~pt.yaml~ alone has 1163
+  tests), but it systematically breaks every table that uses standalone
+  combining marks.
+
 - No warning is currently emitted when a combining-mark rule is silently
   unreachable (tracked as TODO in ~trie.rs~).
 
