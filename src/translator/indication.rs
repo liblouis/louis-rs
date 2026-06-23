@@ -20,6 +20,7 @@
 
 use crate::translator::ResolvedTranslation;
 
+pub mod events;
 pub mod lettersign;
 pub mod nocontract;
 pub mod numeric;
