@@ -44,7 +44,32 @@ pub enum IndicationEvent {
     NumberStart,
     NumberEnd,
     Italic,
+    Underline,
     Bold,
+    /// Table-defined emphasis class 4
+    Emph4,
+    /// Table-defined emphasis class 5
+    Emph5,
+    /// Table-defined emphasis class 6
+    Emph6,
+    /// Table-defined emphasis class 7
+    Emph7,
+    /// Table-defined emphasis class 8
+    Emph8,
+    /// Table-defined emphasis class 9
+    Emph9,
+    /// Table-defined emphasis class 10
+    Emph10,
+    ComputerBraille,
+    PassageBreak,
+    WordReset,
+    Script,
+    TransNote,
+    TransNote1,
+    TransNote2,
+    TransNote3,
+    TransNote4,
+    TransNote5,
     LetterSign,
     NoContractSign,
     /// Suppress contraction rules at this position (liblouis `dontContract`).

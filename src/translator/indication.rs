@@ -18,8 +18,9 @@
 //! * [`lettersign::Indicator`]: indicates that the following braille cells are not to be read as a contraction
 //! * [`nocontract::Indicator`]: indicates that the following braille cells are not to be read as a contraction
 
+use crate::text_attribute::{TextAttribute, TextAttributes};
 use crate::translator::ResolvedTranslation;
-use events::IndicationEvents;
+use events::{IndicationEvent, IndicationEvents};
 
 pub mod events;
 pub mod lettersign;
@@ -67,11 +68,50 @@ impl Indicators {
         self.0.iter_mut().flat_map(|i| i.next(s, prev)).collect()
     }
 
-    pub fn precompute(&self, input: &str) -> IndicationEvents {
+    pub fn precompute(&self, input: &str, typeforms: &[TextAttributes]) -> IndicationEvents {
         self.0
             .iter()
             .map(|i| i.precompute(input))
-            .fold(IndicationEvents::default(), |acc, e| acc | e)
+            .fold(IndicationEvents::from(typeforms), |acc, e| acc | e)
+    }
+}
+
+impl From<TextAttribute> for IndicationEvent {
+    fn from(attr: TextAttribute) -> Self {
+        match attr {
+            TextAttribute::Italic => Self::Italic,
+            TextAttribute::Underline => Self::Underline,
+            TextAttribute::Bold => Self::Bold,
+            TextAttribute::Emph4 => Self::Emph4,
+            TextAttribute::Emph5 => Self::Emph5,
+            TextAttribute::Emph6 => Self::Emph6,
+            TextAttribute::Emph7 => Self::Emph7,
+            TextAttribute::Emph8 => Self::Emph8,
+            TextAttribute::Emph9 => Self::Emph9,
+            TextAttribute::Emph10 => Self::Emph10,
+            TextAttribute::ComputerBraille => Self::ComputerBraille,
+            TextAttribute::PassageBreak => Self::PassageBreak,
+            TextAttribute::WordReset => Self::WordReset,
+            TextAttribute::Script => Self::Script,
+            TextAttribute::TransNote => Self::TransNote,
+            TextAttribute::TransNote1 => Self::TransNote1,
+            TextAttribute::TransNote2 => Self::TransNote2,
+            TextAttribute::TransNote3 => Self::TransNote3,
+            TextAttribute::TransNote4 => Self::TransNote4,
+            TextAttribute::TransNote5 => Self::TransNote5,
+        }
+    }
+}
+
+impl From<&[TextAttributes]> for IndicationEvents {
+    fn from(typeforms: &[TextAttributes]) -> Self {
+        let mut events = IndicationEvents::new(typeforms.len());
+        for (pos, &attrs) in typeforms.iter().enumerate() {
+            for attr in attrs {
+                events.insert(pos, attr.into());
+            }
+        }
+        events
     }
 }
 
@@ -102,10 +142,31 @@ mod tests {
         let indicators = Indicators::new(vec![numeric, uppercase]);
 
         assert_eq!(
-            indicators.precompute("A1"),
+            indicators.precompute("A1", &[]),
             IndicationEvents::from(vec![
                 IndicationEvent::UppercaseStart.into(),                          // 'A'
                 IndicationEvent::NumberStart | IndicationEvent::DontContract,   // '1'
+            ])
+        );
+    }
+
+    #[test]
+    fn precompute_merges_typeforms() {
+        use crate::text_attribute::TextAttribute;
+        use enumset::EnumSet;
+
+        let indicators = Indicators::new(vec![]);
+        let typeforms = vec![
+            TextAttribute::Italic.into(),
+            TextAttribute::Bold | TextAttribute::Underline,
+            EnumSet::empty(),
+        ];
+        assert_eq!(
+            indicators.precompute("abc", &typeforms),
+            IndicationEvents::from(vec![
+                IndicationEvent::Italic.into(),
+                IndicationEvent::Bold | IndicationEvent::Underline,
+                EnumSet::empty(),
             ])
         );
     }
