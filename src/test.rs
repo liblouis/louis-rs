@@ -8,6 +8,7 @@ use search_path::SearchPath;
 
 use crate::{
     parser::{self, Direction, TableError},
+    text_attribute::TextAttributes,
     translator::{self, DisplayTable, TranslationPipeline},
 };
 
@@ -244,7 +245,6 @@ impl TranslationModes {
     }
 }
 
-pub type Typeform = HashMap<String, String>;
 
 #[derive(Debug, Clone)]
 pub enum CursorPosition {
@@ -280,8 +280,8 @@ pub struct Test {
     expected: String,
     /// Is the test expected to fail?
     xfail: ExpectedFailure,
-    typeform: Typeform,
-    expected_typeform: Typeform,
+    typeform: Vec<TextAttributes>,
+    expected_typeform: Vec<TextAttributes>,
     input_pos: Vec<u16>,
     output_pos: Vec<u16>,
     cursor_pos: Option<CursorPosition>,
@@ -329,8 +329,8 @@ impl Test {
         input: String,
         expected: String,
         xfail: ExpectedFailure,
-        typeform: Typeform,
-        expected_typeform: Typeform,
+        typeform: Vec<TextAttributes>,
+        expected_typeform: Vec<TextAttributes>,
         input_pos: Vec<u16>,
         output_pos: Vec<u16>,
         cursor_pos: Option<CursorPosition>,

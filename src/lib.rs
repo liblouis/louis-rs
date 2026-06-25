@@ -27,12 +27,13 @@ assert_eq!(braille, "⠓⠑⠇⠇⠕⠀⠺⠕⠗⠇⠙");
 
 mod parser;
 mod test;
+pub mod text_attribute;
 mod translator;
 
 use std::path::Path;
 
 pub use parser::Direction;
-pub use test::Typeform;
+pub use text_attribute::{TextAttribute, TextAttributes};
 pub use test::{TranslationMode, TranslationModes};
 use translator::TranslationPipeline;
 
@@ -49,7 +50,7 @@ pub enum TranslationError {
 #[derive(Debug, Clone)]
 pub struct TranslationOptions {
     pub mode: TranslationModes,
-    pub typeforms: Option<Vec<Typeform>>,
+    pub typeforms: Option<Vec<TextAttributes>>,
     pub cursor_pos: Option<usize>,
 }
 
@@ -70,7 +71,7 @@ pub struct SpacingInfo {
 #[derive(Debug, Default)]
 pub struct TranslationResult {
     pub output: String,
-    pub typeforms: Option<Vec<Typeform>>, // Only if input had typeforms
+    pub typeforms: Option<Vec<TextAttributes>>, // Only if input had typeforms
     pub spacing: Option<Vec<SpacingInfo>>,
     pub output_positions: Option<Vec<usize>>, // Maps input pos -> output pos
     pub input_positions: Option<Vec<usize>>,  // Maps output pos -> input pos

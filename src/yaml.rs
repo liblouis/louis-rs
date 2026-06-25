@@ -7,12 +7,34 @@ use crate::{parser, parser::EscapingContext, parser::unescape};
 use libyaml::{Encoding, Event, Parser, ParserIter};
 
 use crate::parser::Direction;
+use crate::text_attribute::{TextAttribute, TextAttributes};
 use crate::test::{
     CursorPosition, Directions, Display, ExpectedFailure, Table, TableQuery, Test, TestError,
-    TestMatrix, TestMode, TestResult, TranslationMode, TranslationModes, Typeform,
+    TestMatrix, TestMode, TestResult, TranslationMode, TranslationModes,
 };
 
 type YAMLEventError = Option<Result<Event, libyaml::ParserError>>;
+
+impl TextAttribute {
+    fn from_yaml_name(s: &str) -> Option<Self> {
+        match s {
+            "italic" => Some(Self::Italic),
+            "underline" => Some(Self::Underline),
+            "bold" => Some(Self::Bold),
+            "computer_braille" => Some(Self::ComputerBraille),
+            "passage_break" => Some(Self::PassageBreak),
+            "word_reset" => Some(Self::WordReset),
+            "script" => Some(Self::Script),
+            "trans_note" => Some(Self::TransNote),
+            "trans_note_1" => Some(Self::TransNote1),
+            "trans_note_2" => Some(Self::TransNote2),
+            "trans_note_3" => Some(Self::TransNote3),
+            "trans_note_4" => Some(Self::TransNote4),
+            "trans_note_5" => Some(Self::TransNote5),
+            _ => None,
+        }
+    }
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum ParseError {
@@ -236,16 +258,27 @@ impl YAMLParser<'_> {
         }
     }
 
-    fn typeform_value(&mut self) -> Result<Typeform, ParseError> {
-        let mut typeform = HashMap::new();
+    fn typeform_value(&mut self) -> Result<Vec<TextAttributes>, ParseError> {
+        let mut pairs: Vec<(TextAttribute, String)> = Vec::new();
         self.mapping_start()?;
         while let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
             let key = self.scalar()?;
             let value = self.scalar()?;
-            typeform.insert(key, value);
+            if let Some(attr) = TextAttribute::from_yaml_name(&key) {
+                pairs.push((attr, value));
+            }
         }
         self.mapping_end()?;
-        Ok(typeform)
+        let char_count = pairs.iter().map(|(_, s)| s.chars().count()).max().unwrap_or(0);
+        let mut result = vec![TextAttributes::empty(); char_count];
+        for (attr, mask) in &pairs {
+            for (i, ch) in mask.chars().enumerate() {
+                if ch == '+' {
+                    result[i].insert(*attr);
+                }
+            }
+        }
+        Ok(result)
     }
 
     fn u16_value(&mut self) -> Result<u16, ParseError> {
@@ -321,8 +354,8 @@ impl YAMLParser<'_> {
         // let input = self.scalar()?;
         // let expected = self.scalar()?;
         let mut xfail = ExpectedFailure::Simple(false);
-        let mut typeform = HashMap::new();
-        let mut expected_typeform = HashMap::new();
+        let mut typeform: Vec<TextAttributes> = Vec::new();
+        let mut expected_typeform: Vec<TextAttributes> = Vec::new();
         let mut input_pos: Vec<u16> = Vec::new();
         let mut output_pos: Vec<u16> = Vec::new();
         let mut cursor_pos = None;
