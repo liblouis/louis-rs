@@ -18,6 +18,7 @@ use crate::{
 
 use log::warn;
 
+use super::events::{IndicationEvent, IndicationEvents};
 use std::collections::HashMap;
 
 /// A builder for [`Indicator`]
@@ -80,6 +81,23 @@ pub struct Indicator {
 }
 
 impl Indicator {
+    pub fn precompute(&self, input: &str) -> IndicationEvents {
+        let char_count = input.chars().count();
+        let mut events = IndicationEvents::new(char_count);
+        let mut prev: Option<char> = None;
+        let mut char_pos = 0;
+
+        for (byte_pos, c) in input.char_indices() {
+            if self.next(&input[byte_pos..], prev).is_some() {
+                events.insert(char_pos, IndicationEvent::LetterSign);
+            }
+            prev = Some(c);
+            char_pos += 1;
+        }
+
+        events
+    }
+
     pub fn next(&self, s: &str, prev: Option<char>) -> Option<ResolvedTranslation> {
         let translations = self.contractions.find_translations(s, prev);
         if !translations.is_empty() {
@@ -100,6 +118,8 @@ mod tests {
         parser::{CharacterClass, RuleParser},
         translator::TranslationStage,
     };
+    use crate::translator::indication::events::{IndicationEvent, IndicationEvents};
+    use enumset::EnumSet;
 
     fn rule(rule: &str) -> AnchoredRule {
         let rule = RuleParser::new(rule).rule().unwrap();
@@ -134,6 +154,25 @@ mod tests {
                 TranslationStage::Main,
                 rule("letsign 6")
             ))
+        );
+    }
+
+    #[test]
+    fn precompute_indicator() {
+        let mut builder = IndicatorBuilder::new();
+        builder.letsign("⠠", &rule("letsign 6"));
+        builder.contraction("ab", &rule("contraction ab"));
+        builder.contraction("cd", &rule("contraction cd"));
+        let ctx = CharacterClasses::new(&[(CharacterClass::Letter, &['a', 'b', 'c', 'd'])]);
+        let indicator = builder.build(ctx).unwrap();
+
+        assert_eq!(
+            indicator.precompute("aa"),
+            IndicationEvents::from(vec![EnumSet::empty(), EnumSet::empty()])
+        );
+        assert_eq!(
+            indicator.precompute("ab"),
+            IndicationEvents::from(vec![IndicationEvent::LetterSign.into(), EnumSet::empty()])
         );
     }
 }

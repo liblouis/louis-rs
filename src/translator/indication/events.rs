@@ -25,6 +25,7 @@
 //! translation" in `doc/Architecture_Decision_Records.org`.
 
 use enumset::{EnumSet, EnumSetType};
+use std::ops::BitOr;
 
 /// An indication event at a single character position.
 ///
@@ -44,6 +45,8 @@ pub enum IndicationEvent {
     NumberEnd,
     Italic,
     Bold,
+    LetterSign,
+    NoContractSign,
     /// Suppress contraction rules at this position (liblouis `dontContract`).
     /// Set for every character inside a numeric run and for characters covered
     /// by a `no_contract` typeform bit.
@@ -54,7 +57,7 @@ pub enum IndicationEvent {
 ///
 /// One [`EnumSet<IndicationEvent>`] per input character, indexed by character
 /// position (not byte offset). Most entries will be empty.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct IndicationEvents(Vec<EnumSet<IndicationEvent>>);
 
 impl IndicationEvents {
@@ -70,5 +73,25 @@ impl IndicationEvents {
         if let Some(entry) = self.0.get_mut(pos) {
             entry.insert(event);
         }
+    }
+}
+
+impl From<Vec<EnumSet<IndicationEvent>>> for IndicationEvents {
+    fn from(v: Vec<EnumSet<IndicationEvent>>) -> Self {
+        IndicationEvents(v)
+    }
+}
+
+impl BitOr for IndicationEvents {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self {
+        let len = self.0.len().max(rhs.0.len());
+        let mut result = vec![EnumSet::empty(); len];
+        for (i, entry) in result.iter_mut().enumerate() {
+            *entry = self.0.get(i).copied().unwrap_or(EnumSet::empty())
+                | rhs.0.get(i).copied().unwrap_or(EnumSet::empty());
+        }
+        IndicationEvents(result)
     }
 }

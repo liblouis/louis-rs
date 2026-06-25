@@ -18,6 +18,7 @@ use crate::{
     translator::{ResolvedTranslation, TranslationStage},
 };
 
+use super::events::{IndicationEvent, IndicationEvents};
 use std::collections::HashSet;
 
 /// Possible states for the [`Indicator`] state machine
@@ -177,11 +178,62 @@ impl Indicator {
             .nth(1)
             .is_some_and(|c| self.numeric_chars.contains(&c))
     }
+
+    pub fn precompute(&self, input: &str) -> IndicationEvents {
+        let chars: Vec<char> = input.chars().collect();
+        let mut events = IndicationEvents::new(chars.len());
+
+        if self.start_translation.is_none() {
+            return events;
+        }
+
+        let mut in_numeric = false;
+
+        for (pos, &c) in chars.iter().enumerate() {
+            let is_numeric = self.numeric_chars.contains(&c);
+            match (is_numeric, in_numeric) {
+                (false, false) => {}
+                (true, false) => {
+                    in_numeric = true;
+                    events.insert(pos, IndicationEvent::NumberStart);
+                    events.insert(pos, IndicationEvent::DontContract);
+                }
+                (true, true) => {
+                    events.insert(pos, IndicationEvent::Number);
+                    events.insert(pos, IndicationEvent::DontContract);
+                }
+                (false, true) if self.extra_numeric_chars.contains(&c) => {
+                    events.insert(pos, IndicationEvent::Number);
+                    events.insert(pos, IndicationEvent::DontContract);
+                }
+                (false, true)
+                    if self.extra_numeric_chars.is_empty()
+                        && self.mid_numeric_chars.contains(&c)
+                        && chars
+                            .get(pos + 1)
+                            .is_some_and(|nc| self.numeric_chars.contains(nc)) =>
+                {
+                    events.insert(pos, IndicationEvent::Number);
+                    events.insert(pos, IndicationEvent::DontContract);
+                }
+                (false, true) => {
+                    in_numeric = false;
+                    if self.terminating_chars.contains(&c) {
+                        events.insert(pos, IndicationEvent::NumberEnd);
+                    }
+                }
+            }
+        }
+
+        events
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::parser::RuleParser;
+    use crate::translator::indication::events::{IndicationEvent, IndicationEvents};
+    use enumset::EnumSet;
 
     use super::*;
 
@@ -251,5 +303,53 @@ mod tests {
             ))
         );
         assert_eq!(indicator.next("".into()), None);
+    }
+
+    #[test]
+    fn precompute_number() {
+        let rule = RuleParser::new("numsign 3456").rule().unwrap();
+        let rule = AnchoredRule::new(rule, None, 0);
+        let mut builder = IndicatorBuilder::new();
+        builder.numeric_characters(HashSet::from(['1', '2', '3']));
+        builder.numsign("⠼", &rule);
+        builder.numericnocontchars("abc");
+        let indicator = builder.build().unwrap();
+
+        assert_eq!(
+            indicator.precompute("ab12 a"),
+            IndicationEvents::from(vec![
+                EnumSet::empty(),                                                     // 'a'
+                EnumSet::empty(),                                                     // 'b'
+                IndicationEvent::NumberStart | IndicationEvent::DontContract,        // '1'
+                IndicationEvent::Number      | IndicationEvent::DontContract,        // '2'
+                EnumSet::empty(),                                                     // ' ' not a terminating char
+                EnumSet::empty(),                                                     // 'a'
+            ])
+        );
+    }
+
+    #[test]
+    fn precompute_end_indication() {
+        let rule = RuleParser::new("numsign 3456").rule().unwrap();
+        let numsign_rule = AnchoredRule::new(rule, None, 0);
+        let rule = RuleParser::new("nonumsign 56").rule().unwrap();
+        let nonumsign_rule = AnchoredRule::new(rule, None, 0);
+        let mut builder = IndicatorBuilder::new();
+        builder.numeric_characters(HashSet::from(['1', '2', '3']));
+        builder.numsign("⠼", &numsign_rule);
+        builder.nonumsign("⠰", &nonumsign_rule);
+        builder.numericnocontchars("abc");
+        let indicator = builder.build().unwrap();
+
+        assert_eq!(
+            indicator.precompute("ab12a"),
+            IndicationEvents::from(vec![
+                EnumSet::empty(),                                                     // 'a'
+                EnumSet::empty(),                                                     // 'b'
+                IndicationEvent::NumberStart | IndicationEvent::DontContract,        // '1'
+                IndicationEvent::Number      | IndicationEvent::DontContract,        // '2'
+                IndicationEvent::NumberEnd.into(),                                    // 'a' terminating char
+            ])
+        );
     }
 }

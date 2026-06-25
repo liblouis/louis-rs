@@ -17,6 +17,7 @@ use crate::{
     translator::{ResolvedTranslation, TranslationStage},
 };
 
+use super::events::{IndicationEvent, IndicationEvents};
 use std::collections::HashSet;
 
 /// Possible states for the [`Indicator`] state machine
@@ -187,12 +188,58 @@ impl Indicator {
             || self.start_word_translation.is_some()
             || self.start_translation.is_some()
     }
+
+    pub fn precompute(&self, input: &str) -> IndicationEvents {
+        let chars: Vec<char> = input.chars().collect();
+        let mut events = IndicationEvents::new(chars.len());
+
+        if !self.is_indicating() {
+            return events;
+        }
+
+        let mut state = State::Default;
+
+        for (pos, &c) in chars.iter().enumerate() {
+            let is_upper = self.uppercase_chars.contains(&c);
+            match (&state, is_upper) {
+                (State::Default, true) => {
+                    let next_is_upper = chars
+                        .get(pos + 1)
+                        .is_some_and(|nc| self.uppercase_chars.contains(nc));
+                    if next_is_upper {
+                        state = State::UppercaseMulti;
+                        events.insert(pos, IndicationEvent::AllCapsStart);
+                    } else {
+                        state = State::UppercaseSingle;
+                        events.insert(pos, IndicationEvent::UppercaseStart);
+                    }
+                }
+                (State::UppercaseSingle, false) => {
+                    state = State::Default;
+                }
+                (State::UppercaseMulti, true) => {
+                    events.insert(pos, IndicationEvent::AllCaps);
+                }
+                (State::UppercaseMulti, false) => {
+                    state = State::Default;
+                    if self.terminating_chars.contains(&c) {
+                        events.insert(pos, IndicationEvent::AllCapsEnd);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        events
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::parser::RuleParser;
+    use crate::translator::indication::events::{IndicationEvent, IndicationEvents};
+    use enumset::EnumSet;
 
     #[test]
     fn indicator() {
@@ -254,5 +301,50 @@ mod tests {
             ))
         );
         assert_eq!(indicator.next("".into()), None);
+    }
+
+    #[test]
+    fn precompute_indicator() {
+        let rule = RuleParser::new("capsletter 123").rule().unwrap();
+        let rule = AnchoredRule::new(rule, None, 0);
+        let mut builder = IndicatorBuilder::new();
+        builder.capsletter("⠇", &rule);
+        builder.uppercase_characters(HashSet::from(['A', 'B', 'C']));
+        builder.letter_characters(HashSet::from(['a', 'b', 'c']));
+        let indicator = builder.build().unwrap();
+
+        assert_eq!(
+            indicator.precompute("Abc "),
+            IndicationEvents::from(vec![
+                IndicationEvent::UppercaseStart.into(), // 'A' — single uppercase
+                EnumSet::empty(),                       // 'b'
+                EnumSet::empty(),                       // 'c'
+                EnumSet::empty(),                       // ' '
+            ])
+        );
+    }
+
+    #[test]
+    fn precompute_end_indication() {
+        let rule = RuleParser::new("begcapsword 123").rule().unwrap();
+        let begcapsword_rule = AnchoredRule::new(rule, None, 0);
+        let rule = RuleParser::new("endcapsword 6").rule().unwrap();
+        let endcapsword_rule = AnchoredRule::new(rule, None, 0);
+        let mut builder = IndicatorBuilder::new();
+        builder.begcapsword("⠇", &begcapsword_rule);
+        builder.endcapsword("⠠", &endcapsword_rule);
+        builder.uppercase_characters(HashSet::from(['A', 'B', 'C']));
+        builder.letter_characters(HashSet::from(['a', 'b', 'c']));
+        let indicator = builder.build().unwrap();
+
+        assert_eq!(
+            indicator.precompute("ABCa"),
+            IndicationEvents::from(vec![
+                IndicationEvent::AllCapsStart.into(), // 'A' — multi uppercase starts
+                IndicationEvent::AllCaps.into(),      // 'B'
+                IndicationEvent::AllCaps.into(),      // 'C'
+                IndicationEvent::AllCapsEnd.into(),   // 'a' — terminating char
+            ])
+        );
     }
 }
