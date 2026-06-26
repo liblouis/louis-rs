@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   evaluated as a better alternative.
 
 ### Changed
+- Braille indication (numeric, uppercase, letter sign, no-contract) is now
+  pre-computed from the input text before the translation loop begins. Each
+  indicator runs as a single pass over the input and records which events fire
+  at each character position; the translation loop consults an immutable
+  per-position array instead of advancing mutable state machines in parallel.
+  User-supplied typeform annotations (`TextAttribute`) are merged into the same
+  array, unifying built-in and typeform indication under one mechanism.
 - `always` rules now correctly take precedence over character-definition
   opcodes (`letter`, `punctuation`, `sign`, etc.), matching liblouis
   behaviour. Previously both had equal precedence, so whichever appeared
