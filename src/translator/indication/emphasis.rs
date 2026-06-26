@@ -98,16 +98,11 @@ impl EmphasisClass {
             .unwrap_or(false)
     }
 
-    /// Emit indicator translations for all emphasis runs of this class.
-    ///
-    /// `result` has `chars.len() + 1` slots; the extra slot at index n is for
-    /// translations that must appear after all input characters (e.g. endemph
-    /// at the very end of the string).
     fn emit(
         &self,
         chars: &[char],
         typeforms: &[TextAttributes],
-        result: &mut Vec<Vec<ResolvedTranslation>>,
+        result: &mut Vec<(usize, ResolvedTranslation)>,
     ) {
         let n = chars.len();
         let mut pos = 0;
@@ -130,14 +125,14 @@ impl EmphasisClass {
         chars: &[char],
         run_start: usize,
         run_end: usize,
-        result: &mut Vec<Vec<ResolvedTranslation>>,
+        result: &mut Vec<(usize, ResolvedTranslation)>,
     ) {
         // begemph/endemph: general indicators that can start/end anywhere.
         if let Some(begemph) = &self.begemph {
             let effective_start = (run_start..run_end)
                 .find(|&i| !chars[i].is_whitespace())
                 .unwrap_or(run_start);
-            result[effective_start].push(begemph.clone());
+            result.push((effective_start, begemph.clone()));
 
             if let Some(endemph) = &self.endemph {
                 // Find the last non-space position in the run. endemph goes
@@ -147,7 +142,7 @@ impl EmphasisClass {
                     .find(|&i| !chars[i].is_whitespace())
                     .map(|i| i + 1)
                     .unwrap_or(run_end);
-                result[effective_end].push(endemph.clone());
+                result.push((effective_end, endemph.clone()));
             }
             return;
         }
@@ -185,11 +180,11 @@ impl EmphasisClass {
     fn emit_clean_words(
         &self,
         words: &[(usize, usize)],
-        result: &mut Vec<Vec<ResolvedTranslation>>,
+        result: &mut Vec<(usize, ResolvedTranslation)>,
     ) {
         if let Some(begemphphrase) = &self.begemphphrase {
             if words.len() >= self.len_phrase {
-                result[words[0].0].push(begemphphrase.clone());
+                result.push((words[0].0, begemphphrase.clone()));
 
                 if self.endemphphrase_before {
                     // BANA-style: phrase covers all but the last word; the last
@@ -201,7 +196,7 @@ impl EmphasisClass {
                 } else {
                     // Phrase brackets all words; explicit endemph after the last.
                     if let Some(end_t) = &self.endemphphrase {
-                        result[words.last().unwrap().1].push(end_t.clone());
+                        result.push((words.last().unwrap().1, end_t.clone()));
                     }
                 }
                 return;
@@ -218,16 +213,16 @@ impl EmphasisClass {
         &self,
         word_start: usize,
         word_end: usize,
-        result: &mut Vec<Vec<ResolvedTranslation>>,
+        result: &mut Vec<(usize, ResolvedTranslation)>,
     ) {
         if word_end - word_start == 1 {
             if let Some(t) = &self.emphletter {
-                result[word_start].push(t.clone());
+                result.push((word_start, t.clone()));
                 return;
             }
         }
         if let Some(t) = &self.begemphword {
-            result[word_start].push(t.clone());
+            result.push((word_start, t.clone()));
         }
         // No endemphword: word ends at a space/boundary, so terminator is implicit.
     }
@@ -239,24 +234,24 @@ impl EmphasisClass {
         run_start: usize,
         run_end: usize,
         words: &[(usize, usize)],
-        result: &mut Vec<Vec<ResolvedTranslation>>,
+        result: &mut Vec<(usize, ResolvedTranslation)>,
     ) {
         let total_chars: usize = words.iter().map(|(s, e)| e - s).sum();
 
         if total_chars == 1 {
             if let Some(t) = &self.emphletter {
-                result[words[0].0].push(t.clone());
+                result.push((words[0].0, t.clone()));
                 return;
             }
         }
 
         if let Some(t) = &self.begemphword {
-            result[run_start].push(t.clone());
+            result.push((run_start, t.clone()));
             // endemphword is only needed when emphasis ends mid-word (the next
             // character is not a word boundary and not end-of-string).
             if let Some(end_t) = &self.endemphword {
                 if run_end < chars.len() && !chars[run_end].is_whitespace() {
-                    result[run_end].push(end_t.clone());
+                    result.push((run_end, end_t.clone()));
                 }
             }
             return;
@@ -264,12 +259,12 @@ impl EmphasisClass {
 
         // Phrase-only class (e.g. underline): no word indicator, use phrase indicators.
         if let Some(t) = &self.begemphphrase {
-            result[run_start].push(t.clone());
+            result.push((run_start, t.clone()));
             // Phrase indicators always need explicit closing; emit at run_end
             // unless we're at end-of-string.
             if let Some(end_t) = &self.endemphphrase {
                 if run_end < chars.len() {
-                    result[run_end].push(end_t.clone());
+                    result.push((run_end, end_t.clone()));
                 }
             }
         }
@@ -377,19 +372,18 @@ pub struct Indicator {
 }
 
 impl Indicator {
-    /// Returns direct per-position translations for the given input and typeforms.
+    /// Returns sparse `(position, translation)` pairs for the given input and typeforms.
     ///
-    /// The returned `Vec` has `input.chars().count() + 1` slots. The last slot
-    /// (index n) collects translations that must be emitted after all input
-    /// characters (e.g. `endemph` at end of string).
+    /// Position `n` (where `n = input.chars().count()`) is valid and used for
+    /// translations that must appear after all input characters (e.g. `endemph`
+    /// at end of string).
     pub fn precompute(
         &self,
         input: &str,
         typeforms: &[TextAttributes],
-    ) -> Vec<Vec<ResolvedTranslation>> {
+    ) -> Vec<(usize, ResolvedTranslation)> {
         let chars: Vec<char> = input.chars().collect();
-        let n = chars.len();
-        let mut result: Vec<Vec<ResolvedTranslation>> = vec![Vec::new(); n + 1];
+        let mut result: Vec<(usize, ResolvedTranslation)> = Vec::new();
         for class in &self.classes {
             class.emit(&chars, typeforms, &mut result);
         }

@@ -5,8 +5,8 @@
 //! braille cells are not a contraction.
 //!
 //! [`Indicator`] analyses the full input text in a single pass before translation begins. At each
-//! position it checks whether the remaining input matches a known contraction and, if so, records a
-//! [`IndicationEvent::NoContractSign`] event at that position.
+//! position it checks whether the remaining input matches a known contraction and, if so, emits the
+//! nocontractsign translation at that position.
 //!
 //! # FIXME:
 //!
@@ -24,7 +24,6 @@ use crate::{
 
 use log::warn;
 
-use super::events::{IndicationEvent, IndicationEvents};
 use std::collections::HashMap;
 
 /// A builder for [`Indicator`]
@@ -90,33 +89,27 @@ pub struct Indicator {
 }
 
 impl Indicator {
-    pub fn event_translations(&self) -> Vec<(IndicationEvent, ResolvedTranslation)> {
-        vec![(IndicationEvent::NoContractSign, self.start_translation.clone())]
-    }
-
-    pub fn precompute(&self, input: &str) -> IndicationEvents {
-        let char_count = input.chars().count();
-        let mut events = IndicationEvents::new(char_count);
+    /// Returns sparse `(position, translation)` pairs.
+    pub fn precompute(&self, input: &str) -> Vec<(usize, ResolvedTranslation)> {
+        let mut translations: Vec<(usize, ResolvedTranslation)> = Vec::new();
         let mut prev: Option<char> = None;
         let mut char_pos = 0;
 
         for (byte_pos, c) in input.char_indices() {
             if self.next(&input[byte_pos..], prev).is_some() {
-                events.insert(char_pos, IndicationEvent::NoContractSign);
+                translations.push((char_pos, self.start_translation.clone()));
             }
             prev = Some(c);
             char_pos += 1;
         }
 
-        events
+        translations
     }
 
     pub fn next(&self, s: &str, prev: Option<char>) -> Option<ResolvedTranslation> {
         let translations = self.contractions.find_translations(s, prev);
         if !translations.is_empty() {
             let translation = translations.first().unwrap();
-            // the translations contain the contraction as input, so set that one to the empty
-            // string
             Some(translation.clone().with_input("").with_weight(1))
         } else {
             None
@@ -131,12 +124,14 @@ mod tests {
         parser::{CharacterClass, RuleParser},
         translator::TranslationStage,
     };
-    use crate::translator::indication::events::{IndicationEvent, IndicationEvents};
-    use enumset::EnumSet;
 
     fn rule(rule: &str) -> AnchoredRule {
         let rule = RuleParser::new(rule).rule().unwrap();
         AnchoredRule::new(rule, None, 0)
+    }
+
+    fn pairs(t: &[(usize, ResolvedTranslation)]) -> Vec<(usize, String)> {
+        t.iter().map(|(pos, r)| (*pos, r.output().to_string())).collect()
     }
 
     #[test]
@@ -179,16 +174,7 @@ mod tests {
         let ctx = CharacterClasses::new(&[(CharacterClass::Letter, &['a', 'b', 'c', 'd'])]);
         let indicator = builder.build(ctx).unwrap();
 
-        assert_eq!(
-            indicator.precompute("aa"),
-            IndicationEvents::from(vec![EnumSet::empty(), EnumSet::empty()])
-        );
-        assert_eq!(
-            indicator.precompute("ab"),
-            IndicationEvents::from(vec![
-                IndicationEvent::NoContractSign.into(),
-                EnumSet::empty(),
-            ])
-        );
+        assert_eq!(pairs(&indicator.precompute("aa")), vec![]);
+        assert_eq!(pairs(&indicator.precompute("ab")), vec![(0, "⡀".to_string())]);
     }
 }

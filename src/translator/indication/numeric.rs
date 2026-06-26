@@ -1,13 +1,10 @@
 //! Numeric Braille indication
 //!
-//! [`Indicator`] analyses the full input text in a single pass before translation begins.
-//! For each character position it records which indication events apply:
+//! [`Indicator`] analyses the full input text in a single pass before translation begins:
 //!
-//! - [`IndicationEvent::NumberStart`] at the first digit of a numeric run (emits the numsign).
-//! - [`IndicationEvent::Number`] at every subsequent character inside the run.
-//! - [`IndicationEvent::NumberEnd`] at the first non-numeric terminating character after a run
-//!   (emits the non-numsign, if defined).
-//! - [`IndicationEvent::DontContract`] at every position inside a numeric run to suppress
+//! - Emits the numsign translation at the first digit of a numeric run.
+//! - Emits the non-numsign translation at the first non-numeric terminating character.
+//! - Sets [`BehaviourFlag::DontContract`] at every position inside a numeric run to suppress
 //!   contraction rules.
 
 use crate::{
@@ -15,7 +12,7 @@ use crate::{
     translator::{ResolvedTranslation, TranslationStage},
 };
 
-use super::events::{IndicationEvent, IndicationEvents};
+use super::events::{BehaviourFlag, BehaviourFlags};
 use std::collections::HashSet;
 
 /// A builder for [`Indicator`]
@@ -98,23 +95,16 @@ pub struct Indicator {
 }
 
 impl Indicator {
-    pub fn event_translations(&self) -> Vec<(IndicationEvent, ResolvedTranslation)> {
-        let mut v = Vec::new();
-        if let Some(t) = &self.start_translation {
-            v.push((IndicationEvent::NumberStart, t.clone()));
-        }
-        if let Some(t) = &self.end_translation {
-            v.push((IndicationEvent::NumberEnd, t.clone()));
-        }
-        v
-    }
-
-    pub fn precompute(&self, input: &str) -> IndicationEvents {
+    /// Returns sparse `(position, translation)` pairs and a dense per-position
+    /// flags vec of `n` elements (`n = input.chars().count()`).
+    pub fn precompute(&self, input: &str) -> (Vec<(usize, ResolvedTranslation)>, Vec<BehaviourFlags>) {
         let chars: Vec<char> = input.chars().collect();
-        let mut events = IndicationEvents::new(chars.len());
+        let n = chars.len();
+        let mut translations: Vec<(usize, ResolvedTranslation)> = Vec::new();
+        let mut flags: Vec<BehaviourFlags> = vec![BehaviourFlags::empty(); n];
 
         if self.start_translation.is_none() {
-            return events;
+            return (translations, flags);
         }
 
         let mut in_numeric = false;
@@ -125,16 +115,16 @@ impl Indicator {
                 (false, false) => {}
                 (true, false) => {
                     in_numeric = true;
-                    events.insert(pos, IndicationEvent::NumberStart);
-                    events.insert(pos, IndicationEvent::DontContract);
+                    if let Some(t) = &self.start_translation {
+                        translations.push((pos, t.clone()));
+                    }
+                    flags[pos].insert(BehaviourFlag::DontContract);
                 }
                 (true, true) => {
-                    events.insert(pos, IndicationEvent::Number);
-                    events.insert(pos, IndicationEvent::DontContract);
+                    flags[pos].insert(BehaviourFlag::DontContract);
                 }
                 (false, true) if self.extra_numeric_chars.contains(&c) => {
-                    events.insert(pos, IndicationEvent::Number);
-                    events.insert(pos, IndicationEvent::DontContract);
+                    flags[pos].insert(BehaviourFlag::DontContract);
                 }
                 (false, true)
                     if self.extra_numeric_chars.is_empty()
@@ -143,75 +133,67 @@ impl Indicator {
                             .get(pos + 1)
                             .is_some_and(|nc| self.numeric_chars.contains(nc)) =>
                 {
-                    events.insert(pos, IndicationEvent::Number);
-                    events.insert(pos, IndicationEvent::DontContract);
+                    flags[pos].insert(BehaviourFlag::DontContract);
                 }
                 (false, true) => {
                     in_numeric = false;
                     if self.terminating_chars.contains(&c) {
-                        events.insert(pos, IndicationEvent::NumberEnd);
+                        if let Some(t) = &self.end_translation {
+                            translations.push((pos, t.clone()));
+                        }
                     }
                 }
             }
         }
 
-        events
+        (translations, flags)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::parser::RuleParser;
-    use crate::translator::indication::events::{IndicationEvent, IndicationEvents};
-    use enumset::EnumSet;
 
     use super::*;
 
+    fn rule(s: &str) -> AnchoredRule {
+        AnchoredRule::new(RuleParser::new(s).rule().unwrap(), None, 0)
+    }
+
+    fn dont_contract(f: &[BehaviourFlags]) -> Vec<bool> {
+        f.iter().map(|fl| fl.contains(BehaviourFlag::DontContract)).collect()
+    }
+
     #[test]
     fn precompute_number() {
-        let rule = RuleParser::new("numsign 3456").rule().unwrap();
-        let rule = AnchoredRule::new(rule, None, 0);
         let mut builder = IndicatorBuilder::new();
         builder.numeric_characters(HashSet::from(['1', '2', '3']));
-        builder.numsign("⠼", &rule);
+        builder.numsign("⠼", &rule("numsign 3456"));
         builder.numericnocontchars("abc");
         let indicator = builder.build().unwrap();
 
+        let (t, f) = indicator.precompute("ab12 a");
         assert_eq!(
-            indicator.precompute("ab12 a"),
-            IndicationEvents::from(vec![
-                EnumSet::empty(),                                                     // 'a'
-                EnumSet::empty(),                                                     // 'b'
-                IndicationEvent::NumberStart | IndicationEvent::DontContract,        // '1'
-                IndicationEvent::Number      | IndicationEvent::DontContract,        // '2'
-                EnumSet::empty(),                                                     // ' ' not a terminating char
-                EnumSet::empty(),                                                     // 'a'
-            ])
+            t.iter().map(|(pos, r)| (*pos, r.output().to_string())).collect::<Vec<_>>(),
+            vec![(2, "⠼".to_string())],
         );
+        assert_eq!(dont_contract(&f), vec![false, false, true, true, false, false]);
     }
 
     #[test]
     fn precompute_end_indication() {
-        let rule = RuleParser::new("numsign 3456").rule().unwrap();
-        let numsign_rule = AnchoredRule::new(rule, None, 0);
-        let rule = RuleParser::new("nonumsign 56").rule().unwrap();
-        let nonumsign_rule = AnchoredRule::new(rule, None, 0);
         let mut builder = IndicatorBuilder::new();
         builder.numeric_characters(HashSet::from(['1', '2', '3']));
-        builder.numsign("⠼", &numsign_rule);
-        builder.nonumsign("⠰", &nonumsign_rule);
+        builder.numsign("⠼", &rule("numsign 3456"));
+        builder.nonumsign("⠰", &rule("nonumsign 56"));
         builder.numericnocontchars("abc");
         let indicator = builder.build().unwrap();
 
+        let (t, f) = indicator.precompute("ab12a");
         assert_eq!(
-            indicator.precompute("ab12a"),
-            IndicationEvents::from(vec![
-                EnumSet::empty(),                                                     // 'a'
-                EnumSet::empty(),                                                     // 'b'
-                IndicationEvent::NumberStart | IndicationEvent::DontContract,        // '1'
-                IndicationEvent::Number      | IndicationEvent::DontContract,        // '2'
-                IndicationEvent::NumberEnd.into(),                                    // 'a' terminating char
-            ])
+            t.iter().map(|(pos, r)| (*pos, r.output().to_string())).collect::<Vec<_>>(),
+            vec![(2, "⠼".to_string()), (4, "⠰".to_string())],
         );
+        assert_eq!(dont_contract(&f), vec![false, false, true, true, false]);
     }
 }

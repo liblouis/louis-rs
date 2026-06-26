@@ -6,20 +6,21 @@
 //!
 //! Braille indication is handled by a preprocessing pass over the input text.
 //! Before translation begins each indicator analyses the full input and records,
-//! at each character position, which indication events fire there. The result is
-//! a [`PrecomputedIndications`] value that the translation loop consults by
-//! index rather than running stateful logic in parallel with rule selection.
+//! at each character position, which translations to emit and which rule-selection
+//! flags apply. The result is a [`PrecomputedIndications`] value that the
+//! translation loop consults by index rather than running stateful logic in
+//! parallel with rule selection.
 //!
 //! The indicator types are:
-//! * [`numeric::Indicator`]: detects digit sequences and records number-sign events
-//! * [`uppercase::Indicator`]: detects uppercase runs and records capitalisation events
+//! * [`emphasis::Indicator`]: detects emphasis runs and emits letter/word/phrase indicators
+//! * [`numeric::Indicator`]: detects digit sequences and emits number-sign indicators
+//! * [`uppercase::Indicator`]: detects uppercase runs and emits capitalisation indicators
 //! * [`lettersign::Indicator`]: detects contractions that require a letter sign
 //! * [`nocontract::Indicator`]: detects contractions that require a no-contract sign
 
-use crate::text_attribute::{TextAttribute, TextAttributes};
+use crate::text_attribute::TextAttributes;
 use crate::translator::ResolvedTranslation;
-use events::{IndicationEvent, IndicationEvents};
-use std::collections::HashMap;
+use events::BehaviourFlags;
 
 pub mod emphasis;
 pub mod events;
@@ -37,64 +38,31 @@ pub enum Indicator {
     Uppercase(uppercase::Indicator),
 }
 
-impl Indicator {
-    pub fn precompute(&self, input: &str) -> IndicationEvents {
-        match self {
-            Self::Emphasis(_) => IndicationEvents::new(input.chars().count()),
-            Self::LetterSign(i) => i.precompute(input),
-            Self::NoContract(i) => i.precompute(input),
-            Self::Numeric(i) => i.precompute(input),
-            Self::Uppercase(i) => i.precompute(input),
-        }
-    }
-
-    pub fn event_translations(&self) -> Vec<(IndicationEvent, ResolvedTranslation)> {
-        match self {
-            Self::Emphasis(_) => vec![],
-            Self::LetterSign(i) => i.event_translations(),
-            Self::NoContract(i) => i.event_translations(),
-            Self::Numeric(i) => i.event_translations(),
-            Self::Uppercase(i) => i.event_translations(),
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Indicators(Vec<Indicator>);
 
 /// The result of pre-computing indications for a given input.
 ///
-/// Combines the pre-computed events per character position with the
-/// event-to-translation map, so callers can directly ask for the braille
-/// translations to emit at any given character position.
+/// `translations` holds per-position braille translations to emit, indexed by
+/// character position (with one extra slot at index `n` for translations that
+/// must appear after all input characters, e.g. `endemph` at end of string).
 ///
-/// `direct_translations` holds per-position translations produced by
-/// the emphasis indicator (which needs context to decide letter vs word vs
-/// phrase indicators). It has `n + 1` slots where `n` is the input length;
-/// the extra slot at index `n` is for translations emitted after all chars.
+/// `flags` holds per-position [`BehaviourFlags`] that gate rule selection, such
+/// as [`events::BehaviourFlag::DontContract`] for numeric runs.
 pub struct PrecomputedIndications {
-    events: IndicationEvents,
-    translations: HashMap<IndicationEvent, ResolvedTranslation>,
-    direct_translations: Vec<Vec<ResolvedTranslation>>,
+    translations: Vec<Vec<ResolvedTranslation>>,
+    flags: Vec<BehaviourFlags>,
 }
 
 impl PrecomputedIndications {
     pub fn translations_at(&self, pos: usize) -> Vec<ResolvedTranslation> {
-        // Emphasis indicators (direct) must precede capitalization/numeric indicators
-        // (events) so that begemphword appears before capsletter in the output.
-        let mut result: Vec<ResolvedTranslation> = self
-            .direct_translations
+        self.translations.get(pos).cloned().unwrap_or_default()
+    }
+
+    pub fn dont_contract_at(&self, pos: usize) -> bool {
+        self.flags
             .get(pos)
-            .map(|v| v.as_slice())
-            .unwrap_or(&[])
-            .to_vec();
-        result.extend(
-            self.events
-                .get(pos)
-                .into_iter()
-                .filter_map(|event| self.translations.get(&event).cloned()),
-        );
-        result
+            .is_some_and(|f| f.contains(events::BehaviourFlag::DontContract))
     }
 }
 
@@ -103,79 +71,46 @@ impl Indicators {
         Indicators(indicators)
     }
 
-    fn event_translations(&self) -> HashMap<IndicationEvent, ResolvedTranslation> {
-        self.0
-            .iter()
-            .flat_map(|i| i.event_translations())
-            .collect()
-    }
-
     pub fn precompute(&self, input: &str, typeforms: &[TextAttributes]) -> PrecomputedIndications {
         let n = input.chars().count();
-        let events = self
-            .0
-            .iter()
-            .filter(|i| !matches!(i, Indicator::Emphasis(_)))
-            .map(|i| i.precompute(input))
-            .fold(IndicationEvents::from(typeforms), |acc, e| acc | e);
+        let mut translations: Vec<Vec<ResolvedTranslation>> = vec![vec![]; n + 1];
+        let mut flags: Vec<BehaviourFlags> = vec![BehaviourFlags::empty(); n];
 
-        // Emphasis indicators produce direct per-position translations.
-        let mut direct_translations: Vec<Vec<ResolvedTranslation>> = vec![Vec::new(); n + 1];
         for indicator in &self.0 {
-            if let Indicator::Emphasis(e) = indicator {
-                let emph_result = e.precompute(input, typeforms);
-                for (pos, translations) in emph_result.into_iter().enumerate() {
-                    if pos < direct_translations.len() {
-                        direct_translations[pos].extend(translations);
+            match indicator {
+                Indicator::Emphasis(i) => {
+                    for (pos, t) in i.precompute(input, typeforms) {
+                        translations[pos].push(t);
+                    }
+                }
+                Indicator::Numeric(i) => {
+                    let (pairs, f) = i.precompute(input);
+                    for (pos, t) in pairs {
+                        translations[pos].push(t);
+                    }
+                    for (pos, flag) in f.into_iter().enumerate() {
+                        flags[pos] |= flag;
+                    }
+                }
+                Indicator::Uppercase(i) => {
+                    for (pos, t) in i.precompute(input) {
+                        translations[pos].push(t);
+                    }
+                }
+                Indicator::LetterSign(i) => {
+                    for (pos, t) in i.precompute(input) {
+                        translations[pos].push(t);
+                    }
+                }
+                Indicator::NoContract(i) => {
+                    for (pos, t) in i.precompute(input) {
+                        translations[pos].push(t);
                     }
                 }
             }
         }
 
-        PrecomputedIndications {
-            events,
-            translations: self.event_translations(),
-            direct_translations,
-        }
-    }
-}
-
-impl From<TextAttribute> for IndicationEvent {
-    fn from(attr: TextAttribute) -> Self {
-        match attr {
-            TextAttribute::Italic => Self::Italic,
-            TextAttribute::Underline => Self::Underline,
-            TextAttribute::Bold => Self::Bold,
-            TextAttribute::Emph4 => Self::Emph4,
-            TextAttribute::Emph5 => Self::Emph5,
-            TextAttribute::Emph6 => Self::Emph6,
-            TextAttribute::Emph7 => Self::Emph7,
-            TextAttribute::Emph8 => Self::Emph8,
-            TextAttribute::Emph9 => Self::Emph9,
-            TextAttribute::Emph10 => Self::Emph10,
-            TextAttribute::ComputerBraille => Self::ComputerBraille,
-            TextAttribute::PassageBreak => Self::PassageBreak,
-            TextAttribute::WordReset => Self::WordReset,
-            TextAttribute::Script => Self::Script,
-            TextAttribute::TransNote => Self::TransNote,
-            TextAttribute::TransNote1 => Self::TransNote1,
-            TextAttribute::TransNote2 => Self::TransNote2,
-            TextAttribute::TransNote3 => Self::TransNote3,
-            TextAttribute::TransNote4 => Self::TransNote4,
-            TextAttribute::TransNote5 => Self::TransNote5,
-        }
-    }
-}
-
-impl From<&[TextAttributes]> for IndicationEvents {
-    fn from(typeforms: &[TextAttributes]) -> Self {
-        let mut events = IndicationEvents::new(typeforms.len());
-        for (pos, &attrs) in typeforms.iter().enumerate() {
-            for attr in attrs {
-                events.insert(pos, attr.into());
-            }
-        }
-        events
+        PrecomputedIndications { translations, flags }
     }
 }
 
@@ -183,7 +118,6 @@ impl From<&[TextAttributes]> for IndicationEvents {
 mod tests {
     use super::*;
     use crate::parser::{AnchoredRule, RuleParser};
-    use crate::translator::indication::events::{IndicationEvent, IndicationEvents};
     use std::collections::HashSet;
 
     fn rule(s: &str) -> AnchoredRule {
@@ -215,25 +149,5 @@ mod tests {
         };
         assert_eq!(outputs_at(0), vec!["⠠"]); // capsletter for 'A'
         assert_eq!(outputs_at(1), vec!["⠼"]); // numsign for '1'
-    }
-
-    #[test]
-    fn typeforms_convert_to_indication_events() {
-        use crate::text_attribute::TextAttribute;
-        use enumset::EnumSet;
-
-        let typeforms: Vec<TextAttributes> = vec![
-            TextAttribute::Italic.into(),
-            TextAttribute::Bold | TextAttribute::Underline,
-            EnumSet::empty(),
-        ];
-        assert_eq!(
-            IndicationEvents::from(typeforms.as_slice()),
-            IndicationEvents::from(vec![
-                IndicationEvent::Italic.into(),
-                IndicationEvent::Bold | IndicationEvent::Underline,
-                EnumSet::empty(),
-            ])
-        );
     }
 }

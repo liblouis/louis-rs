@@ -1,21 +1,19 @@
 //! Uppercase Braille indication
 //!
 //! [`Indicator`] analyses the full input text in a single pass before translation begins.
-//! For each character position it records which indication events apply:
+//! For each character position it emits the appropriate capitalisation indicator:
 //!
-//! - [`IndicationEvent::UppercaseStart`] at a single isolated uppercase character.
-//! - [`IndicationEvent::AllCapsStart`] at the first character of a run of two or more uppercase
-//!   characters.
-//! - [`IndicationEvent::AllCaps`] at every subsequent uppercase character inside such a run.
-//! - [`IndicationEvent::AllCapsEnd`] at the first terminating letter that follows a
-//!   multi-character uppercase run.
+//! - [`capsletter`](IndicatorBuilder::capsletter) at a single isolated uppercase character.
+//! - [`begcapsword`](IndicatorBuilder::begcapsword) (falling back to `capsletter`) at the
+//!   first character of a run of two or more uppercase characters.
+//! - [`endcapsword`](IndicatorBuilder::endcapsword) at the first terminating letter that
+//!   follows a multi-character uppercase run.
 
 use crate::{
     parser::AnchoredRule,
     translator::{ResolvedTranslation, TranslationStage},
 };
 
-use super::events::{IndicationEvent, IndicationEvents};
 use std::collections::HashSet;
 
 /// States used locally within the [`Indicator::precompute`] pass
@@ -134,27 +132,17 @@ impl Indicator {
             || self.start_translation.is_some()
     }
 
-    pub fn event_translations(&self) -> Vec<(IndicationEvent, ResolvedTranslation)> {
-        let mut v = Vec::new();
-        if let Some(t) = &self.start_letter_translation {
-            v.push((IndicationEvent::UppercaseStart, t.clone()));
-        }
-        if let Some(t) = self.start_word_translation.as_ref().or(self.start_letter_translation.as_ref()) {
-            v.push((IndicationEvent::AllCapsStart, t.clone()));
-        }
-        if let Some(t) = &self.end_word_translation {
-            v.push((IndicationEvent::AllCapsEnd, t.clone()));
-        }
-        v
-    }
-
-    pub fn precompute(&self, input: &str) -> IndicationEvents {
+    /// Returns sparse `(position, translation)` pairs.
+    pub fn precompute(&self, input: &str) -> Vec<(usize, ResolvedTranslation)> {
         let chars: Vec<char> = input.chars().collect();
-        let mut events = IndicationEvents::new(chars.len());
+        let mut translations: Vec<(usize, ResolvedTranslation)> = Vec::new();
 
         if !self.is_indicating() {
-            return events;
+            return translations;
         }
+
+        let start_word_t = self.start_word_translation.as_ref()
+            .or(self.start_letter_translation.as_ref());
 
         let mut state = State::Default;
 
@@ -167,29 +155,33 @@ impl Indicator {
                         .is_some_and(|nc| self.uppercase_chars.contains(nc));
                     if next_is_upper {
                         state = State::UppercaseMulti;
-                        events.insert(pos, IndicationEvent::AllCapsStart);
+                        if let Some(t) = start_word_t {
+                            translations.push((pos, t.clone()));
+                        }
                     } else {
                         state = State::UppercaseSingle;
-                        events.insert(pos, IndicationEvent::UppercaseStart);
+                        if let Some(t) = &self.start_letter_translation {
+                            translations.push((pos, t.clone()));
+                        }
                     }
                 }
                 (State::UppercaseSingle, false) => {
                     state = State::Default;
                 }
-                (State::UppercaseMulti, true) => {
-                    events.insert(pos, IndicationEvent::AllCaps);
-                }
+                (State::UppercaseMulti, true) => {}
                 (State::UppercaseMulti, false) => {
                     state = State::Default;
                     if self.terminating_chars.contains(&c) {
-                        events.insert(pos, IndicationEvent::AllCapsEnd);
+                        if let Some(t) = &self.end_word_translation {
+                            translations.push((pos, t.clone()));
+                        }
                     }
                 }
                 _ => {}
             }
         }
 
-        events
+        translations
     }
 }
 
@@ -197,51 +189,37 @@ impl Indicator {
 mod tests {
     use super::*;
     use crate::parser::RuleParser;
-    use crate::translator::indication::events::{IndicationEvent, IndicationEvents};
-    use enumset::EnumSet;
+
+    fn rule(s: &str) -> AnchoredRule {
+        AnchoredRule::new(RuleParser::new(s).rule().unwrap(), None, 0)
+    }
+
+    fn pairs(t: &[(usize, ResolvedTranslation)]) -> Vec<(usize, String)> {
+        t.iter().map(|(pos, r)| (*pos, r.output().to_string())).collect()
+    }
 
     #[test]
     fn precompute_indicator() {
-        let rule = RuleParser::new("capsletter 123").rule().unwrap();
-        let rule = AnchoredRule::new(rule, None, 0);
         let mut builder = IndicatorBuilder::new();
-        builder.capsletter("⠇", &rule);
+        builder.capsletter("⠇", &rule("capsletter 123"));
         builder.uppercase_characters(HashSet::from(['A', 'B', 'C']));
         builder.letter_characters(HashSet::from(['a', 'b', 'c']));
         let indicator = builder.build().unwrap();
 
-        assert_eq!(
-            indicator.precompute("Abc "),
-            IndicationEvents::from(vec![
-                IndicationEvent::UppercaseStart.into(), // 'A' — single uppercase
-                EnumSet::empty(),                       // 'b'
-                EnumSet::empty(),                       // 'c'
-                EnumSet::empty(),                       // ' '
-            ])
-        );
+        assert_eq!(pairs(&indicator.precompute("Abc ")), vec![(0, "⠇".to_string())]);
     }
 
     #[test]
     fn precompute_end_indication() {
-        let rule = RuleParser::new("begcapsword 123").rule().unwrap();
-        let begcapsword_rule = AnchoredRule::new(rule, None, 0);
-        let rule = RuleParser::new("endcapsword 6").rule().unwrap();
-        let endcapsword_rule = AnchoredRule::new(rule, None, 0);
         let mut builder = IndicatorBuilder::new();
-        builder.begcapsword("⠇", &begcapsword_rule);
-        builder.endcapsword("⠠", &endcapsword_rule);
+        builder.begcapsword("⠇", &rule("begcapsword 123"));
+        builder.endcapsword("⠠", &rule("endcapsword 6"));
         builder.uppercase_characters(HashSet::from(['A', 'B', 'C']));
         builder.letter_characters(HashSet::from(['a', 'b', 'c']));
         let indicator = builder.build().unwrap();
 
-        assert_eq!(
-            indicator.precompute("ABCa"),
-            IndicationEvents::from(vec![
-                IndicationEvent::AllCapsStart.into(), // 'A' — multi uppercase starts
-                IndicationEvent::AllCaps.into(),      // 'B'
-                IndicationEvent::AllCaps.into(),      // 'C'
-                IndicationEvent::AllCapsEnd.into(),   // 'a' — terminating char
-            ])
-        );
+        assert_eq!(pairs(&indicator.precompute("ABCa")), vec![
+            (0, "⠇".to_string()), (3, "⠠".to_string()),
+        ]);
     }
 }

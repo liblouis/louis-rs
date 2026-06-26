@@ -142,6 +142,8 @@ impl PrimaryTableBuilder {
 
     fn build(self, direction: Direction, ctx: &TableContext) -> PrimaryTable {
         let indicators = [
+            // Emphasis must be first so begemphword appears before capsletter.
+            self.emphasis_indicator.build().map(Indicator::Emphasis),
             self.numeric_indicator.build().map(Indicator::Numeric),
             self.lettersign_indicator
                 .build(ctx.character_classes.clone())
@@ -150,7 +152,6 @@ impl PrimaryTableBuilder {
             self.nocontract_indicator
                 .build(ctx.character_classes.clone())
                 .map(Indicator::NoContract),
-            self.emphasis_indicator.build().map(Indicator::Emphasis),
         ]
         .into_iter()
         .flatten()
@@ -793,6 +794,11 @@ impl PrimaryTable {
             let (current, delayed) = self.partition_delayed_translations(delayed_translations);
             delayed_translations = delayed;
             candidates.extend(current);
+
+            // inside a numeric run, suppress multi-character contractions
+            if indications.dont_contract_at(char_pos) {
+                candidates.retain(|t| t.length() <= 1);
+            }
 
             // use the longest translation
             let candidate = candidates
