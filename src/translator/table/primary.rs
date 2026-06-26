@@ -718,15 +718,12 @@ impl PrimaryTable {
         let mut chars = input.chars();
         let mut prev: Option<char> = None;
         let mut seen: HashSet<TranslationSubset> = HashSet::default();
+        let mut char_pos: usize = 0;
 
-        // FIXME: the following seems weird, but the indicators are mutable state machines. Since
-        // self (the translation table) is immutable we build a mutable copy of the indicators for
-        // each translation
-        let mut indicators = self.indicators.clone();
+        let indications = self.indicators.precompute(input, &[]);
 
         loop {
-            // Check for indications
-            translations.extend(indicators.next(chars.as_str(), prev));
+            translations.extend(indications.translations_at(char_pos));
 
             // First check for nocross candidates
             let nocross_candidate = self
@@ -775,6 +772,7 @@ impl PrimaryTable {
                     // move the iterator forward by the number of characters in the translation
                     chars.nth(nocross.length() - 1);
                     prev = translation.input().chars().last();
+                    char_pos += nocross.length();
                     translations.push(translation);
                     delayed_translations = self.update_offsets(delayed_translations, t.length());
                 } else {
@@ -787,6 +785,7 @@ impl PrimaryTable {
                         // move the iterator forward by the number of characters in the translation
                         chars.nth(t.length() - 1);
                         prev = t.input().chars().last();
+                        char_pos += t.length();
                     }
                     // there is a matching translation rule
                     let translation = t.clone();
@@ -802,6 +801,7 @@ impl PrimaryTable {
                 }
             } else if let Some(next_char) = chars.next() {
                 prev = Some(next_char);
+                char_pos += 1;
                 // no translation rule found
                 if let Some(translation) = self.character_translations.get(&next_char) {
                     translations.push(translation.clone());
