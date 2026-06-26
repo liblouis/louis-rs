@@ -54,6 +54,15 @@ impl Indicator {
             Self::Uppercase(i) => i.precompute(input),
         }
     }
+
+    pub fn event_translations(&self) -> Vec<(IndicationEvent, ResolvedTranslation)> {
+        match self {
+            Self::LetterSign(i) => i.event_translations(),
+            Self::NoContract(i) => i.event_translations(),
+            Self::Numeric(i) => i.event_translations(),
+            Self::Uppercase(i) => i.event_translations(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +75,13 @@ impl Indicators {
 
     pub fn next(&mut self, s: &str, prev: Option<char>) -> Vec<ResolvedTranslation> {
         self.0.iter_mut().flat_map(|i| i.next(s, prev)).collect()
+    }
+
+    pub fn event_translations(&self) -> Vec<(IndicationEvent, ResolvedTranslation)> {
+        self.0
+            .iter()
+            .flat_map(|i| i.event_translations())
+            .collect()
     }
 
     pub fn precompute(&self, input: &str, typeforms: &[TextAttributes]) -> IndicationEvents {

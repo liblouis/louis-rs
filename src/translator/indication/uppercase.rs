@@ -189,6 +189,20 @@ impl Indicator {
             || self.start_translation.is_some()
     }
 
+    pub fn event_translations(&self) -> Vec<(IndicationEvent, ResolvedTranslation)> {
+        let mut v = Vec::new();
+        if let Some(t) = &self.start_letter_translation {
+            v.push((IndicationEvent::UppercaseStart, t.clone()));
+        }
+        if let Some(t) = self.start_word_translation.as_ref().or(self.start_letter_translation.as_ref()) {
+            v.push((IndicationEvent::AllCapsStart, t.clone()));
+        }
+        if let Some(t) = &self.end_word_translation {
+            v.push((IndicationEvent::AllCapsEnd, t.clone()));
+        }
+        v
+    }
+
     pub fn precompute(&self, input: &str) -> IndicationEvents {
         let chars: Vec<char> = input.chars().collect();
         let mut events = IndicationEvents::new(chars.len());

@@ -90,6 +90,10 @@ pub struct Indicator {
 }
 
 impl Indicator {
+    pub fn event_translations(&self) -> Vec<(IndicationEvent, ResolvedTranslation)> {
+        vec![(IndicationEvent::NoContractSign, self.start_translation.clone())]
+    }
+
     pub fn precompute(&self, input: &str) -> IndicationEvents {
         let char_count = input.chars().count();
         let mut events = IndicationEvents::new(char_count);

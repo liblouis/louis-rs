@@ -179,6 +179,17 @@ impl Indicator {
             .is_some_and(|c| self.numeric_chars.contains(&c))
     }
 
+    pub fn event_translations(&self) -> Vec<(IndicationEvent, ResolvedTranslation)> {
+        let mut v = Vec::new();
+        if let Some(t) = &self.start_translation {
+            v.push((IndicationEvent::NumberStart, t.clone()));
+        }
+        if let Some(t) = &self.end_translation {
+            v.push((IndicationEvent::NumberEnd, t.clone()));
+        }
+        v
+    }
+
     pub fn precompute(&self, input: &str) -> IndicationEvents {
         let chars: Vec<char> = input.chars().collect();
         let mut events = IndicationEvents::new(chars.len());
