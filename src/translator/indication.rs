@@ -21,6 +21,7 @@ use crate::translator::ResolvedTranslation;
 use events::{IndicationEvent, IndicationEvents};
 use std::collections::HashMap;
 
+pub mod emphasis;
 pub mod events;
 pub mod lettersign;
 pub mod nocontract;
@@ -29,6 +30,7 @@ pub mod uppercase;
 
 #[derive(Debug, Clone)]
 pub enum Indicator {
+    Emphasis(emphasis::Indicator),
     LetterSign(lettersign::Indicator),
     NoContract(nocontract::Indicator),
     Numeric(numeric::Indicator),
@@ -38,6 +40,7 @@ pub enum Indicator {
 impl Indicator {
     pub fn precompute(&self, input: &str) -> IndicationEvents {
         match self {
+            Self::Emphasis(_) => IndicationEvents::new(input.chars().count()),
             Self::LetterSign(i) => i.precompute(input),
             Self::NoContract(i) => i.precompute(input),
             Self::Numeric(i) => i.precompute(input),
@@ -47,6 +50,7 @@ impl Indicator {
 
     pub fn event_translations(&self) -> Vec<(IndicationEvent, ResolvedTranslation)> {
         match self {
+            Self::Emphasis(_) => vec![],
             Self::LetterSign(i) => i.event_translations(),
             Self::NoContract(i) => i.event_translations(),
             Self::Numeric(i) => i.event_translations(),
@@ -63,18 +67,34 @@ pub struct Indicators(Vec<Indicator>);
 /// Combines the pre-computed events per character position with the
 /// event-to-translation map, so callers can directly ask for the braille
 /// translations to emit at any given character position.
+///
+/// `direct_translations` holds per-position translations produced by
+/// the emphasis indicator (which needs context to decide letter vs word vs
+/// phrase indicators). It has `n + 1` slots where `n` is the input length;
+/// the extra slot at index `n` is for translations emitted after all chars.
 pub struct PrecomputedIndications {
     events: IndicationEvents,
     translations: HashMap<IndicationEvent, ResolvedTranslation>,
+    direct_translations: Vec<Vec<ResolvedTranslation>>,
 }
 
 impl PrecomputedIndications {
     pub fn translations_at(&self, pos: usize) -> Vec<ResolvedTranslation> {
-        self.events
+        // Emphasis indicators (direct) must precede capitalization/numeric indicators
+        // (events) so that begemphword appears before capsletter in the output.
+        let mut result: Vec<ResolvedTranslation> = self
+            .direct_translations
             .get(pos)
-            .into_iter()
-            .filter_map(|event| self.translations.get(&event).cloned())
-            .collect()
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
+            .to_vec();
+        result.extend(
+            self.events
+                .get(pos)
+                .into_iter()
+                .filter_map(|event| self.translations.get(&event).cloned()),
+        );
+        result
     }
 }
 
@@ -91,12 +111,32 @@ impl Indicators {
     }
 
     pub fn precompute(&self, input: &str, typeforms: &[TextAttributes]) -> PrecomputedIndications {
+        let n = input.chars().count();
         let events = self
             .0
             .iter()
+            .filter(|i| !matches!(i, Indicator::Emphasis(_)))
             .map(|i| i.precompute(input))
             .fold(IndicationEvents::from(typeforms), |acc, e| acc | e);
-        PrecomputedIndications { events, translations: self.event_translations() }
+
+        // Emphasis indicators produce direct per-position translations.
+        let mut direct_translations: Vec<Vec<ResolvedTranslation>> = vec![Vec::new(); n + 1];
+        for indicator in &self.0 {
+            if let Indicator::Emphasis(e) = indicator {
+                let emph_result = e.precompute(input, typeforms);
+                for (pos, translations) in emph_result.into_iter().enumerate() {
+                    if pos < direct_translations.len() {
+                        direct_translations[pos].extend(translations);
+                    }
+                }
+            }
+        }
+
+        PrecomputedIndications {
+            events,
+            translations: self.event_translations(),
+            direct_translations,
+        }
     }
 }
 

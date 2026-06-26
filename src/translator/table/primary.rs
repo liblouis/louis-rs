@@ -14,7 +14,7 @@ use crate::{
         TranslationOptions,
         context_pattern::{ContextPatterns, ContextPatternsBuilder},
         effect::Environment,
-        indication::{Indicator, Indicators, lettersign, nocontract, numeric, uppercase},
+        indication::{Indicator, Indicators, emphasis, lettersign, nocontract, numeric, uppercase},
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
         table::TableContext,
         translation::TranslationSubset,
@@ -81,6 +81,7 @@ struct PrimaryTableBuilder {
     uppercase_indicator: uppercase::IndicatorBuilder,
     lettersign_indicator: lettersign::IndicatorBuilder,
     nocontract_indicator: nocontract::IndicatorBuilder,
+    emphasis_indicator: emphasis::IndicatorBuilder,
 }
 
 impl PrimaryTableBuilder {
@@ -97,6 +98,7 @@ impl PrimaryTableBuilder {
             uppercase_indicator: uppercase::IndicatorBuilder::new(),
             lettersign_indicator: lettersign::IndicatorBuilder::new(),
             nocontract_indicator: nocontract::IndicatorBuilder::new(),
+            emphasis_indicator: emphasis::IndicatorBuilder::new(),
         }
     }
 
@@ -148,6 +150,7 @@ impl PrimaryTableBuilder {
             self.nocontract_indicator
                 .build(ctx.character_classes.clone())
                 .map(Indicator::NoContract),
+            self.emphasis_indicator.build().map(Indicator::Emphasis),
         ]
         .into_iter()
         .flatten()
@@ -280,6 +283,33 @@ impl PrimaryTable {
                 }
                 Rule::Capsmodechars { chars } => {
                     builder.uppercase_indicator.capsmodechars(chars);
+                }
+                Rule::Emphclass { name } => {
+                    builder.emphasis_indicator.emphclass(name);
+                }
+                Rule::Emphletter { name, dots } => {
+                    builder.emphasis_indicator.emphletter(name, &dots.to_string(), rule);
+                }
+                Rule::Begemphword { name, dots } => {
+                    builder.emphasis_indicator.begemphword(name, &dots.to_string(), rule);
+                }
+                Rule::Endemphword { name, dots } => {
+                    builder.emphasis_indicator.endemphword(name, &dots.to_string(), rule);
+                }
+                Rule::Begemphphrase { name, dots } => {
+                    builder.emphasis_indicator.begemphphrase(name, &dots.to_string(), rule);
+                }
+                Rule::Endemphphrase { name, dots, position } => {
+                    builder.emphasis_indicator.endemphphrase(name, &dots.to_string(), position, rule);
+                }
+                Rule::Lenemphphrase { name, number } => {
+                    builder.emphasis_indicator.lenemphphrase(name, *number as usize);
+                }
+                Rule::Begemph { name, dots, .. } => {
+                    builder.emphasis_indicator.begemph(name, &dots.to_string(), rule);
+                }
+                Rule::Endemph { name, dots, .. } => {
+                    builder.emphasis_indicator.endemph(name, &dots.to_string(), rule);
                 }
                 Rule::Letsign { dots } => {
                     builder
@@ -838,7 +868,9 @@ impl PrimaryTable {
                     delayed_translations = self.update_offsets(delayed_translations, 1);
                 }
             } else {
-                // the chars iterator is exhausted
+                // the chars iterator is exhausted — slot `n` translations were
+                // already emitted by the translations_at call at the top of this
+                // iteration, so just break here.
                 break;
             }
         }
