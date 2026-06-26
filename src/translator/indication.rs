@@ -68,6 +68,31 @@ impl Indicator {
 #[derive(Debug, Clone)]
 pub struct Indicators(Vec<Indicator>);
 
+/// The result of pre-computing indications for a given input.
+///
+/// Combines the pre-computed events per character position with the
+/// event-to-translation map, so callers can directly ask for the braille
+/// translations to emit at any given character position.
+pub struct PrecomputedIndications {
+    events: IndicationEvents,
+    translations: Vec<(IndicationEvent, ResolvedTranslation)>,
+}
+
+impl PrecomputedIndications {
+    pub fn translations_at(&self, pos: usize) -> Vec<ResolvedTranslation> {
+        self.events
+            .get(pos)
+            .into_iter()
+            .filter_map(|event| {
+                self.translations
+                    .iter()
+                    .find(|(e, _)| *e == event)
+                    .map(|(_, t)| t.clone())
+            })
+            .collect()
+    }
+}
+
 impl Indicators {
     pub fn new(indicators: Vec<Indicator>) -> Indicators {
         Indicators(indicators)
@@ -77,18 +102,20 @@ impl Indicators {
         self.0.iter_mut().flat_map(|i| i.next(s, prev)).collect()
     }
 
-    pub fn event_translations(&self) -> Vec<(IndicationEvent, ResolvedTranslation)> {
+    fn event_translations(&self) -> Vec<(IndicationEvent, ResolvedTranslation)> {
         self.0
             .iter()
             .flat_map(|i| i.event_translations())
             .collect()
     }
 
-    pub fn precompute(&self, input: &str, typeforms: &[TextAttributes]) -> IndicationEvents {
-        self.0
+    pub fn precompute(&self, input: &str, typeforms: &[TextAttributes]) -> PrecomputedIndications {
+        let events = self
+            .0
             .iter()
             .map(|i| i.precompute(input))
-            .fold(IndicationEvents::from(typeforms), |acc, e| acc | e)
+            .fold(IndicationEvents::from(typeforms), |acc, e| acc | e);
+        PrecomputedIndications { events, translations: self.event_translations() }
     }
 }
 
@@ -156,29 +183,31 @@ mod tests {
         let uppercase = Indicator::Uppercase(cap_builder.build().unwrap());
 
         let indicators = Indicators::new(vec![numeric, uppercase]);
+        let indications = indicators.precompute("A1", &[]);
 
-        assert_eq!(
-            indicators.precompute("A1", &[]),
-            IndicationEvents::from(vec![
-                IndicationEvent::UppercaseStart.into(),                          // 'A'
-                IndicationEvent::NumberStart | IndicationEvent::DontContract,   // '1'
-            ])
-        );
+        let outputs_at = |pos| {
+            indications
+                .translations_at(pos)
+                .into_iter()
+                .map(|t| t.output().to_string())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(outputs_at(0), vec!["⠠"]); // capsletter for 'A'
+        assert_eq!(outputs_at(1), vec!["⠼"]); // numsign for '1'
     }
 
     #[test]
-    fn precompute_merges_typeforms() {
+    fn typeforms_convert_to_indication_events() {
         use crate::text_attribute::TextAttribute;
         use enumset::EnumSet;
 
-        let indicators = Indicators::new(vec![]);
-        let typeforms = vec![
+        let typeforms: Vec<TextAttributes> = vec![
             TextAttribute::Italic.into(),
             TextAttribute::Bold | TextAttribute::Underline,
             EnumSet::empty(),
         ];
         assert_eq!(
-            indicators.precompute("abc", &typeforms),
+            IndicationEvents::from(typeforms.as_slice()),
             IndicationEvents::from(vec![
                 IndicationEvent::Italic.into(),
                 IndicationEvent::Bold | IndicationEvent::Underline,
