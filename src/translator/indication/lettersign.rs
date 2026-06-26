@@ -39,22 +39,24 @@ impl IndicatorBuilder {
     /// Build an [`Indicator`]
     pub fn build(self, ctx: CharacterClasses) -> Option<Indicator> {
         if !self.contractions.is_empty() && self.lettersign.is_some() {
+            let (lettersign, origin) = self.lettersign.unwrap();
+            let start_translation = ResolvedTranslation::new(
+                "", &lettersign, 1, TranslationStage::Main, origin.clone(),
+            );
             let mut trie = Trie::new().with_context(ctx);
-            if let Some((lettersign, origin)) = self.lettersign {
-                for (contraction, _origin) in self.contractions {
-                    trie.insert(
-                        &contraction,
-                        &lettersign,
-                        Some(Transition::Start(Boundary::Word)),
-                        Some(Transition::End(Boundary::Word)),
-                        Direction::Forward,
-                        Precedence::Default,
-                        TranslationStage::Main,
-                        &origin,
-                    );
-                }
+            for (contraction, _origin) in self.contractions {
+                trie.insert(
+                    &contraction,
+                    &lettersign,
+                    Some(Transition::Start(Boundary::Word)),
+                    Some(Transition::End(Boundary::Word)),
+                    Direction::Forward,
+                    Precedence::Default,
+                    TranslationStage::Main,
+                    &origin,
+                );
             }
-            Some(Indicator { contractions: trie })
+            Some(Indicator { contractions: trie, start_translation })
         } else if !self.contractions.is_empty() && self.lettersign.is_none() {
             warn!("Table contains contractions but no letsign");
             None
@@ -78,6 +80,7 @@ impl IndicatorBuilder {
 #[derive(Debug, Clone)]
 pub struct Indicator {
     contractions: Trie,
+    start_translation: ResolvedTranslation,
 }
 
 impl Indicator {

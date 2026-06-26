@@ -45,22 +45,24 @@ impl IndicatorBuilder {
     /// Build an [`Indicator`]
     pub fn build(self, ctx: CharacterClasses) -> Option<Indicator> {
         if !self.contractions.is_empty() && self.nocontractsign.is_some() {
+            let (nocontractsign, origin) = self.nocontractsign.unwrap();
+            let start_translation = ResolvedTranslation::new(
+                "", &nocontractsign, 1, TranslationStage::Main, origin.clone(),
+            );
             let mut trie = Trie::new().with_context(ctx);
-            if let Some((nocontractsign, origin)) = self.nocontractsign {
-                for (contraction, _origin) in self.contractions {
-                    trie.insert(
-                        &contraction,
-                        &nocontractsign,
-                        Some(Transition::Start(Boundary::Word)),
-                        Some(Transition::End(Boundary::Word)),
-                        Direction::Forward,
-                        Precedence::Default,
-                        TranslationStage::Main,
-                        &origin,
-                    );
-                }
+            for (contraction, _origin) in self.contractions {
+                trie.insert(
+                    &contraction,
+                    &nocontractsign,
+                    Some(Transition::Start(Boundary::Word)),
+                    Some(Transition::End(Boundary::Word)),
+                    Direction::Forward,
+                    Precedence::Default,
+                    TranslationStage::Main,
+                    &origin,
+                );
             }
-            Some(Indicator { contractions: trie })
+            Some(Indicator { contractions: trie, start_translation })
         } else if !self.contractions.is_empty() && self.nocontractsign.is_none() {
             warn!("Table contains contractions but no nocontractionsign");
             None
@@ -84,6 +86,7 @@ impl IndicatorBuilder {
 #[derive(Debug, Clone)]
 pub struct Indicator {
     contractions: Trie,
+    start_translation: ResolvedTranslation,
 }
 
 impl Indicator {
