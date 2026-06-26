@@ -35,7 +35,6 @@ pub struct IndicatorBuilder(Indicator);
 impl IndicatorBuilder {
     pub fn new() -> Self {
         IndicatorBuilder(Indicator {
-            state: State::Default,
             uppercase_chars: HashSet::default(),
             extra_uppercase_chars: HashSet::default(),
             start_translation: None,
@@ -120,7 +119,6 @@ impl IndicatorBuilder {
 
 #[derive(Debug, Clone)]
 pub struct Indicator {
-    state: State,
     uppercase_chars: HashSet<char>,
     extra_uppercase_chars: HashSet<char>,
     start_letter_translation: Option<ResolvedTranslation>,
@@ -132,57 +130,6 @@ pub struct Indicator {
 }
 
 impl Indicator {
-    /// The transition method of the uppercase indication state machine.
-    ///
-    /// Takes a string slice to examine the next character(s). Typically the
-    /// indicator only looks at the next character, but there are cases where
-    /// the indicator wants a bigger look-ahead, so we take a `&str` as input
-    /// instead of just a `char`.
-    pub fn next(&mut self, s: &str) -> Option<ResolvedTranslation> {
-        let mut chars = s.chars();
-        let c = chars.next();
-        if !self.is_indicating() || c.is_none() {
-            return None;
-        }
-        match (&self.state, self.uppercase_chars.contains(&c.unwrap())) {
-            (State::Default, true) => {
-                // OK, so we hit an uppercase char. Are we looking at just a
-                // single char or are we looking at a whole capitalized word?
-                if let Some(next_char) = chars.next()
-                    && self.uppercase_chars.contains(&next_char)
-                {
-                    // well, at least two uppercase chars
-                    // FIXME: Not sure if we can deduce that the whole word is
-                    // uppercase by just looking at the first two characters
-                    self.state = State::UppercaseMulti;
-                    self.start_word_translation
-                        .clone()
-                        .or(self.start_letter_translation.clone())
-                } else {
-                    // looks like it was just a single uppercase letter
-                    self.state = State::UppercaseSingle;
-                    self.start_letter_translation.clone()
-                }
-            }
-            (State::UppercaseSingle, false) => {
-                self.state = State::Default;
-                // no need to indicate anything
-                None
-            }
-            (State::UppercaseMulti, false) => {
-                self.state = State::Default;
-                // only indicate the end of uppercase if there is an end_indicator and the next char
-                // is a letter
-                if self.terminating_chars.contains(&c.unwrap()) {
-                    self.end_word_translation.clone()
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
-    }
-
     fn is_indicating(&self) -> bool {
         self.start_letter_translation.is_some()
             || self.start_word_translation.is_some()
@@ -254,68 +201,6 @@ mod tests {
     use crate::parser::RuleParser;
     use crate::translator::indication::events::{IndicationEvent, IndicationEvents};
     use enumset::EnumSet;
-
-    #[test]
-    fn indicator() {
-        let rule = RuleParser::new("capsletter 123").rule().unwrap();
-        let rule = AnchoredRule::new(rule, None, 0);
-        let mut builder = IndicatorBuilder::new();
-        builder.capsletter("⠇", &rule);
-        builder.uppercase_characters(HashSet::from(['A', 'B', 'C']));
-        builder.letter_characters(HashSet::from(['a', 'b', 'c']));
-        let mut indicator = builder.build().unwrap();
-        assert_eq!(
-            indicator.next("Abc ".into()),
-            Some(ResolvedTranslation::new(
-                "",
-                "⠇",
-                1,
-                TranslationStage::Main,
-                rule,
-            ))
-        );
-        assert_eq!(indicator.next("bc ".into()), None);
-        assert_eq!(indicator.next("c ".into()), None);
-        assert_eq!(indicator.next(" ".into()), None);
-        assert_eq!(indicator.next("".into()), None);
-    }
-
-    #[test]
-    fn end_indication() {
-        let rule = RuleParser::new("begcapsword 123").rule().unwrap();
-        let begcapsword_rule = AnchoredRule::new(rule, None, 0);
-        let rule = RuleParser::new("endcapsword 6").rule().unwrap();
-        let endcapsword_rule = AnchoredRule::new(rule, None, 0);
-        let mut builder = IndicatorBuilder::new();
-        builder.begcapsword("⠇", &begcapsword_rule);
-        builder.endcapsword("⠠", &endcapsword_rule);
-        builder.uppercase_characters(HashSet::from(['A', 'B', 'C']));
-        builder.letter_characters(HashSet::from(['a', 'b', 'c']));
-        let mut indicator = builder.build().unwrap();
-        assert_eq!(
-            indicator.next("ABCa".into()),
-            Some(ResolvedTranslation::new(
-                "",
-                "⠇",
-                1,
-                TranslationStage::Main,
-                begcapsword_rule,
-            ))
-        );
-        assert_eq!(indicator.next("BCa".into()), None);
-        assert_eq!(indicator.next("Ca".into()), None);
-        assert_eq!(
-            indicator.next("a".into()),
-            Some(ResolvedTranslation::new(
-                "",
-                "⠠",
-                1,
-                TranslationStage::Main,
-                endcapsword_rule,
-            ))
-        );
-        assert_eq!(indicator.next("".into()), None);
-    }
 
     #[test]
     fn precompute_indicator() {

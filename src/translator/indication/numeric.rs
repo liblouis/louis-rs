@@ -21,13 +21,6 @@ use crate::{
 use super::events::{IndicationEvent, IndicationEvents};
 use std::collections::HashSet;
 
-/// Possible states for the [`Indicator`] state machine
-#[derive(Debug, Clone)]
-enum State {
-    Default,
-    Numeric,
-}
-
 /// A builder for [`Indicator`]
 #[derive(Debug)]
 pub struct IndicatorBuilder(Indicator);
@@ -35,7 +28,6 @@ pub struct IndicatorBuilder(Indicator);
 impl IndicatorBuilder {
     pub fn new() -> Self {
         IndicatorBuilder(Indicator {
-            state: State::Default,
             numeric_chars: HashSet::default(),
             extra_numeric_chars: HashSet::default(),
             mid_numeric_chars: HashSet::default(),
@@ -104,9 +96,6 @@ impl IndicatorBuilder {
 /// character encountered is in the set of terminating_chars.
 #[derive(Debug, Clone)]
 pub struct Indicator {
-    state: State,
-    /// The set of characters that will trigger a state change to the
-    /// [State::Numeric] mode
     numeric_chars: HashSet<char>,
     /// The set of characters that will prevent a state change to the
     /// [State::Default] mode
@@ -123,62 +112,6 @@ pub struct Indicator {
 }
 
 impl Indicator {
-    /// The transition method of the numeric indication state machine.
-    ///
-    /// Takes a string slice to examine the next character(s). Typically the
-    /// indicator only looks at the next character, but there are cases where
-    /// the indicator wants a bigger look-ahead, so we take a `&str` as input
-    /// instead of just a `char`. Returns a [`ResolvedTranslation`] when
-    /// transitioning between numeric and non-numeric states or `None` when no
-    /// state change occurs (or the table contains no `numsign` opcode).
-    ///
-    /// # Arguments
-    /// * `s` - A string slice containing the character(s) to process
-    pub fn next(&mut self, s: &str) -> Option<ResolvedTranslation> {
-        let c = s.chars().next();
-        if self.start_translation.is_none() || c.is_none() {
-            return None;
-        }
-        match (&self.state, self.numeric_chars.contains(&c.unwrap())) {
-            (State::Default, true) => {
-                self.state = State::Numeric;
-                self.start_translation.clone()
-            }
-            (State::Numeric, false) => {
-                if self.extra_numeric_chars.contains(&c.unwrap()) {
-                    None
-                }
-                // a midnum character between two digits keeps the number going,
-                // but only in plain number-sign mode (with numericmodechars the
-                // midnum terminates the number and the sign is re-emitted)
-                else if self.extra_numeric_chars.is_empty()
-                    && self.mid_numeric_chars.contains(&c.unwrap())
-                    && self.next_is_numeric(s)
-                {
-                    None
-                } else {
-                    self.state = State::Default;
-                    // only indicate the end of a number if the character is contained in
-                    // terminating_chars
-                    if self.terminating_chars.contains(&c.unwrap()) {
-                        // FIXME: end indication should only occur within a word
-                        self.end_translation.clone()
-                    } else {
-                        None
-                    }
-                }
-            }
-            _ => None,
-        }
-    }
-
-    fn next_is_numeric(&self, s: &str) -> bool {
-        // s starts with the current (midnum) char; check the char after it
-        s.chars()
-            .nth(1)
-            .is_some_and(|c| self.numeric_chars.contains(&c))
-    }
-
     pub fn event_translations(&self) -> Vec<(IndicationEvent, ResolvedTranslation)> {
         let mut v = Vec::new();
         if let Some(t) = &self.start_translation {
@@ -247,74 +180,6 @@ mod tests {
     use enumset::EnumSet;
 
     use super::*;
-
-    #[test]
-    fn indicator() {
-        let rule = RuleParser::new("numsign 3456").rule().unwrap();
-        let rule = AnchoredRule::new(rule, None, 0);
-        let numeric_chars: HashSet<char> = HashSet::from(['1', '2', '3']);
-        let mut builder = IndicatorBuilder::new();
-        builder.numeric_characters(numeric_chars);
-        builder.numsign("⠼", &rule);
-        builder.nonumsign("⠰", &rule);
-        builder.numericnocontchars("abc");
-        let mut indicator = builder.build().unwrap();
-        assert_eq!(indicator.next("ab12 a".into()), None);
-        assert_eq!(indicator.next("b12 a".into()), None);
-        assert_eq!(
-            indicator.next("12 a".into()),
-            Some(ResolvedTranslation::new(
-                "",
-                "⠼",
-                1,
-                TranslationStage::Main,
-                rule
-            ))
-        );
-        assert_eq!(indicator.next("2 a".into()), None);
-        assert_eq!(indicator.next(" a".into()), None);
-        assert_eq!(indicator.next("a".into()), None);
-        assert_eq!(indicator.next("".into()), None);
-    }
-
-    #[test]
-    fn end_indication() {
-        let rule = RuleParser::new("numsign 3456").rule().unwrap();
-        let numsign_rule = AnchoredRule::new(rule, None, 0);
-        let rule = RuleParser::new("nonumsign 56").rule().unwrap();
-        let nonumsign_rule = AnchoredRule::new(rule, None, 0);
-        let numeric_chars: HashSet<char> = HashSet::from(['1', '2', '3']);
-        let mut builder = IndicatorBuilder::new();
-        builder.numeric_characters(numeric_chars);
-        builder.numsign("⠼", &numsign_rule);
-        builder.nonumsign("⠰", &nonumsign_rule);
-        builder.numericnocontchars("abc");
-        let mut indicator = builder.build().unwrap();
-        assert_eq!(indicator.next("ab12a".into()), None);
-        assert_eq!(indicator.next("b12a".into()), None);
-        assert_eq!(
-            indicator.next("12a".into()),
-            Some(ResolvedTranslation::new(
-                "",
-                "⠼",
-                1,
-                TranslationStage::Main,
-                numsign_rule
-            ))
-        );
-        assert_eq!(indicator.next("2a".into()), None);
-        assert_eq!(
-            indicator.next("a".into()),
-            Some(ResolvedTranslation::new(
-                "",
-                "⠰",
-                1,
-                TranslationStage::Main,
-                nonumsign_rule
-            ))
-        );
-        assert_eq!(indicator.next("".into()), None);
-    }
 
     #[test]
     fn precompute_number() {

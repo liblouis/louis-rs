@@ -37,15 +37,6 @@ pub enum Indicator {
 }
 
 impl Indicator {
-    pub fn next(&mut self, s: &str, prev: Option<char>) -> Option<ResolvedTranslation> {
-        match self {
-            Self::LetterSign(i) => i.next(s, prev),
-            Self::NoContract(i) => i.next(s, prev),
-            Self::Numeric(i) => i.next(s),
-            Self::Uppercase(i) => i.next(s),
-        }
-    }
-
     pub fn precompute(&self, input: &str) -> IndicationEvents {
         match self {
             Self::LetterSign(i) => i.precompute(input),
@@ -96,10 +87,6 @@ impl PrecomputedIndications {
 impl Indicators {
     pub fn new(indicators: Vec<Indicator>) -> Indicators {
         Indicators(indicators)
-    }
-
-    pub fn next(&mut self, s: &str, prev: Option<char>) -> Vec<ResolvedTranslation> {
-        self.0.iter_mut().flat_map(|i| i.next(s, prev)).collect()
     }
 
     fn event_translations(&self) -> Vec<(IndicationEvent, ResolvedTranslation)> {
