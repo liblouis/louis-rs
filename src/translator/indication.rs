@@ -21,6 +21,7 @@
 use crate::text_attribute::{TextAttribute, TextAttributes};
 use crate::translator::ResolvedTranslation;
 use events::{IndicationEvent, IndicationEvents};
+use std::collections::HashMap;
 
 pub mod events;
 pub mod lettersign;
@@ -66,7 +67,7 @@ pub struct Indicators(Vec<Indicator>);
 /// translations to emit at any given character position.
 pub struct PrecomputedIndications {
     events: IndicationEvents,
-    translations: Vec<(IndicationEvent, ResolvedTranslation)>,
+    translations: HashMap<IndicationEvent, ResolvedTranslation>,
 }
 
 impl PrecomputedIndications {
@@ -74,12 +75,7 @@ impl PrecomputedIndications {
         self.events
             .get(pos)
             .into_iter()
-            .filter_map(|event| {
-                self.translations
-                    .iter()
-                    .find(|(e, _)| *e == event)
-                    .map(|(_, t)| t.clone())
-            })
+            .filter_map(|event| self.translations.get(&event).cloned())
             .collect()
     }
 }
@@ -89,7 +85,7 @@ impl Indicators {
         Indicators(indicators)
     }
 
-    fn event_translations(&self) -> Vec<(IndicationEvent, ResolvedTranslation)> {
+    fn event_translations(&self) -> HashMap<IndicationEvent, ResolvedTranslation> {
         self.0
             .iter()
             .flat_map(|i| i.event_translations())

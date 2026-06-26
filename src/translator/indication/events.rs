@@ -32,7 +32,7 @@ use std::ops::BitOr;
 /// `*Start` / `*End` variants bracket a run; the plain variants (e.g.
 /// [`Number`](IndicationEvent::Number)) mark that we are still inside a run,
 /// which is used to suppress contraction rules (liblouis `dontContract`).
-#[derive(EnumSetType, Debug)]
+#[derive(EnumSetType, Debug, Hash)]
 pub enum IndicationEvent {
     AllCaps,
     AllCapsStart,
