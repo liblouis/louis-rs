@@ -2,6 +2,7 @@
 
 use std::{collections::HashMap, io};
 
+pub use options::{TranslationMode, TranslationModes, TranslationOptions};
 pub use pipeline::TranslationPipeline;
 pub use translation::{ResolvedTranslation, TranslationStage};
 
@@ -13,6 +14,7 @@ use crate::{
 mod context_pattern;
 mod effect;
 mod indication;
+mod options;
 mod match_pattern;
 mod pipeline;
 mod regexp;

@@ -34,7 +34,7 @@ use std::path::Path;
 
 pub use parser::Direction;
 pub use text_attribute::{TextAttribute, TextAttributes};
-pub use test::{TranslationMode, TranslationModes};
+pub use translator::{TranslationMode, TranslationModes, TranslationOptions};
 use translator::TranslationPipeline;
 
 use crate::translator::ResolvedTranslation;
@@ -45,23 +45,6 @@ pub enum TranslationError {
     TranslationFailed(#[from] translator::TranslationError),
     #[error("Errors when reading given braille table(s)")]
     ParseFailed(Vec<parser::TableError>),
-}
-
-#[derive(Debug, Clone)]
-pub struct TranslationOptions {
-    pub mode: TranslationModes,
-    pub typeforms: Option<Vec<TextAttributes>>,
-    pub cursor_pos: Option<usize>,
-}
-
-impl Default for TranslationOptions {
-    fn default() -> Self {
-        Self {
-            mode: TranslationModes::empty(),
-            typeforms: None,
-            cursor_pos: None,
-        }
-    }
 }
 #[derive(Debug, Clone)]
 pub struct SpacingInfo {

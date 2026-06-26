@@ -10,8 +10,9 @@ use crate::parser::Direction;
 use crate::text_attribute::{TextAttribute, TextAttributes};
 use crate::test::{
     CursorPosition, Directions, Display, ExpectedFailure, Table, TableQuery, Test, TestError,
-    TestMatrix, TestMode, TestResult, TranslationMode, TranslationModes,
+    TestMatrix, TestMode, TestResult,
 };
+use crate::translator::{TranslationMode, TranslationModes};
 
 type YAMLEventError = Option<Result<Event, libyaml::ParserError>>;
 

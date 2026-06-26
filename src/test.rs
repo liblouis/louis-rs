@@ -2,14 +2,14 @@
 
 use std::{collections::HashMap, path::PathBuf};
 
-use enumset::{EnumSet, EnumSetType};
+use enumset::EnumSet;
 
 use search_path::SearchPath;
 
 use crate::{
     parser::{self, Direction, TableError},
     text_attribute::TextAttributes,
-    translator::{self, DisplayTable, TranslationPipeline},
+    translator::{self, DisplayTable, TranslationModes, TranslationPipeline},
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -220,30 +220,6 @@ pub enum Display {
 }
 
 pub type TableQuery = HashMap<String, String>;
-
-#[derive(EnumSetType, Debug)]
-pub enum TranslationMode {
-    NoContractions,
-    CompbrlAtCursor,
-    DotsIo,
-    CompbrlLeftCursor,
-    UcBrl,
-    NoUndefined,
-    PartialTrans,
-}
-
-#[derive(Debug, Clone)]
-pub struct TranslationModes(EnumSet<TranslationMode>);
-
-impl TranslationModes {
-    pub fn empty() -> Self {
-        TranslationModes(EnumSet::empty())
-    }
-
-    pub fn insert(&mut self, value: TranslationMode) -> bool {
-        self.0.insert(value)
-    }
-}
 
 
 #[derive(Debug, Clone)]
