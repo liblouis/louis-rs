@@ -126,7 +126,7 @@ impl Translator {
         options: TranslationOptions,
     ) -> Result<TranslationResult, TranslationError> {
         Ok(TranslationResult {
-            output: self.0.translate(input),
+            output: self.0.translate_with_options(input, &options),
             ..Default::default()
         })
     }

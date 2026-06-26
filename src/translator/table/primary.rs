@@ -11,6 +11,7 @@ use crate::{
     parser::{AnchoredRule, Braille, CharacterClass, HasNocross, HasPrecedence, fallback},
     translator::{
         CharacterDefinition, ResolvedTranslation, Rule, TranslationError, TranslationStage,
+        TranslationOptions,
         context_pattern::{ContextPatterns, ContextPatternsBuilder},
         effect::Environment,
         indication::{Indicator, Indicators, lettersign, nocontract, numeric, uppercase},
@@ -651,7 +652,14 @@ impl PrimaryTable {
     }
 
     pub fn translate(&self, input: &str) -> String {
-        self.trace(input).iter().map(|t| t.output()).collect()
+        self.trace(input, &TranslationOptions::default())
+            .iter()
+            .map(|t| t.output())
+            .collect()
+    }
+
+    pub fn translate_with_options(&self, input: &str, options: &TranslationOptions) -> String {
+        self.trace(input, options).iter().map(|t| t.output()).collect()
     }
 
     fn translation_candidates(
@@ -710,7 +718,7 @@ impl PrimaryTable {
         delayed.into_iter().partition(|t| t.offset() == 0)
     }
 
-    pub fn trace(&self, input: &str) -> Vec<ResolvedTranslation> {
+    pub fn trace(&self, input: &str, options: &TranslationOptions) -> Vec<ResolvedTranslation> {
         let mut translations: Vec<ResolvedTranslation> = Vec::new();
         let mut delayed_translations: Vec<ResolvedTranslation> = Vec::new();
 
@@ -720,7 +728,7 @@ impl PrimaryTable {
         let mut seen: HashSet<TranslationSubset> = HashSet::default();
         let mut char_pos: usize = 0;
 
-        let indications = self.indicators.precompute(input, &[]);
+        let indications = self.indicators.precompute(input, options.typeforms());
 
         loop {
             translations.extend(indications.translations_at(char_pos));

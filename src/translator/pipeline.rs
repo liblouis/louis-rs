@@ -4,7 +4,7 @@ use crate::{
     Direction,
     parser::{AnchoredRule, HasDirection, Rule},
     translator::{
-        ResolvedTranslation, TranslationError, TranslationStage,
+        ResolvedTranslation, TranslationError, TranslationOptions, TranslationStage,
         table::{TableContext, multipass::MultipassTable, primary::PrimaryTable},
     },
 };
@@ -17,10 +17,10 @@ pub enum Transformation {
 }
 
 impl Transformation {
-    pub fn trace(&self, input: &str) -> Vec<ResolvedTranslation> {
+    pub fn trace(&self, input: &str, options: &TranslationOptions) -> Vec<ResolvedTranslation> {
         match self {
             Transformation::Pre(t) => t.trace(input),
-            Transformation::Primary(t) => t.trace(input),
+            Transformation::Primary(t) => t.trace(input, options),
             Transformation::Post(t) => t.trace(input),
         }
     }
@@ -29,6 +29,14 @@ impl Transformation {
         match self {
             Transformation::Pre(t) => t.translate(input),
             Transformation::Primary(t) => t.translate(input),
+            Transformation::Post(t) => t.translate(input),
+        }
+    }
+
+    fn translate_with_options(&self, input: &str, options: &TranslationOptions) -> String {
+        match self {
+            Transformation::Pre(t) => t.translate(input),
+            Transformation::Primary(t) => t.translate_with_options(input, options),
             Transformation::Post(t) => t.translate(input),
         }
     }
@@ -108,10 +116,18 @@ impl TranslationPipeline {
     }
 
     pub fn trace(&self, input: &str) -> Vec<Vec<ResolvedTranslation>> {
+        self.trace_with_options(input, &TranslationOptions::default())
+    }
+
+    pub fn trace_with_options(
+        &self,
+        input: &str,
+        options: &TranslationOptions,
+    ) -> Vec<Vec<ResolvedTranslation>> {
         let mut input = input.to_string();
         let mut result: Vec<Vec<ResolvedTranslation>> = Vec::new();
         for step in &self.steps {
-            let translations = step.trace(&input);
+            let translations = step.trace(&input, options);
             input = translations.iter().map(|t| t.output()).collect();
             result.push(translations);
         }
@@ -122,6 +138,14 @@ impl TranslationPipeline {
         let mut result: String = input.nfc().collect();
         for step in &self.steps {
             result = step.translate(&result);
+        }
+        result
+    }
+
+    pub fn translate_with_options(&self, input: &str, options: &TranslationOptions) -> String {
+        let mut result: String = input.nfc().collect();
+        for step in &self.steps {
+            result = step.translate_with_options(&result, options);
         }
         result
     }
