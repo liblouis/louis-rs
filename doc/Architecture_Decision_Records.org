@@ -370,6 +370,144 @@ callers ask for ~translations_at(pos)~ directly.
 - [[https://github.com/liblouis/liblouis/blob/master/liblouis/lou_translateString.c][liblouis lou_translateString.c]] — authoritative reference for
   ~checkNumericMode~, ~dontContract~, and ~for_selectRule~
 
+* DRAFT Backward-translation indication with pre-computed events
+- Deciders :: CE
+- Date :: [2026-06-26 Do]
+
+** Context and Problem Statement
+
+Forward-translation indication is now pre-computed: each indicator runs
+a single pass over the text input and records, at each character
+position, which events fire there. The translation loop consults an
+immutable ~PrecomputedIndications~ array instead of advancing mutable
+state machines in parallel.
+
+Backward translation (braille → text) poses the symmetric but inverted
+problem. In forward translation the indicators are *inserted* — the
+state machines detect conditions in the text and emit braille indicator
+cells. In backward translation the indicator cells are already present
+in the braille input and must be *detected* and *consumed*, with their
+meaning applied to how subsequent braille cells are interpreted.
+
+The question is how to extend the pre-computed architecture to cover
+backward indication, and in particular whether the same ~precompute()~
+interface and ~PrecomputedIndications~ type can be reused or whether a
+separate abstraction is needed.
+
+*** Detection vs insertion
+
+In forward translation, ~numsign~ means: /when the input text enters a
+numeric run, emit the numsign dot pattern before the first digit./
+In backward translation, ~numsign~ means: /when the braille input
+contains the numsign dot pattern, the following cells represent digits./
+
+The indicator cell itself has no text output — it is consumed and
+suppressed — but it sets a mode that affects how subsequent braille
+cells are matched against back-translation rules. This is analogous to
+the forward ~DontContract~ flag, but inverted: instead of suppressing
+contractions in the *source*, it forces digit interpretation in the
+*target*.
+
+*** Same opcode, inverted state machine
+
+The same table opcode (~numsign~, ~capsletter~, ~begcapsword~, …) drives
+both directions. In forward translation the state machine watches for
+triggering characters in the text and emits the indicator cell. In
+backward translation the state machine watches for the indicator dot
+pattern in the braille input and sets a mode flag for subsequent cells.
+
+The key question for pre-computation: can the backward state machine
+also analyse the entire braille input in one pass before the translation
+loop, producing a per-position array of interpretation flags?
+
+*** Does the output affect subsequent indicator detection?
+
+In forward translation, pre-computation is valid because the indicator
+events depend only on the input text characters, not on what braille has
+already been emitted. The analogous question for backward translation is
+whether the detection of indicator cells in the braille input depends on
+what text has already been output.
+
+For numeric indication this is straightforward: the numsign dot pattern
+is a fixed, recognisable cell. Its detection depends only on the braille
+input sequence, not on the output text produced so far.
+
+For uppercase indication the picture is similar: ~capsletter~ and
+~begcapsword~ are fixed dot patterns. Their detection is independent of
+prior output.
+
+However, unlike forward translation where we know the exact character
+boundaries of the input text, braille back-translation operates on a
+sequence of braille cells whose correspondence to output characters is
+determined by the rule matching. This means a braille-position index is
+not the same as a text-character index, and the two cannot be trivially
+unified.
+
+*** Implication for rule selection
+
+In forward translation, the ~DontContract~ event pre-computed at a text
+position suppresses contraction rules when that position is translated.
+In backward translation, a detected ~numsign~ suppresses non-digit
+back-translation rules for the following braille cells. The mechanism
+is the same in structure — a per-position flag that modulates rule
+selection — but the positions are braille-cell positions rather than
+text-character positions.
+
+** Decision Drivers
+
+- The pre-computed architecture should extend naturally to backward
+  translation rather than reverting to the mutable-state-machine pattern
+- The correspondence between braille-cell positions and output-text
+  positions must be handled consistently
+- The same ~IndicationEvent~ vocabulary should be reusable where possible
+- Backward indicator detection must remain correct even for tables that
+  define multi-cell indicator patterns
+
+** Considered Options
+
+1. *Separate backward precompute pass over braille input* — analogous to
+   the forward pass but running over braille cells. Produces a
+   ~PrecomputedIndications~ indexed by braille-cell position. The
+   backward translation loop consults it by braille-cell index.
+
+2. *Inline detection during backward translation* — detect indicator
+   cells opportunistically as the backward loop encounters them, without
+   a separate pass. Avoids the braille-position / text-position alignment
+   problem but reintroduces mutable state in the translation loop.
+
+3. *Reuse forward precompute on the back-translated output* — run the
+   forward indicator state machines on the *reconstructed text* after
+   a first-pass back-translation, then use the results to refine a
+   second pass. Correct in principle but doubles the translation work
+   and introduces a two-pass architecture.
+
+** Decision Outcome
+
+/Not yet decided./
+
+Option 1 is the most consistent with the established forward
+architecture and is the preferred direction to investigate. The key open
+question is how to align braille-cell positions with output-character
+positions — specifically whether a dense braille-position array remains
+the right data structure when braille cells and text characters do not
+correspond one-to-one.
+
+Option 2 is a pragmatic fallback if the alignment problem proves too
+complex to pre-compute. It accepts mutable state in the backward loop
+but keeps it isolated to indication, which is at least a bounded
+regression from the forward design.
+
+Option 3 is ruled out as it introduces unnecessary complexity and a
+performance penalty.
+
+** Links
+
+- [[*ACCEPTED Pre-compute indication events before translation][ADR: Pre-compute indication events before translation]] — the forward
+  architecture this ADR extends
+- ~src/translator/indication.rs~ — current indication infrastructure
+- [[https://github.com/liblouis/liblouis/blob/master/liblouis/lou_backTranslateString.c][liblouis lou_backTranslateString.c]] — authoritative reference for
+  backward indication handling
+
 * DRAFT Regexps duplicate character transitions
 - Deciders :: CE
 - Date :: [2024-12-24 Di]
