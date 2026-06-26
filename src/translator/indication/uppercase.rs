@@ -1,16 +1,14 @@
 //! Uppercase Braille indication
 //!
-//! [`Indicator`] is a simple state machine to keep track of the state of a translation. As soon as
-//! a character is encountered that is in the set of [`Indicator::uppercase_chars`] the state is
-//! changed to an uppercase state ([`State::UppercaseSingle`] or [`State::UppercaseMulti`]). When a
-//! character is encountered that is not in [`Indicator::uppercase_chars`] the state is changed back
-//! to [`State::Default`].
+//! [`Indicator`] analyses the full input text in a single pass before translation begins.
+//! For each character position it records which indication events apply:
 //!
-//! An indication for a start is only emitted if there is any indicators listed in the braille table
-//! [`Indicator::is_indicating`] and the state is changed to `State::Uppercase`.
-//!
-//! An indication for the end is only emitted if there is any indicators listed in the braille table
-//! [`Indicator::is_indicating`] and the state is changed to `State::Default`.
+//! - [`IndicationEvent::UppercaseStart`] at a single isolated uppercase character.
+//! - [`IndicationEvent::AllCapsStart`] at the first character of a run of two or more uppercase
+//!   characters.
+//! - [`IndicationEvent::AllCaps`] at every subsequent uppercase character inside such a run.
+//! - [`IndicationEvent::AllCapsEnd`] at the first terminating letter that follows a
+//!   multi-character uppercase run.
 
 use crate::{
     parser::AnchoredRule,
@@ -20,7 +18,7 @@ use crate::{
 use super::events::{IndicationEvent, IndicationEvents};
 use std::collections::HashSet;
 
-/// Possible states for the [`Indicator`] state machine
+/// States used locally within the [`Indicator::precompute`] pass
 #[derive(Debug, Clone)]
 enum State {
     Default,

@@ -1,17 +1,14 @@
 //! Numeric Braille indication
 //!
-//! [`Indicator`] is a simple state machine to keep track of the state of a translation. As soon
-//! as a character is encountered that is in the set of [`Indicator::numeric_chars`] the state is
-//! changed to [`State::Numeric`]. When a character is encountered that is neither in
-//! [`Indicator::numeric_chars`] nor in [`Indicator::extra_numeric_chars`] the state is changed back
-//! to [`State::Default`]
+//! [`Indicator`] analyses the full input text in a single pass before translation begins.
+//! For each character position it records which indication events apply:
 //!
-//! An indication for a start is only emitted if there is a [`Indicator::start_translation`] and the
-//! state is changed to `State::Numeric`.
-//!
-//! Indication for the end is only emitted if there is a [`Indicator::end_translation`], the state is
-//! changed to `State::Default` and the character encountered is in the set of
-//! [`Indicator::terminating_chars`].
+//! - [`IndicationEvent::NumberStart`] at the first digit of a numeric run (emits the numsign).
+//! - [`IndicationEvent::Number`] at every subsequent character inside the run.
+//! - [`IndicationEvent::NumberEnd`] at the first non-numeric terminating character after a run
+//!   (emits the non-numsign, if defined).
+//! - [`IndicationEvent::DontContract`] at every position inside a numeric run to suppress
+//!   contraction rules.
 
 use crate::{
     parser::AnchoredRule,
@@ -82,32 +79,21 @@ impl IndicatorBuilder {
     }
 }
 
-/// A very simple state machine to keep track when an numeric indication is
-/// required
-///
-/// The state is changed to `State::Numeric` as soon as a character is
-/// encountered that is a member of the set of `numeric_chars`. And if a
-/// character is encountered that is neither in the set of `numeric_chars` nor
-/// in the set of `extra_numeric_chars` the state is changed to
-/// `State::Default`.
-///
-/// An indication for a start is emitted if the `start_indicator` is not None.
-/// Indication for the end is emitted if `end_indicator` is not None and the
-/// character encountered is in the set of terminating_chars.
 #[derive(Debug, Clone)]
 pub struct Indicator {
+    /// Characters that trigger entry into a numeric run (digits)
     numeric_chars: HashSet<char>,
-    /// The set of characters that will prevent a state change to the
-    /// [State::Default] mode
+    /// Characters that extend a numeric run without being digits themselves
+    /// (e.g. `numericmodechars`)
     extra_numeric_chars: HashSet<char>,
-    /// The set of `midnum` characters. They keep the indicator in
-    /// [State::Numeric] only when sandwiched between two numeric characters.
+    /// Characters that extend a numeric run only when sandwiched between two
+    /// digits (`midnum`)
     mid_numeric_chars: HashSet<char>,
-    /// The translation to indicate the start of a sequence of numerical characters
+    /// Translation emitted at the start of a numeric run (the numsign)
     start_translation: Option<ResolvedTranslation>,
-    /// The characters to indicate the end of a sequence of numerical characters
+    /// Translation emitted at the end of a numeric run (the non-numsign)
     end_translation: Option<ResolvedTranslation>,
-    /// The characters that will trigger the indication of the end of a sequence of numerical characters
+    /// Characters that trigger end-of-run indication when the run exits into them
     terminating_chars: HashSet<char>,
 }
 

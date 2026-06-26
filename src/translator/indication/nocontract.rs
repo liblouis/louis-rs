@@ -1,12 +1,12 @@
 //! Nocontract braille indication
 //!
 //! Sometimes a sequence of letters happens to be the same as a braille contraction. In that case an
-//! indication is needed to clarify the meaning. The nocontract indicator indicates that the
-//! following braille cells are not a contraction.
+//! indication is needed to clarify the meaning. The nocontract indicator signals that the following
+//! braille cells are not a contraction.
 //!
-//! Other than the rest of the indicators this [`Indicator`] is not a state machine. It keeps a list
-//! of contractions and matches the input against it. If a contraction appears in the input an
-//! indication is emitted.
+//! [`Indicator`] analyses the full input text in a single pass before translation begins. At each
+//! position it checks whether the remaining input matches a known contraction and, if so, records a
+//! [`IndicationEvent::NoContractSign`] event at that position.
 //!
 //! # FIXME:
 //!

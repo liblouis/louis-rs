@@ -4,19 +4,17 @@
 //! to indicate such things as capitalization, italic type, computer braille,
 //! etc.
 //!
-//! Braille indication is handled with the help of a number of simple
-//! state machines that keep track which state a translation currently
-//! is in. When given the next pending character(s) to translate, they
-//! keep track of state changes and will notify the caller whether an
-//! indication is required by optionally returning a
-//! [`ResolvedTranslation`](crate::translator::ResolvedTranslation).
+//! Braille indication is handled by a preprocessing pass over the input text.
+//! Before translation begins each indicator analyses the full input and records,
+//! at each character position, which indication events fire there. The result is
+//! a [`PrecomputedIndications`] value that the translation loop consults by
+//! index rather than running stateful logic in parallel with rule selection.
 //!
-//! There are multiple state machines to keep track of different indication
-//! requirements:
-//! * [`numeric::Indicator`]: knowns whether the translation is in numeric mode
-//! * [`uppercase::Indicator`]: knowns whether the translation is in uppercase mode
-//! * [`lettersign::Indicator`]: indicates that the following braille cells are not to be read as a contraction
-//! * [`nocontract::Indicator`]: indicates that the following braille cells are not to be read as a contraction
+//! The indicator types are:
+//! * [`numeric::Indicator`]: detects digit sequences and records number-sign events
+//! * [`uppercase::Indicator`]: detects uppercase runs and records capitalisation events
+//! * [`lettersign::Indicator`]: detects contractions that require a letter sign
+//! * [`nocontract::Indicator`]: detects contractions that require a no-contract sign
 
 use crate::text_attribute::{TextAttribute, TextAttributes};
 use crate::translator::ResolvedTranslation;
