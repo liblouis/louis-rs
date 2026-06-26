@@ -9,7 +9,7 @@ use search_path::SearchPath;
 use crate::{
     parser::{self, Direction, TableError},
     text_attribute::TextAttributes,
-    translator::{self, DisplayTable, TranslationModes, TranslationPipeline},
+    translator::{self, DisplayTable, TranslationModes, TranslationOptions, TranslationPipeline},
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -273,7 +273,16 @@ impl Test {
         display_table: &DisplayTable,
         direction: Direction,
     ) -> TestResult {
-        let translated = table.translate(&self.input);
+        let options = TranslationOptions {
+            mode: self.modes.clone(),
+            typeforms: if self.typeform.is_empty() {
+                None
+            } else {
+                Some(self.typeform.clone())
+            },
+            cursor_pos: None,
+        };
+        let translated = table.translate_with_options(&self.input, &options);
         let displayed = display_table.translate(&translated);
         if displayed == self.expected {
             if !self.xfail.is_failure(direction) {
