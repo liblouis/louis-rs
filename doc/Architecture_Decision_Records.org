@@ -175,9 +175,10 @@ and louis-rs does not currently implement position mapping.
 - [[https://github.com/nvaccess/nvda/pull/16521][nvaccess/nvda#16521: normalization mapping in NVDA]]
 - [[https://unicode.org/reports/tr15/][Unicode Standard Annex #15: Unicode Normalization Forms]]
 
-* DRAFT Pre-compute indication events before translation
+* ACCEPTED Pre-compute indication events before translation
 - Deciders :: CE
 - Date :: [2026-06-23 Di]
+- Implemented :: [2026-06-26 Do]
 
 ** Context and Problem Statement
 
@@ -302,11 +303,12 @@ The translation loop replaces ~indicators.next(chars.as_str(), prev)~
 with a single array lookup. The indicators no longer need to be cloned;
 the array is immutable and cheaply shareable.
 
-The event type sketched in ~src/translator/indication/events.rs~ is the
-right starting point. The ~HashSet<IndicationEvent>~ noted there should
-be replaced by a bitflag word (e.g. using the ~bitflags!~ macro) — the
-number of distinct events per position is small and bounded, so a ~u16~
-or ~u32~ avoids any heap allocation per position.
+The event type is defined in ~src/translator/indication/events.rs~.
+Each position uses ~EnumSet<IndicationEvent>~ (from the ~enumset~ crate),
+which compiles to a compact integer with no per-position heap allocation.
+~Indicators::precompute()~ returns a ~PrecomputedIndications~ value that
+bundles the per-position event array with the event-to-translation map;
+callers ask for ~translations_at(pos)~ directly.
 
 ** Positive Consequences
 
@@ -360,10 +362,11 @@ or ~u32~ avoids any heap allocation per position.
 
 ** Links
 
-- ~src/translator/indication/events.rs~ — initial sketch of the event
-  type (predates this ADR)
-- ~src/translator/indication/numeric.rs~ — current numeric indicator state machine
-- ~src/translator/indication/uppercase.rs~ — current uppercase indicator state machine
+- ~src/translator/indication/events.rs~ — ~IndicationEvent~ enum and ~IndicationEvents~ type
+- ~src/translator/indication.rs~ — ~PrecomputedIndications~, ~Indicators::precompute()~, ~From<TextAttribute>~ and ~From<&[TextAttributes]>~ bridge impls
+- ~src/translator/indication/numeric.rs~ — numeric indicator ~precompute()~
+- ~src/translator/indication/uppercase.rs~ — uppercase indicator ~precompute()~
+- ~src/text_attribute.rs~ — ~TextAttribute~ enum (what liblouis calls typeform)
 - [[https://github.com/liblouis/liblouis/blob/master/liblouis/lou_translateString.c][liblouis lou_translateString.c]] — authoritative reference for
   ~checkNumericMode~, ~dontContract~, and ~for_selectRule~
 
