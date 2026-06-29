@@ -167,7 +167,6 @@ impl<'a> Parser<'a> {
         if c != '\\' {
             Ok(c)
         } else {
-            // handle \" and \s
             match self.chars.peek() {
                 Some('s') => {
                     self.chars.next();
@@ -177,11 +176,33 @@ impl<'a> Parser<'a> {
                     self.chars.next();
                     Ok('"')
                 }
+                Some('x') => {
+                    self.chars.next();
+                    self.unescape_unicode(4)
+                }
+                Some('y') => {
+                    self.chars.next();
+                    self.unescape_unicode(5)
+                }
                 // pass through any other escape chars
                 Some(_) => Ok(c),
                 _ => Err(ParseError::InvalidEscapeSequence { found: None }),
             }
         }
+    }
+
+    fn unescape_unicode(&mut self, len: usize) -> Result<char, ParseError> {
+        let mut s = String::new();
+        for _ in 0..len {
+            match self.chars.next() {
+                Some(c) => s.push(c),
+                None => return Err(ParseError::InvalidEscapeSequence { found: None }),
+            }
+        }
+        u32::from_str_radix(&s, 16)
+            .ok()
+            .and_then(char::from_u32)
+            .ok_or(ParseError::InvalidEscapeSequence { found: None })
     }
 
     fn string(&mut self) -> Result<ActionInstruction, ParseError> {
