@@ -35,10 +35,14 @@ fn active_positions(class_name: &str, n: usize, spans: &[EmphasisSpan]) -> Vec<b
 
 /// Compiled indicator data for one emphasis class (e.g. "italic").
 #[derive(Debug, Clone)]
-struct EmphasisClass {
+struct ClassIndicator {
     class_name: String,
     /// Single-letter emphasis indicator (emphletter).
     emphletter: Option<ResolvedTranslation>,
+    /// General start indicator (begemph), used for any emphasis boundary.
+    begemph: Option<ResolvedTranslation>,
+    /// General end indicator (endemph).
+    endemph: Option<ResolvedTranslation>,
     /// Start of a word-level emphasis run (begemphword).
     begemphword: Option<ResolvedTranslation>,
     /// End of a word-level emphasis run (endemphword), only emitted mid-word.
@@ -51,25 +55,21 @@ struct EmphasisClass {
     endemphphrase_before: bool,
     /// Minimum words in a run to qualify as a phrase.
     len_phrase: usize,
-    /// General start indicator (begemph), used for any emphasis boundary.
-    begemph: Option<ResolvedTranslation>,
-    /// General end indicator (endemph).
-    endemph: Option<ResolvedTranslation>,
 }
 
-impl EmphasisClass {
+impl ClassIndicator {
     fn new(class_name: String) -> Self {
-        EmphasisClass {
+        ClassIndicator {
             class_name,
             emphletter: None,
+            begemph: None,
+            endemph: None,
             begemphword: None,
             endemphword: None,
             begemphphrase: None,
             endemphphrase: None,
             endemphphrase_before: true,
             len_phrase: 4,
-            begemph: None,
-            endemph: None,
         }
     }
 
@@ -277,7 +277,7 @@ fn find_word_segments(chars: &[char], run_start: usize, run_end: usize) -> Vec<(
 /// Builder for [`Indicator`].
 #[derive(Debug)]
 pub struct IndicatorBuilder {
-    classes: HashMap<String, EmphasisClass>,
+    classes: HashMap<String, ClassIndicator>,
 }
 
 impl IndicatorBuilder {
@@ -285,10 +285,10 @@ impl IndicatorBuilder {
         Self { classes: HashMap::new() }
     }
 
-    fn class_mut(&mut self, name: &str) -> &mut EmphasisClass {
+    fn class_mut(&mut self, name: &str) -> &mut ClassIndicator {
         self.classes
             .entry(name.to_string())
-            .or_insert_with(|| EmphasisClass::new(name.to_string()))
+            .or_insert_with(|| ClassIndicator::new(name.to_string()))
     }
 
     pub fn emphclass(&mut self, name: &str) {
@@ -336,7 +336,7 @@ impl IndicatorBuilder {
     }
 
     pub fn build(self) -> Option<Indicator> {
-        let classes: Vec<EmphasisClass> = self
+        let classes: Vec<ClassIndicator> = self
             .classes
             .into_values()
             .filter(|c| c.is_indicating())
@@ -350,7 +350,7 @@ impl IndicatorBuilder {
 /// Compiled emphasis indicator for one or more emphasis classes.
 #[derive(Debug, Clone)]
 pub struct Indicator {
-    classes: Vec<EmphasisClass>,
+    classes: Vec<ClassIndicator>,
 }
 
 impl Indicator {
