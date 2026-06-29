@@ -412,3 +412,74 @@ impl Indicator {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::emphasis::EmphasisSpan;
+    use crate::parser::{AnchoredRule, RuleParser};
+
+    fn rule(s: &str) -> AnchoredRule {
+        AnchoredRule::new(RuleParser::new(s).rule().unwrap(), None, 0)
+    }
+
+    fn outputs_at(result: &[(usize, ResolvedTranslation)], pos: usize) -> Vec<String> {
+        result
+            .iter()
+            .filter(|(p, _)| *p == pos)
+            .map(|(_, t)| t.output().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn emphletter_for_single_char() {
+        let mut b = IndicatorBuilder::new();
+        b.emphletter("italic", "⠨", &rule("always a 1"));
+        let indicator = b.build().unwrap();
+
+        let result = indicator.precompute("hello", &[EmphasisSpan::new("italic", 2..3)]);
+        assert_eq!(outputs_at(&result, 2), vec!["⠨"]);
+        assert!(outputs_at(&result, 0).is_empty());
+    }
+
+    #[test]
+    fn begemphword_for_whole_word() {
+        let mut b = IndicatorBuilder::new();
+        b.begemphword("italic", "⠨", &rule("always a 1"));
+        let indicator = b.build().unwrap();
+
+        let result = indicator.precompute("hello", &[EmphasisSpan::new("italic", 0..5)]);
+        assert_eq!(outputs_at(&result, 0), vec!["⠨"]);
+    }
+
+    #[test]
+    fn noemphchars_splits_span_into_two_runs() {
+        let mut b = IndicatorBuilder::new();
+        b.emphletter("italic", "⠨", &rule("always a 1"));
+        b.noemphchars("italic", ",");
+        let indicator = b.build().unwrap();
+
+        // The comma cannot be emphasized, so "a,b" with a span over all three chars
+        // becomes two single-char runs — each gets emphletter.
+        let result = indicator.precompute("a,b", &[EmphasisSpan::new("italic", 0..3)]);
+        assert_eq!(outputs_at(&result, 0), vec!["⠨"]); // 'a'
+        assert!(outputs_at(&result, 1).is_empty());     // ',' — not indicated
+        assert_eq!(outputs_at(&result, 2), vec!["⠨"]); // 'b'
+    }
+
+    #[test]
+    fn emphmodechars_hyphen_splits_word_within_run() {
+        let mut b = IndicatorBuilder::new();
+        b.begemphword("italic", "⠨", &rule("always a 1"));
+        b.emphmodechars("italic", " -");
+        let indicator = b.build().unwrap();
+
+        // Without emphmodechars the hyphen would be part of the word, giving one
+        // begemphword.  With '-' as a separator, "well" and "known" are two words
+        // — each gets its own begemphword, but the run is not closed between them.
+        let result = indicator.precompute("well-known", &[EmphasisSpan::new("italic", 0..10)]);
+        assert_eq!(outputs_at(&result, 0), vec!["⠨"]); // "well"
+        assert_eq!(outputs_at(&result, 5), vec!["⠨"]); // "known"
+        assert!(outputs_at(&result, 4).is_empty());     // '-' — no indicator
+    }
+}
