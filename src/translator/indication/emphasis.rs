@@ -4,10 +4,8 @@
 //! appropriate indicator cells (emphletter, begemphword, …) before or after
 //! the relevant character positions.
 //!
-//! Because the choice of indicator (letter / word / phrase) depends on
-//! context that is only known at precompute time, this module returns
-//! *direct* per-position translations rather than the event-based
-//! `IndicationEvent` mechanism used by other indicators.
+//! The choice of indicator (letter / word / phrase) depends on the full
+//! run context, so the entire decision is made during precompute.
 
 use std::collections::HashMap;
 
