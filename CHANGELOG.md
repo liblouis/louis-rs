@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Added
+- Implement emphasis (typeform) indication: `emphletter`, `begemphword`,
+  `endemphword`, `begemphphrase`, `endemphphrase`, `begemph`, `endemph`,
+  `emphmodechars`, and `noemphchars` are all supported. When multiple
+  emphasis classes open or close at the same position their indicators are
+  ordered according to the liblouis stack rule (the class that closes last
+  opens first).
+- Implement computer braille: `comp6` rules are now activated only inside
+  computer braille regions instead of firing unconditionally. Computer
+  braille regions are detected from the `computer_braille` typeform and
+  from `compbrl` pattern matches (which expand to the surrounding word).
+  `begcomp` and `endcomp` indicators are emitted at region boundaries.
 - The library now has a basic API that covers both simple and advanced
   use cases. See `translator.translate` and
   `translator.translate_with_options` in `lib.rs`.
