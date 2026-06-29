@@ -19,11 +19,8 @@ back into liblouis maintenance.
 
 The re-implementation is in alpha state.
 
-That said, the `louis` binary currently, passes around 82% of the
-liblouis test suite for forward translation successfully. Backward
-translation works in principle but not much of it has really been
-implemented, so the success rate for both forward and backward
-translation is less, namely 79.7%.
+That said, the `louis` binary currently passes around 83% of the
+liblouis test suite (forward and backward combined).
 
 The library and its API has not been worked out and is not stable.
 
@@ -143,8 +140,8 @@ Run the tests in a YAML file:
 
 Run all YAML tests:
 
-      $ export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
-      $ louis check --summary ~/src/liblouis/tests/braille-specs/*.yaml ~/src/liblouis/tests/yaml/*.yaml 2> /dev/null
+    $ export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
+    $ louis check --summary ~/src/liblouis/tests/braille-specs/*.yaml ~/src/liblouis/tests/yaml/*.yaml 2> /dev/null
     ┌─────────────────────────────────────────────┬────────┬───────────┬──────────┬──────────┬────────────┐
     │ YAML File                                   │ Tests  │ Successes │ Failures │ Expected │ Unexpected │
     │                                             │        │           │          │ Failures │ Successes  │
@@ -173,7 +170,7 @@ Run all YAML tests:
     │ en-us-comp8-ext-for_harness.yaml            │ 6      │ 83.3%     │ 16.7%    │ 0.0%     │ 0.0%       │
     │ begcaps_endcaps.yaml                        │ 6      │ 33.3%     │ 33.3%    │ 33.3%    │ 0.0%       │
     │ computer_braille.yaml                       │ 6      │ 33.3%     │ 33.3%    │ 16.7%    │ 16.7%      │
-    │ example_test.yaml                           │ 6      │ 66.7%     │ 16.7%    │ 16.7%    │ 0.0%       │
+    │ example_test.yaml                           │ 6      │ 83.3%     │ 0.0%     │ 16.7%    │ 0.0%       │
     │ issue-963.yaml                              │ 6      │ 50.0%     │ 50.0%    │ 0.0%     │ 0.0%       │
     │ attribute.yaml                              │ 7      │ 85.7%     │ 14.3%    │ 0.0%     │ 0.0%       │
     │ multipass-negation.yaml                     │ 7      │ 0.0%      │ 100.0%   │ 0.0%     │ 0.0%       │
@@ -184,7 +181,7 @@ Run all YAML tests:
     │ de-de-comp8.yaml                            │ 8      │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
     │ el-backward.yaml                            │ 8      │ 0.0%      │ 100.0%   │ 0.0%     │ 0.0%       │
     │ en-nabcc.yaml                               │ 8      │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
-    │ en-ueb-math.yaml                            │ 8      │ 0.0%      │ 100.0%   │ 0.0%     │ 0.0%       │
+    │ en-ueb-math.yaml                            │ 8      │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
     │ hr-8dots_harness.yaml                       │ 8      │ 62.5%     │ 12.5%    │ 25.0%    │ 0.0%       │
     │ letterDefTest_harness.yaml                  │ 8      │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
     │ precedence.yaml                             │ 8      │ 75.0%     │ 25.0%    │ 0.0%     │ 0.0%       │
@@ -197,11 +194,11 @@ Run all YAML tests:
     │ match-vs-always.yaml                        │ 10     │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
     │ nonumsign.yaml                              │ 10     │ 0.0%      │ 100.0%   │ 0.0%     │ 0.0%       │
     │ face-with-tears-of-joy-ucs4.yaml            │ 11     │ 0.0%      │ 100.0%   │ 0.0%     │ 0.0%       │
-    │ kk.yaml                                     │ 12     │ 16.7%     │ 83.3%    │ 0.0%     │ 0.0%       │
-    │ sah.yaml                                    │ 12     │ 16.7%     │ 83.3%    │ 0.0%     │ 0.0%       │
+    │ kk.yaml                                     │ 12     │ 91.7%     │ 8.3%     │ 0.0%     │ 0.0%       │
+    │ sah.yaml                                    │ 12     │ 91.7%     │ 8.3%     │ 0.0%     │ 0.0%       │
     │ partialTrans.yaml                           │ 12     │ 33.3%     │ 66.7%    │ 0.0%     │ 0.0%       │
     │ he-IL.yaml                                  │ 14     │ 64.3%     │ 28.6%    │ 7.1%     │ 0.0%       │
-    │ tt.yaml                                     │ 15     │ 6.7%      │ 80.0%    │ 13.3%    │ 0.0%       │
+    │ tt.yaml                                     │ 15     │ 66.7%     │ 20.0%    │ 13.3%    │ 0.0%       │
     │ case-sensitivity.yaml                       │ 15     │ 40.0%     │ 40.0%    │ 13.3%    │ 6.7%       │
     │ yi.yaml                                     │ 16     │ 68.8%     │ 31.2%    │ 0.0%     │ 0.0%       │
     │ iu-ca-g1_harness.yaml                       │ 17     │ 0.0%      │ 94.1%    │ 5.9%     │ 0.0%       │
@@ -215,100 +212,100 @@ Run all YAML tests:
     │ squash_space.yaml                           │ 21     │ 0.0%      │ 100.0%   │ 0.0%     │ 0.0%       │
     │ en-us-comp6.yaml                            │ 22     │ 72.7%     │ 27.3%    │ 0.0%     │ 0.0%       │
     │ en-us-g2.yaml                               │ 22     │ 36.4%     │ 63.6%    │ 0.0%     │ 0.0%       │
-    │ ro-g0.yaml                                  │ 23     │ 34.8%     │ 56.5%    │ 8.7%     │ 0.0%       │
+    │ ro-g0.yaml                                  │ 23     │ 56.5%     │ 34.8%    │ 8.7%     │ 0.0%       │
     │ zh-tw.yaml                                  │ 23     │ 69.6%     │ 30.4%    │ 0.0%     │ 0.0%       │
     │ ar-ar-comp8.yaml                            │ 24     │ 95.8%     │ 4.2%     │ 0.0%     │ 0.0%       │
-    │ various-regression-tests.yaml               │ 24     │ 12.5%     │ 87.5%    │ 0.0%     │ 0.0%       │
+    │ various-regression-tests.yaml               │ 24     │ 16.7%     │ 83.3%    │ 0.0%     │ 0.0%       │
     │ mk.yaml                                     │ 25     │ 48.0%     │ 40.0%    │ 12.0%    │ 0.0%       │
     │ en-ueb-g1_backward.yaml                     │ 26     │ 19.2%     │ 80.8%    │ 0.0%     │ 0.0%       │
     │ uga.yaml                                    │ 27     │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
     │ new_emph.yaml                               │ 27     │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
-    │ fr-bfu-comp8.yaml                           │ 28     │ 96.4%     │ 3.6%     │ 0.0%     │ 0.0%       │
+    │ fr-bfu-comp8.yaml                           │ 28     │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
     │ emphasis.yaml                               │ 28     │ 82.1%     │ 17.9%    │ 0.0%     │ 0.0%       │
     │ fil.yaml                                    │ 29     │ 27.6%     │ 72.4%    │ 0.0%     │ 0.0%       │
     │ mixed-case.yaml                             │ 30     │ 0.0%      │ 63.3%    │ 36.7%    │ 0.0%       │
     │ ipa.yaml                                    │ 34     │ 76.5%     │ 23.5%    │ 0.0%     │ 0.0%       │
     │ capitalization.yaml                         │ 34     │ 32.4%     │ 67.6%    │ 0.0%     │ 0.0%       │
     │ et_harness.yaml                             │ 36     │ 66.7%     │ 33.3%    │ 0.0%     │ 0.0%       │
-    │ lt.yaml                                     │ 36     │ 11.1%     │ 88.9%    │ 0.0%     │ 0.0%       │
+    │ lt.yaml                                     │ 36     │ 13.9%     │ 86.1%    │ 0.0%     │ 0.0%       │
     │ syc.yaml                                    │ 36     │ 91.7%     │ 0.0%     │ 8.3%     │ 0.0%       │
-    │ fi_harness.yaml                             │ 38     │ 78.9%     │ 18.4%    │ 2.6%     │ 0.0%       │
+    │ fi_harness.yaml                             │ 38     │ 81.6%     │ 15.8%    │ 2.6%     │ 0.0%       │
     │ kmr.yaml                                    │ 39     │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
-    │ bel.yaml                                    │ 45     │ 73.3%     │ 26.7%    │ 0.0%     │ 0.0%       │
+    │ bel.yaml                                    │ 45     │ 88.9%     │ 11.1%    │ 0.0%     │ 0.0%       │
     │ nl-comp8_harness.yaml                       │ 45     │ 62.2%     │ 37.8%    │ 0.0%     │ 0.0%       │
-    │ uk.yaml                                     │ 45     │ 82.2%     │ 17.8%    │ 0.0%     │ 0.0%       │
+    │ uk.yaml                                     │ 45     │ 84.4%     │ 15.6%    │ 0.0%     │ 0.0%       │
     │ capsword.yaml                               │ 45     │ 13.3%     │ 82.2%    │ 4.4%     │ 0.0%       │
     │ backtranslation_emphasis.yaml               │ 48     │ 2.1%      │ 97.9%    │ 0.0%     │ 0.0%       │
-    │ mn-MN_harness.yaml                          │ 49     │ 14.3%     │ 85.7%    │ 0.0%     │ 0.0%       │
+    │ mn-MN_harness.yaml                          │ 49     │ 79.6%     │ 20.4%    │ 0.0%     │ 0.0%       │
     │ en-us-emphasis_harness.yaml                 │ 50     │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
-    │ ga-g1_harness.yaml                          │ 51     │ 94.1%     │ 5.9%     │ 0.0%     │ 0.0%       │
+    │ ga-g1_harness.yaml                          │ 51     │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
     │ sr.yaml                                     │ 64     │ 51.6%     │ 7.8%     │ 37.5%    │ 3.1%       │
-    │ en-ueb-g1_harness.yaml                      │ 67     │ 94.0%     │ 6.0%     │ 0.0%     │ 0.0%       │
-    │ kn.yaml                                     │ 77     │ 32.5%     │ 67.5%    │ 0.0%     │ 0.0%       │
-    │ ga-g2_harness.yaml                          │ 80     │ 45.0%     │ 55.0%    │ 0.0%     │ 0.0%       │
+    │ en-ueb-g1_harness.yaml                      │ 67     │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
+    │ kn.yaml                                     │ 77     │ 61.0%     │ 39.0%    │ 0.0%     │ 0.0%       │
+    │ ga-g2_harness.yaml                          │ 80     │ 47.5%     │ 52.5%    │ 0.0%     │ 0.0%       │
     │ fr-bfu-comp6.yaml                           │ 82     │ 54.9%     │ 39.0%    │ 6.1%     │ 0.0%       │
-    │ vi.yaml                                     │ 82     │ 53.7%     │ 46.3%    │ 0.0%     │ 0.0%       │
-    │ it.yaml                                     │ 84     │ 89.3%     │ 9.5%     │ 1.2%     │ 0.0%       │
+    │ vi.yaml                                     │ 82     │ 59.8%     │ 40.2%    │ 0.0%     │ 0.0%       │
+    │ it.yaml                                     │ 84     │ 91.7%     │ 7.1%     │ 1.2%     │ 0.0%       │
     │ bn.yaml                                     │ 87     │ 35.6%     │ 64.4%    │ 0.0%     │ 0.0%       │
-    │ el-forward.yaml                             │ 93     │ 82.8%     │ 17.2%    │ 0.0%     │ 0.0%       │
-    │ cuneiform-transliterated.yaml               │ 102    │ 63.7%     │ 36.3%    │ 0.0%     │ 0.0%       │
+    │ el-forward.yaml                             │ 93     │ 84.9%     │ 15.1%    │ 0.0%     │ 0.0%       │
+    │ cuneiform-transliterated.yaml               │ 102    │ 69.6%     │ 30.4%    │ 0.0%     │ 0.0%       │
     │ nemeth.yaml                                 │ 133    │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
-    │ ru.yaml                                     │ 142    │ 37.3%     │ 60.6%    │ 2.1%     │ 0.0%       │
-    │ sl-g1.yaml                                  │ 143    │ 52.4%     │ 41.3%    │ 6.3%     │ 0.0%       │
+    │ ru.yaml                                     │ 142    │ 42.3%     │ 55.6%    │ 2.1%     │ 0.0%       │
+    │ sl-g1.yaml                                  │ 143    │ 58.0%     │ 35.7%    │ 4.9%     │ 1.4%       │
     │ ar-ar-g2.yaml                               │ 168    │ 72.6%     │ 27.4%    │ 0.0%     │ 0.0%       │
-    │ hu-hu-comp8_harness.yaml                    │ 173    │ 78.6%     │ 21.4%    │ 0.0%     │ 0.0%       │
+    │ hu-hu-comp8_harness.yaml                    │ 173    │ 91.3%     │ 8.7%     │ 0.0%     │ 0.0%       │
     │ hu-hu-g1_braille_input_backward.yaml        │ 174    │ 9.8%      │ 89.1%    │ 1.1%     │ 0.0%       │
-    │ hu-hu-g1_braille_input_forward.yaml         │ 175    │ 10.9%     │ 89.1%    │ 0.0%     │ 0.0%       │
+    │ hu-hu-g1_braille_input_forward.yaml         │ 175    │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
     │ pl-g1.yaml                                  │ 202    │ 61.9%     │ 38.1%    │ 0.0%     │ 0.0%       │
     │ lv_harness.yaml                             │ 214    │ 98.6%     │ 0.0%     │ 1.4%     │ 0.0%       │
-    │ ar-ar-g1.yaml                               │ 266    │ 92.5%     │ 7.5%     │ 0.0%     │ 0.0%       │
+    │ ar-ar-g1.yaml                               │ 266    │ 92.9%     │ 7.1%     │ 0.0%     │ 0.0%       │
     │ es-g2.yaml                                  │ 266    │ 49.6%     │ 47.7%    │ 2.6%     │ 0.0%       │
-    │ hu-hu-g2_dictionary_numbers.yaml            │ 272    │ 0.4%      │ 99.6%    │ 0.0%     │ 0.0%       │
+    │ hu-hu-g2_dictionary_numbers.yaml            │ 272    │ 99.3%     │ 0.7%     │ 0.0%     │ 0.0%       │
     │ eo-g1_harness.yaml                          │ 285    │ 72.3%     │ 27.7%    │ 0.0%     │ 0.0%       │
-    │ ethio-g1_harness.yaml                       │ 301    │ 99.3%     │ 0.7%     │ 0.0%     │ 0.0%       │
-    │ en-ueb-g2_backward.yaml                     │ 348    │ 63.8%     │ 35.6%    │ 0.6%     │ 0.0%       │
+    │ ethio-g1_harness.yaml                       │ 301    │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
+    │ en-ueb-g2_backward.yaml                     │ 348    │ 64.1%     │ 35.3%    │ 0.6%     │ 0.0%       │
     │ hbo.yaml                                    │ 469    │ 41.8%     │ 57.4%    │ 0.9%     │ 0.0%       │
-    │ de-g0-detailed-specs.yaml                   │ 476    │ 57.4%     │ 37.2%    │ 5.0%     │ 0.4%       │
+    │ de-g0-detailed-specs.yaml                   │ 476    │ 63.2%     │ 31.3%    │ 4.8%     │ 0.6%       │
     │ en-gb-comp8.yaml                            │ 508    │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
-    │ hu-hu-g2_harness.yaml                       │ 511    │ 81.2%     │ 18.8%    │ 0.0%     │ 0.0%       │
-    │ en-GB-g2.yaml                               │ 528    │ 65.9%     │ 13.3%    │ 17.4%    │ 3.4%       │
-    │ de-g0.yaml                                  │ 550    │ 73.3%     │ 16.4%    │ 10.4%    │ 0.0%       │
+    │ hu-hu-g2_harness.yaml                       │ 511    │ 91.2%     │ 8.8%     │ 0.0%     │ 0.0%       │
+    │ en-GB-g2.yaml                               │ 528    │ 67.2%     │ 11.9%    │ 17.4%    │ 3.4%       │
+    │ de-g0.yaml                                  │ 550    │ 82.4%     │ 7.3%     │ 10.4%    │ 0.0%       │
     │ ur-pk-g2.yaml                               │ 578    │ 75.6%     │ 15.7%    │ 8.7%     │ 0.0%       │
-    │ en-ueb-symbols_harness.yaml                 │ 593    │ 97.8%     │ 1.7%     │ 0.5%     │ 0.0%       │
+    │ en-ueb-symbols_harness.yaml                 │ 593    │ 99.5%     │ 0.0%     │ 0.5%     │ 0.0%       │
     │ es-g0-g1.yaml                               │ 992    │ 67.9%     │ 4.6%     │ 27.4%    │ 0.0%       │
     │ pt.yaml                                     │ 1163   │ 87.0%     │ 9.9%     │ 3.0%     │ 0.1%       │
     │ ms-my-g2.yaml                               │ 1432   │ 96.4%     │ 3.5%     │ 0.1%     │ 0.0%       │
     │ tr.yaml                                     │ 1654   │ 42.1%     │ 27.7%    │ 30.2%    │ 0.0%       │
-    │ sw-ke.yaml                                  │ 1884   │ 64.6%     │ 35.4%    │ 0.0%     │ 0.0%       │
+    │ sw-ke.yaml                                  │ 1884   │ 71.3%     │ 28.7%    │ 0.0%     │ 0.0%       │
     │ ve-g2.yaml                                  │ 2038   │ 86.2%     │ 13.7%    │ 0.0%     │ 0.0%       │
     │ fa-ir-g1-harness.yaml                       │ 2108   │ 91.0%     │ 9.0%     │ 0.0%     │ 0.0%       │
-    │ fr-bfu-g2.yaml                              │ 2145   │ 49.0%     │ 51.0%    │ 0.0%     │ 0.0%       │
-    │ en-ueb.yaml                                 │ 2232   │ 53.1%     │ 35.6%    │ 10.8%    │ 0.5%       │
-    │ hu-hu-g1_harness.yaml                       │ 2532   │ 70.7%     │ 29.3%    │ 0.0%     │ 0.0%       │
+    │ fr-bfu-g2.yaml                              │ 2145   │ 49.1%     │ 50.9%    │ 0.0%     │ 0.0%       │
+    │ en-ueb.yaml                                 │ 2232   │ 58.8%     │ 29.9%    │ 10.8%    │ 0.6%       │
+    │ hu-hu-g1_harness.yaml                       │ 2532   │ 71.8%     │ 28.2%    │ 0.0%     │ 0.0%       │
     │ lo.yaml                                     │ 2637   │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
     │ en-ueb-computer-code.yaml                   │ 2818   │ 44.5%     │ 54.2%    │ 1.3%     │ 0.0%       │
-    │ ny-mw.yaml                                  │ 3250   │ 87.3%     │ 12.7%    │ 0.0%     │ 0.0%       │
+    │ ny-mw.yaml                                  │ 3250   │ 87.9%     │ 12.1%    │ 0.0%     │ 0.0%       │
     │ st-g2.yaml                                  │ 3774   │ 95.1%     │ 4.5%     │ 0.1%     │ 0.4%       │
     │ xh-g2.yaml                                  │ 4048   │ 94.0%     │ 5.9%     │ 0.0%     │ 0.0%       │
-    │ hi_harness.yaml                             │ 4118   │ 81.5%     │ 17.4%    │ 0.8%     │ 0.3%       │
+    │ hi_harness.yaml                             │ 4118   │ 81.9%     │ 17.0%    │ 0.8%     │ 0.3%       │
     │ fa-ir-comp8-harness.yaml                    │ 4212   │ 99.9%     │ 0.1%     │ 0.0%     │ 0.0%       │
-    │ ta-ta-g1_harness.yaml                       │ 4690   │ 10.5%     │ 88.7%    │ 0.7%     │ 0.1%       │
-    │ pa.yaml                                     │ 5027   │ 41.6%     │ 58.4%    │ 0.0%     │ 0.0%       │
-    │ zh-tw-dictionary.yaml                       │ 5139   │ 4.0%      │ 96.0%    │ 0.0%     │ 0.0%       │
+    │ ta-ta-g1_harness.yaml                       │ 4690   │ 13.2%     │ 86.0%    │ 0.7%     │ 0.1%       │
+    │ pa.yaml                                     │ 5027   │ 42.3%     │ 57.7%    │ 0.0%     │ 0.0%       │
+    │ zh-tw-dictionary.yaml                       │ 5139   │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
     │ ja-rokutenkanji.yaml                        │ 7010   │ 99.8%     │ 0.2%     │ 0.0%     │ 0.0%       │
-    │ ml.yaml                                     │ 7524   │ 31.4%     │ 68.4%    │ 0.3%     │ 0.0%       │
-    │ ar-ar-g1_harness.yaml                       │ 7596   │ 95.8%     │ 4.2%     │ 0.0%     │ 0.0%       │
-    │ lg-ug-g1.yaml                               │ 8283   │ 89.2%     │ 10.8%    │ 0.0%     │ 0.0%       │
-    │ rw-rw-g1.yaml                               │ 9839   │ 86.9%     │ 13.1%    │ 0.0%     │ 0.0%       │
+    │ ml.yaml                                     │ 7524   │ 31.4%     │ 68.3%    │ 0.3%     │ 0.0%       │
+    │ ar-ar-g1_harness.yaml                       │ 7596   │ 99.0%     │ 1.0%     │ 0.0%     │ 0.0%       │
+    │ lg-ug-g1.yaml                               │ 8283   │ 91.8%     │ 8.2%     │ 0.0%     │ 0.0%       │
+    │ rw-rw-g1.yaml                               │ 9839   │ 87.1%     │ 12.9%    │ 0.0%     │ 0.0%       │
     │ sw-ke-dictionary.yaml                       │ 10966  │ 80.4%     │ 19.6%    │ 0.0%     │ 0.0%       │
     │ de-g0-detailed-dictionary.yaml              │ 19996  │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │
-    │ hu-hu-g1_dictionary_numbers.yaml            │ 34246  │ 0.0%      │ 100.0%   │ 0.0%     │ 0.0%       │
+    │ hu-hu-g1_dictionary_numbers.yaml            │ 34246  │ 50.0%     │ 50.0%    │ 0.0%     │ 0.0%       │
     │ afr-za-g2.yaml                              │ 51824  │ 88.3%     │ 11.7%    │ 0.0%     │ 0.0%       │
     │ en-us-g2-dictionary_harness.yaml            │ 93796  │ 85.3%     │ 4.9%     │ 9.7%     │ 0.1%       │
-    │ hu-hu-g1_dictionary_special_consonants.yaml │ 181870 │ 88.3%     │ 11.6%    │ 0.0%     │ 0.0%       │
+    │ hu-hu-g1_dictionary_special_consonants.yaml │ 181870 │ 88.4%     │ 11.6%    │ 0.0%     │ 0.0%       │
     │ en-ueb-g2-dictionary_harness.yaml           │ 213167 │ 84.6%     │ 15.4%    │ 0.1%     │ 0.0%       │
     ┌─────────────────────────────────────────────┌────────┌───────────┌──────────┌──────────┌────────────┐
-    │ Total                                       │ 713827 │ 80.1%     │ 18.4%    │ 1.5%     │ 0.0%       │
+    │ Total                                       │ 713827 │ 83.4%     │ 15.0%    │ 1.5%     │ 0.0%       │
     └─────────────────────────────────────────────└────────└───────────└──────────└──────────└────────────┘
 
 Test the table query functionality:

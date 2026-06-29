@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - ReleaseDate
 
+### Fixed
+- `litdigit` rules now take precedence over `digit` rules in forward
+  translation. In literary braille tables both opcodes are often present for
+  the same character: `digit` carries the computer-style dot pattern used for
+  backward translation, while `litdigit` carries the literary form used in
+  numeric mode. Previously the winner was determined by insertion order, which
+  caused Hungarian numbers to be translated with the wrong dot pattern.
+- `\xHHHH` Unicode escape sequences in the test and action operands of
+  `correct`, `pass2`, `pass3`, and `pass4` rules are now decoded correctly.
+  They were previously passed through as literal backslash sequences, making
+  rules like `correct "\x34C6" "\x51D4"` silently ineffective. This affected
+  the Chinese braille table (zh-tw.ctb), which uses ~6800 such rules, causing
+  96% of its test suite to fail.
+- `\xHHHH` escape sequences in YAML test file expected values are now decoded.
+  liblouis test files use this non-standard syntax even in single-quoted YAML
+  strings; our test runner now matches liblouis's own behaviour.
+
 ### Added
 - Implement emphasis (typeform) indication: `emphletter`, `begemphword`,
   `endemphword`, `begemphphrase`, `endemphphrase`, `begemph`, `endemph`,
