@@ -7,7 +7,7 @@
 //! The choice of indicator (letter / word / phrase) depends on the full
 //! run context, so the entire decision is made during precompute.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     parser::{AnchoredRule, Position},
@@ -19,19 +19,6 @@ fn make_translation(dots: &str, origin: &AnchoredRule) -> ResolvedTranslation {
     ResolvedTranslation::new("", dots, 1, TranslationStage::Main, origin.clone())
 }
 
-/// Build a dense per-position active flag for a single emphasis class name.
-fn active_positions(class_name: &str, n: usize, spans: &[EmphasisSpan]) -> Vec<bool> {
-    let mut active = vec![false; n];
-    for span in spans {
-        if span.class == class_name {
-            let end = span.range.end.min(n);
-            for pos in span.range.start..end {
-                active[pos] = true;
-            }
-        }
-    }
-    active
-}
 
 /// Compiled indicator data for one emphasis class (e.g. "italic").
 #[derive(Debug, Clone)]
@@ -55,6 +42,19 @@ struct ClassIndicator {
     endemphphrase_before: bool,
     /// Minimum words in a run to qualify as a phrase.
     len_phrase: usize,
+    /// Characters where the emphasis *mode is maintained* across them (emphmodechars).
+    ///
+    /// These chars are transparent to emphasis in two ways: the overall emphasis
+    /// run stays active across them (so no indicator is closed and reopened), but
+    /// they still act as word separators — each word on either side gets its own
+    /// `begemphword`. Think of a hyphen in "well-known": one emphasis run, two
+    /// word indicators. Default (empty set) falls back to Unicode whitespace.
+    emphmodechars: HashSet<char>,
+    /// Characters that cannot carry emphasis (noemphchars).
+    ///
+    /// Their positions are forced inactive even when inside a span, splitting the
+    /// span into separate runs on either side.
+    noemphchars: HashSet<char>,
 }
 
 impl ClassIndicator {
@@ -70,7 +70,56 @@ impl ClassIndicator {
             endemphphrase: None,
             endemphphrase_before: true,
             len_phrase: 4,
+            emphmodechars: HashSet::new(),
+            noemphchars: HashSet::new(),
         }
+    }
+
+    fn is_emphasis_word_separator(&self, ch: char) -> bool {
+        if self.emphmodechars.is_empty() {
+            ch.is_whitespace()
+        } else {
+            self.emphmodechars.contains(&ch)
+        }
+    }
+
+    /// Build a dense per-position active flag from the caller's emphasis spans.
+    ///
+    /// Positions occupied by `noemphchars` are forced to `false`, splitting the
+    /// span into separate runs around those characters.
+    fn active_positions(&self, chars: &[char], spans: &[EmphasisSpan]) -> Vec<bool> {
+        let n = chars.len();
+        let mut active = vec![false; n];
+        for span in spans {
+            if span.class == self.class_name {
+                let end = span.range.end.min(n);
+                for pos in span.range.start..end {
+                    if !self.noemphchars.contains(&chars[pos]) {
+                        active[pos] = true;
+                    }
+                }
+            }
+        }
+        active
+    }
+
+    fn find_word_segments(&self, chars: &[char], run_start: usize, run_end: usize) -> Vec<(usize, usize)> {
+        let mut words = Vec::new();
+        let mut pos = run_start;
+        while pos < run_end {
+            while pos < run_end && self.is_emphasis_word_separator(chars[pos]) {
+                pos += 1;
+            }
+            if pos >= run_end {
+                break;
+            }
+            let word_start = pos;
+            while pos < run_end && !self.is_emphasis_word_separator(chars[pos]) {
+                pos += 1;
+            }
+            words.push((word_start, pos));
+        }
+        words
     }
 
     fn is_indicating(&self) -> bool {
@@ -112,16 +161,16 @@ impl ClassIndicator {
         // begemph/endemph: general indicators that can start/end anywhere.
         if let Some(begemph) = &self.begemph {
             let effective_start = (run_start..run_end)
-                .find(|&i| !chars[i].is_whitespace())
+                .find(|&i| !self.is_emphasis_word_separator(chars[i]))
                 .unwrap_or(run_start);
             result.push((effective_start, begemph.clone()));
 
             if let Some(endemph) = &self.endemph {
-                // Find the last non-space position in the run. endemph goes
-                // at the next slot (= first trailing-space, or n if none).
+                // Find the last non-mode-char position in the run. endemph goes
+                // at the next slot (= first trailing mode char, or n if none).
                 let effective_end = (run_start..run_end)
                     .rev()
-                    .find(|&i| !chars[i].is_whitespace())
+                    .find(|&i| !self.is_emphasis_word_separator(chars[i]))
                     .map(|i| i + 1)
                     .unwrap_or(run_end);
                 result.push((effective_end, endemph.clone()));
@@ -130,26 +179,26 @@ impl ClassIndicator {
         }
 
         // begemphword / emphletter / begemphphrase path.
-        let words = find_word_segments(chars, run_start, run_end);
+        let words = self.find_word_segments(chars, run_start, run_end);
         if words.is_empty() {
             return;
         }
 
-        // Strip leading/trailing whitespace inside the run before checking
+        // Strip leading/trailing mode chars inside the run before checking
         // whether it aligns with word boundaries.  Runs that start or end with
-        // spaces still begin/finish at a word boundary even if the adjacent
-        // character outside the run happens to be non-space.
+        // mode chars still begin/finish at a word boundary even if the adjacent
+        // character outside the run happens to be non-mode.
         let effective_run_start = (run_start..run_end)
-            .find(|&i| !chars[i].is_whitespace())
+            .find(|&i| !self.is_emphasis_word_separator(chars[i]))
             .unwrap_or(run_start);
         let starts_clean =
-            effective_run_start == 0 || chars[effective_run_start.saturating_sub(1)].is_whitespace();
+            effective_run_start == 0 || self.is_emphasis_word_separator(chars[effective_run_start.saturating_sub(1)]);
         let effective_run_end = (run_start..run_end)
             .rev()
-            .find(|&i| !chars[i].is_whitespace())
+            .find(|&i| !self.is_emphasis_word_separator(chars[i]))
             .map(|i| i + 1)
             .unwrap_or(run_start);
-        let ends_clean = effective_run_end >= chars.len() || chars[effective_run_end].is_whitespace();
+        let ends_clean = effective_run_end >= chars.len() || self.is_emphasis_word_separator(chars[effective_run_end]);
 
         if starts_clean && ends_clean {
             self.emit_clean_words(&words, result);
@@ -232,7 +281,7 @@ impl ClassIndicator {
             // endemphword is only needed when emphasis ends mid-word (the next
             // character is not a word boundary and not end-of-string).
             if let Some(end_t) = &self.endemphword {
-                if run_end < chars.len() && !chars[run_end].is_whitespace() {
+                if run_end < chars.len() && !self.is_emphasis_word_separator(chars[run_end]) {
                     result.push((run_end, end_t.clone()));
                 }
             }
@@ -253,24 +302,6 @@ impl ClassIndicator {
     }
 }
 
-fn find_word_segments(chars: &[char], run_start: usize, run_end: usize) -> Vec<(usize, usize)> {
-    let mut words = Vec::new();
-    let mut pos = run_start;
-    while pos < run_end {
-        while pos < run_end && chars[pos].is_whitespace() {
-            pos += 1;
-        }
-        if pos >= run_end {
-            break;
-        }
-        let word_start = pos;
-        while pos < run_end && !chars[pos].is_whitespace() {
-            pos += 1;
-        }
-        words.push((word_start, pos));
-    }
-    words
-}
 
 // ── Builder ─────────────────────────────────────────────────────────────────
 
@@ -335,6 +366,14 @@ impl IndicatorBuilder {
         self.class_mut(name).endemph = Some(make_translation(dots, origin));
     }
 
+    pub fn emphmodechars(&mut self, name: &str, chars: &str) {
+        self.class_mut(name).emphmodechars = chars.chars().collect();
+    }
+
+    pub fn noemphchars(&mut self, name: &str, chars: &str) {
+        self.class_mut(name).noemphchars = chars.chars().collect();
+    }
+
     pub fn build(self) -> Option<Indicator> {
         let classes: Vec<ClassIndicator> = self
             .classes
@@ -367,7 +406,7 @@ impl Indicator {
         let chars: Vec<char> = input.chars().collect();
         let mut result: Vec<(usize, ResolvedTranslation)> = Vec::new();
         for class in &self.classes {
-            let active = active_positions(&class.class_name, chars.len(), spans);
+            let active = class.active_positions(&chars, spans);
             class.emit(&chars, &active, &mut result);
         }
         result

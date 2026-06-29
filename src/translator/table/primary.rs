@@ -318,6 +318,12 @@ impl PrimaryTable {
                 Rule::Endemph { name, dots, .. } => {
                     builder.emphasis_indicator.endemph(name, &dots.to_string(), rule);
                 }
+                Rule::Emphmodechars { name, chars } => {
+                    builder.emphasis_indicator.emphmodechars(name, chars);
+                }
+                Rule::Noemphchars { name, chars } => {
+                    builder.emphasis_indicator.noemphchars(name, chars);
+                }
                 Rule::Letsign { dots } => {
                     builder
                         .lettersign_indicator
