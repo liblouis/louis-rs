@@ -40,7 +40,11 @@ impl IndicatorBuilder {
         if !self.contractions.is_empty() && self.lettersign.is_some() {
             let (lettersign, origin) = self.lettersign.unwrap();
             let start_translation = ResolvedTranslation::new(
-                "", &lettersign, 1, TranslationStage::Main, origin.clone(),
+                "",
+                &lettersign,
+                1,
+                TranslationStage::Main,
+                origin.clone(),
             );
             let mut trie = Trie::new().with_context(ctx);
             for (contraction, _origin) in self.contractions {
@@ -55,7 +59,10 @@ impl IndicatorBuilder {
                     &origin,
                 );
             }
-            Some(Indicator { contractions: trie, start_translation })
+            Some(Indicator {
+                contractions: trie,
+                start_translation,
+            })
         } else if !self.contractions.is_empty() && self.lettersign.is_none() {
             warn!("Table contains contractions but no letsign");
             None
@@ -125,7 +132,9 @@ mod tests {
     }
 
     fn pairs(t: &[(usize, ResolvedTranslation)]) -> Vec<(usize, String)> {
-        t.iter().map(|(pos, r)| (*pos, r.output().to_string())).collect()
+        t.iter()
+            .map(|(pos, r)| (*pos, r.output().to_string()))
+            .collect()
     }
 
     #[test]
@@ -169,6 +178,9 @@ mod tests {
         let indicator = builder.build(ctx).unwrap();
 
         assert_eq!(pairs(&indicator.precompute("aa")), vec![]);
-        assert_eq!(pairs(&indicator.precompute("ab")), vec![(0, "⠠".to_string())]);
+        assert_eq!(
+            pairs(&indicator.precompute("ab")),
+            vec![(0, "⠠".to_string())]
+        );
     }
 }

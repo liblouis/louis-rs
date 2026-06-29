@@ -14,8 +14,8 @@ use crate::{
 mod context_pattern;
 mod effect;
 mod indication;
-mod options;
 mod match_pattern;
+mod options;
 mod pipeline;
 mod position_constraints;
 mod regexp;

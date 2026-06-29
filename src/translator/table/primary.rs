@@ -46,7 +46,10 @@ impl CompbrlScanner {
         while pos < n {
             // Check if any trigger matches at this character position.
             let remaining: String = chars[pos..].iter().collect();
-            let matched = self.triggers.iter().any(|t| remaining.starts_with(t.as_str()));
+            let matched = self
+                .triggers
+                .iter()
+                .any(|t| remaining.starts_with(t.as_str()));
             if matched {
                 // Expand to surrounding word: scan backward for whitespace.
                 let mut word_start = pos;
@@ -368,28 +371,51 @@ impl PrimaryTable {
                     builder.emphasis_indicator.emphclass(name);
                 }
                 Rule::Emphletter { name, dots } => {
-                    builder.emphasis_indicator.emphletter(name, &dots.to_string(), rule);
+                    builder
+                        .emphasis_indicator
+                        .emphletter(name, &dots.to_string(), rule);
                 }
                 Rule::Begemphword { name, dots } => {
-                    builder.emphasis_indicator.begemphword(name, &dots.to_string(), rule);
+                    builder
+                        .emphasis_indicator
+                        .begemphword(name, &dots.to_string(), rule);
                 }
                 Rule::Endemphword { name, dots } => {
-                    builder.emphasis_indicator.endemphword(name, &dots.to_string(), rule);
+                    builder
+                        .emphasis_indicator
+                        .endemphword(name, &dots.to_string(), rule);
                 }
                 Rule::Begemphphrase { name, dots } => {
-                    builder.emphasis_indicator.begemphphrase(name, &dots.to_string(), rule);
+                    builder
+                        .emphasis_indicator
+                        .begemphphrase(name, &dots.to_string(), rule);
                 }
-                Rule::Endemphphrase { name, dots, position } => {
-                    builder.emphasis_indicator.endemphphrase(name, &dots.to_string(), position, rule);
+                Rule::Endemphphrase {
+                    name,
+                    dots,
+                    position,
+                } => {
+                    builder.emphasis_indicator.endemphphrase(
+                        name,
+                        &dots.to_string(),
+                        position,
+                        rule,
+                    );
                 }
                 Rule::Lenemphphrase { name, number } => {
-                    builder.emphasis_indicator.lenemphphrase(name, *number as usize);
+                    builder
+                        .emphasis_indicator
+                        .lenemphphrase(name, *number as usize);
                 }
                 Rule::Begemph { name, dots, .. } => {
-                    builder.emphasis_indicator.begemph(name, &dots.to_string(), rule);
+                    builder
+                        .emphasis_indicator
+                        .begemph(name, &dots.to_string(), rule);
                 }
                 Rule::Endemph { name, dots, .. } => {
-                    builder.emphasis_indicator.endemph(name, &dots.to_string(), rule);
+                    builder
+                        .emphasis_indicator
+                        .endemph(name, &dots.to_string(), rule);
                 }
                 Rule::Emphmodechars { name, chars } => {
                     builder.emphasis_indicator.emphmodechars(name, chars);
@@ -472,10 +498,14 @@ impl PrimaryTable {
                     );
                 }
                 Rule::Begcomp { dots, .. } => {
-                    builder.computer_braille_indicator.begcomp(&dots.to_string(), rule);
+                    builder
+                        .computer_braille_indicator
+                        .begcomp(&dots.to_string(), rule);
                 }
                 Rule::Endcomp { dots, .. } => {
-                    builder.computer_braille_indicator.endcomp(&dots.to_string(), rule);
+                    builder
+                        .computer_braille_indicator
+                        .endcomp(&dots.to_string(), rule);
                 }
                 Rule::Compbrl { chars, .. } => {
                     builder.compbrl_triggers.push(chars.clone());
@@ -805,7 +835,10 @@ impl PrimaryTable {
     }
 
     pub fn translate_with_options(&self, input: &str, options: &TranslationOptions) -> String {
-        self.trace(input, options).iter().map(|t| t.output()).collect()
+        self.trace(input, options)
+            .iter()
+            .map(|t| t.output())
+            .collect()
     }
 
     fn translation_candidates(

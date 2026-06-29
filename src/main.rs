@@ -18,9 +18,9 @@ use crate::translator::ResolvedTranslation;
 use crate::translator::TranslationPipeline;
 use crate::translator::TranslationStage;
 
+pub mod emphasis;
 mod metadata;
 mod test;
-pub mod emphasis;
 mod translator;
 mod yaml;
 

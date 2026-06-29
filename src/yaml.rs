@@ -6,8 +6,8 @@ use crate::{parser, parser::EscapingContext, parser::unescape};
 
 use libyaml::{Encoding, Event, Parser, ParserIter};
 
-use crate::parser::Direction;
 use crate::emphasis::EmphasisSpan;
+use crate::parser::Direction;
 use crate::test::{
     CursorPosition, Directions, Display, ExpectedFailure, Table, TableQuery, Test, TestError,
     TestMatrix, TestMode, TestResult,
@@ -15,7 +15,6 @@ use crate::test::{
 use crate::translator::{TranslationMode, TranslationModes};
 
 type YAMLEventError = Option<Result<Event, libyaml::ParserError>>;
-
 
 #[derive(thiserror::Error, Debug)]
 pub enum ParseError {

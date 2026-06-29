@@ -17,6 +17,9 @@ pub struct EmphasisSpan {
 
 impl EmphasisSpan {
     pub fn new(class: impl Into<String>, range: Range<usize>) -> Self {
-        Self { class: class.into(), range }
+        Self {
+            class: class.into(),
+            range,
+        }
     }
 }

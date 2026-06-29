@@ -7,7 +7,9 @@ use enumset::EnumSet;
 use search_path::SearchPath;
 
 use crate::{
-    emphasis::{self, EmphasisSpan}, parser::{self, Direction, TableError}, translator::{self, DisplayTable, TranslationModes, TranslationOptions, TranslationPipeline}
+    emphasis::{self, EmphasisSpan},
+    parser::{self, Direction, TableError},
+    translator::{self, DisplayTable, TranslationModes, TranslationOptions, TranslationPipeline},
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -218,7 +220,6 @@ pub enum Display {
 }
 
 pub type TableQuery = HashMap<String, String>;
-
 
 #[derive(Debug, Clone)]
 pub enum CursorPosition {

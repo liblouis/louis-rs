@@ -25,17 +25,17 @@ assert_eq!(braille, "⠓⠑⠇⠇⠕⠀⠺⠕⠗⠇⠙");
 
 */
 
+pub mod emphasis;
 mod parser;
 mod test;
-pub mod emphasis;
 mod translator;
 
 use std::path::Path;
 
-pub use parser::Direction;
 pub use emphasis::EmphasisSpan;
-pub use translator::{TranslationMode, TranslationModes, TranslationOptions};
+pub use parser::Direction;
 use translator::TranslationPipeline;
+pub use translator::{TranslationMode, TranslationModes, TranslationOptions};
 
 use crate::translator::ResolvedTranslation;
 

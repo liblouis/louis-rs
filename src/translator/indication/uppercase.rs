@@ -141,7 +141,9 @@ impl Indicator {
             return translations;
         }
 
-        let start_word_t = self.start_word_translation.as_ref()
+        let start_word_t = self
+            .start_word_translation
+            .as_ref()
             .or(self.start_letter_translation.as_ref());
 
         let mut state = State::Default;
@@ -195,7 +197,9 @@ mod tests {
     }
 
     fn pairs(t: &[(usize, ResolvedTranslation)]) -> Vec<(usize, String)> {
-        t.iter().map(|(pos, r)| (*pos, r.output().to_string())).collect()
+        t.iter()
+            .map(|(pos, r)| (*pos, r.output().to_string()))
+            .collect()
     }
 
     #[test]
@@ -206,7 +210,10 @@ mod tests {
         builder.letter_characters(HashSet::from(['a', 'b', 'c']));
         let indicator = builder.build().unwrap();
 
-        assert_eq!(pairs(&indicator.precompute("Abc ")), vec![(0, "⠇".to_string())]);
+        assert_eq!(
+            pairs(&indicator.precompute("Abc ")),
+            vec![(0, "⠇".to_string())]
+        );
     }
 
     #[test]
@@ -218,8 +225,9 @@ mod tests {
         builder.letter_characters(HashSet::from(['a', 'b', 'c']));
         let indicator = builder.build().unwrap();
 
-        assert_eq!(pairs(&indicator.precompute("ABCa")), vec![
-            (0, "⠇".to_string()), (3, "⠠".to_string()),
-        ]);
+        assert_eq!(
+            pairs(&indicator.precompute("ABCa")),
+            vec![(0, "⠇".to_string()), (3, "⠠".to_string()),]
+        );
     }
 }

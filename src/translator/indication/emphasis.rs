@@ -10,8 +10,8 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    parser::{AnchoredRule, Position},
     emphasis::EmphasisSpan,
+    parser::{AnchoredRule, Position},
     translator::{ResolvedTranslation, TranslationStage},
 };
 
@@ -38,7 +38,6 @@ enum EmitKind {
     /// All other indicators — ordering within a position is preserved as-is.
     Unordered,
 }
-
 
 /// Compiled indicator data for one emphasis class (e.g. "italic").
 #[derive(Debug, Clone)]
@@ -123,7 +122,12 @@ impl ClassIndicator {
         active
     }
 
-    fn find_word_segments(&self, chars: &[char], run_start: usize, run_end: usize) -> Vec<(usize, usize)> {
+    fn find_word_segments(
+        &self,
+        chars: &[char],
+        run_start: usize,
+        run_end: usize,
+    ) -> Vec<(usize, usize)> {
         let mut words = Vec::new();
         let mut pos = run_start;
         while pos < run_end {
@@ -193,7 +197,13 @@ impl ClassIndicator {
                     .find(|&i| !self.is_emphasis_word_separator(chars[i]))
                     .map(|i| i + 1)
                     .unwrap_or(run_end);
-                result.push((effective_end, endemph.clone(), EmitKind::Close { emit_start: effective_start }));
+                result.push((
+                    effective_end,
+                    endemph.clone(),
+                    EmitKind::Close {
+                        emit_start: effective_start,
+                    },
+                ));
             }
             return;
         }
@@ -211,14 +221,15 @@ impl ClassIndicator {
         let effective_run_start = (run_start..run_end)
             .find(|&i| !self.is_emphasis_word_separator(chars[i]))
             .unwrap_or(run_start);
-        let starts_clean =
-            effective_run_start == 0 || self.is_emphasis_word_separator(chars[effective_run_start.saturating_sub(1)]);
+        let starts_clean = effective_run_start == 0
+            || self.is_emphasis_word_separator(chars[effective_run_start.saturating_sub(1)]);
         let effective_run_end = (run_start..run_end)
             .rev()
             .find(|&i| !self.is_emphasis_word_separator(chars[i]))
             .map(|i| i + 1)
             .unwrap_or(run_start);
-        let ends_clean = effective_run_end >= chars.len() || self.is_emphasis_word_separator(chars[effective_run_end]);
+        let ends_clean = effective_run_end >= chars.len()
+            || self.is_emphasis_word_separator(chars[effective_run_end]);
 
         if starts_clean && ends_clean {
             self.emit_clean_words(&words, result);
@@ -322,7 +333,6 @@ impl ClassIndicator {
     }
 }
 
-
 // ── Builder ─────────────────────────────────────────────────────────────────
 
 /// Builder for [`Indicator`].
@@ -335,13 +345,17 @@ pub struct IndicatorBuilder {
 
 impl IndicatorBuilder {
     pub fn new() -> Self {
-        Self { classes: HashMap::new(), class_order: Vec::new() }
+        Self {
+            classes: HashMap::new(),
+            class_order: Vec::new(),
+        }
     }
 
     fn class_mut(&mut self, name: &str) -> &mut ClassIndicator {
         if !self.classes.contains_key(name) {
             self.class_order.push(name.to_string());
-            self.classes.insert(name.to_string(), ClassIndicator::new(name.to_string()));
+            self.classes
+                .insert(name.to_string(), ClassIndicator::new(name.to_string()));
         }
         self.classes.get_mut(name).unwrap()
     }
@@ -399,12 +413,17 @@ impl IndicatorBuilder {
     }
 
     pub fn build(mut self) -> Option<Indicator> {
-        let classes: Vec<ClassIndicator> = self.class_order
+        let classes: Vec<ClassIndicator> = self
+            .class_order
             .into_iter()
             .filter_map(|name| self.classes.remove(&name))
             .filter(|c| c.is_indicating())
             .collect();
-        if classes.is_empty() { None } else { Some(Indicator { classes }) }
+        if classes.is_empty() {
+            None
+        } else {
+            Some(Indicator { classes })
+        }
     }
 }
 
@@ -474,7 +493,10 @@ impl Indicator {
             }
         });
 
-        events.into_iter().map(|(pos, trans, _, _)| (pos, trans)).collect()
+        events
+            .into_iter()
+            .map(|(pos, trans, _, _)| (pos, trans))
+            .collect()
     }
 }
 
@@ -528,7 +550,7 @@ mod tests {
         // becomes two single-char runs — each gets emphletter.
         let result = indicator.precompute("a,b", &[EmphasisSpan::new("italic", 0..3)]);
         assert_eq!(outputs_at(&result, 0), vec!["⠨"]); // 'a'
-        assert!(outputs_at(&result, 1).is_empty());     // ',' — not indicated
+        assert!(outputs_at(&result, 1).is_empty()); // ',' — not indicated
         assert_eq!(outputs_at(&result, 2), vec!["⠨"]); // 'b'
     }
 
@@ -545,6 +567,6 @@ mod tests {
         let result = indicator.precompute("well-known", &[EmphasisSpan::new("italic", 0..10)]);
         assert_eq!(outputs_at(&result, 0), vec!["⠨"]); // "well"
         assert_eq!(outputs_at(&result, 5), vec!["⠨"]); // "known"
-        assert!(outputs_at(&result, 4).is_empty());     // '-' — no indicator
+        assert!(outputs_at(&result, 4).is_empty()); // '-' — no indicator
     }
 }
