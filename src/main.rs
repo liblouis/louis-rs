@@ -20,7 +20,7 @@ use crate::translator::TranslationStage;
 
 mod metadata;
 mod test;
-pub mod text_attribute;
+pub mod emphasis;
 mod translator;
 mod yaml;
 

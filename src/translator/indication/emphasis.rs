@@ -1,8 +1,8 @@
 //! Emphasis (italic, bold, underline, …) braille indication.
 //!
-//! Analyses the per-character [`TextAttributes`] supplied by the caller and
-//! emits the appropriate indicator cells (emphletter, begemphword, …) before
-//! or after the relevant character positions.
+//! Analyses the [`EmphasisSpan`] list supplied by the caller and emits the
+//! appropriate indicator cells (emphletter, begemphword, …) before or after
+//! the relevant character positions.
 //!
 //! Because the choice of indicator (letter / word / phrase) depends on
 //! context that is only known at precompute time, this module returns
@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 use crate::{
     parser::{AnchoredRule, Position},
-    text_attribute::{TextAttribute, TextAttributes},
+    emphasis::EmphasisSpan,
     translator::{ResolvedTranslation, TranslationStage},
 };
 
@@ -21,33 +21,24 @@ fn make_translation(dots: &str, origin: &AnchoredRule) -> ResolvedTranslation {
     ResolvedTranslation::new("", dots, 1, TranslationStage::Main, origin.clone())
 }
 
-fn name_to_attribute(name: &str) -> TextAttribute {
-    match name {
-        "italic" | "emph1" => TextAttribute::Italic,
-        "bold" | "emph2" => TextAttribute::Bold,
-        "underline" | "emph3" => TextAttribute::Underline,
-        "emph4" => TextAttribute::Emph4,
-        "emph5" => TextAttribute::Emph5,
-        "emph6" => TextAttribute::Emph6,
-        "emph7" => TextAttribute::Emph7,
-        "emph8" => TextAttribute::Emph8,
-        "emph9" => TextAttribute::Emph9,
-        "emph10" => TextAttribute::Emph10,
-        "script" => TextAttribute::Script,
-        "transnote" => TextAttribute::TransNote,
-        "trans1" => TextAttribute::TransNote1,
-        "trans2" => TextAttribute::TransNote2,
-        "trans3" => TextAttribute::TransNote3,
-        "trans4" => TextAttribute::TransNote4,
-        "trans5" => TextAttribute::TransNote5,
-        _ => TextAttribute::Emph4, //TODO
+/// Build a dense per-position active flag for a single emphasis class name.
+fn active_positions(class_name: &str, n: usize, spans: &[EmphasisSpan]) -> Vec<bool> {
+    let mut active = vec![false; n];
+    for span in spans {
+        if span.class == class_name {
+            let end = span.range.end.min(n);
+            for pos in span.range.start..end {
+                active[pos] = true;
+            }
+        }
     }
+    active
 }
 
 /// Compiled indicator data for one emphasis class (e.g. "italic").
 #[derive(Debug, Clone)]
 struct EmphasisClass {
-    text_attribute: TextAttribute,
+    class_name: String,
     /// Single-letter emphasis indicator (emphletter).
     emphletter: Option<ResolvedTranslation>,
     /// Start of a word-level emphasis run (begemphword).
@@ -69,9 +60,9 @@ struct EmphasisClass {
 }
 
 impl EmphasisClass {
-    fn new(text_attribute: TextAttribute) -> Self {
+    fn new(class_name: String) -> Self {
         EmphasisClass {
-            text_attribute,
+            class_name,
             emphletter: None,
             begemphword: None,
             endemphword: None,
@@ -91,31 +82,24 @@ impl EmphasisClass {
             || self.begemphphrase.is_some()
     }
 
-    fn is_emph_at(&self, pos: usize, typeforms: &[TextAttributes]) -> bool {
-        typeforms
-            .get(pos)
-            .map(|attrs| attrs.contains(self.text_attribute))
-            .unwrap_or(false)
-    }
-
     fn emit(
         &self,
         chars: &[char],
-        typeforms: &[TextAttributes],
+        active: &[bool],
         result: &mut Vec<(usize, ResolvedTranslation)>,
     ) {
         let n = chars.len();
         let mut pos = 0;
         while pos < n {
-            if !self.is_emph_at(pos, typeforms) {
+            if !active.get(pos).copied().unwrap_or(false) {
                 pos += 1;
                 continue;
             }
             let run_start = pos;
-            while pos < n && self.is_emph_at(pos, typeforms) {
+            while pos < n && active.get(pos).copied().unwrap_or(false) {
                 pos += 1;
             }
-            let run_end = pos; // exclusive; first non-italic position (may equal n)
+            let run_end = pos;
             self.emit_run(chars, run_start, run_end, result);
         }
     }
@@ -306,7 +290,7 @@ impl IndicatorBuilder {
     fn class_mut(&mut self, name: &str) -> &mut EmphasisClass {
         self.classes
             .entry(name.to_string())
-            .or_insert_with(|| EmphasisClass::new(name_to_attribute(name)))
+            .or_insert_with(|| EmphasisClass::new(name.to_string()))
     }
 
     pub fn emphclass(&mut self, name: &str) {
@@ -372,7 +356,7 @@ pub struct Indicator {
 }
 
 impl Indicator {
-    /// Returns sparse `(position, translation)` pairs for the given input and typeforms.
+    /// Returns sparse `(position, translation)` pairs for the given input and emphasis spans.
     ///
     /// Position `n` (where `n = input.chars().count()`) is valid and used for
     /// translations that must appear after all input characters (e.g. `endemph`
@@ -380,12 +364,13 @@ impl Indicator {
     pub fn precompute(
         &self,
         input: &str,
-        typeforms: &[TextAttributes],
+        spans: &[EmphasisSpan],
     ) -> Vec<(usize, ResolvedTranslation)> {
         let chars: Vec<char> = input.chars().collect();
         let mut result: Vec<(usize, ResolvedTranslation)> = Vec::new();
         for class in &self.classes {
-            class.emit(&chars, typeforms, &mut result);
+            let active = active_positions(&class.class_name, chars.len(), spans);
+            class.emit(&chars, &active, &mut result);
         }
         result
     }

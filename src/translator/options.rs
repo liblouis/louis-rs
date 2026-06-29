@@ -6,7 +6,7 @@
 
 use enumset::{EnumSet, EnumSetType};
 
-use crate::text_attribute::TextAttributes;
+use crate::emphasis::EmphasisSpan;
 
 /// Flags that modify the behaviour of the translator.
 ///
@@ -37,26 +37,22 @@ impl TranslationModes {
 }
 
 /// Per-call options for a translation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct TranslationOptions {
     pub mode: TranslationModes,
-    /// Per-character text attribute annotations (what liblouis calls typeforms).
-    pub typeforms: Option<Vec<TextAttributes>>,
+    /// Per-character emphasis annotations (which emphasis classes are active where).
+    pub emphasis: Vec<EmphasisSpan>,
     pub cursor_pos: Option<usize>,
 }
 
 impl TranslationOptions {
-    pub fn typeforms(&self) -> &[TextAttributes] {
-        self.typeforms.as_deref().unwrap_or(&[])
+    pub fn emphasis(&self) -> &[EmphasisSpan] {
+        &self.emphasis
     }
 }
 
-impl Default for TranslationOptions {
+impl Default for TranslationModes {
     fn default() -> Self {
-        Self {
-            mode: TranslationModes::empty(),
-            typeforms: None,
-            cursor_pos: None,
-        }
+        Self::empty()
     }
 }

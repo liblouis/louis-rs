@@ -7,9 +7,7 @@ use enumset::EnumSet;
 use search_path::SearchPath;
 
 use crate::{
-    parser::{self, Direction, TableError},
-    text_attribute::TextAttributes,
-    translator::{self, DisplayTable, TranslationModes, TranslationOptions, TranslationPipeline},
+    emphasis::{self, EmphasisSpan}, parser::{self, Direction, TableError}, translator::{self, DisplayTable, TranslationModes, TranslationOptions, TranslationPipeline}
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -256,8 +254,8 @@ pub struct Test {
     expected: String,
     /// Is the test expected to fail?
     xfail: ExpectedFailure,
-    typeform: Vec<TextAttributes>,
-    expected_typeform: Vec<TextAttributes>,
+    emphasis: Vec<EmphasisSpan>,
+    expected_emphasis: Vec<EmphasisSpan>,
     input_pos: Vec<u16>,
     output_pos: Vec<u16>,
     cursor_pos: Option<CursorPosition>,
@@ -275,11 +273,7 @@ impl Test {
     ) -> TestResult {
         let options = TranslationOptions {
             mode: self.modes.clone(),
-            typeforms: if self.typeform.is_empty() {
-                None
-            } else {
-                Some(self.typeform.clone())
-            },
+            emphasis: self.emphasis.clone(),
             cursor_pos: None,
         };
         let translated = table.translate_with_options(&self.input, &options);
@@ -314,8 +308,8 @@ impl Test {
         input: String,
         expected: String,
         xfail: ExpectedFailure,
-        typeform: Vec<TextAttributes>,
-        expected_typeform: Vec<TextAttributes>,
+        emphasis: Vec<EmphasisSpan>,
+        expected_emphasis: Vec<EmphasisSpan>,
         input_pos: Vec<u16>,
         output_pos: Vec<u16>,
         cursor_pos: Option<CursorPosition>,
@@ -327,8 +321,8 @@ impl Test {
             input,
             expected,
             xfail,
-            typeform,
-            expected_typeform,
+            emphasis,
+            expected_emphasis,
             input_pos,
             output_pos,
             cursor_pos,

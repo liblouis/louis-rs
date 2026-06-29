@@ -771,7 +771,7 @@ impl PrimaryTable {
         let mut seen: HashSet<TranslationSubset> = HashSet::default();
         let mut char_pos: usize = 0;
 
-        let indications = self.indicators.precompute(input, options.typeforms());
+        let indications = self.indicators.precompute(input, options.emphasis());
         let constraints = self
             .constrainer
             .as_ref()

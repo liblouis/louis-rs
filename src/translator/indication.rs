@@ -18,7 +18,7 @@
 //! * [`lettersign::Indicator`]: detects contractions that require a letter sign
 //! * [`nocontract::Indicator`]: detects contractions that require a no-contract sign
 
-use crate::text_attribute::TextAttributes;
+use crate::emphasis::EmphasisSpan;
 use crate::translator::ResolvedTranslation;
 
 pub mod emphasis;
@@ -57,13 +57,13 @@ impl Indicators {
         Indicators(indicators)
     }
 
-    pub fn precompute(&self, input: &str, typeforms: &[TextAttributes]) -> PrecomputedIndications {
+    pub fn precompute(&self, input: &str, spans: &[EmphasisSpan]) -> PrecomputedIndications {
         let n = input.chars().count();
         let mut indications: Vec<Vec<ResolvedTranslation>> = vec![vec![]; n + 1];
 
         for indicator in &self.0 {
             let pairs: Vec<(usize, ResolvedTranslation)> = match indicator {
-                Indicator::Emphasis(i) => i.precompute(input, typeforms),
+                Indicator::Emphasis(i) => i.precompute(input, spans),
                 Indicator::Numeric(i) => i.precompute(input),
                 Indicator::Uppercase(i) => i.precompute(input),
                 Indicator::LetterSign(i) => i.precompute(input),

@@ -27,13 +27,13 @@ assert_eq!(braille, "⠓⠑⠇⠇⠕⠀⠺⠕⠗⠇⠙");
 
 mod parser;
 mod test;
-pub mod text_attribute;
+pub mod emphasis;
 mod translator;
 
 use std::path::Path;
 
 pub use parser::Direction;
-pub use text_attribute::{TextAttribute, TextAttributes};
+pub use emphasis::EmphasisSpan;
 pub use translator::{TranslationMode, TranslationModes, TranslationOptions};
 use translator::TranslationPipeline;
 
@@ -54,7 +54,7 @@ pub struct SpacingInfo {
 #[derive(Debug, Default)]
 pub struct TranslationResult {
     pub output: String,
-    pub typeforms: Option<Vec<TextAttributes>>, // Only if input had typeforms
+    pub emphasis: Option<Vec<EmphasisSpan>>, // Only if input had emphasis
     pub spacing: Option<Vec<SpacingInfo>>,
     pub output_positions: Option<Vec<usize>>, // Maps input pos -> output pos
     pub input_positions: Option<Vec<usize>>,  // Maps output pos -> input pos
