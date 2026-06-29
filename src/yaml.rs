@@ -325,17 +325,15 @@ impl YAMLParser<'_> {
     fn test(&mut self) -> Result<Test, ParseError> {
         self.sequence_start()?;
         let mut input = unescape(&self.scalar()?, EscapingContext::Default)?;
-        let mut expected = self.scalar()?;
+        let mut expected = unescape(&self.scalar()?, EscapingContext::Default)?;
         // the YAML format is way too flexible: You can have two
         // scalars in which case those are input and expected. But you
         // can also have 3 scalars so that (description, input, expected)
         if let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
             let _description = Some(input);
             input = expected;
-            expected = self.scalar()?;
+            expected = unescape(&self.scalar()?, EscapingContext::Default)?;
         }
-        // let input = self.scalar()?;
-        // let expected = self.scalar()?;
         let mut xfail = ExpectedFailure::Simple(false);
         let mut emphasis: Vec<EmphasisSpan> = Vec::new();
         let mut expected_emphasis: Vec<EmphasisSpan> = Vec::new();
