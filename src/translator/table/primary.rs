@@ -928,15 +928,10 @@ impl PrimaryTable {
             }
 
             // In computer braille mode, discard normal candidates and use comp6 rules only.
+            // comp6 rules have no pre-pattern so offset() is always 0 — no delayed handling needed.
             if constraints.use_comp6_at(char_pos) {
                 candidates.clear();
-                let (comp6, comp6_delayed): (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) =
-                    self.comp6_trie
-                        .find_translations(chars.as_str(), prev)
-                        .into_iter()
-                        .partition(|t| t.offset() == 0);
-                delayed_translations.extend(comp6_delayed);
-                candidates.extend(comp6);
+                candidates.extend(self.comp6_trie.find_translations(chars.as_str(), prev));
             }
 
             // use the longest translation
