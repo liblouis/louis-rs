@@ -1,16 +1,16 @@
-* Todo [13/23]
+* Todo [14/23]
 - [ ] Move the display tables into the Pipeline
 - [ ] implement "libhyphen"
 - [ ] guard against "()+" regexp?
-- [-] Indication [2/3]
+- [X] Indication [3/3]
   - Indication is pre-computed before translation via ~Indicators::precompute()~,
     which produces an immutable ~PrecomputedIndications~ value. Both built-in
     indication and user-supplied typeforms (~TextAttribute~) populate the same
     ~IndicationEvents~ array; the translation loop consults it by position index.
   - [X] Numeric indication
   - [X] Caps indication
-  - [ ] Emphasis indication
-- [ ] Typeforms
+  - [X] Emphasis indication
+- [X] Typeforms
 - [ ] Cursor handling
 - [ ] Hyphenation
   - will probably be delegated to the [[https://docs.rs/hyphenation/latest/hyphenation/][hyphenation crate]]
