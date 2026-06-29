@@ -21,6 +21,7 @@
 use crate::emphasis::EmphasisSpan;
 use crate::translator::ResolvedTranslation;
 
+pub mod computer_braille;
 pub mod emphasis;
 pub mod lettersign;
 pub mod nocontract;
@@ -29,6 +30,7 @@ pub mod uppercase;
 
 #[derive(Debug, Clone)]
 pub enum Indicator {
+    ComputerBraille(computer_braille::Indicator),
     Emphasis(emphasis::Indicator),
     LetterSign(lettersign::Indicator),
     NoContract(nocontract::Indicator),
@@ -63,6 +65,7 @@ impl Indicators {
 
         for indicator in &self.0 {
             let pairs: Vec<(usize, ResolvedTranslation)> = match indicator {
+                Indicator::ComputerBraille(i) => i.precompute(input, spans),
                 Indicator::Emphasis(i) => i.precompute(input, spans),
                 Indicator::Numeric(i) => i.precompute(input),
                 Indicator::Uppercase(i) => i.precompute(input),

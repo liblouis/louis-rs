@@ -8,13 +8,17 @@ use hyphenation::{Hyphenator, Load, Standard};
 
 use crate::{
     Direction,
+    emphasis::EmphasisSpan,
     parser::{AnchoredRule, Braille, CharacterClass, HasNocross, HasPrecedence, fallback},
     translator::{
         CharacterDefinition, ResolvedTranslation, Rule, TranslationError, TranslationOptions,
         TranslationStage,
         context_pattern::{ContextPatterns, ContextPatternsBuilder},
         effect::Environment,
-        indication::{Indicator, Indicators, emphasis, lettersign, nocontract, numeric, uppercase},
+        indication::{
+            Indicator, Indicators, computer_braille, emphasis, lettersign, nocontract, numeric,
+            uppercase,
+        },
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
         position_constraints::{Constrainer, ConstrainerBuilder, PositionConstraints},
         table::TableContext,
@@ -22,6 +26,53 @@ use crate::{
         trie::{Boundary, Transition, Trie},
     },
 };
+
+/// Detects compbrl-triggered computer braille regions and adds `computer_braille` spans.
+///
+/// When a table contains `compbrl` rules, any word in the input that contains one
+/// of the trigger strings is treated as a computer braille span.
+#[derive(Debug, Clone)]
+struct CompbrlScanner {
+    triggers: Vec<String>,
+}
+
+impl CompbrlScanner {
+    fn enrich(&self, input: &str, caller_spans: &[EmphasisSpan]) -> Vec<EmphasisSpan> {
+        let chars: Vec<char> = input.chars().collect();
+        let n = chars.len();
+        let mut spans = caller_spans.to_vec();
+
+        let mut pos = 0;
+        while pos < n {
+            // Check if any trigger matches at this character position.
+            let remaining: String = chars[pos..].iter().collect();
+            let matched = self.triggers.iter().any(|t| remaining.starts_with(t.as_str()));
+            if matched {
+                // Expand to surrounding word: scan backward for whitespace.
+                let mut word_start = pos;
+                while word_start > 0 && !chars[word_start - 1].is_whitespace() {
+                    word_start -= 1;
+                }
+                // Scan forward for whitespace.
+                let mut word_end = pos;
+                while word_end < n && !chars[word_end].is_whitespace() {
+                    word_end += 1;
+                }
+                let new_span = EmphasisSpan::new("computer_braille", word_start..word_end);
+                // Avoid exact duplicates.
+                if !spans.contains(&new_span) {
+                    spans.push(new_span);
+                }
+                // Skip to end of word to avoid adding duplicate spans for the same word.
+                pos = word_end;
+            } else {
+                pos += 1;
+            }
+        }
+
+        spans
+    }
+}
 
 #[derive(Debug)]
 /// Character Translations map characters to a [`ResolvedTranslation`]. This cannot be done using
@@ -59,6 +110,9 @@ pub struct PrimaryTable {
     /// A prefix tree that contains all the translation rules and their
     /// [`ResolvedTranslations`](ResolvedTranslation)
     trie: Trie,
+    /// A prefix tree that contains comp6 (computer braille) translation rules.
+    /// These are only consulted when `UseComp6` is set at a character position.
+    comp6_trie: Trie,
     match_patterns: MatchPatterns,
     context_patterns: ContextPatterns,
     /// All the nocross translation rules are stored in a separate trie
@@ -66,6 +120,8 @@ pub struct PrimaryTable {
     hyphenator: Option<Standard>,
     indicators: Indicators,
     constrainer: Option<Constrainer>,
+    /// Detects compbrl-triggered computer braille regions.
+    compbrl_scanner: Option<CompbrlScanner>,
     direction: Direction,
 }
 
@@ -75,6 +131,7 @@ struct PrimaryTableBuilder {
     undefined: Option<String>,
     character_translations: CharacterTranslation,
     trie: Trie,
+    comp6_trie: Trie,
     nocross_trie: Trie,
     hyphenator: Option<Standard>,
     match_patterns: MatchPatternsBuilder,
@@ -84,7 +141,9 @@ struct PrimaryTableBuilder {
     lettersign_indicator: lettersign::IndicatorBuilder,
     nocontract_indicator: nocontract::IndicatorBuilder,
     emphasis_indicator: emphasis::IndicatorBuilder,
+    computer_braille_indicator: computer_braille::IndicatorBuilder,
     constrainer_builder: ConstrainerBuilder,
+    compbrl_triggers: Vec<String>,
 }
 
 impl PrimaryTableBuilder {
@@ -93,6 +152,7 @@ impl PrimaryTableBuilder {
             undefined: None,
             character_translations: CharacterTranslation::new(),
             trie: Trie::new(),
+            comp6_trie: Trie::new(),
             nocross_trie: Trie::new(),
             hyphenator: None,
             match_patterns: MatchPatternsBuilder::new(),
@@ -102,7 +162,9 @@ impl PrimaryTableBuilder {
             lettersign_indicator: lettersign::IndicatorBuilder::new(),
             nocontract_indicator: nocontract::IndicatorBuilder::new(),
             emphasis_indicator: emphasis::IndicatorBuilder::new(),
+            computer_braille_indicator: computer_braille::IndicatorBuilder::new(),
             constrainer_builder: ConstrainerBuilder::new(),
+            compbrl_triggers: Vec::new(),
         }
     }
 
@@ -145,8 +207,13 @@ impl PrimaryTableBuilder {
     }
 
     fn build(self, direction: Direction, ctx: &TableContext) -> PrimaryTable {
+        let triggers = self.compbrl_triggers;
         let indicators = [
-            // Emphasis must be first so begemphword appears before capsletter.
+            // Computer braille must be first so begcomp appears before emphasis.
+            self.computer_braille_indicator
+                .build()
+                .map(Indicator::ComputerBraille),
+            // Emphasis must be before capsletter so begemphword appears before capsletter.
             self.emphasis_indicator.build().map(Indicator::Emphasis),
             self.numeric_indicator.build().map(Indicator::Numeric),
             self.lettersign_indicator
@@ -166,6 +233,7 @@ impl PrimaryTableBuilder {
             direction,
             fallback_definitions: ctx.character_definitions().clone(),
             trie: self.trie.with_context(ctx.character_classes.clone()),
+            comp6_trie: self.comp6_trie.with_context(ctx.character_classes.clone()),
             nocross_trie: self
                 .nocross_trie
                 .with_context(ctx.character_classes.clone()),
@@ -174,6 +242,11 @@ impl PrimaryTableBuilder {
             context_patterns: self.context_patterns.build(),
             indicators: Indicators::new(indicators),
             constrainer: self.constrainer_builder.build(),
+            compbrl_scanner: if triggers.is_empty() {
+                None
+            } else {
+                Some(CompbrlScanner { triggers })
+            },
         }
     }
 }
@@ -368,7 +441,22 @@ impl PrimaryTable {
                         }
                     }
                 }
-                Rule::Comp6 { chars, dots } | Rule::Always { chars, dots, .. } => {
+                Rule::Comp6 { chars, dots } => {
+                    let dots = ctx
+                        .character_definitions()
+                        .braille_to_unicode(dots, chars)?;
+                    builder.comp6_trie.insert(
+                        chars,
+                        &dots,
+                        None,
+                        None,
+                        direction,
+                        rule.precedence(),
+                        TranslationStage::Main,
+                        rule,
+                    );
+                }
+                Rule::Always { chars, dots, .. } => {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
@@ -382,6 +470,15 @@ impl PrimaryTable {
                         TranslationStage::Main,
                         rule,
                     );
+                }
+                Rule::Begcomp { dots, .. } => {
+                    builder.computer_braille_indicator.begcomp(&dots.to_string(), rule);
+                }
+                Rule::Endcomp { dots, .. } => {
+                    builder.computer_braille_indicator.endcomp(&dots.to_string(), rule);
+                }
+                Rule::Compbrl { chars, .. } => {
+                    builder.compbrl_triggers.push(chars.clone());
                 }
                 Rule::Largesign { chars, dots } => {
                     builder.get_trie_mut(rule).insert(
@@ -777,12 +874,19 @@ impl PrimaryTable {
         let mut seen: HashSet<TranslationSubset> = HashSet::default();
         let mut char_pos: usize = 0;
 
-        let indications = self.indicators.precompute(input, options.emphasis());
+        // Enrich spans with compbrl-detected regions.
+        let enriched_spans: Vec<EmphasisSpan> = self
+            .compbrl_scanner
+            .as_ref()
+            .map(|s| s.enrich(input, options.emphasis()))
+            .unwrap_or_else(|| options.emphasis().to_vec());
+
+        let indications = self.indicators.precompute(input, &enriched_spans);
         let constraints = self
             .constrainer
             .as_ref()
-            .map(|c| c.precompute(input))
-            .unwrap_or_else(PositionConstraints::empty);
+            .map(|c| c.precompute(input, &enriched_spans))
+            .unwrap_or_else(|| PositionConstraints::from_spans(input, &enriched_spans));
 
         loop {
             translations.extend(indications.translations_at(char_pos));
@@ -821,6 +925,18 @@ impl PrimaryTable {
             // inside a numeric run, suppress multi-character contractions
             if constraints.dont_contract_at(char_pos) {
                 candidates.retain(|t| t.length() <= 1);
+            }
+
+            // In computer braille mode, discard normal candidates and use comp6 rules only.
+            if constraints.use_comp6_at(char_pos) {
+                candidates.clear();
+                let (comp6, comp6_delayed): (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) =
+                    self.comp6_trie
+                        .find_translations(chars.as_str(), prev)
+                        .into_iter()
+                        .partition(|t| t.offset() == 0);
+                delayed_translations.extend(comp6_delayed);
+                candidates.extend(comp6);
             }
 
             // use the longest translation
