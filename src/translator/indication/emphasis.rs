@@ -19,6 +19,26 @@ fn make_translation(dots: &str, origin: &AnchoredRule) -> ResolvedTranslation {
     ResolvedTranslation::new("", dots, 1, TranslationStage::Main, origin.clone())
 }
 
+/// Ordering tag attached to each emitted event.
+///
+/// `Open`/`Close` events are for `begemph`/`endemph` indicators and carry the
+/// span's `run_end` so that same-position events can be sorted into the correct
+/// LIFO (stack) order across multiple emphasis classes.  All other indicator
+/// types (word, phrase, letter) use `Unordered` and retain their original
+/// class-definition order.
+#[derive(Debug)]
+enum EmitKind {
+    /// `begemph` event; `run_end` is the position where the corresponding
+    /// `endemph` will be emitted.
+    Open { run_end: usize },
+    /// `endemph` event; `emit_start` is the position where the matching `Open`
+    /// (begemph) was emitted.  Used to sort same-position closes in inverse
+    /// open order (later open = closes first).
+    Close { emit_start: usize },
+    /// All other indicators — ordering within a position is preserved as-is.
+    Unordered,
+}
+
 
 /// Compiled indicator data for one emphasis class (e.g. "italic").
 #[derive(Debug, Clone)]
@@ -133,7 +153,7 @@ impl ClassIndicator {
         &self,
         chars: &[char],
         active: &[bool],
-        result: &mut Vec<(usize, ResolvedTranslation)>,
+        result: &mut Vec<(usize, ResolvedTranslation, EmitKind)>,
     ) {
         let n = chars.len();
         let mut pos = 0;
@@ -156,14 +176,14 @@ impl ClassIndicator {
         chars: &[char],
         run_start: usize,
         run_end: usize,
-        result: &mut Vec<(usize, ResolvedTranslation)>,
+        result: &mut Vec<(usize, ResolvedTranslation, EmitKind)>,
     ) {
         // begemph/endemph: general indicators that can start/end anywhere.
         if let Some(begemph) = &self.begemph {
             let effective_start = (run_start..run_end)
                 .find(|&i| !self.is_emphasis_word_separator(chars[i]))
                 .unwrap_or(run_start);
-            result.push((effective_start, begemph.clone()));
+            result.push((effective_start, begemph.clone(), EmitKind::Open { run_end }));
 
             if let Some(endemph) = &self.endemph {
                 // Find the last non-mode-char position in the run. endemph goes
@@ -173,7 +193,7 @@ impl ClassIndicator {
                     .find(|&i| !self.is_emphasis_word_separator(chars[i]))
                     .map(|i| i + 1)
                     .unwrap_or(run_end);
-                result.push((effective_end, endemph.clone()));
+                result.push((effective_end, endemph.clone(), EmitKind::Close { emit_start: effective_start }));
             }
             return;
         }
@@ -211,11 +231,11 @@ impl ClassIndicator {
     fn emit_clean_words(
         &self,
         words: &[(usize, usize)],
-        result: &mut Vec<(usize, ResolvedTranslation)>,
+        result: &mut Vec<(usize, ResolvedTranslation, EmitKind)>,
     ) {
         if let Some(begemphphrase) = &self.begemphphrase {
             if words.len() >= self.len_phrase {
-                result.push((words[0].0, begemphphrase.clone()));
+                result.push((words[0].0, begemphphrase.clone(), EmitKind::Unordered));
 
                 if self.endemphphrase_before {
                     // BANA-style: phrase covers all but the last word; the last
@@ -227,7 +247,7 @@ impl ClassIndicator {
                 } else {
                     // Phrase brackets all words; explicit endemph after the last.
                     if let Some(end_t) = &self.endemphphrase {
-                        result.push((words.last().unwrap().1, end_t.clone()));
+                        result.push((words.last().unwrap().1, end_t.clone(), EmitKind::Unordered));
                     }
                 }
                 return;
@@ -244,16 +264,16 @@ impl ClassIndicator {
         &self,
         word_start: usize,
         word_end: usize,
-        result: &mut Vec<(usize, ResolvedTranslation)>,
+        result: &mut Vec<(usize, ResolvedTranslation, EmitKind)>,
     ) {
         if word_end - word_start == 1 {
             if let Some(t) = &self.emphletter {
-                result.push((word_start, t.clone()));
+                result.push((word_start, t.clone(), EmitKind::Unordered));
                 return;
             }
         }
         if let Some(t) = &self.begemphword {
-            result.push((word_start, t.clone()));
+            result.push((word_start, t.clone(), EmitKind::Unordered));
         }
         // No endemphword: word ends at a space/boundary, so terminator is implicit.
     }
@@ -265,24 +285,24 @@ impl ClassIndicator {
         run_start: usize,
         run_end: usize,
         words: &[(usize, usize)],
-        result: &mut Vec<(usize, ResolvedTranslation)>,
+        result: &mut Vec<(usize, ResolvedTranslation, EmitKind)>,
     ) {
         let total_chars: usize = words.iter().map(|(s, e)| e - s).sum();
 
         if total_chars == 1 {
             if let Some(t) = &self.emphletter {
-                result.push((words[0].0, t.clone()));
+                result.push((words[0].0, t.clone(), EmitKind::Unordered));
                 return;
             }
         }
 
         if let Some(t) = &self.begemphword {
-            result.push((run_start, t.clone()));
+            result.push((run_start, t.clone(), EmitKind::Unordered));
             // endemphword is only needed when emphasis ends mid-word (the next
             // character is not a word boundary and not end-of-string).
             if let Some(end_t) = &self.endemphword {
                 if run_end < chars.len() && !self.is_emphasis_word_separator(chars[run_end]) {
-                    result.push((run_end, end_t.clone()));
+                    result.push((run_end, end_t.clone(), EmitKind::Unordered));
                 }
             }
             return;
@@ -290,12 +310,12 @@ impl ClassIndicator {
 
         // Phrase-only class (e.g. underline): no word indicator, use phrase indicators.
         if let Some(t) = &self.begemphphrase {
-            result.push((run_start, t.clone()));
+            result.push((run_start, t.clone(), EmitKind::Unordered));
             // Phrase indicators always need explicit closing; emit at run_end
             // unless we're at end-of-string.
             if let Some(end_t) = &self.endemphphrase {
                 if run_end < chars.len() {
-                    result.push((run_end, end_t.clone()));
+                    result.push((run_end, end_t.clone(), EmitKind::Unordered));
                 }
             }
         }
@@ -309,17 +329,21 @@ impl ClassIndicator {
 #[derive(Debug)]
 pub struct IndicatorBuilder {
     classes: HashMap<String, ClassIndicator>,
+    /// Tracks emphclass declaration order so the built `Indicator` preserves it.
+    class_order: Vec<String>,
 }
 
 impl IndicatorBuilder {
     pub fn new() -> Self {
-        Self { classes: HashMap::new() }
+        Self { classes: HashMap::new(), class_order: Vec::new() }
     }
 
     fn class_mut(&mut self, name: &str) -> &mut ClassIndicator {
-        self.classes
-            .entry(name.to_string())
-            .or_insert_with(|| ClassIndicator::new(name.to_string()))
+        if !self.classes.contains_key(name) {
+            self.class_order.push(name.to_string());
+            self.classes.insert(name.to_string(), ClassIndicator::new(name.to_string()));
+        }
+        self.classes.get_mut(name).unwrap()
     }
 
     pub fn emphclass(&mut self, name: &str) {
@@ -374,10 +398,10 @@ impl IndicatorBuilder {
         self.class_mut(name).noemphchars = chars.chars().collect();
     }
 
-    pub fn build(self) -> Option<Indicator> {
-        let classes: Vec<ClassIndicator> = self
-            .classes
-            .into_values()
+    pub fn build(mut self) -> Option<Indicator> {
+        let classes: Vec<ClassIndicator> = self.class_order
+            .into_iter()
+            .filter_map(|name| self.classes.remove(&name))
             .filter(|c| c.is_indicating())
             .collect();
         if classes.is_empty() { None } else { Some(Indicator { classes }) }
@@ -398,18 +422,59 @@ impl Indicator {
     /// Position `n` (where `n = input.chars().count()`) is valid and used for
     /// translations that must appear after all input characters (e.g. `endemph`
     /// at end of string).
+    ///
+    /// When multiple emphasis classes emit indicators at the same position the
+    /// output is sorted to respect the liblouis stack rule:
+    /// * Opens at the same position: the class whose run ends **latest** opens
+    ///   first (it is the "outermost" bracket).  Tiebreaker: last-defined class
+    ///   opens first.
+    /// * Closes at the same position: sorted in the inverse of the open order,
+    ///   i.e. the class whose run ends **earliest** closes first.  Tiebreaker:
+    ///   first-defined class closes first.
     pub fn precompute(
         &self,
         input: &str,
         spans: &[EmphasisSpan],
     ) -> Vec<(usize, ResolvedTranslation)> {
         let chars: Vec<char> = input.chars().collect();
-        let mut result: Vec<(usize, ResolvedTranslation)> = Vec::new();
-        for class in &self.classes {
+
+        // Collect tagged events: (position, translation, kind, class_idx).
+        // class_idx reflects emphclass declaration order (guaranteed by IndicatorBuilder).
+        let mut events: Vec<(usize, ResolvedTranslation, EmitKind, usize)> = Vec::new();
+        for (class_idx, class) in self.classes.iter().enumerate() {
             let active = class.active_positions(&chars, spans);
-            class.emit(&chars, &active, &mut result);
+            let mut raw: Vec<(usize, ResolvedTranslation, EmitKind)> = Vec::new();
+            class.emit(&chars, &active, &mut raw);
+            for (pos, trans, kind) in raw {
+                events.push((pos, trans, kind, class_idx));
+            }
         }
-        result
+
+        // Stable-sort so that same-position, same-kind events keep their relative
+        // order unless the rules require a reordering.
+        events.sort_by(|a, b| {
+            use std::cmp::Ordering;
+            let pos_ord = a.0.cmp(&b.0);
+            if pos_ord != Ordering::Equal {
+                return pos_ord;
+            }
+            match (&a.2, &b.2) {
+                // Opens at same position: later run_end first, then higher class_idx first.
+                (EmitKind::Open { run_end: re_a }, EmitKind::Open { run_end: re_b }) => {
+                    re_b.cmp(re_a).then(b.3.cmp(&a.3))
+                }
+                // Closes at same position: later open (higher emit_start) closes first
+                // (= inverse of open order).  Tiebreaker: lower class_idx first
+                // (first-defined closes first, matching emphclass definition order).
+                (EmitKind::Close { emit_start: es_a }, EmitKind::Close { emit_start: es_b }) => {
+                    es_b.cmp(es_a).then(a.3.cmp(&b.3))
+                }
+                // All other combinations: preserve original order.
+                _ => Ordering::Equal,
+            }
+        });
+
+        events.into_iter().map(|(pos, trans, _, _)| (pos, trans)).collect()
     }
 }
 
