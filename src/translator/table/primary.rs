@@ -263,8 +263,37 @@ impl PrimaryTable {
     ) -> Result<Self, TranslationError> {
         let mut builder = PrimaryTableBuilder::new();
 
-        // decpoint and hyphen take precedence over other character definition rules, so insert them
-        // first
+        // In literary braille tables, digit and litdigit serve distinct roles:
+        //
+        //   digit    — defines the "computer" dot pattern for a digit character, primarily
+        //              used for *backward* translation (matching a dot pattern back to a digit).
+        //              Some tables (e.g. digits6DotsPlusDot6.uti) add an extra dot so the
+        //              pattern is unambiguous in backward translation.
+        //
+        //   litdigit — defines the *literary* dot pattern used in *forward* translation when
+        //              the numeric indicator (numsign) is active.  Tables that target literary
+        //              braille include a separate litdigit file alongside the digit file.
+        //
+        // When both are defined for the same character (a common pattern), litdigit must win
+        // for forward translation.  We collect the set of characters that have a litdigit rule
+        // so that we can skip the digit rule for those characters in the forward direction.
+        let litdigit_chars: std::collections::HashSet<char> = if direction == Direction::Forward {
+            rules
+                .iter()
+                .filter_map(|r| {
+                    if let Rule::Litdigit { character, .. } = &r.rule {
+                        Some(*character)
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        } else {
+            std::collections::HashSet::new()
+        };
+
+        // decpoint and hyphen take precedence over other character definition rules, so insert
+        // them first
         for rule in rules {
             match &rule.rule {
                 Rule::Decpoint {
@@ -298,7 +327,11 @@ impl PrimaryTable {
                 Rule::Digit {
                     character, dots, ..
                 } => {
-                    builder.insert_character(*character, &dots.to_string(), direction, rule);
+                    // Skip forward translation when a litdigit rule exists for this character;
+                    // the litdigit rule is handled below and takes precedence.
+                    if !litdigit_chars.contains(character) {
+                        builder.insert_character(*character, &dots.to_string(), direction, rule);
+                    }
                 }
                 Rule::Litdigit {
                     character, dots, ..
