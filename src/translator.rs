@@ -17,6 +17,7 @@ mod indication;
 mod options;
 mod match_pattern;
 mod pipeline;
+mod position_constraints;
 mod regexp;
 mod swap;
 mod table;

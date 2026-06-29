@@ -4,15 +4,12 @@
 //!
 //! - Emits the numsign translation at the first digit of a numeric run.
 //! - Emits the non-numsign translation at the first non-numeric terminating character.
-//! - Sets [`BehaviourFlag::DontContract`] at every position inside a numeric run to suppress
-//!   contraction rules.
 
 use crate::{
     parser::AnchoredRule,
     translator::{ResolvedTranslation, TranslationStage},
 };
 
-use super::events::{BehaviourFlag, BehaviourFlags};
 use std::collections::HashSet;
 
 /// A builder for [`Indicator`]
@@ -95,16 +92,13 @@ pub struct Indicator {
 }
 
 impl Indicator {
-    /// Returns sparse `(position, translation)` pairs and a dense per-position
-    /// flags vec of `n` elements (`n = input.chars().count()`).
-    pub fn precompute(&self, input: &str) -> (Vec<(usize, ResolvedTranslation)>, Vec<BehaviourFlags>) {
+    /// Returns sparse `(position, translation)` pairs.
+    pub fn precompute(&self, input: &str) -> Vec<(usize, ResolvedTranslation)> {
         let chars: Vec<char> = input.chars().collect();
-        let n = chars.len();
         let mut translations: Vec<(usize, ResolvedTranslation)> = Vec::new();
-        let mut flags: Vec<BehaviourFlags> = vec![BehaviourFlags::empty(); n];
 
         if self.start_translation.is_none() {
-            return (translations, flags);
+            return translations;
         }
 
         let mut in_numeric = false;
@@ -118,23 +112,15 @@ impl Indicator {
                     if let Some(t) = &self.start_translation {
                         translations.push((pos, t.clone()));
                     }
-                    flags[pos].insert(BehaviourFlag::DontContract);
                 }
-                (true, true) => {
-                    flags[pos].insert(BehaviourFlag::DontContract);
-                }
-                (false, true) if self.extra_numeric_chars.contains(&c) => {
-                    flags[pos].insert(BehaviourFlag::DontContract);
-                }
+                (true, true) => {}
+                (false, true) if self.extra_numeric_chars.contains(&c) => {}
                 (false, true)
                     if self.extra_numeric_chars.is_empty()
                         && self.mid_numeric_chars.contains(&c)
                         && chars
                             .get(pos + 1)
-                            .is_some_and(|nc| self.numeric_chars.contains(nc)) =>
-                {
-                    flags[pos].insert(BehaviourFlag::DontContract);
-                }
+                            .is_some_and(|nc| self.numeric_chars.contains(nc)) => {}
                 (false, true) => {
                     in_numeric = false;
                     if self.terminating_chars.contains(&c) {
@@ -146,7 +132,7 @@ impl Indicator {
             }
         }
 
-        (translations, flags)
+        translations
     }
 }
 
@@ -160,8 +146,10 @@ mod tests {
         AnchoredRule::new(RuleParser::new(s).rule().unwrap(), None, 0)
     }
 
-    fn dont_contract(f: &[BehaviourFlags]) -> Vec<bool> {
-        f.iter().map(|fl| fl.contains(BehaviourFlag::DontContract)).collect()
+    fn pairs(t: &[(usize, ResolvedTranslation)]) -> Vec<(usize, String)> {
+        t.iter()
+            .map(|(pos, r)| (*pos, r.output().to_string()))
+            .collect()
     }
 
     #[test]
@@ -172,12 +160,10 @@ mod tests {
         builder.numericnocontchars("abc");
         let indicator = builder.build().unwrap();
 
-        let (t, f) = indicator.precompute("ab12 a");
         assert_eq!(
-            t.iter().map(|(pos, r)| (*pos, r.output().to_string())).collect::<Vec<_>>(),
-            vec![(2, "⠼".to_string())],
+            pairs(&indicator.precompute("ab12 a")),
+            vec![(2, "⠼".to_string())]
         );
-        assert_eq!(dont_contract(&f), vec![false, false, true, true, false, false]);
     }
 
     #[test]
@@ -189,11 +175,9 @@ mod tests {
         builder.numericnocontchars("abc");
         let indicator = builder.build().unwrap();
 
-        let (t, f) = indicator.precompute("ab12a");
         assert_eq!(
-            t.iter().map(|(pos, r)| (*pos, r.output().to_string())).collect::<Vec<_>>(),
+            pairs(&indicator.precompute("ab12a")),
             vec![(2, "⠼".to_string()), (4, "⠰".to_string())],
         );
-        assert_eq!(dont_contract(&f), vec![false, false, true, true, false]);
     }
 }

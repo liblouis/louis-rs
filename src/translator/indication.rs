@@ -20,10 +20,8 @@
 
 use crate::text_attribute::TextAttributes;
 use crate::translator::ResolvedTranslation;
-use events::BehaviourFlags;
 
 pub mod emphasis;
-pub mod events;
 pub mod lettersign;
 pub mod nocontract;
 pub mod numeric;
@@ -43,26 +41,14 @@ pub struct Indicators(Vec<Indicator>);
 
 /// The result of pre-computing indications for a given input.
 ///
-/// `translations` holds per-position braille translations to emit, indexed by
+/// Holds per-position braille translations to emit, indexed by
 /// character position (with one extra slot at index `n` for translations that
 /// must appear after all input characters, e.g. `endemph` at end of string).
-///
-/// `flags` holds per-position [`BehaviourFlags`] that gate rule selection, such
-/// as [`events::BehaviourFlag::DontContract`] for numeric runs.
-pub struct PrecomputedIndications {
-    translations: Vec<Vec<ResolvedTranslation>>,
-    flags: Vec<BehaviourFlags>,
-}
+pub struct PrecomputedIndications(Vec<Vec<ResolvedTranslation>>);
 
 impl PrecomputedIndications {
     pub fn translations_at(&self, pos: usize) -> Vec<ResolvedTranslation> {
-        self.translations.get(pos).cloned().unwrap_or_default()
-    }
-
-    pub fn dont_contract_at(&self, pos: usize) -> bool {
-        self.flags
-            .get(pos)
-            .is_some_and(|f| f.contains(events::BehaviourFlag::DontContract))
+        self.0.get(pos).cloned().unwrap_or_default()
     }
 }
 
@@ -73,44 +59,22 @@ impl Indicators {
 
     pub fn precompute(&self, input: &str, typeforms: &[TextAttributes]) -> PrecomputedIndications {
         let n = input.chars().count();
-        let mut translations: Vec<Vec<ResolvedTranslation>> = vec![vec![]; n + 1];
-        let mut flags: Vec<BehaviourFlags> = vec![BehaviourFlags::empty(); n];
+        let mut indications: Vec<Vec<ResolvedTranslation>> = vec![vec![]; n + 1];
 
         for indicator in &self.0 {
-            match indicator {
-                Indicator::Emphasis(i) => {
-                    for (pos, t) in i.precompute(input, typeforms) {
-                        translations[pos].push(t);
-                    }
-                }
-                Indicator::Numeric(i) => {
-                    let (pairs, f) = i.precompute(input);
-                    for (pos, t) in pairs {
-                        translations[pos].push(t);
-                    }
-                    for (pos, flag) in f.into_iter().enumerate() {
-                        flags[pos] |= flag;
-                    }
-                }
-                Indicator::Uppercase(i) => {
-                    for (pos, t) in i.precompute(input) {
-                        translations[pos].push(t);
-                    }
-                }
-                Indicator::LetterSign(i) => {
-                    for (pos, t) in i.precompute(input) {
-                        translations[pos].push(t);
-                    }
-                }
-                Indicator::NoContract(i) => {
-                    for (pos, t) in i.precompute(input) {
-                        translations[pos].push(t);
-                    }
-                }
+            let pairs: Vec<(usize, ResolvedTranslation)> = match indicator {
+                Indicator::Emphasis(i) => i.precompute(input, typeforms),
+                Indicator::Numeric(i) => i.precompute(input),
+                Indicator::Uppercase(i) => i.precompute(input),
+                Indicator::LetterSign(i) => i.precompute(input),
+                Indicator::NoContract(i) => i.precompute(input),
+            };
+            for (pos, t) in pairs {
+                indications[pos].push(t);
             }
         }
 
-        PrecomputedIndications { translations, flags }
+        PrecomputedIndications(indications)
     }
 }
 

@@ -40,7 +40,7 @@ fn name_to_attribute(name: &str) -> TextAttribute {
         "trans3" => TextAttribute::TransNote3,
         "trans4" => TextAttribute::TransNote4,
         "trans5" => TextAttribute::TransNote5,
-        _ => todo!("unknown emphasis class name: {name}"),
+        _ => TextAttribute::Emph4, //TODO
     }
 }
 

@@ -10,12 +10,13 @@ use crate::{
     Direction,
     parser::{AnchoredRule, Braille, CharacterClass, HasNocross, HasPrecedence, fallback},
     translator::{
-        CharacterDefinition, ResolvedTranslation, Rule, TranslationError, TranslationStage,
-        TranslationOptions,
+        CharacterDefinition, ResolvedTranslation, Rule, TranslationError, TranslationOptions,
+        TranslationStage,
         context_pattern::{ContextPatterns, ContextPatternsBuilder},
         effect::Environment,
         indication::{Indicator, Indicators, emphasis, lettersign, nocontract, numeric, uppercase},
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
+        position_constraints::{Constrainer, ConstrainerBuilder, PositionConstraints},
         table::TableContext,
         translation::TranslationSubset,
         trie::{Boundary, Transition, Trie},
@@ -64,6 +65,7 @@ pub struct PrimaryTable {
     nocross_trie: Trie,
     hyphenator: Option<Standard>,
     indicators: Indicators,
+    constrainer: Option<Constrainer>,
     direction: Direction,
 }
 
@@ -82,6 +84,7 @@ struct PrimaryTableBuilder {
     lettersign_indicator: lettersign::IndicatorBuilder,
     nocontract_indicator: nocontract::IndicatorBuilder,
     emphasis_indicator: emphasis::IndicatorBuilder,
+    constrainer_builder: ConstrainerBuilder,
 }
 
 impl PrimaryTableBuilder {
@@ -99,6 +102,7 @@ impl PrimaryTableBuilder {
             lettersign_indicator: lettersign::IndicatorBuilder::new(),
             nocontract_indicator: nocontract::IndicatorBuilder::new(),
             emphasis_indicator: emphasis::IndicatorBuilder::new(),
+            constrainer_builder: ConstrainerBuilder::new(),
         }
     }
 
@@ -169,6 +173,7 @@ impl PrimaryTableBuilder {
             match_patterns: self.match_patterns.build(),
             context_patterns: self.context_patterns.build(),
             indicators: Indicators::new(indicators),
+            constrainer: self.constrainer_builder.build(),
         }
     }
 }
@@ -260,6 +265,7 @@ impl PrimaryTable {
                 }
                 Rule::Numericmodechars { chars } => {
                     builder.numeric_indicator.numericmodechars(chars);
+                    builder.constrainer_builder.numericmodechars(chars);
                 }
                 Rule::Capsletter { dots, .. } => {
                     builder
@@ -551,6 +557,7 @@ impl PrimaryTable {
                 ),
                 Rule::Midnum { chars, dots, .. } => {
                     builder.numeric_indicator.midnum(chars);
+                    builder.constrainer_builder.midnum(chars);
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots.to_string(),
@@ -651,11 +658,16 @@ impl PrimaryTable {
                 _ => (),
             }
         }
-        builder.numeric_indicator.numeric_characters(
-            ctx.character_classes()
-                .get(&CharacterClass::Litdigit)
-                .unwrap_or_default(),
-        );
+        let numeric_chars = ctx
+            .character_classes()
+            .get(&CharacterClass::Litdigit)
+            .unwrap_or_default();
+        builder
+            .numeric_indicator
+            .numeric_characters(numeric_chars.clone());
+        builder
+            .constrainer_builder
+            .numeric_characters(numeric_chars);
         builder.uppercase_indicator.uppercase_characters(
             ctx.character_classes()
                 .get(&CharacterClass::Uppercase)
@@ -760,6 +772,11 @@ impl PrimaryTable {
         let mut char_pos: usize = 0;
 
         let indications = self.indicators.precompute(input, options.typeforms());
+        let constraints = self
+            .constrainer
+            .as_ref()
+            .map(|c| c.precompute(input))
+            .unwrap_or_else(PositionConstraints::empty);
 
         loop {
             translations.extend(indications.translations_at(char_pos));
@@ -796,7 +813,7 @@ impl PrimaryTable {
             candidates.extend(current);
 
             // inside a numeric run, suppress multi-character contractions
-            if indications.dont_contract_at(char_pos) {
+            if constraints.dont_contract_at(char_pos) {
                 candidates.retain(|t| t.length() <= 1);
             }
 
