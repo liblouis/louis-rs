@@ -19,11 +19,10 @@ back into liblouis maintenance.
 
 The re-implementation is in alpha state.
 
-That said, the `louis` binary currently, passes around 82% of the
-liblouis test suite for forward translation successfully. Backward
-translation works in principle but not much of it has really been
-implemented, so the success rate for both forward and backward
-translation is less, namely 71%.
+That said, the `louis` binary currently passes around 80% of the
+liblouis test suite (both forward and backward translation combined).
+Forward translation is more complete; backward translation works in
+principle but a number of features are not yet implemented.
 
 The library and its API has not been worked out and is not stable.
 
