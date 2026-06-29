@@ -324,6 +324,11 @@ impl YAMLParser<'_> {
 
     fn test(&mut self) -> Result<Test, ParseError> {
         self.sequence_start()?;
+        // FIXME: liblouis test files use \xHHHH escape sequences inside single-quoted YAML
+        // strings. Single-quoted strings are literal in standard YAML and should not be
+        // unescaped, so the test files are technically wrong. We apply the unescaping anyway
+        // to stay compatible with liblouis's own test runner. The real fix is to update the
+        // liblouis test files to use double-quoted strings or literal Unicode characters.
         let mut input = unescape(&self.scalar()?, EscapingContext::Default)?;
         let mut expected = unescape(&self.scalar()?, EscapingContext::Default)?;
         // the YAML format is way too flexible: You can have two
