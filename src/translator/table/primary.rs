@@ -20,7 +20,7 @@ use crate::{
             uppercase,
         },
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
-        position_constraints::{Constrainer, ConstrainerBuilder, PositionConstraints},
+        position_constraints::{ComputerBrailleConstrainer, Constrainer, Constrainers, NumericConstrainerBuilder},
         table::TableContext,
         translation::TranslationSubset,
         trie::{Boundary, Transition, Trie},
@@ -122,7 +122,7 @@ pub struct PrimaryTable {
     nocross_trie: Trie,
     hyphenator: Option<Standard>,
     indicators: Indicators,
-    constrainer: Option<Constrainer>,
+    constrainers: Constrainers,
     /// Detects compbrl-triggered computer braille regions.
     compbrl_scanner: Option<CompbrlScanner>,
     direction: Direction,
@@ -145,7 +145,7 @@ struct PrimaryTableBuilder {
     nocontract_indicator: nocontract::IndicatorBuilder,
     emphasis_indicator: emphasis::IndicatorBuilder,
     computer_braille_indicator: computer_braille::IndicatorBuilder,
-    constrainer_builder: ConstrainerBuilder,
+    numeric_constrainer: NumericConstrainerBuilder,
     compbrl_triggers: Vec<String>,
 }
 
@@ -166,7 +166,7 @@ impl PrimaryTableBuilder {
             nocontract_indicator: nocontract::IndicatorBuilder::new(),
             emphasis_indicator: emphasis::IndicatorBuilder::new(),
             computer_braille_indicator: computer_braille::IndicatorBuilder::new(),
-            constrainer_builder: ConstrainerBuilder::new(),
+            numeric_constrainer: NumericConstrainerBuilder::new(),
             compbrl_triggers: Vec::new(),
         }
     }
@@ -244,7 +244,15 @@ impl PrimaryTableBuilder {
             match_patterns: self.match_patterns.build(),
             context_patterns: self.context_patterns.build(),
             indicators: Indicators::new(indicators),
-            constrainer: self.constrainer_builder.build(),
+            constrainers: Constrainers::new(
+                [
+                    Some(Constrainer::ComputerBraille(ComputerBrailleConstrainer {})),
+                    self.numeric_constrainer.build().map(Constrainer::Numeric),
+                ]
+                .into_iter()
+                .flatten()
+                .collect(),
+            ),
             compbrl_scanner: if triggers.is_empty() {
                 None
             } else {
@@ -374,7 +382,7 @@ impl PrimaryTable {
                 }
                 Rule::Numericmodechars { chars } => {
                     builder.numeric_indicator.numericmodechars(chars);
-                    builder.constrainer_builder.numericmodechars(chars);
+                    builder.numeric_constrainer.numericmodechars(chars);
                 }
                 Rule::Capsletter { dots, .. } => {
                     builder
@@ -723,7 +731,7 @@ impl PrimaryTable {
                 ),
                 Rule::Midnum { chars, dots, .. } => {
                     builder.numeric_indicator.midnum(chars);
-                    builder.constrainer_builder.midnum(chars);
+                    builder.numeric_constrainer.midnum(chars);
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots.to_string(),
@@ -832,7 +840,7 @@ impl PrimaryTable {
             .numeric_indicator
             .numeric_characters(numeric_chars.clone());
         builder
-            .constrainer_builder
+            .numeric_constrainer
             .numeric_characters(numeric_chars);
         builder.uppercase_indicator.uppercase_characters(
             ctx.character_classes()
@@ -948,11 +956,7 @@ impl PrimaryTable {
             .unwrap_or_else(|| options.emphasis().to_vec());
 
         let indications = self.indicators.precompute(input, &enriched_spans);
-        let constraints = self
-            .constrainer
-            .as_ref()
-            .map(|c| c.precompute(input, &enriched_spans))
-            .unwrap_or_else(|| PositionConstraints::from_spans(input, &enriched_spans));
+        let constraints = self.constrainers.precompute(input, &enriched_spans);
 
         loop {
             translations.extend(indications.translations_at(char_pos));
