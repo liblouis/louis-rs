@@ -57,7 +57,7 @@
 - [X] Handle implicit braille definitions, i.e. '='
 - [X] Table resolution based on metadata
 - [X] Handle undefined characters similarly to liblouis
-- [-] Normalize input text to a canonical Unicode form
+- [ ] Normalize input text to a canonical Unicode form
   - Input is currently normalized to NFC at the start of the
     translation pipeline. This fixes tables that define rules for
     precomposed characters (e.g. pt-pt-g1.utb), but breaks tables
@@ -76,10 +76,10 @@
   - reduce the regexp opcode operand to only 32 bit
 
 * Known gaps
-- hyphen (nocross)
-- indication + backtranslation
-- indication
-- computer braille
-- inpos + outpos mapping
-- typeform (emphasis input)
-- regexp infinite loop
+- [ ] hyphen (nocross)
+- [ ] indication + backtranslation
+- [X] indication
+- [X] computer braille
+- [ ] inpos + outpos mapping
+- [X] typeform (emphasis input)
+- [ ] regexp infinite loop
