@@ -632,7 +632,7 @@ impl PrimaryTable {
                         rule,
                     )
                 }
-                Rule::Midword { chars, dots, .. } | Rule::Partword { chars, dots, .. } => {
+                Rule::Midword { chars, dots, .. } => {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
@@ -647,6 +647,37 @@ impl PrimaryTable {
                         TranslationStage::Main,
                         rule,
                     )
+                }
+                Rule::Partword { chars, dots, .. } => {
+                    // partword fires when preceded OR followed by a letter (i.e. not standalone).
+                    // Two insertions cover all non-standalone positions:
+                    // 1. preceded by word char (midword + endword)
+                    // 2. at word-start followed by word char (begword)
+                    let dots = ctx
+                        .character_definitions()
+                        .braille_to_unicode(dots, chars)?;
+                    builder.get_trie_mut(rule).insert(
+                        chars,
+                        &dots,
+                        Some(Transition::Start(Boundary::NotWord)),
+                        None,
+                        direction,
+                        rule.precedence(),
+                        vec![],
+                        TranslationStage::Main,
+                        rule,
+                    );
+                    builder.get_trie_mut(rule).insert(
+                        chars,
+                        &dots,
+                        Some(Transition::Start(Boundary::Word)),
+                        Some(Transition::End(Boundary::NotWord)),
+                        direction,
+                        rule.precedence(),
+                        vec![],
+                        TranslationStage::Main,
+                        rule,
+                    );
                 }
                 Rule::Midendword { chars, dots, .. } => {
                     let dots = ctx
@@ -1300,13 +1331,14 @@ mod tests {
         let table =
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
                 .unwrap();
-        assert_eq!(table.translate("bar"), "⠂⠁⠐"); // bar should not be contracted
-        assert_eq!(table.translate("foobar"), "⠉⠂⠁⠐"); // bar should not be contracted
-        assert_eq!(table.translate("foobar."), "⠉⠂⠁⠐⠠"); // bar should not be contracted
-        assert_eq!(table.translate("foobarfoo"), "⠉⠑⠉"); // bar should be contracted
-        assert_eq!(table.translate("foobar foo"), "⠉⠂⠁⠐⠀⠉"); // bar should not be contracted
-        assert_eq!(table.translate("foobar. foo"), "⠉⠂⠁⠐⠠⠀⠉"); // bar should not be contracted
-        assert_eq!(table.translate("foo bar foo"), "⠉⠀⠂⠁⠐⠀⠉"); // bar should not be contracted
+        // partword fires when either side is a letter (not standalone)
+        assert_eq!(table.translate("bar"), "⠂⠁⠐"); // standalone: NOT contracted
+        assert_eq!(table.translate("foobar"), "⠉⠑"); // word-end (prev=letter): contracted
+        assert_eq!(table.translate("foobar."), "⠉⠑⠠"); // word-end (prev=letter): contracted
+        assert_eq!(table.translate("foobarfoo"), "⠉⠑⠉"); // midword: contracted
+        assert_eq!(table.translate("foobar foo"), "⠉⠑⠀⠉"); // word-end: contracted
+        assert_eq!(table.translate("foobar. foo"), "⠉⠑⠠⠀⠉"); // word-end: contracted
+        assert_eq!(table.translate("foo bar foo"), "⠉⠀⠂⠁⠐⠀⠉"); // standalone: NOT contracted
     }
 
     #[test]
