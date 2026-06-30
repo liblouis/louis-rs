@@ -9,10 +9,10 @@ use hyphenation::{Hyphenator, Load, Standard};
 use crate::{
     Direction,
     emphasis::EmphasisSpan,
-    parser::{AnchoredRule, Braille, CharacterClass, HasNocross, HasPrecedence, fallback},
+    parser::{AnchoredRule, Braille, CharacterClass, CharacterClasses, HasNocross, HasPrecedence, WithClass as ParsedClass, fallback},
     translator::{
         CharacterDefinition, ResolvedTranslation, Rule, TranslationError, TranslationOptions,
-        TranslationStage,
+        TranslationStage, WithClass, WithClasses,
         context_pattern::{ContextPatterns, ContextPatternsBuilder},
         effect::Environment,
         indication::{
@@ -482,6 +482,7 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
+                        vec![],
                         TranslationStage::Main,
                         rule,
                     );
@@ -519,14 +520,28 @@ impl PrimaryTable {
                         None,
                         direction,
                         rule.precedence(),
+                        vec![],
                         TranslationStage::Main,
                         rule,
                     );
                 }
-                Rule::Always { chars, dots, .. } => {
+                Rule::Always { chars, dots, with_classes, .. } => {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
+                    let with_classes: WithClasses = with_classes
+                        .iter()
+                        .filter_map(|wc| match wc {
+                            ParsedClass::Before { class } => ctx
+                                .character_classes
+                                .get(&CharacterClass::from(class.as_str()))
+                                .map(WithClass::Before),
+                            ParsedClass::After { class } => ctx
+                                .character_classes
+                                .get(&CharacterClass::from(class.as_str()))
+                                .map(WithClass::After),
+                        })
+                        .collect();
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
@@ -534,6 +549,7 @@ impl PrimaryTable {
                         None,
                         direction,
                         rule.precedence(),
+                        with_classes,
                         TranslationStage::Main,
                         rule,
                     );
@@ -559,6 +575,7 @@ impl PrimaryTable {
                         None,
                         direction,
                         rule.precedence(),
+                        vec![],
                         TranslationStage::Main,
                         rule,
                     );
@@ -574,6 +591,7 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
+                        vec![],
                         TranslationStage::Main,
                         rule,
                     );
@@ -589,6 +607,7 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::NotWord)),
                         direction,
                         rule.precedence(),
+                        vec![],
                         TranslationStage::Main,
                         rule,
                     )
@@ -604,6 +623,7 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::NotWord)),
                         direction,
                         rule.precedence(),
+                        vec![],
                         TranslationStage::Main,
                         rule,
                     )
@@ -619,6 +639,7 @@ impl PrimaryTable {
                         None,
                         direction,
                         rule.precedence(),
+                        vec![],
                         TranslationStage::Main,
                         rule,
                     );
@@ -634,6 +655,7 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
+                        vec![],
                         TranslationStage::Main,
                         rule,
                     );
@@ -651,6 +673,7 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
+                        vec![],
                         TranslationStage::Main,
                         rule,
                     );
@@ -661,6 +684,7 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
+                        vec![],
                         TranslationStage::Main,
                         rule,
                     );
@@ -678,6 +702,7 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
+                        vec![],
                         TranslationStage::Main,
                         rule,
                     );
@@ -688,6 +713,7 @@ impl PrimaryTable {
                         None,
                         direction,
                         rule.precedence(),
+                        vec![],
                         TranslationStage::Main,
                         rule,
                     );
@@ -703,6 +729,7 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::NotWord)),
                         direction,
                         rule.precedence(),
+                        vec![],
                         TranslationStage::Main,
                         rule,
                     );
@@ -715,6 +742,7 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
+                        vec![],
                         TranslationStage::Main,
                         rule,
                     )
@@ -726,6 +754,7 @@ impl PrimaryTable {
                     Some(Transition::Start(Boundary::Number)),
                     direction,
                     rule.precedence(),
+                    vec![],
                     TranslationStage::Main,
                     rule,
                 ),
@@ -739,6 +768,7 @@ impl PrimaryTable {
                         Some(Transition::Start(Boundary::Number)),
                         direction,
                         rule.precedence(),
+                        vec![],
                         TranslationStage::Main,
                         rule,
                     );
@@ -754,6 +784,7 @@ impl PrimaryTable {
                         None,
                         direction,
                         rule.precedence(),
+                        vec![],
                         TranslationStage::Main,
                         rule,
                     );
@@ -772,6 +803,7 @@ impl PrimaryTable {
                             Some(Transition::End(Boundary::PunctuationWord)),
                             direction,
                             rule.precedence(),
+                            vec![],
                             TranslationStage::Main,
                             rule,
                         );
@@ -791,6 +823,7 @@ impl PrimaryTable {
                             Some(Transition::End(Boundary::Punctuation)),
                             direction,
                             rule.precedence(),
+                            vec![],
                             TranslationStage::Main,
                             rule,
                         );
@@ -893,6 +926,29 @@ impl PrimaryTable {
             .partition(|t| t.offset() == 0)
     }
 
+    /// Returns `false` if `t` has a `before`/`after` class constraint that is not satisfied
+    /// at this position.
+    fn satisfies_class_constraints(
+        &self,
+        t: &ResolvedTranslation,
+        remaining: &str,
+        prev: Option<char>,
+    ) -> bool {
+        for wc in t.with_classes() {
+            let satisfied = match wc {
+                WithClass::Before(chars) => remaining
+                    .chars()
+                    .nth(t.length())
+                    .is_some_and(|c| chars.contains(&c)),
+                WithClass::After(chars) => prev.is_some_and(|c| chars.contains(&c)),
+            };
+            if !satisfied {
+                return false;
+            }
+        }
+        true
+    }
+
     fn word_hyphenates(&self, input: &str) -> bool {
         match &self.hyphenator {
             Some(hyphenator) => !hyphenator.opportunities(&input.to_lowercase()).is_empty(),
@@ -991,6 +1047,9 @@ impl PrimaryTable {
             let (current, delayed) = self.partition_delayed_translations(delayed_translations);
             delayed_translations = delayed;
             candidates.extend(current);
+
+            // filter out candidates whose before/after class constraint is not satisfied
+            candidates.retain(|t| self.satisfies_class_constraints(t, chars.as_str(), prev));
 
             // inside a numeric run, suppress multi-character contractions
             if constraints.dont_contract_at(char_pos) {

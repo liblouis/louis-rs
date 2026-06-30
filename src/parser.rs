@@ -122,7 +122,7 @@ pub enum Direction {
     Backward,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum WithClass {
     Before { class: String },
     After { class: String },
@@ -608,6 +608,7 @@ pub enum Rule {
         chars: String,
         dots: Braille,
         constraints: Constraints,
+        with_classes: Vec<WithClass>,
     },
     Repeated {
         chars: String,
@@ -1552,7 +1553,7 @@ impl<'a> RuleParser<'a> {
 
     pub fn rule(&mut self) -> Result<Rule, ParseError> {
         let constraints = self.constraints();
-        let _classes = self.with_classes();
+        let classes = self.with_classes().unwrap_or_default().unwrap_or_default();
         let matches = self.with_matches();
         let opcode = self.opcode()?;
         let rule = match opcode {
@@ -2024,6 +2025,7 @@ impl<'a> RuleParser<'a> {
                 chars: self.chars()?,
                 dots: self.dots()?,
                 constraints,
+                with_classes: classes,
             },
             Opcode::Repeated => {
                 fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;

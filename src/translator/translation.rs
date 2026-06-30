@@ -1,7 +1,21 @@
+use std::collections::HashSet;
+
 use crate::{
     parser::{AnchoredRule, Precedence},
     translator::{effect::Effect, swap::Swapper},
 };
+
+/// A resolved `before`/`after` class constraint from a `before CLASS always` or
+/// `after CLASS always` rule, with the class name already resolved to its character set.
+#[derive(Debug, Clone, PartialEq)]
+pub enum WithClass {
+    /// The character immediately after the match must be in this set.
+    Before(HashSet<char>),
+    /// The character immediately before the match must be in this set.
+    After(HashSet<char>),
+}
+
+pub type WithClasses = Vec<WithClass>;
 
 /// A translation can have multiple stages.
 ///
@@ -133,6 +147,7 @@ impl Resolve for UnresolvedTranslation {
             stage: self.stage,
             effects: self.effects,
             origin: self.origin,
+            with_classes: vec![],
         }
     }
 }
@@ -183,6 +198,9 @@ pub struct ResolvedTranslation {
     offset: usize,
     /// The precedence of a translation based on the precedence of the originating translation rule
     precedence: Precedence,
+    /// `before`/`after` class constraints from `before CLASS always` / `after CLASS always` rules.
+    /// Empty means no constraint.
+    with_classes: Vec<WithClass>,
     /// The stage in which this translation is applied
     stage: TranslationStage,
     /// A possibly empty list of [`Effect`]s. These will be applied to the
@@ -234,7 +252,12 @@ impl ResolvedTranslation {
             stage,
             effects: Vec::default(),
             origin: origin.into(),
+            with_classes: vec![],
         }
+    }
+
+    pub fn with_class_constraint(self, with_classes: Vec<WithClass>) -> Self {
+        Self { with_classes, ..self }
     }
 
     pub fn input(&self) -> String {
@@ -263,6 +286,10 @@ impl ResolvedTranslation {
 
     pub fn origin(&self) -> Option<AnchoredRule> {
         self.origin.clone()
+    }
+
+    pub fn with_classes(&self) -> &[WithClass] {
+        &self.with_classes
     }
 
     pub fn stage(&self) -> TranslationStage {

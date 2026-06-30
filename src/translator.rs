@@ -4,7 +4,7 @@ use std::{collections::HashMap, io};
 
 pub use options::{TranslationMode, TranslationModes, TranslationOptions};
 pub use pipeline::TranslationPipeline;
-pub use translation::{ResolvedTranslation, TranslationStage};
+pub use translation::{ResolvedTranslation, TranslationStage, WithClass, WithClasses};
 
 use crate::{
     Direction,

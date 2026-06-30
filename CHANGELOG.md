@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - ReleaseDate
 
+### Fixed
+- `before CLASS always` and `after CLASS always` constraints are now
+  enforced during translation. Previously the class name was parsed but
+  silently discarded, causing rules such as
+  `before MalayalamVowel always VA 1236-1` to fire unconditionally and
+  produce spurious braille cells. This fix improves Malayalam from 2% to
+  91% and Punjabi from 31% to 95% on their respective test suites.
+
 ## [0.2.8] - 2026-06-29
 
 ### Fixed

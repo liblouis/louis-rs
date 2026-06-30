@@ -9,6 +9,8 @@ use crate::{
     translator::TranslationStage,
 };
 
+use super::{WithClass, WithClasses};
+
 use super::ResolvedTranslation;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -95,6 +97,7 @@ impl Trie {
             None,
             direction,
             precedence,
+            vec![],
             stage,
             origin,
         );
@@ -108,6 +111,7 @@ impl Trie {
         after: Option<Transition>,
         direction: Direction,
         precedence: Precedence,
+        with_classes: WithClasses,
         stage: TranslationStage,
         origin: &AnchoredRule,
     ) {
@@ -161,33 +165,24 @@ impl Trie {
         if let Some(translation) = &current_node.translation {
             // this node already contains a translation
             if precedence > translation.precedence() {
-                current_node.translation = Some(ResolvedTranslation::new(
-                    from,
-                    to,
-                    from.chars().count(),
-                    stage,
-                    origin.clone(),
-                ));
+                current_node.translation = Some(
+                    ResolvedTranslation::new(from, to, from.chars().count(), stage, origin.clone())
+                        .with_class_constraint(with_classes),
+                );
             } else if cfg!(feature = "backwards_compatibility") {
                 // first rule wins, so nothing to insert
             } else {
                 // last rule wins
-                current_node.translation = Some(ResolvedTranslation::new(
-                    from,
-                    to,
-                    length,
-                    stage,
-                    origin.clone(),
-                ));
+                current_node.translation = Some(
+                    ResolvedTranslation::new(from, to, length, stage, origin.clone())
+                        .with_class_constraint(with_classes),
+                );
             }
         } else {
-            current_node.translation = Some(ResolvedTranslation::new(
-                from,
-                to,
-                length,
-                stage,
-                origin.clone(),
-            ));
+            current_node.translation = Some(
+                ResolvedTranslation::new(from, to, length, stage, origin.clone())
+                    .with_class_constraint(with_classes),
+            );
         }
     }
 
@@ -332,6 +327,7 @@ mod tests {
             None,
             Direction::Forward,
             Precedence::Default,
+            vec![],
             TranslationStage::Main,
             &rule,
         );
@@ -342,6 +338,7 @@ mod tests {
             None,
             Direction::Forward,
             Precedence::Default,
+            vec![],
             TranslationStage::Main,
             &rule,
         );
@@ -352,6 +349,7 @@ mod tests {
             None,
             Direction::Forward,
             Precedence::Default,
+            vec![],
             TranslationStage::Main,
             &rule,
         );
@@ -362,6 +360,7 @@ mod tests {
             None,
             Direction::Forward,
             Precedence::Default,
+            vec![],
             TranslationStage::Main,
             &rule,
         );
@@ -372,6 +371,7 @@ mod tests {
             None,
             Direction::Forward,
             Precedence::Default,
+            vec![],
             TranslationStage::Main,
             &rule,
         );
@@ -421,6 +421,7 @@ mod tests {
             Some(Transition::End(Boundary::Word)),
             Direction::Forward,
             Precedence::Default,
+            vec![],
             TranslationStage::Main,
             &rule,
         );
@@ -452,6 +453,7 @@ mod tests {
             Some(Transition::End(Boundary::NotWord)),
             Direction::Forward,
             Precedence::Default,
+            vec![],
             TranslationStage::Main,
             &rule,
         );
@@ -485,6 +487,7 @@ mod tests {
             None,
             Direction::Forward,
             Precedence::Default,
+            vec![],
             TranslationStage::Main,
             &rule,
         );
@@ -518,6 +521,7 @@ mod tests {
             Some(Transition::End(Boundary::NotWord)),
             Direction::Forward,
             Precedence::Default,
+            vec![],
             TranslationStage::Main,
             &rule,
         );
@@ -553,6 +557,7 @@ mod tests {
             Some(Transition::End(Boundary::WordNumber)),
             Direction::Forward,
             Precedence::Default,
+            vec![],
             TranslationStage::Main,
             &rule,
         );
@@ -587,6 +592,7 @@ mod tests {
             Some(Transition::End(Boundary::Word)),
             Direction::Forward,
             Precedence::Default,
+            vec![],
             TranslationStage::Main,
             &rule,
         );
@@ -621,6 +627,7 @@ mod tests {
             None,
             Direction::Forward,
             Precedence::Default,
+            vec![],
             TranslationStage::Main,
             &rule,
         );
@@ -654,6 +661,7 @@ mod tests {
             Some(Transition::End(Boundary::PunctuationWord)),
             Direction::Forward,
             Precedence::Default,
+            vec![],
             TranslationStage::Main,
             &rule,
         );
@@ -683,6 +691,7 @@ mod tests {
             None,
             Direction::Forward,
             Precedence::Default,
+            vec![],
             TranslationStage::Main,
             &rule,
         );

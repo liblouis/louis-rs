@@ -55,6 +55,7 @@ impl IndicatorBuilder {
                     Some(Transition::End(Boundary::Word)),
                     Direction::Forward,
                     Precedence::Default,
+                    vec![],
                     TranslationStage::Main,
                     &origin,
                 );
