@@ -2,14 +2,12 @@
 
 use std::collections::HashMap;
 
-use unicode_normalization::UnicodeNormalization;
-
 use crate::{
     parser::{AnchoredRule, CharacterClasses, Direction, Precedence},
     translator::TranslationStage,
 };
 
-use super::{WithClass, WithClasses};
+use super::WithClasses;
 
 use super::ResolvedTranslation;
 
@@ -120,17 +118,6 @@ impl Trie {
             Direction::Forward => (from, to),
             Direction::Backward => (to, from),
         };
-        // Normalize rule patterns to NFC so they match NFC-normalized input. A rule defined
-        // as "e\u{0302}" normalizes to "ê" (U+00EA), which is the same form the input takes
-        // after the pipeline's NFC normalization step. Braille codepoints (U+2800–U+28FF) have
-        // no canonical decompositions, so backward-translation patterns are unaffected.
-        // TODO: if `from` changed after normalization (from_normalized != original from), emit a
-        // warning — the table author wrote a rule using a form that differs from how input will
-        // arrive, which is almost certainly unintentional (e.g. a precomposed character that
-        // becomes a base+combining sequence, or a standalone combining mark that can never be
-        // reached because the pipeline already composed it with its base character).
-        let from_normalized: String = from.nfc().collect();
-        let from = from_normalized.as_str();
         // FIXME: if `from` is an empty string (or `to` in case of Direction::Backward) there will
         // be an infinite loop in the translation as the returned Translation will not consume any
         // input. So for now just panic if that is the case. You could argue that it is a programmer

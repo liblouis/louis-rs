@@ -1,5 +1,3 @@
-use unicode_normalization::UnicodeNormalization;
-
 use crate::{
     Direction,
     parser::{AnchoredRule, HasDirection, Rule},
@@ -135,7 +133,7 @@ impl TranslationPipeline {
     }
 
     pub fn translate(&self, input: &str) -> String {
-        let mut result: String = input.nfc().collect();
+        let mut result = input.to_string();
         for step in &self.steps {
             result = step.translate(&result);
         }
@@ -143,7 +141,7 @@ impl TranslationPipeline {
     }
 
     pub fn translate_with_options(&self, input: &str, options: &TranslationOptions) -> String {
-        let mut result: String = input.nfc().collect();
+        let mut result = input.to_string();
         for step in &self.steps {
             result = step.translate_with_options(&result, options);
         }
