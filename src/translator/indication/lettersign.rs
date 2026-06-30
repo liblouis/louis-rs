@@ -8,10 +8,12 @@
 //! position it checks whether the remaining input matches a known contraction and, if so, emits the
 //! lettersign translation at that position.
 //!
-//! In addition, even without explicit contraction entries, the indicator fires for any isolated
-//! single letter (a letter not adjacent to other letters) or for any letter immediately following a
-//! digit.  These are the contexts where a standalone letter cell could be misread as a braille
-//! symbol.  The `noletsignafter` opcode lists characters after which the indicator must not fire.
+//! In addition, the indicator fires for any isolated letter (not followed by another letter)
+//! whose preceding character is neither a space nor a letter — for example, a letter at string
+//! start before punctuation (`b:`), or a Tamil consonant followed by a vowel sign or virama.
+//! Letters preceded by a space (word boundary) or by another letter (tail of a letter run) do not fire.
+//! The `noletsignafter` and `noletsignbefore` opcodes list characters adjacent to a letter that
+//! suppress the indicator.
 
 use std::collections::HashSet;
 
@@ -87,8 +89,8 @@ impl IndicatorBuilder {
         .flatten()
         .collect();
 
-        let numeric_chars: HashSet<char> = cc
-            .get(&CharacterClass::Digit)
+        let space_chars: HashSet<char> = cc
+            .get(&CharacterClass::Space)
             .into_iter()
             .flatten()
             .collect();
@@ -97,7 +99,7 @@ impl IndicatorBuilder {
             contractions: trie,
             start_translation,
             letter_chars,
-            numeric_chars,
+            space_chars,
             noletsignafter_chars: self.noletsignafter_chars,
             noletsignbefore_chars: self.noletsignbefore_chars,
         })
@@ -126,8 +128,8 @@ pub struct Indicator {
     start_translation: ResolvedTranslation,
     /// Characters that are considered letters (Letter + Uppercase + Lowercase classes).
     letter_chars: HashSet<char>,
-    /// Characters that are considered digits (Digit class).
-    numeric_chars: HashSet<char>,
+    /// Characters that are considered spaces (Space class).
+    space_chars: HashSet<char>,
     /// After these characters the letsign must NOT be inserted.
     noletsignafter_chars: HashSet<char>,
     /// Before these characters the letsign must NOT be inserted.
@@ -143,12 +145,15 @@ impl Indicator {
         // Collect positions where letsign should fire (deduplicated via HashSet).
         let mut fire: HashSet<usize> = HashSet::new();
 
-        // ── Isolation-based letsign ────────────────────────────────────────────
-        // Fires for any letter that:
-        //   • is not preceded by another letter, AND
-        //   • is not preceded by a noletsignafter character, AND
-        //   • is either isolated (not followed by another letter)
-        //     OR immediately follows a digit.
+        // ── Isolation-based letsign ───────────────────────────────────────────
+        // Fires for a letter that is isolated (not followed by another letter)
+        // AND whose preceding character, if any, is neither a space nor a letter.
+        // This covers:
+        //   - letters at string start before punctuation (e.g. `b:`, prev=None)
+        //   - Tamil consonants followed by vowel signs or virama (prev=digit/punct)
+        //   - letters that immediately follow a digit or other non-letter, non-space char
+        // It does NOT fire when preceded by a space (word boundary: "a", "I'm")
+        // or by another letter (tail of a word: `:bc` — 'c' has prev='b').
         for (i, &c) in chars.iter().enumerate() {
             if !self.letter_chars.contains(&c) {
                 continue;
@@ -156,10 +161,6 @@ impl Indicator {
             let prev = if i > 0 { Some(chars[i - 1]) } else { None };
             let next = if i + 1 < n { Some(chars[i + 1]) } else { None };
 
-            // Skip if the preceding character is already a letter (part of a word).
-            if prev.is_some_and(|p| self.letter_chars.contains(&p)) {
-                continue;
-            }
             // Skip if preceded by a noletsignafter character.
             if prev.is_some_and(|p| self.noletsignafter_chars.contains(&p)) {
                 continue;
@@ -170,9 +171,10 @@ impl Indicator {
             }
 
             let isolated = next.map_or(true, |n| !self.letter_chars.contains(&n));
-            let after_digit = prev.is_some_and(|p| self.numeric_chars.contains(&p));
-
-            if isolated || after_digit {
+            let prev_is_space_or_letter = prev.is_some_and(|p| {
+                self.space_chars.contains(&p) || self.letter_chars.contains(&p)
+            });
+            if isolated && !prev_is_space_or_letter {
                 fire.insert(i);
             }
         }
@@ -243,10 +245,7 @@ mod tests {
         }
         let cc = CharacterClasses::new(&[
             (CharacterClass::Letter, letter_chars),
-            (
-                CharacterClass::Digit,
-                &['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
-            ),
+            (CharacterClass::Space, &[' ']),
         ]);
         let ctx = TableContext::new(cc, CharacterClasses::default(), Default::default());
         builder.build(&ctx).unwrap()
@@ -269,44 +268,35 @@ mod tests {
     }
 
     #[test]
-    fn isolated_letter_fires_letsign() {
+    fn isolated_letter_fires_when_not_preceded_by_space() {
         let indicator = build_indicator(&['a', 'b', 'c'], &[], None);
-        // single isolated letter at start
+        // isolated letter at string start (prev=None): fires
         assert_eq!(
             pairs(&indicator.precompute("b:")),
             vec![(0, "⠠".to_string())]
         );
-        // single letter at end
+        // isolated letter after punctuation (prev is non-space, non-letter): fires
         assert_eq!(
-            pairs(&indicator.precompute("x,b")),
-            vec![(2, "⠠".to_string())]
+            pairs(&indicator.precompute("2b")),
+            vec![(1, "⠠".to_string())]
         );
+        // isolated letter preceded by space: does NOT fire
+        assert_eq!(pairs(&indicator.precompute("x b")), vec![]);
+        assert_eq!(pairs(&indicator.precompute(" b ")), vec![]);
+        // letter followed by another letter (not isolated): does NOT fire
+        assert_eq!(pairs(&indicator.precompute(":bc")), vec![]);
         // multi-letter word: no letsign
         assert_eq!(pairs(&indicator.precompute("abc")), vec![]);
     }
 
     #[test]
-    fn letter_after_digit_fires_letsign() {
-        let indicator = build_indicator(&['a', 'b', 'c'], &[], None);
+    fn noletsignafter_suppresses_isolation_letsign() {
+        let indicator = build_indicator(&['a', 'b', 'c'], &['2'], None);
+        // noletsignafter '2' suppresses the letsign for "2b"
+        assert_eq!(pairs(&indicator.precompute("2b")), vec![]);
+        // other non-space, non-letter chars still trigger it
         assert_eq!(
-            pairs(&indicator.precompute("2b")),
-            vec![(1, "⠠".to_string())]
-        );
-        // letter after digit followed by more letters still fires
-        assert_eq!(
-            pairs(&indicator.precompute("2bc")),
-            vec![(1, "⠠".to_string())]
-        );
-    }
-
-    #[test]
-    fn noletsignafter_suppresses_letsign() {
-        let indicator = build_indicator(&['a', 'b', 'c'], &['.'], None);
-        // After '.', no letsign
-        assert_eq!(pairs(&indicator.precompute(".b")), vec![]);
-        // After other chars, still fires
-        assert_eq!(
-            pairs(&indicator.precompute(",b")),
+            pairs(&indicator.precompute("3b")),
             vec![(1, "⠠".to_string())]
         );
     }

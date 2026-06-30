@@ -35,6 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   rejected. Constraints now check against the corresponding braille
   character set when translating backward, recovering Hindi backward
   translation from 53.8% to 87.1%.
+- Letter-sign isolation was incorrectly firing for isolated letters
+  preceded by another letter (e.g. the final letter of `:bc`) or
+  preceded by a space (word boundary, e.g. the "I" in "I'm"). The
+  condition is now: fire only when the letter is isolated (not followed
+  by another letter) AND its preceding character, if any, is neither a
+  space nor a letter. This restores correct en-gb-g1 translation while
+  preserving the Tamil letsign behaviour (letters after digits, hyphens,
+  or other non-letter, non-space characters still fire).
 
 ## [0.2.8] - 2026-06-29
 
