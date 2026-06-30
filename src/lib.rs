@@ -25,7 +25,7 @@ assert_eq!(braille, "⠓⠑⠇⠇⠕⠀⠺⠕⠗⠇⠙");
 
 */
 
-pub mod emphasis;
+mod emphasis;
 mod parser;
 mod test;
 mod translator;
