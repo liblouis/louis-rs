@@ -164,10 +164,14 @@ impl CharacterClasses {
         }
     }
 
-    /// Return true if character `c` is at the boundary between a word and punctuation
+    /// Return true if character `c` is at the boundary between a word (or digit) and punctuation.
+    ///
+    /// Digits are treated equivalently to word characters here so that `postpunc` rules fire
+    /// correctly after numeric sequences (e.g. `postpunc , 2` should give the midnum dot pattern
+    /// for `,` in `1,`).
     pub fn is_word_punctuation(&self, previous: Option<char>, c: Option<char>) -> bool {
         match (previous, c) {
-            (Some(c1), Some(c2)) => self.is_word(c1) && self.is_punctuation(c2),
+            (Some(c1), Some(c2)) => (self.is_word(c1) || self.is_numeric(c1)) && self.is_punctuation(c2),
             (_, _) => false,
         }
     }
@@ -389,7 +393,7 @@ mod tests {
         assert!(!ctx.is_word_punctuation(Some(')'), None));
         assert!(!ctx.is_word_punctuation(Some('('), Some('(')));
         assert!(!ctx.is_word_punctuation(Some(')'), Some('(')));
-        assert!(!ctx.is_word_punctuation(Some('1'), Some('(')));
+        assert!(ctx.is_word_punctuation(Some('1'), Some('(')));  // digit before punctuation fires postpunc
         assert!(!ctx.is_word_punctuation(Some('('), Some('a')));
         assert!(!ctx.is_word_punctuation(Some('('), Some('1')));
         assert!(!ctx.is_word_punctuation(Some('('), Some(')')));

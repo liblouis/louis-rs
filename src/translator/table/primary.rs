@@ -308,6 +308,12 @@ impl PrimaryTable {
                     character, dots, ..
                 } => {
                     builder.insert_character(*character, &dots.to_string(), direction, rule);
+                    // A decimal point extends the numeric run: digits that follow it
+                    // must not get a second numsign.  Registering it as a midnum
+                    // character achieves this via the numeric indicator and constrainer.
+                    let s = character.to_string();
+                    builder.numeric_indicator.midnum(&s);
+                    builder.numeric_constrainer.midnum(&s);
                 }
                 Rule::Hyphen {
                     character, dots, ..
@@ -468,6 +474,12 @@ impl PrimaryTable {
                     builder
                         .lettersign_indicator
                         .letsign(&dots.to_string(), rule);
+                }
+                Rule::Noletsignafter { chars } => {
+                    builder.lettersign_indicator.noletsignafter(chars);
+                }
+                Rule::Noletsignbefore { chars } => {
+                    builder.lettersign_indicator.noletsignbefore(chars);
                 }
                 // Treat a contraction rule similarly to a word rule. Pretend the dots have been
                 // defined implicitely
