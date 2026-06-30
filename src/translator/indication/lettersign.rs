@@ -15,8 +15,9 @@
 
 use std::collections::HashSet;
 
-use crate::parser::{CharacterClass, CharacterClasses};
+use crate::parser::CharacterClass;
 use crate::translator::TranslationStage;
+use crate::translator::table::TableContext;
 use crate::translator::trie::{Boundary, Transition};
 use crate::{
     parser::{AnchoredRule, Direction, Precedence},
@@ -47,7 +48,7 @@ impl IndicatorBuilder {
     }
 
     /// Build an [`Indicator`]
-    pub fn build(self, ctx: CharacterClasses) -> Option<Indicator> {
+    pub fn build(self, ctx: &TableContext) -> Option<Indicator> {
         if self.lettersign.is_none() {
             if !self.contractions.is_empty() {
                 warn!("Table contains contractions but no letsign");
@@ -64,7 +65,8 @@ impl IndicatorBuilder {
             origin.clone(),
         );
 
-        let mut trie = Trie::new().with_context(ctx.clone());
+        let cc = ctx.character_classes();
+        let mut trie = Trie::new().with_context(cc.clone());
         for (contraction, _origin) in self.contractions {
             trie.insert(
                 &contraction,
@@ -86,12 +88,12 @@ impl IndicatorBuilder {
             CharacterClass::Lowercase,
         ]
         .iter()
-        .filter_map(|class| ctx.get(class))
+        .filter_map(|class| cc.get(class))
         .flatten()
         .collect();
 
         let numeric_chars: HashSet<char> =
-            ctx.get(&CharacterClass::Digit).into_iter().flatten().collect();
+            cc.get(&CharacterClass::Digit).into_iter().flatten().collect();
 
         Some(Indicator {
             contractions: trie,
@@ -214,8 +216,8 @@ impl Indicator {
 mod tests {
     use super::*;
     use crate::{
-        parser::{CharacterClass, RuleParser},
-        translator::TranslationStage,
+        parser::{CharacterClass, CharacterClasses, RuleParser},
+        translator::{TranslationStage, table::TableContext},
     };
 
     fn rule(rule: &str) -> AnchoredRule {
@@ -241,11 +243,12 @@ mod tests {
         if let Some(c) = contraction {
             builder.contraction(c, &rule(&format!("contraction {}", c)));
         }
-        let ctx = CharacterClasses::new(&[
+        let cc = CharacterClasses::new(&[
             (CharacterClass::Letter, letter_chars),
             (CharacterClass::Digit, &['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']),
         ]);
-        builder.build(ctx).unwrap()
+        let ctx = TableContext::new(cc, CharacterClasses::default(), Default::default());
+        builder.build(&ctx).unwrap()
     }
 
     #[test]
@@ -298,8 +301,9 @@ mod tests {
         builder.letsign("⠠", &rule("letsign 6"));
         builder.contraction("ab", &rule("contraction ab"));
         builder.contraction("cd", &rule("contraction cd"));
-        let ctx = CharacterClasses::new(&[(CharacterClass::Letter, &['a', 'b', 'c', 'd'])]);
-        let indicator = builder.build(ctx).unwrap();
+        let cc = CharacterClasses::new(&[(CharacterClass::Letter, &['a', 'b', 'c', 'd'])]);
+        let ctx = TableContext::new(cc, CharacterClasses::default(), Default::default());
+        let indicator = builder.build(&ctx).unwrap();
 
         assert_eq!(pairs(&indicator.precompute("aa")), vec![]);
         assert_eq!(

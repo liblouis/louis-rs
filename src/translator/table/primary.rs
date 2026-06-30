@@ -34,6 +34,7 @@ use crate::{
 #[derive(Debug, Clone)]
 struct CompbrlScanner {
     triggers: Vec<String>,
+    character_classes: CharacterClasses,
 }
 
 impl CompbrlScanner {
@@ -53,12 +54,14 @@ impl CompbrlScanner {
             if matched {
                 // Expand to surrounding word: scan backward for whitespace.
                 let mut word_start = pos;
-                while word_start > 0 && !chars[word_start - 1].is_whitespace() {
+                while word_start > 0
+                    && !self.character_classes.is_whitespace(chars[word_start - 1])
+                {
                     word_start -= 1;
                 }
                 // Scan forward for whitespace.
                 let mut word_end = pos;
-                while word_end < n && !chars[word_end].is_whitespace() {
+                while word_end < n && !self.character_classes.is_whitespace(chars[word_end]) {
                     word_end += 1;
                 }
                 let new_span = EmphasisSpan::new("computer_braille", word_start..word_end);
@@ -217,14 +220,16 @@ impl PrimaryTableBuilder {
                 .build()
                 .map(Indicator::ComputerBraille),
             // Emphasis must be before capsletter so begemphword appears before capsletter.
-            self.emphasis_indicator.build().map(Indicator::Emphasis),
+            self.emphasis_indicator
+                .build(ctx)
+                .map(Indicator::Emphasis),
             self.numeric_indicator.build().map(Indicator::Numeric),
             self.lettersign_indicator
-                .build(ctx.character_classes.clone())
+                .build(ctx)
                 .map(Indicator::LetterSign),
             self.uppercase_indicator.build().map(Indicator::Uppercase),
             self.nocontract_indicator
-                .build(ctx.character_classes.clone())
+                .build(ctx)
                 .map(Indicator::NoContract),
         ]
         .into_iter()
@@ -256,7 +261,10 @@ impl PrimaryTableBuilder {
             compbrl_scanner: if triggers.is_empty() {
                 None
             } else {
-                Some(CompbrlScanner { triggers })
+                Some(CompbrlScanner {
+                    triggers,
+                    character_classes: ctx.character_classes.clone(),
+                })
             },
         }
     }

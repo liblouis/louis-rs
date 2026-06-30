@@ -14,8 +14,8 @@
 //! indicator](crate::translator::indication::lettersign::Indicator). In liblouis they do not seem
 //! to have exactly the same behaviour. Find a way to merge them.
 
-use crate::parser::CharacterClasses;
 use crate::translator::TranslationStage;
+use crate::translator::table::TableContext;
 use crate::translator::trie::{Boundary, Transition};
 use crate::{
     parser::{AnchoredRule, Direction, Precedence},
@@ -42,7 +42,7 @@ impl IndicatorBuilder {
     }
 
     /// Build an [`Indicator`]
-    pub fn build(self, ctx: CharacterClasses) -> Option<Indicator> {
+    pub fn build(self, ctx: &TableContext) -> Option<Indicator> {
         if !self.contractions.is_empty() && self.nocontractsign.is_some() {
             let (nocontractsign, origin) = self.nocontractsign.unwrap();
             let start_translation = ResolvedTranslation::new(
@@ -52,7 +52,7 @@ impl IndicatorBuilder {
                 TranslationStage::Main,
                 origin.clone(),
             );
-            let mut trie = Trie::new().with_context(ctx);
+            let mut trie = Trie::new().with_context(ctx.character_classes().clone());
             for (contraction, _origin) in self.contractions {
                 trie.insert(
                     &contraction,
@@ -129,8 +129,8 @@ impl Indicator {
 mod tests {
     use super::*;
     use crate::{
-        parser::{CharacterClass, RuleParser},
-        translator::TranslationStage,
+        parser::{CharacterClass, CharacterClasses, RuleParser},
+        translator::{TranslationStage, table::TableContext},
     };
 
     fn rule(rule: &str) -> AnchoredRule {
@@ -144,14 +144,19 @@ mod tests {
             .collect()
     }
 
+    fn make_ctx(letter_chars: &[char]) -> TableContext {
+        let cc = CharacterClasses::new(&[(CharacterClass::Letter, letter_chars)]);
+        TableContext::new(cc, CharacterClasses::default(), Default::default())
+    }
+
     #[test]
     fn indicator() {
         let mut builder = IndicatorBuilder::new();
         builder.nocontractsign("⡀", &rule("nocontractsign 7"));
         builder.contraction("ab", &rule("contraction ab"));
         builder.contraction("cd", &rule("contraction cd"));
-        let ctx = CharacterClasses::new(&[(CharacterClass::Letter, &['a', 'b', 'c', 'd'])]);
-        let indicator = builder.build(ctx).unwrap();
+        let ctx = make_ctx(&['a', 'b', 'c', 'd']);
+        let indicator = builder.build(&ctx).unwrap();
         assert_eq!(indicator.next("aa".into(), None), None);
         assert_eq!(
             indicator.next("ab".into(), None),
@@ -181,8 +186,8 @@ mod tests {
         builder.nocontractsign("⡀", &rule("nocontractsign 7"));
         builder.contraction("ab", &rule("contraction ab"));
         builder.contraction("cd", &rule("contraction cd"));
-        let ctx = CharacterClasses::new(&[(CharacterClass::Letter, &['a', 'b', 'c', 'd'])]);
-        let indicator = builder.build(ctx).unwrap();
+        let ctx = make_ctx(&['a', 'b', 'c', 'd']);
+        let indicator = builder.build(&ctx).unwrap();
 
         assert_eq!(pairs(&indicator.precompute("aa")), vec![]);
         assert_eq!(

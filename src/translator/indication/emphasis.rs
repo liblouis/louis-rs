@@ -11,8 +11,8 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     emphasis::EmphasisSpan,
-    parser::{AnchoredRule, Position},
-    translator::{ResolvedTranslation, TranslationStage},
+    parser::{AnchoredRule, CharacterClasses, Position},
+    translator::{ResolvedTranslation, TranslationStage, table::TableContext},
 };
 
 fn make_translation(dots: &str, origin: &AnchoredRule) -> ResolvedTranslation {
@@ -67,13 +67,15 @@ struct ClassIndicator {
     /// run stays active across them (so no indicator is closed and reopened), but
     /// they still act as word separators — each word on either side gets its own
     /// `begemphword`. Think of a hyphen in "well-known": one emphasis run, two
-    /// word indicators. Default (empty set) falls back to Unicode whitespace.
+    /// word indicators. Default (empty set) falls back to the table's space class.
     emphmodechars: HashSet<char>,
     /// Characters that cannot carry emphasis (noemphchars).
     ///
     /// Their positions are forced inactive even when inside a span, splitting the
     /// span into separate runs on either side.
     noemphchars: HashSet<char>,
+    /// Table character classes, used to determine word separators.
+    character_classes: CharacterClasses,
 }
 
 impl ClassIndicator {
@@ -91,12 +93,13 @@ impl ClassIndicator {
             len_phrase: 4,
             emphmodechars: HashSet::new(),
             noemphchars: HashSet::new(),
+            character_classes: CharacterClasses::default(),
         }
     }
 
     fn is_emphasis_word_separator(&self, ch: char) -> bool {
         if self.emphmodechars.is_empty() {
-            ch.is_whitespace()
+            self.character_classes.is_whitespace(ch)
         } else {
             self.emphmodechars.contains(&ch)
         }
@@ -412,11 +415,15 @@ impl IndicatorBuilder {
         self.class_mut(name).noemphchars = chars.chars().collect();
     }
 
-    pub fn build(mut self) -> Option<Indicator> {
+    pub fn build(mut self, ctx: &TableContext) -> Option<Indicator> {
         let classes: Vec<ClassIndicator> = self
             .class_order
             .into_iter()
-            .filter_map(|name| self.classes.remove(&name))
+            .filter_map(|name| {
+                let mut c = self.classes.remove(&name)?;
+                c.character_classes = ctx.character_classes().clone();
+                Some(c)
+            })
             .filter(|c| c.is_indicating())
             .collect();
         if classes.is_empty() {
@@ -505,6 +512,7 @@ mod tests {
     use super::*;
     use crate::emphasis::EmphasisSpan;
     use crate::parser::{AnchoredRule, RuleParser};
+    use crate::translator::table::TableContext;
 
     fn rule(s: &str) -> AnchoredRule {
         AnchoredRule::new(RuleParser::new(s).rule().unwrap(), None, 0)
@@ -522,7 +530,7 @@ mod tests {
     fn emphletter_for_single_char() {
         let mut b = IndicatorBuilder::new();
         b.emphletter("italic", "⠨", &rule("always a 1"));
-        let indicator = b.build().unwrap();
+        let indicator = b.build(&TableContext::default()).unwrap();
 
         let result = indicator.precompute("hello", &[EmphasisSpan::new("italic", 2..3)]);
         assert_eq!(outputs_at(&result, 2), vec!["⠨"]);
@@ -533,7 +541,7 @@ mod tests {
     fn begemphword_for_whole_word() {
         let mut b = IndicatorBuilder::new();
         b.begemphword("italic", "⠨", &rule("always a 1"));
-        let indicator = b.build().unwrap();
+        let indicator = b.build(&TableContext::default()).unwrap();
 
         let result = indicator.precompute("hello", &[EmphasisSpan::new("italic", 0..5)]);
         assert_eq!(outputs_at(&result, 0), vec!["⠨"]);
@@ -544,7 +552,7 @@ mod tests {
         let mut b = IndicatorBuilder::new();
         b.emphletter("italic", "⠨", &rule("always a 1"));
         b.noemphchars("italic", ",");
-        let indicator = b.build().unwrap();
+        let indicator = b.build(&TableContext::default()).unwrap();
 
         // The comma cannot be emphasized, so "a,b" with a span over all three chars
         // becomes two single-char runs — each gets emphletter.
@@ -559,7 +567,7 @@ mod tests {
         let mut b = IndicatorBuilder::new();
         b.begemphword("italic", "⠨", &rule("always a 1"));
         b.emphmodechars("italic", " -");
-        let indicator = b.build().unwrap();
+        let indicator = b.build(&TableContext::default()).unwrap();
 
         // Without emphmodechars the hyphen would be part of the word, giving one
         // begemphword.  With '-' as a separator, "well" and "known" are two words
