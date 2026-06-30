@@ -164,14 +164,26 @@ impl CharacterClasses {
         }
     }
 
+    pub fn is_sign(&self, c: char) -> bool {
+        self.get(&CharacterClass::Sign)
+            .is_some_and(|class| class.contains(&c))
+    }
+
     /// Return true if character `c` is at the boundary between a word (or digit) and punctuation.
     ///
     /// Digits are treated equivalently to word characters here so that `postpunc` rules fire
     /// correctly after numeric sequences (e.g. `postpunc , 2` should give the midnum dot pattern
     /// for `,` in `1,`).
+    ///
+    /// Sign characters (defined via the `sign` opcode) are also treated as word-like so that
+    /// `postpunc` fires after script-specific combining characters (e.g. Tamil vowel signs
+    /// that end Tamil syllables, making the next punctuation character use postpunc translation).
     pub fn is_word_punctuation(&self, previous: Option<char>, c: Option<char>) -> bool {
         match (previous, c) {
-            (Some(c1), Some(c2)) => (self.is_word(c1) || self.is_numeric(c1)) && self.is_punctuation(c2),
+            (Some(c1), Some(c2)) => {
+                (self.is_word(c1) || self.is_numeric(c1) || self.is_sign(c1))
+                    && self.is_punctuation(c2)
+            }
             (_, _) => false,
         }
     }
@@ -397,6 +409,14 @@ mod tests {
         assert!(!ctx.is_word_punctuation(Some('('), Some('a')));
         assert!(!ctx.is_word_punctuation(Some('('), Some('1')));
         assert!(!ctx.is_word_punctuation(Some('('), Some(')')));
+
+        // sign characters (e.g. Tamil vowel signs) are treated as word-like for postpunc purposes
+        let ctx_sign = CharacterClasses::new(&[
+            (CharacterClass::Sign, &['ை']),
+            (CharacterClass::Punctuation, &[',']),
+        ]);
+        assert!(ctx_sign.is_word_punctuation(Some('ை'), Some(',')));
+        assert!(!ctx_sign.is_word_punctuation(Some(','), Some('ை')));
     }
 
     #[test]
