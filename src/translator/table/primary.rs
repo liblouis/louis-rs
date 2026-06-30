@@ -9,7 +9,10 @@ use hyphenation::{Hyphenator, Load, Standard};
 use crate::{
     Direction,
     emphasis::EmphasisSpan,
-    parser::{AnchoredRule, Braille, CharacterClass, CharacterClasses, HasNocross, HasPrecedence, WithClass as ParsedClass, fallback},
+    parser::{
+        AnchoredRule, Braille, CharacterClass, CharacterClasses, HasNocross, HasPrecedence,
+        WithClass as ParsedClass, fallback,
+    },
     translator::{
         CharacterDefinition, ResolvedTranslation, Rule, TranslationError, TranslationOptions,
         TranslationStage, WithClass, WithClasses,
@@ -20,7 +23,9 @@ use crate::{
             uppercase,
         },
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
-        position_constraints::{ComputerBrailleConstrainer, Constrainer, Constrainers, NumericConstrainerBuilder},
+        position_constraints::{
+            ComputerBrailleConstrainer, Constrainer, Constrainers, NumericConstrainerBuilder,
+        },
         table::TableContext,
         translation::TranslationSubset,
         trie::{Boundary, Transition, Trie},
@@ -54,8 +59,7 @@ impl CompbrlScanner {
             if matched {
                 // Expand to surrounding word: scan backward for whitespace.
                 let mut word_start = pos;
-                while word_start > 0
-                    && !self.character_classes.is_whitespace(chars[word_start - 1])
+                while word_start > 0 && !self.character_classes.is_whitespace(chars[word_start - 1])
                 {
                     word_start -= 1;
                 }
@@ -220,9 +224,7 @@ impl PrimaryTableBuilder {
                 .build()
                 .map(Indicator::ComputerBraille),
             // Emphasis must be before capsletter so begemphword appears before capsletter.
-            self.emphasis_indicator
-                .build(ctx)
-                .map(Indicator::Emphasis),
+            self.emphasis_indicator.build(ctx).map(Indicator::Emphasis),
             self.numeric_indicator.build().map(Indicator::Numeric),
             self.lettersign_indicator
                 .build(ctx)
@@ -545,7 +547,12 @@ impl PrimaryTable {
                         rule,
                     );
                 }
-                Rule::Always { chars, dots, with_classes, .. } => {
+                Rule::Always {
+                    chars,
+                    dots,
+                    with_classes,
+                    ..
+                } => {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;

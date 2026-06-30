@@ -257,7 +257,10 @@ impl ResolvedTranslation {
     }
 
     pub fn with_class_constraint(self, with_classes: Vec<WithClass>) -> Self {
-        Self { with_classes, ..self }
+        Self {
+            with_classes,
+            ..self
+        }
     }
 
     pub fn input(&self) -> String {

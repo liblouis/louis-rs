@@ -57,13 +57,8 @@ impl IndicatorBuilder {
         }
 
         let (lettersign, origin) = self.lettersign.unwrap();
-        let start_translation = ResolvedTranslation::new(
-            "",
-            &lettersign,
-            1,
-            TranslationStage::Main,
-            origin.clone(),
-        );
+        let start_translation =
+            ResolvedTranslation::new("", &lettersign, 1, TranslationStage::Main, origin.clone());
 
         let cc = ctx.character_classes();
         let mut trie = Trie::new().with_context(cc.clone());
@@ -92,8 +87,11 @@ impl IndicatorBuilder {
         .flatten()
         .collect();
 
-        let numeric_chars: HashSet<char> =
-            cc.get(&CharacterClass::Digit).into_iter().flatten().collect();
+        let numeric_chars: HashSet<char> = cc
+            .get(&CharacterClass::Digit)
+            .into_iter()
+            .flatten()
+            .collect();
 
         Some(Indicator {
             contractions: trie,
@@ -245,7 +243,10 @@ mod tests {
         }
         let cc = CharacterClasses::new(&[
             (CharacterClass::Letter, letter_chars),
-            (CharacterClass::Digit, &['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']),
+            (
+                CharacterClass::Digit,
+                &['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+            ),
         ]);
         let ctx = TableContext::new(cc, CharacterClasses::default(), Default::default());
         builder.build(&ctx).unwrap()
@@ -271,9 +272,15 @@ mod tests {
     fn isolated_letter_fires_letsign() {
         let indicator = build_indicator(&['a', 'b', 'c'], &[], None);
         // single isolated letter at start
-        assert_eq!(pairs(&indicator.precompute("b:")), vec![(0, "⠠".to_string())]);
+        assert_eq!(
+            pairs(&indicator.precompute("b:")),
+            vec![(0, "⠠".to_string())]
+        );
         // single letter at end
-        assert_eq!(pairs(&indicator.precompute("x,b")), vec![(2, "⠠".to_string())]);
+        assert_eq!(
+            pairs(&indicator.precompute("x,b")),
+            vec![(2, "⠠".to_string())]
+        );
         // multi-letter word: no letsign
         assert_eq!(pairs(&indicator.precompute("abc")), vec![]);
     }
@@ -281,9 +288,15 @@ mod tests {
     #[test]
     fn letter_after_digit_fires_letsign() {
         let indicator = build_indicator(&['a', 'b', 'c'], &[], None);
-        assert_eq!(pairs(&indicator.precompute("2b")), vec![(1, "⠠".to_string())]);
+        assert_eq!(
+            pairs(&indicator.precompute("2b")),
+            vec![(1, "⠠".to_string())]
+        );
         // letter after digit followed by more letters still fires
-        assert_eq!(pairs(&indicator.precompute("2bc")), vec![(1, "⠠".to_string())]);
+        assert_eq!(
+            pairs(&indicator.precompute("2bc")),
+            vec![(1, "⠠".to_string())]
+        );
     }
 
     #[test]
@@ -292,7 +305,10 @@ mod tests {
         // After '.', no letsign
         assert_eq!(pairs(&indicator.precompute(".b")), vec![]);
         // After other chars, still fires
-        assert_eq!(pairs(&indicator.precompute(",b")), vec![(1, "⠠".to_string())]);
+        assert_eq!(
+            pairs(&indicator.precompute(",b")),
+            vec![(1, "⠠".to_string())]
+        );
     }
 
     #[test]

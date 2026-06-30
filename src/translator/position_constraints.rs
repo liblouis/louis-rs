@@ -131,7 +131,7 @@ impl Constrainer {
         match self {
             Constrainer::Numeric(c) => c.compute(input),
             Constrainer::ComputerBraille(c) => c.compute(input, spans),
-	}
+        }
     }
 }
 
@@ -144,15 +144,14 @@ impl Constrainers {
         Constrainers(constrainers)
     }
 
-    pub fn precompute(
-        &self,
-        input: &str,
-        spans: &[EmphasisSpan],
-    ) -> PositionConstraints {
+    pub fn precompute(&self, input: &str, spans: &[EmphasisSpan]) -> PositionConstraints {
         let n = input.chars().count();
         let mut constraints: Vec<Constraints> = vec![Constraints::empty(); n];
         for constrainer in &self.0 {
-            for (accum, computed) in constraints.iter_mut().zip(constrainer.compute(input, spans)) {
+            for (accum, computed) in constraints
+                .iter_mut()
+                .zip(constrainer.compute(input, spans))
+            {
                 *accum |= computed;
             }
         }
@@ -249,7 +248,9 @@ mod tests {
     #[test]
     fn computer_braille_span_sets_use_comp6() {
         let spans = vec![EmphasisSpan::new("computer_braille", 1..4)];
-        let constrainers = Constrainers::new(vec![Constrainer::ComputerBraille(ComputerBrailleConstrainer {  })]);
+        let constrainers = Constrainers::new(vec![Constrainer::ComputerBraille(
+            ComputerBrailleConstrainer {},
+        )]);
         let c = constrainers.precompute("hello", &spans);
         assert_eq!(use_comp6(&c), vec![false, true, true, true, false]);
         assert_eq!(dont_contract(&c), vec![false, false, false, false, false]);

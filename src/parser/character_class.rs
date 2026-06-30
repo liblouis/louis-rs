@@ -405,7 +405,7 @@ mod tests {
         assert!(!ctx.is_word_punctuation(Some(')'), None));
         assert!(!ctx.is_word_punctuation(Some('('), Some('(')));
         assert!(!ctx.is_word_punctuation(Some(')'), Some('(')));
-        assert!(ctx.is_word_punctuation(Some('1'), Some('(')));  // digit before punctuation fires postpunc
+        assert!(ctx.is_word_punctuation(Some('1'), Some('('))); // digit before punctuation fires postpunc
         assert!(!ctx.is_word_punctuation(Some('('), Some('a')));
         assert!(!ctx.is_word_punctuation(Some('('), Some('1')));
         assert!(!ctx.is_word_punctuation(Some('('), Some(')')));
