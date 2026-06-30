@@ -6,13 +6,20 @@ use crate::{
 };
 
 /// A resolved `before`/`after` class constraint from a `before CLASS always` or
-/// `after CLASS always` rule, with the class name already resolved to its character set.
+/// `after CLASS always` rule, with the class name resolved to both its text and braille character
+/// sets. `text` is used in forward translation; `braille` is used in backward translation.
 #[derive(Debug, Clone, PartialEq)]
 pub enum WithClass {
-    /// The character immediately after the match must be in this set.
-    Before(HashSet<char>),
-    /// The character immediately before the match must be in this set.
-    After(HashSet<char>),
+    /// The character immediately after the match must be in the relevant set.
+    Before {
+        text: HashSet<char>,
+        braille: HashSet<char>,
+    },
+    /// The character immediately before the match must be in the relevant set.
+    After {
+        text: HashSet<char>,
+        braille: HashSet<char>,
+    },
 }
 
 pub type WithClasses = Vec<WithClass>;

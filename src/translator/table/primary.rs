@@ -559,14 +559,20 @@ impl PrimaryTable {
                     let with_classes: WithClasses = with_classes
                         .iter()
                         .filter_map(|wc| match wc {
-                            ParsedClass::Before { class } => ctx
-                                .character_classes
-                                .get(&CharacterClass::from(class.as_str()))
-                                .map(WithClass::Before),
-                            ParsedClass::After { class } => ctx
-                                .character_classes
-                                .get(&CharacterClass::from(class.as_str()))
-                                .map(WithClass::After),
+                            ParsedClass::Before { class } => {
+                                let key = CharacterClass::from(class.as_str());
+                                let text = ctx.character_classes.get(&key)?;
+                                let braille =
+                                    ctx.dots_classes.get(&key).unwrap_or_default();
+                                Some(WithClass::Before { text, braille })
+                            }
+                            ParsedClass::After { class } => {
+                                let key = CharacterClass::from(class.as_str());
+                                let text = ctx.character_classes.get(&key)?;
+                                let braille =
+                                    ctx.dots_classes.get(&key).unwrap_or_default();
+                                Some(WithClass::After { text, braille })
+                            }
                         })
                         .collect();
                     builder.get_trie_mut(rule).insert(
@@ -994,11 +1000,16 @@ impl PrimaryTable {
     ) -> bool {
         for wc in t.with_classes() {
             let satisfied = match wc {
-                WithClass::Before(chars) => remaining
-                    .chars()
-                    .nth(t.length())
-                    .is_some_and(|c| chars.contains(&c)),
-                WithClass::After(chars) => prev.is_some_and(|c| chars.contains(&c)),
+                WithClass::Before { text, braille } => {
+                    let chars =
+                        if self.direction == Direction::Backward { braille } else { text };
+                    remaining.chars().nth(t.length()).is_some_and(|c| chars.contains(&c))
+                }
+                WithClass::After { text, braille } => {
+                    let chars =
+                        if self.direction == Direction::Backward { braille } else { text };
+                    prev.is_some_and(|c| chars.contains(&c))
+                }
             };
             if !satisfied {
                 return false;

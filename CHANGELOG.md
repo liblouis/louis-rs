@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `before MalayalamVowel always VA 1236-1` to fire unconditionally and
   produce spurious braille cells. This fix improves Malayalam from 2% to
   91% and Punjabi from 31% to 95% on their respective test suites.
+- `before`/`after` class constraints now work correctly in backward
+  translation. Previously the constraint was checked against text-side
+  character sets even in backward mode, where the surrounding context
+  consists of braille Unicode cells, so all constrained rules were
+  rejected. Constraints now check against the corresponding braille
+  character set when translating backward, recovering Hindi backward
+  translation from 53.8% to 87.1%.
 
 ## [0.2.8] - 2026-06-29
 
