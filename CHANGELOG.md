@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- `partword` rules now fire when the pattern is preceded or followed by a
+  letter (i.e. anywhere inside or adjacent to a word), matching the liblouis
+  semantics documented as "translates if preceded or followed by a letter".
+  Previously `partword` was compiled identically to `midword`, which required
+  letters on both sides and therefore missed word-end and word-start positions.
+  This fix improves Afrikaans (afr-za-g2) from ~77% to ~90% on its test suite.
+- Unicode NFC normalization is no longer applied to input text or trie patterns.
+  The normalization was causing spurious mismatches for tables that define rules
+  for standalone combining characters (IPA, Hebrew, Yiddish).
+- Whitespace detection now uses the table's own `space` class instead of Rust's
+  built-in `char::is_whitespace()`, which is broader than the braille standard
+  requires. This affects word-separator detection in emphasis indication and
+  computer braille region scanning.
 - `before CLASS always` and `after CLASS always` constraints are now
   enforced during translation. Previously the class name was parsed but
   silently discarded, causing rules such as
