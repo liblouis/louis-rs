@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - ReleaseDate
 
+### Changed
+- The `check` subcommand now runs YAML test files concurrently, and further
+  parallelizes across the individual tests within each file/table
+  combination, using `rayon`. This cuts the wall-clock time of running the
+  full liblouis test suite locally from ~3m30s to ~35s on an 8-core machine,
+  with byte-identical output. Table compilation and translation were already
+  read-only/side-effect-free per file, so no correctness changes were needed.
+
 ### Added
 - Implement `begcaps`/`endcaps` and `begcapsphrase`/`endcapsphrase`/`lencapsphrase`
   caps-passage indication. A passage of two or more (or `lencapsphrase`, if set)

@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::process::exit;
 
 use clap::{Parser, Subcommand};
+use rayon::prelude::*;
 
 mod parser;
 use parser::RuleParser;
@@ -298,58 +299,65 @@ impl YAMLTestResult {
     }
 }
 
+/// Parses and runs a single YAML test file, returning either the test
+/// results or a ready-to-print error message.
+fn check_yaml_file(path: &Path) -> Result<Vec<test::TestResult>, String> {
+    let file =
+        File::open(path).map_err(|e| format!("Could not open yaml file {:?} ({})", path, e))?;
+    let mut parser = YAMLParser::new(file)
+        .map_err(|e| format!("Could not create parser {:?} ({:?})", path, e))?;
+    parser
+        .yaml()
+        .map_err(|e| format!("{}: {}", path.display(), e))
+}
+
 fn check_yaml(paths: Vec<PathBuf>, summary: bool) {
+    // Each YAML file is independent (its own tables, its own tests), so we
+    // run them concurrently and only merge results back together afterwards
+    // in the original order, keeping output deterministic.
+    let outcomes: Vec<_> = paths.par_iter().map(|path| check_yaml_file(path)).collect();
+
     let mut total = YAMLTestResult::default();
     let mut yaml_results: Vec<YAMLTestResult> = Vec::new();
-    for path in paths {
-        match File::open(&path) {
-            Ok(file) => match YAMLParser::new(file) {
-                Ok(mut parser) => match parser.yaml() {
-                    Ok(test_results) => {
-                        let tests = test_results.len();
-                        let successes = test_results.iter().filter(|r| r.is_success()).count();
-                        let failures = test_results.iter().filter(|r| r.is_failure()).count();
-                        let expected_failures = test_results
-                            .iter()
-                            .filter(|r| r.is_expected_failure())
-                            .count();
-                        let unexpected_successes = test_results
-                            .iter()
-                            .filter(|r| r.is_unexpected_success())
-                            .count();
-                        total.update(
-                            tests,
-                            successes,
-                            failures,
-                            expected_failures,
-                            unexpected_successes,
-                        );
-                        yaml_results.push(YAMLTestResult {
-                            yaml_file: path
-                                .file_name()
-                                .map_or("".to_string(), |f| f.to_string_lossy().into_owned()),
-                            tests,
-                            successes,
-                            failures,
-                            expected_failures,
-                            unexpected_successes,
-                        });
-                        if !summary {
-                            for res in test_results.iter().filter(|r| !r.is_success()) {
-                                println!("{:?}", res);
-                            }
-                        }
+    for (path, outcome) in paths.iter().zip(outcomes) {
+        match outcome {
+            Ok(test_results) => {
+                let tests = test_results.len();
+                let successes = test_results.iter().filter(|r| r.is_success()).count();
+                let failures = test_results.iter().filter(|r| r.is_failure()).count();
+                let expected_failures = test_results
+                    .iter()
+                    .filter(|r| r.is_expected_failure())
+                    .count();
+                let unexpected_successes = test_results
+                    .iter()
+                    .filter(|r| r.is_unexpected_success())
+                    .count();
+                total.update(
+                    tests,
+                    successes,
+                    failures,
+                    expected_failures,
+                    unexpected_successes,
+                );
+                yaml_results.push(YAMLTestResult {
+                    yaml_file: path
+                        .file_name()
+                        .map_or("".to_string(), |f| f.to_string_lossy().into_owned()),
+                    tests,
+                    successes,
+                    failures,
+                    expected_failures,
+                    unexpected_successes,
+                });
+                if !summary {
+                    for res in test_results.iter().filter(|r| !r.is_success()) {
+                        println!("{:?}", res);
                     }
-                    Err(e) => {
-                        eprintln!("{}: {}", path.display(), e);
-                    }
-                },
-                Err(e) => {
-                    eprintln!("Could not create parser {:?} ({:?})", path, e)
                 }
-            },
-            Err(e) => {
-                eprintln!("Could not open yaml file {:?} ({})", path, e)
+            }
+            Err(message) => {
+                eprintln!("{}", message);
             }
         }
     }

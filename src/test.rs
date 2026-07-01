@@ -3,6 +3,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use enumset::EnumSet;
+use rayon::prelude::*;
 
 use search_path::SearchPath;
 
@@ -153,9 +154,12 @@ impl<'a> TestMatrix<'a> {
                 let display_table = self.display_table(Direction::Forward)?;
                 for table in self.tables {
                     let table = self.translation_table(table, Direction::Forward)?;
-                    for test in self.tests {
-                        results.push(test.check(&table, &display_table, Direction::Forward));
-                    }
+                    results.extend(
+                        self.tests
+                            .par_iter()
+                            .map(|test| test.check(&table, &display_table, Direction::Forward))
+                            .collect::<Vec<_>>(),
+                    );
                 }
             }
             TestMode::Backward => {
@@ -164,9 +168,12 @@ impl<'a> TestMatrix<'a> {
                     let display_table = self.display_table(Direction::Backward)?;
                     for table in self.tables {
                         let table = self.translation_table(table, Direction::Backward)?;
-                        for test in self.tests {
-                            results.push(test.check(&table, &display_table, Direction::Backward));
-                        }
+                        results.extend(
+                            self.tests
+                                .par_iter()
+                                .map(|test| test.check(&table, &display_table, Direction::Backward))
+                                .collect::<Vec<_>>(),
+                        );
                     }
                 }
             }
@@ -174,19 +181,27 @@ impl<'a> TestMatrix<'a> {
                 let display_table = self.display_table(Direction::Forward)?;
                 for table in self.tables {
                     let table = self.translation_table(table, Direction::Forward)?;
-                    for test in self.tests {
-                        results.push(test.check(&table, &display_table, Direction::Forward));
-                    }
+                    results.extend(
+                        self.tests
+                            .par_iter()
+                            .map(|test| test.check(&table, &display_table, Direction::Forward))
+                            .collect::<Vec<_>>(),
+                    );
                 }
                 // ignore the backward test if LOUIS_TEST_FOWARD_ONLY is defined
                 if option_env!("LOUIS_TEST_FORWARD_ONLY").is_none() {
                     let display_table = self.display_table(Direction::Backward)?;
+                    // reverse the tests, i.e. swap `input` and `expected`
+                    let reversed: Vec<Test> =
+                        self.tests.iter().cloned().map(|t| t.reverse()).collect();
                     for table in self.tables {
                         let table = self.translation_table(table, Direction::Backward)?;
-                        // reverse the tests, i.e. swap `input` and `expected`
-                        for test in self.tests.iter().cloned().map(|t| t.reverse()) {
-                            results.push(test.check(&table, &display_table, Direction::Backward));
-                        }
+                        results.extend(
+                            reversed
+                                .par_iter()
+                                .map(|test| test.check(&table, &display_table, Direction::Backward))
+                                .collect::<Vec<_>>(),
+                        );
                     }
                 }
             }
