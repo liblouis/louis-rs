@@ -148,6 +148,11 @@ impl TableContext {
                     if let Some(translation) = character_definitions.get(base).cloned() {
                         character_definitions.insert(*derived, &translation);
                         character_classes.insert(CharacterClass::from(name.as_str()), *derived);
+                        // Base-derived uppercase/lowercase characters are letters too,
+                        // matching what the `uppercase`/`lowercase` opcodes do directly.
+                        if name == "uppercase" || name == "lowercase" {
+                            character_classes.insert(CharacterClass::Letter, *derived);
+                        }
                     } else {
                         // hm, there is no character definition for the base character.
                         // If we are backwards compatible ignore the problem, otherwise
@@ -304,7 +309,7 @@ mod tests {
 
         assert_eq!(
             context.character_classes.get(&CharacterClass::Letter),
-            Some(HashSet::from(['a', 'b', 'c']))
+            Some(HashSet::from(['a', 'b', 'c', 'A', 'B']))
         );
         assert_eq!(
             context.character_classes.get(&CharacterClass::Lowercase),

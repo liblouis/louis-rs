@@ -229,7 +229,9 @@ impl PrimaryTableBuilder {
             self.lettersign_indicator
                 .build(ctx)
                 .map(Indicator::LetterSign),
-            self.uppercase_indicator.build().map(Indicator::Uppercase),
+            self.uppercase_indicator
+                .build(ctx)
+                .map(Indicator::Uppercase),
             self.nocontract_indicator
                 .build(ctx)
                 .map(Indicator::NoContract),
@@ -421,6 +423,19 @@ impl PrimaryTable {
                 }
                 Rule::Capsmodechars { chars } => {
                     builder.uppercase_indicator.capsmodechars(chars);
+                }
+                Rule::Begcapsphrase { dots } => {
+                    builder
+                        .uppercase_indicator
+                        .begcapsphrase(&dots.to_string(), rule);
+                }
+                Rule::Endcapsphrase { dots, position } => {
+                    builder
+                        .uppercase_indicator
+                        .endcapsphrase(&dots.to_string(), position, rule);
+                }
+                Rule::Lencapsphrase { number } => {
+                    builder.uppercase_indicator.lencapsphrase(*number as usize);
                 }
                 Rule::Emphclass { name } => {
                     builder.emphasis_indicator.emphclass(name);

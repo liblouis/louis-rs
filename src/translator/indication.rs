@@ -84,7 +84,10 @@ impl Indicators {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::{AnchoredRule, RuleParser};
+    use crate::{
+        parser::{AnchoredRule, RuleParser},
+        translator::table::TableContext,
+    };
     use std::collections::HashSet;
 
     fn rule(s: &str) -> AnchoredRule {
@@ -101,8 +104,8 @@ mod tests {
         let mut cap_builder = uppercase::IndicatorBuilder::new();
         cap_builder.capsletter("⠠", &rule("capsletter 6"));
         cap_builder.uppercase_characters(HashSet::from(['A', 'B', 'C']));
-        cap_builder.letter_characters(HashSet::from(['a', 'b', 'c']));
-        let uppercase = Indicator::Uppercase(cap_builder.build().unwrap());
+        cap_builder.letter_characters(HashSet::from(['a', 'b', 'c', 'A', 'B', 'C']));
+        let uppercase = Indicator::Uppercase(cap_builder.build(&TableContext::default()).unwrap());
 
         let indicators = Indicators::new(vec![numeric, uppercase]);
         let indications = indicators.precompute("A1", &[]);
