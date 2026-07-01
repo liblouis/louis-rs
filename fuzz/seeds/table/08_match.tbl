@@ -1,0 +1,7 @@
+lowercase a 1
+lowercase b 12
+lowercase f 3
+lowercase o 4
+lowercase r 5
+match a foo b 14
+match [fz] oo [fz] 15

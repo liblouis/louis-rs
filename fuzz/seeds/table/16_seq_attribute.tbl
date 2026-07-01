@@ -1,0 +1,4 @@
+attribute foo abc
+seqbeforechars xyz
+seqafterchars 123
+seqdelimiter -

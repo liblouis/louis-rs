@@ -79,6 +79,27 @@ impl Translator {
         Ok(Self(TranslationPipeline::compile(&all_rules, direction)?))
     }
 
+    /// Build a translator from raw liblouis table source held in memory.
+    ///
+    /// This parses only the inline table text. Unlike [`Self::new`], it does
+    /// not resolve `include` directives from the filesystem.
+    pub fn from_table_source(
+        table: &str,
+        direction: Direction,
+    ) -> Result<Self, TranslationError> {
+        let rules = parser::table(table, None).map_err(TranslationError::ParseFailed)?;
+        if rules
+            .iter()
+            .any(|rule| matches!(rule.rule, parser::Rule::Include { .. }))
+        {
+            return Err(TranslationError::ParseFailed(vec![
+                parser::TableError::IncludesNotSupportedInMemory,
+            ]));
+        }
+
+        Ok(Self(TranslationPipeline::compile(&rules, direction)?))
+    }
+
     fn compute_output_positions(translations: &[ResolvedTranslation]) -> Vec<usize> {
         let mut output_positions: Vec<usize> = Vec::new();
         let mut output_offset: usize = 0;
@@ -138,6 +159,28 @@ mod tests {
 
     fn translation(input: &str, output: &str) -> ResolvedTranslation {
         ResolvedTranslation::new(input, output, 0, TranslationStage::Main, None)
+    }
+
+    #[test]
+    fn translator_from_table_source() {
+        let table = "space \\s 0\nletter a 1\nletter b 12\n";
+        let translator = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(translator.translate("ab").unwrap(), "⠁⠃");
+    }
+
+    #[test]
+    fn translator_from_table_source_rejects_include() {
+        let error = Translator::from_table_source("include en-us-g1.ctb", Direction::Forward)
+            .unwrap_err();
+        match error {
+            TranslationError::ParseFailed(errors) => {
+                assert!(matches!(
+                    errors.as_slice(),
+                    [parser::TableError::IncludesNotSupportedInMemory]
+                ));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     #[test]

@@ -1,0 +1,79 @@
+# Hybrid fuzzing table for forward translation coverage.
+#
+# This table intentionally layers several real upstream tables with a short
+# synthetic overlay so the text fuzzer can reach a broad set of runtime paths
+# with short ASCII-heavy inputs.
+
+include en-us-g2.ctb
+include en-ueb-g1.ctb
+include fr-bfu-g2.ctb
+include es-g2.ctb
+include uz-g1.utb
+include ar-ar-g2.ctb
+
+# Keep punctuation-based context patterns easy to trigger.
+punctuation { 126
+punctuation } 345
+prepunc ( 236
+postpunc ) 356
+prepunc [ 45-236
+postpunc ] 356-12
+sign : 123
+sign ; 456
+begnum # 456-35
+midnum , 2
+midnum . 256
+midnum / 34
+endnum % 25-1234
+
+# Short ASCII rules that are easy for text fuzzing to rediscover.
+noback correct "teh" "the"
+noback correct "adn" "and"
+always foo 123
+always bar 456
+always qux 12345
+match a foo b 14
+match . oo . 125
+match [fz] oo [fz] 14
+word about 1-12
+word and 12346
+begword pre 1236
+begword sub 234
+midword in 35
+midword zz 1346
+partword oo 1256
+midendword ally 12356
+endword ing 346
+prfword com 36
+sufword ness 2456
+begmidword con 25
+joinword to 23
+lowword be 23
+lowword go 1245
+contraction ab
+contraction cd
+
+# Exercise lettersign and nocontract indicators with short contractions.
+letsign 6
+nocontractsign 6
+
+# Variable-based context paths.
+context "abc" "<"*">"
+context ":" @123#1=1
+context #1=1"a" @3#1=1
+context ";" @456#1=0
+
+# Swap-backed context capture.
+swapcc shout abc ABC
+swapcd braille abc 1,12,14
+context $p3"abc"$p3 "<"%shout">"
+context "cab" "{"%braille"}"
+
+# Multipass and attribute-driven rewrites.
+sign ΄ 5
+lowercase ύ 5-13456
+attribute accent ΄
+noback pass2 @135[%accent]@13456 *@136
+noback pass2 @123 @78
+noback pass3 @78 @67
+noback pass4 @67 @1

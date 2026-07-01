@@ -1,0 +1,6 @@
+litdigit 1 1
+litdigit 2 12
+litdigit 3 14
+numsign 3456
+nonumsign 56
+numericnocontchars abcdefghij
