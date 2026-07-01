@@ -260,14 +260,10 @@ impl PrimaryTableBuilder {
                 .flatten()
                 .collect(),
             ),
-            compbrl_scanner: if triggers.is_empty() {
-                None
-            } else {
-                Some(CompbrlScanner {
-                    triggers,
-                    character_classes: ctx.character_classes.clone(),
-                })
-            },
+            compbrl_scanner: (!triggers.is_empty()).then(|| CompbrlScanner {
+                triggers,
+                character_classes: ctx.character_classes.clone(),
+            }),
         }
     }
 }
@@ -1074,11 +1070,10 @@ impl PrimaryTable {
         let mut char_pos: usize = 0;
 
         // Enrich spans with compbrl-detected regions.
-        let enriched_spans: Vec<EmphasisSpan> = self
-            .compbrl_scanner
-            .as_ref()
-            .map(|s| s.enrich(input, options.emphasis()))
-            .unwrap_or_else(|| options.emphasis().to_vec());
+        let enriched_spans = match &self.compbrl_scanner {
+            Some(scanner) => scanner.enrich(input, options.emphasis()),
+            None => options.emphasis().to_vec(),
+        };
 
         let indications = self.indicators.precompute(input, &enriched_spans);
         let constraints = self.constrainers.precompute(input, &enriched_spans);
