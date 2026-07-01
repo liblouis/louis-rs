@@ -131,22 +131,9 @@ impl ClassIndicator {
         run_start: usize,
         run_end: usize,
     ) -> Vec<(usize, usize)> {
-        let mut words = Vec::new();
-        let mut pos = run_start;
-        while pos < run_end {
-            while pos < run_end && self.is_emphasis_word_separator(chars[pos]) {
-                pos += 1;
-            }
-            if pos >= run_end {
-                break;
-            }
-            let word_start = pos;
-            while pos < run_end && !self.is_emphasis_word_separator(chars[pos]) {
-                pos += 1;
-            }
-            words.push((word_start, pos));
-        }
-        words
+        super::find_spans(chars, run_start, run_end, |c| {
+            !self.is_emphasis_word_separator(c)
+        })
     }
 
     fn is_indicating(&self) -> bool {

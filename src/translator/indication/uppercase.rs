@@ -196,23 +196,7 @@ impl Indicator {
 
     /// Splits the input into maximal spans of letters/capsmodechars ("words").
     fn find_words(&self, chars: &[char]) -> Vec<(usize, usize)> {
-        let n = chars.len();
-        let mut words = Vec::new();
-        let mut pos = 0;
-        while pos < n {
-            while pos < n && !self.is_word_char(chars[pos]) {
-                pos += 1;
-            }
-            if pos >= n {
-                break;
-            }
-            let start = pos;
-            while pos < n && self.is_word_char(chars[pos]) {
-                pos += 1;
-            }
-            words.push((start, pos));
-        }
-        words
+        super::find_spans(chars, 0, chars.len(), |c| self.is_word_char(c))
     }
 
     fn classify_word(&self, chars: &[char], start: usize, end: usize) -> Word {

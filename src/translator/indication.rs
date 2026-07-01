@@ -28,6 +28,36 @@ pub mod nocontract;
 pub mod numeric;
 pub mod uppercase;
 
+/// Finds maximal spans within `chars[start..end)` where `predicate` holds.
+///
+/// Used by indicators that need to segment a range into alternating "matching" and
+/// "non-matching" runs — e.g. [`uppercase::Indicator`] splitting text into
+/// letter/capsmodechar words, or [`emphasis::Indicator`] splitting an active span into
+/// words separated by whitespace (or `emphmodechars`).
+fn find_spans(
+    chars: &[char],
+    start: usize,
+    end: usize,
+    predicate: impl Fn(char) -> bool,
+) -> Vec<(usize, usize)> {
+    let mut spans = Vec::new();
+    let mut pos = start;
+    while pos < end {
+        while pos < end && !predicate(chars[pos]) {
+            pos += 1;
+        }
+        if pos >= end {
+            break;
+        }
+        let span_start = pos;
+        while pos < end && predicate(chars[pos]) {
+            pos += 1;
+        }
+        spans.push((span_start, pos));
+    }
+    spans
+}
+
 #[derive(Debug, Clone)]
 pub enum Indicator {
     ComputerBraille(computer_braille::Indicator),
@@ -92,6 +122,21 @@ mod tests {
 
     fn rule(s: &str) -> AnchoredRule {
         AnchoredRule::new(RuleParser::new(s).rule().unwrap(), None, 0)
+    }
+
+    #[test]
+    fn find_spans_returns_maximal_matching_runs() {
+        let chars: Vec<char> = "  ab cd  e".chars().collect();
+        assert_eq!(
+            find_spans(&chars, 0, chars.len(), |c| c != ' '),
+            vec![(2, 4), (5, 7), (9, 10)]
+        );
+    }
+
+    #[test]
+    fn find_spans_respects_the_given_range() {
+        let chars: Vec<char> = "aabbaabb".chars().collect();
+        assert_eq!(find_spans(&chars, 2, 6, |c| c == 'b'), vec![(2, 4)]);
     }
 
     #[test]
