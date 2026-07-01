@@ -8,7 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+- Implement `begcaps`/`endcaps` and `begcapsphrase`/`endcapsphrase`/`lencapsphrase`
+  caps-passage indication. A passage of two or more (or `lencapsphrase`, if set)
+  consecutive whole-uppercase words is now wrapped in a single indicator instead of
+  marking each word individually; hyphenated segments of one word don't count
+  toward the threshold, and `begcapsphrase` is preferred over `begcaps` when both
+  are defined. `begcaps`/`endcaps` were previously parsed but never emitted, and
+  `begcapsphrase`/`endcapsphrase`/`lencapsphrase` were not wired up at all. This
+  improves `emphasis.yaml` from 82.1% to 96.4% and `capitalization.yaml` from
+  64.7% to 100% (forward direction).
+
 ### Fixed
+- `base uppercase`/`base lowercase` (case-pairing) rules now also register the
+  derived character in the `letter` character class, matching what the direct
+  `uppercase`/`lowercase` opcodes already do. Previously a derived uppercase
+  letter (e.g. `A` in `base uppercase A a`) was missing from the letter class,
+  which could confuse word-boundary detection.
 - `partword` rules now fire when the pattern is preceded or followed by a
   letter (i.e. anywhere inside or adjacent to a word), matching the liblouis
   semantics documented as "translates if preceded or followed by a letter".
