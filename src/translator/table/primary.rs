@@ -558,15 +558,13 @@ impl PrimaryTable {
                             ParsedClass::Before { class } => {
                                 let key = CharacterClass::from(class.as_str());
                                 let text = ctx.character_classes.get(&key)?;
-                                let braille =
-                                    ctx.dots_classes.get(&key).unwrap_or_default();
+                                let braille = ctx.dots_classes.get(&key).unwrap_or_default();
                                 Some(WithClass::Before { text, braille })
                             }
                             ParsedClass::After { class } => {
                                 let key = CharacterClass::from(class.as_str());
                                 let text = ctx.character_classes.get(&key)?;
-                                let braille =
-                                    ctx.dots_classes.get(&key).unwrap_or_default();
+                                let braille = ctx.dots_classes.get(&key).unwrap_or_default();
                                 Some(WithClass::After { text, braille })
                             }
                         })
@@ -997,13 +995,22 @@ impl PrimaryTable {
         for wc in t.with_classes() {
             let satisfied = match wc {
                 WithClass::Before { text, braille } => {
-                    let chars =
-                        if self.direction == Direction::Backward { braille } else { text };
-                    remaining.chars().nth(t.length()).is_some_and(|c| chars.contains(&c))
+                    let chars = if self.direction == Direction::Backward {
+                        braille
+                    } else {
+                        text
+                    };
+                    remaining
+                        .chars()
+                        .nth(t.length())
+                        .is_some_and(|c| chars.contains(&c))
                 }
                 WithClass::After { text, braille } => {
-                    let chars =
-                        if self.direction == Direction::Backward { braille } else { text };
+                    let chars = if self.direction == Direction::Backward {
+                        braille
+                    } else {
+                        text
+                    };
                     prev.is_some_and(|c| chars.contains(&c))
                 }
             };

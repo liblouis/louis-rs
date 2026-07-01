@@ -171,9 +171,8 @@ impl Indicator {
             }
 
             let isolated = next.map_or(true, |n| !self.letter_chars.contains(&n));
-            let prev_is_space_or_letter = prev.is_some_and(|p| {
-                self.space_chars.contains(&p) || self.letter_chars.contains(&p)
-            });
+            let prev_is_space_or_letter = prev
+                .is_some_and(|p| self.space_chars.contains(&p) || self.letter_chars.contains(&p));
             if isolated && !prev_is_space_or_letter {
                 fire.insert(i);
             }
