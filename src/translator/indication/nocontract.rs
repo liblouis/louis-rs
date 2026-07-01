@@ -43,41 +43,44 @@ impl IndicatorBuilder {
 
     /// Build an [`Indicator`]
     pub fn build(self, ctx: &TableContext) -> Option<Indicator> {
-        if !self.contractions.is_empty() && self.nocontractsign.is_some() {
-            let (nocontractsign, origin) = self.nocontractsign.unwrap();
-            let start_translation = ResolvedTranslation::new(
-                "",
-                &nocontractsign,
-                1,
-                TranslationStage::Main,
-                origin.clone(),
-            );
-            let mut trie = Trie::new().with_context(ctx.character_classes().clone());
-            for (contraction, _origin) in self.contractions {
-                trie.insert(
-                    &contraction,
+        let has_contractions = !self.contractions.is_empty();
+        match self.nocontractsign {
+            Some((nocontractsign, origin)) if has_contractions => {
+                let start_translation = ResolvedTranslation::new(
+                    "",
                     &nocontractsign,
-                    Some(Transition::Start(Boundary::Word)),
-                    Some(Transition::End(Boundary::Word)),
-                    Direction::Forward,
-                    Precedence::Default,
-                    vec![],
+                    1,
                     TranslationStage::Main,
-                    &origin,
+                    origin.clone(),
                 );
+                let mut trie = Trie::new().with_context(ctx.character_classes().clone());
+                for (contraction, _origin) in self.contractions {
+                    trie.insert(
+                        &contraction,
+                        &nocontractsign,
+                        Some(Transition::Start(Boundary::Word)),
+                        Some(Transition::End(Boundary::Word)),
+                        Direction::Forward,
+                        Precedence::Default,
+                        vec![],
+                        TranslationStage::Main,
+                        &origin,
+                    );
+                }
+                Some(Indicator {
+                    contractions: trie,
+                    start_translation,
+                })
             }
-            Some(Indicator {
-                contractions: trie,
-                start_translation,
-            })
-        } else if !self.contractions.is_empty() && self.nocontractsign.is_none() {
-            warn!("Table contains contractions but no nocontractionsign");
-            None
-        } else if self.contractions.is_empty() && self.nocontractsign.is_some() {
-            warn!("Table contains nocontractionsign but no contractions");
-            None
-        } else {
-            None
+            Some(_) => {
+                warn!("Table contains nocontractionsign but no contractions");
+                None
+            }
+            None if has_contractions => {
+                warn!("Table contains contractions but no nocontractionsign");
+                None
+            }
+            None => None,
         }
     }
 
@@ -157,22 +160,22 @@ mod tests {
         builder.contraction("cd", &rule("contraction cd"));
         let ctx = make_ctx(&['a', 'b', 'c', 'd']);
         let indicator = builder.build(&ctx).unwrap();
-        assert_eq!(indicator.next("aa".into(), None), None);
+        assert_eq!(indicator.next("aa", None), None);
         assert_eq!(
-            indicator.next("ab".into(), None),
+            indicator.next("ab", None),
             Some(ResolvedTranslation::new(
-                "".into(),
-                "⡀".into(),
+                "",
+                "⡀",
                 1,
                 TranslationStage::Main,
                 rule("nocontractsign 7")
             ))
         );
         assert_eq!(
-            indicator.next("cd".into(), None),
+            indicator.next("cd", None),
             Some(ResolvedTranslation::new(
-                "".into(),
-                "⡀".into(),
+                "",
+                "⡀",
                 1,
                 TranslationStage::Main,
                 rule("nocontractsign 7")

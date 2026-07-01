@@ -170,7 +170,7 @@ impl Indicator {
                 continue;
             }
 
-            let isolated = next.map_or(true, |n| !self.letter_chars.contains(&n));
+            let isolated = next.is_none_or(|n| !self.letter_chars.contains(&n));
             let prev_is_space_or_letter = prev
                 .is_some_and(|p| self.space_chars.contains(&p) || self.letter_chars.contains(&p));
             if isolated && !prev_is_space_or_letter {
@@ -253,12 +253,12 @@ mod tests {
     #[test]
     fn contraction_indicator() {
         let indicator = build_indicator(&['a', 'b', 'c', 'd'], &[], Some("ab"));
-        assert_eq!(indicator.next("aa".into(), None), None);
+        assert_eq!(indicator.next("aa", None), None);
         assert_eq!(
-            indicator.next("ab".into(), None),
+            indicator.next("ab", None),
             Some(ResolvedTranslation::new(
-                "".into(),
-                "⠠".into(),
+                "",
+                "⠠",
                 1,
                 TranslationStage::Main,
                 rule("letsign 6")

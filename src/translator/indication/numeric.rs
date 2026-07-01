@@ -123,10 +123,10 @@ impl Indicator {
                             .is_some_and(|nc| self.numeric_chars.contains(nc)) => {}
                 (false, true) => {
                     in_numeric = false;
-                    if self.terminating_chars.contains(&c) {
-                        if let Some(t) = &self.end_translation {
-                            translations.push((pos, t.clone()));
-                        }
+                    if self.terminating_chars.contains(&c)
+                        && let Some(t) = &self.end_translation
+                    {
+                        translations.push((pos, t.clone()));
                     }
                 }
             }

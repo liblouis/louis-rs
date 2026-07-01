@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use search_path::SearchPath;
 
 use crate::{
-    emphasis::{self, EmphasisSpan},
+    emphasis::EmphasisSpan,
     parser::{self, Direction, TableError},
     translator::{self, DisplayTable, TranslationModes, TranslationOptions, TranslationPipeline},
 };

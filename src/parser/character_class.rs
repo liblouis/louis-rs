@@ -234,7 +234,7 @@ impl CharacterClasses {
     /// Unlike the other boundary predicates this is lookbehind-only and does not constrain the
     /// current character.
     pub fn is_after_space_or_punct(&self, previous: Option<char>) -> bool {
-        previous.map_or(true, |p| self.is_whitespace(p) || self.is_punctuation(p))
+        previous.is_none_or(|p| self.is_whitespace(p) || self.is_punctuation(p))
     }
 }
 

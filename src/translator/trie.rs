@@ -274,15 +274,13 @@ impl Trie {
             (Transition::Start(Boundary::AfterSpaceOrPunct), self.ctx.is_after_space_or_punct(prev)),
         ];
         for (transition, matches) in &boundary_checks {
-            if *matches {
-                if let Some(node) = node.boundary_transition(transition) {
-                    matching_rules.extend(self.find_translations_from_node(
-                        input,
-                        prev,
-                        node,
-                        match_length,
-                    ));
-                }
+            if *matches && let Some(node) = node.boundary_transition(transition) {
+                matching_rules.extend(self.find_translations_from_node(
+                    input,
+                    prev,
+                    node,
+                    match_length,
+                ));
             }
         }
         // Class-based non-consuming checks. Iterate only transitions that are class variants to
@@ -294,27 +292,27 @@ impl Trie {
         for (transition, child_node) in &node.transitions {
             match transition {
                 Transition::StartClass(class) => {
-                    if let Some(set) = self.ctx.get(class) {
-                        if prev.is_some_and(|p| set.contains(&p)) {
-                            matching_rules.extend(self.find_translations_from_node(
-                                input,
-                                prev,
-                                child_node,
-                                match_length,
-                            ));
-                        }
+                    if let Some(set) = self.ctx.get(class)
+                        && prev.is_some_and(|p| set.contains(&p))
+                    {
+                        matching_rules.extend(self.find_translations_from_node(
+                            input,
+                            prev,
+                            child_node,
+                            match_length,
+                        ));
                     }
                 }
                 Transition::EndClass(class) => {
-                    if let Some(set) = self.ctx.get(class) {
-                        if c.is_some_and(|ch| set.contains(&ch)) {
-                            matching_rules.extend(self.find_translations_from_node(
-                                input,
-                                prev,
-                                child_node,
-                                match_length,
-                            ));
-                        }
+                    if let Some(set) = self.ctx.get(class)
+                        && c.is_some_and(|ch| set.contains(&ch))
+                    {
+                        matching_rules.extend(self.find_translations_from_node(
+                            input,
+                            prev,
+                            child_node,
+                            match_length,
+                        ));
                     }
                 }
                 _ => {}
@@ -354,44 +352,15 @@ mod tests {
         let mut trie = Trie::new();
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let a = ResolvedTranslation::new(
-            "a".into(),
-            "A".into(),
-            1,
-            TranslationStage::Main,
-            rule.clone(),
-        );
-        let f = ResolvedTranslation::new(
-            "f".into(),
-            "F".into(),
-            1,
-            TranslationStage::Main,
-            rule.clone(),
-        );
-        let fo = ResolvedTranslation::new(
-            "fo".into(),
-            "FO".into(),
-            2,
-            TranslationStage::Main,
-            rule.clone(),
-        );
-        let foo = ResolvedTranslation::new(
-            "foo".into(),
-            "FOO".into(),
-            3,
-            TranslationStage::Main,
-            rule.clone(),
-        );
-        let foobar = ResolvedTranslation::new(
-            "foobar".into(),
-            "FOOBAR".into(),
-            6,
-            TranslationStage::Main,
-            rule.clone(),
-        );
+        let a = ResolvedTranslation::new("a", "A", 1, TranslationStage::Main, rule.clone());
+        let f = ResolvedTranslation::new("f", "F", 1, TranslationStage::Main, rule.clone());
+        let fo = ResolvedTranslation::new("fo", "FO", 2, TranslationStage::Main, rule.clone());
+        let foo = ResolvedTranslation::new("foo", "FOO", 3, TranslationStage::Main, rule.clone());
+        let foobar =
+            ResolvedTranslation::new("foobar", "FOOBAR", 6, TranslationStage::Main, rule.clone());
         trie.insert(
-            "a".into(),
-            "A".into(),
+            "a",
+            "A",
             None,
             None,
             Direction::Forward,
@@ -401,8 +370,8 @@ mod tests {
             &rule,
         );
         trie.insert(
-            "f".into(),
-            "F".into(),
+            "f",
+            "F",
             None,
             None,
             Direction::Forward,
@@ -412,8 +381,8 @@ mod tests {
             &rule,
         );
         trie.insert(
-            "fo".into(),
-            "FO".into(),
+            "fo",
+            "FO",
             None,
             None,
             Direction::Forward,
@@ -423,8 +392,8 @@ mod tests {
             &rule,
         );
         trie.insert(
-            "foo".into(),
-            "FOO".into(),
+            "foo",
+            "FOO",
             None,
             None,
             Direction::Forward,
@@ -434,8 +403,8 @@ mod tests {
             &rule,
         );
         trie.insert(
-            "foobar".into(),
-            "FOOBAR".into(),
+            "foobar",
+            "FOOBAR",
             None,
             None,
             Direction::Forward,
@@ -476,16 +445,10 @@ mod tests {
         let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let a = ResolvedTranslation::new(
-            "a".into(),
-            "A".into(),
-            3,
-            TranslationStage::Main,
-            rule.clone(),
-        );
+        let a = ResolvedTranslation::new("a", "A", 3, TranslationStage::Main, rule.clone());
         trie.insert(
-            "a".into(),
-            "A".into(),
+            "a",
+            "A",
             Some(Transition::Start(Boundary::Word)),
             Some(Transition::End(Boundary::Word)),
             Direction::Forward,
@@ -508,16 +471,10 @@ mod tests {
         let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let foo = ResolvedTranslation::new(
-            "foo".into(),
-            "FOO".into(),
-            5,
-            TranslationStage::Main,
-            rule.clone(),
-        );
+        let foo = ResolvedTranslation::new("foo", "FOO", 5, TranslationStage::Main, rule.clone());
         trie.insert(
-            "foo".into(),
-            "FOO".into(),
+            "foo",
+            "FOO",
             Some(Transition::Start(Boundary::Word)),
             Some(Transition::End(Boundary::NotWord)),
             Direction::Forward,
@@ -542,16 +499,10 @@ mod tests {
         let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let foo = ResolvedTranslation::new(
-            "foo".into(),
-            "FOO".into(),
-            4,
-            TranslationStage::Main,
-            rule.clone(),
-        );
+        let foo = ResolvedTranslation::new("foo", "FOO", 4, TranslationStage::Main, rule.clone());
         trie.insert(
-            "foo".into(),
-            "FOO".into(),
+            "foo",
+            "FOO",
             Some(Transition::Start(Boundary::NotWord)),
             None,
             Direction::Forward,
@@ -576,16 +527,10 @@ mod tests {
         let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let foo = ResolvedTranslation::new(
-            "foo".into(),
-            "FOO".into(),
-            5,
-            TranslationStage::Main,
-            rule.clone(),
-        );
+        let foo = ResolvedTranslation::new("foo", "FOO", 5, TranslationStage::Main, rule.clone());
         trie.insert(
-            "foo".into(),
-            "FOO".into(),
+            "foo",
+            "FOO",
             Some(Transition::Start(Boundary::NotWord)),
             Some(Transition::End(Boundary::NotWord)),
             Direction::Forward,
@@ -612,16 +557,10 @@ mod tests {
         let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let foo = ResolvedTranslation::new(
-            "aaa".into(),
-            "A".into(),
-            5,
-            TranslationStage::Main,
-            rule.clone(),
-        );
+        let foo = ResolvedTranslation::new("aaa", "A", 5, TranslationStage::Main, rule.clone());
         trie.insert(
-            "aaa".into(),
-            "A".into(),
+            "aaa",
+            "A",
             Some(Transition::Start(Boundary::Word)),
             Some(Transition::End(Boundary::WordNumber)),
             Direction::Forward,
@@ -647,16 +586,10 @@ mod tests {
         let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let foo = ResolvedTranslation::new(
-            "st".into(),
-            "S".into(),
-            4,
-            TranslationStage::Main,
-            rule.clone(),
-        );
+        let foo = ResolvedTranslation::new("st", "S", 4, TranslationStage::Main, rule.clone());
         trie.insert(
-            "st".into(),
-            "S".into(),
+            "st",
+            "S",
             Some(Transition::Start(Boundary::NumberWord)),
             Some(Transition::End(Boundary::Word)),
             Direction::Forward,
@@ -682,16 +615,10 @@ mod tests {
         let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let foo = ResolvedTranslation::new(
-            "(".into(),
-            "[".into(),
-            2,
-            TranslationStage::Main,
-            rule.clone(),
-        );
+        let foo = ResolvedTranslation::new("(", "[", 2, TranslationStage::Main, rule.clone());
         trie.insert(
-            "(".into(),
-            "[".into(),
+            "(",
+            "[",
             Some(Transition::Start(Boundary::WordPunctuation)),
             None,
             Direction::Forward,
@@ -716,16 +643,10 @@ mod tests {
         let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let foo = ResolvedTranslation::new(
-            "(".into(),
-            "[".into(),
-            2,
-            TranslationStage::Main,
-            rule.clone(),
-        );
+        let foo = ResolvedTranslation::new("(", "[", 2, TranslationStage::Main, rule.clone());
         trie.insert(
-            "(".into(),
-            "[".into(),
+            "(",
+            "[",
             None,
             Some(Transition::End(Boundary::PunctuationWord)),
             Direction::Forward,
@@ -746,16 +667,10 @@ mod tests {
     fn find_translations_case_insensitive() {
         let mut trie = Trie::new();
         let rule = fake_rule();
-        let foo = ResolvedTranslation::new(
-            "foo".into(),
-            "FOO".into(),
-            3,
-            TranslationStage::Main,
-            rule.clone(),
-        );
+        let foo = ResolvedTranslation::new("foo", "FOO", 3, TranslationStage::Main, rule.clone());
         trie.insert(
-            "foo".into(),
-            "FOO".into(),
+            "foo",
+            "FOO",
             None,
             None,
             Direction::Forward,
@@ -780,20 +695,10 @@ mod tests {
         let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let foo_before_letter = ResolvedTranslation::new(
-            "foo".into(),
-            "FL".into(),
-            4,
-            TranslationStage::Main,
-            rule.clone(),
-        );
-        let foo_before_digit = ResolvedTranslation::new(
-            "foo".into(),
-            "FD".into(),
-            4,
-            TranslationStage::Main,
-            rule.clone(),
-        );
+        let foo_before_letter =
+            ResolvedTranslation::new("foo", "FL", 4, TranslationStage::Main, rule.clone());
+        let foo_before_digit =
+            ResolvedTranslation::new("foo", "FD", 4, TranslationStage::Main, rule.clone());
         // "before letter always foo FL" — next char after "foo" must be a letter
         trie.insert(
             "foo",
@@ -838,20 +743,10 @@ mod tests {
         let mut trie = Trie::new().with_context(ctx);
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
-        let foo_after_letter = ResolvedTranslation::new(
-            "foo".into(),
-            "AL".into(),
-            4,
-            TranslationStage::Main,
-            rule.clone(),
-        );
-        let foo_after_digit = ResolvedTranslation::new(
-            "foo".into(),
-            "AD".into(),
-            4,
-            TranslationStage::Main,
-            rule.clone(),
-        );
+        let foo_after_letter =
+            ResolvedTranslation::new("foo", "AL", 4, TranslationStage::Main, rule.clone());
+        let foo_after_digit =
+            ResolvedTranslation::new("foo", "AD", 4, TranslationStage::Main, rule.clone());
         // "after letter always foo AL" — prev char before "foo" must be a letter
         trie.insert(
             "foo",

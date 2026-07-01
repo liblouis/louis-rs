@@ -27,7 +27,6 @@ assert_eq!(braille, "⠓⠑⠇⠇⠕⠀⠺⠕⠗⠇⠙");
 
 mod emphasis;
 mod parser;
-mod test;
 mod translator;
 
 use std::path::Path;
@@ -73,8 +72,7 @@ impl Translator {
 
         for table_path in tables {
             let path = table_path.as_ref();
-            let rules = parser::table_expanded(path)
-                .map_err(|errors| TranslationError::ParseFailed(errors))?;
+            let rules = parser::table_expanded(path).map_err(TranslationError::ParseFailed)?;
             all_rules.extend(rules);
         }
 

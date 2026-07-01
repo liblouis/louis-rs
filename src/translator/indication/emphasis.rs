@@ -234,25 +234,25 @@ impl ClassIndicator {
         words: &[(usize, usize)],
         result: &mut Vec<(usize, ResolvedTranslation, EmitKind)>,
     ) {
-        if let Some(begemphphrase) = &self.begemphphrase {
-            if words.len() >= self.len_phrase {
-                result.push((words[0].0, begemphphrase.clone(), EmitKind::Unordered));
+        if let Some(begemphphrase) = &self.begemphphrase
+            && words.len() >= self.len_phrase
+        {
+            result.push((words[0].0, begemphphrase.clone(), EmitKind::Unordered));
 
-                if self.endemphphrase_before {
-                    // BANA-style: phrase covers all but the last word; the last
-                    // word's begemphword indicator serves as the implicit phrase
-                    // terminator ("close with the word indicator before the last
-                    // italicized word").
-                    let last = words.last().unwrap();
-                    self.emit_single_word(last.0, last.1, result);
-                } else {
-                    // Phrase brackets all words; explicit endemph after the last.
-                    if let Some(end_t) = &self.endemphphrase {
-                        result.push((words.last().unwrap().1, end_t.clone(), EmitKind::Unordered));
-                    }
+            if self.endemphphrase_before {
+                // BANA-style: phrase covers all but the last word; the last
+                // word's begemphword indicator serves as the implicit phrase
+                // terminator ("close with the word indicator before the last
+                // italicized word").
+                let last = words.last().unwrap();
+                self.emit_single_word(last.0, last.1, result);
+            } else {
+                // Phrase brackets all words; explicit endemph after the last.
+                if let Some(end_t) = &self.endemphphrase {
+                    result.push((words.last().unwrap().1, end_t.clone(), EmitKind::Unordered));
                 }
-                return;
             }
+            return;
         }
         for &(ws, we) in words {
             self.emit_single_word(ws, we, result);
@@ -267,11 +267,11 @@ impl ClassIndicator {
         word_end: usize,
         result: &mut Vec<(usize, ResolvedTranslation, EmitKind)>,
     ) {
-        if word_end - word_start == 1 {
-            if let Some(t) = &self.emphletter {
-                result.push((word_start, t.clone(), EmitKind::Unordered));
-                return;
-            }
+        if word_end - word_start == 1
+            && let Some(t) = &self.emphletter
+        {
+            result.push((word_start, t.clone(), EmitKind::Unordered));
+            return;
         }
         if let Some(t) = &self.begemphword {
             result.push((word_start, t.clone(), EmitKind::Unordered));
@@ -290,21 +290,22 @@ impl ClassIndicator {
     ) {
         let total_chars: usize = words.iter().map(|(s, e)| e - s).sum();
 
-        if total_chars == 1 {
-            if let Some(t) = &self.emphletter {
-                result.push((words[0].0, t.clone(), EmitKind::Unordered));
-                return;
-            }
+        if total_chars == 1
+            && let Some(t) = &self.emphletter
+        {
+            result.push((words[0].0, t.clone(), EmitKind::Unordered));
+            return;
         }
 
         if let Some(t) = &self.begemphword {
             result.push((run_start, t.clone(), EmitKind::Unordered));
             // endemphword is only needed when emphasis ends mid-word (the next
             // character is not a word boundary and not end-of-string).
-            if let Some(end_t) = &self.endemphword {
-                if run_end < chars.len() && !self.is_emphasis_word_separator(chars[run_end]) {
-                    result.push((run_end, end_t.clone(), EmitKind::Unordered));
-                }
+            if let Some(end_t) = &self.endemphword
+                && run_end < chars.len()
+                && !self.is_emphasis_word_separator(chars[run_end])
+            {
+                result.push((run_end, end_t.clone(), EmitKind::Unordered));
             }
             return;
         }
@@ -314,10 +315,10 @@ impl ClassIndicator {
             result.push((run_start, t.clone(), EmitKind::Unordered));
             // Phrase indicators always need explicit closing; emit at run_end
             // unless we're at end-of-string.
-            if let Some(end_t) = &self.endemphphrase {
-                if run_end < chars.len() {
-                    result.push((run_end, end_t.clone(), EmitKind::Unordered));
-                }
+            if let Some(end_t) = &self.endemphphrase
+                && run_end < chars.len()
+            {
+                result.push((run_end, end_t.clone(), EmitKind::Unordered));
             }
         }
     }

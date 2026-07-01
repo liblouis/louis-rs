@@ -1393,7 +1393,7 @@ impl<'a> RuleParser<'a> {
 
     fn many_names(&mut self) -> Result<Vec<String>, ParseError> {
         let mut names: Vec<String> = Vec::new();
-        while let Some(name) = self.tokens.next() {
+        for name in self.tokens.by_ref() {
             names.push(name.into());
         }
         if names.len() > 1 {
@@ -2461,18 +2461,18 @@ mod tests {
 
     #[test]
     fn nocross() {
-        assert_eq!(true, RuleParser::new("nocross").nocross());
-        assert_eq!(true, RuleParser::new("nocross nofor").nocross());
-        assert_eq!(false, RuleParser::new("nofor nocross").nocross());
-        assert_eq!(false, RuleParser::new("nofor").nocross());
+        assert!(RuleParser::new("nocross").nocross());
+        assert!(RuleParser::new("nocross nofor").nocross());
+        assert!(!RuleParser::new("nofor nocross").nocross());
+        assert!(!RuleParser::new("nofor").nocross());
     }
 
     #[test]
     fn nofor() {
-        assert_eq!(true, RuleParser::new(" nofor ").nofor());
-        assert_eq!(true, RuleParser::new("nofor nocross").nofor());
-        assert_eq!(false, RuleParser::new("nocross nofor").nofor());
-        assert_eq!(false, RuleParser::new("").nofor());
+        assert!(RuleParser::new(" nofor ").nofor());
+        assert!(RuleParser::new("nofor nocross").nofor());
+        assert!(!RuleParser::new("nocross nofor").nofor());
+        assert!(!RuleParser::new("").nofor());
     }
 
     #[test]
@@ -2600,7 +2600,7 @@ mod tests {
             Some(HashSet::from([WithMatch::Before])),
             RuleParser::new("empmatchbefore match").with_matches()
         );
-        assert_eq!(None, RuleParser::new(&"match").with_matches());
+        assert_eq!(None, RuleParser::new("match").with_matches());
         assert_eq!(
             Some(HashSet::from([WithMatch::After, WithMatch::Before])),
             RuleParser::new("empmatchbefore empmatchafter match").with_matches()

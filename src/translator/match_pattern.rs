@@ -322,27 +322,16 @@ mod tests {
         let ctx = CharacterClasses::default();
         let rule = fake_rule();
         let mut builder = MatchPatternsBuilder::new();
-        builder.insert(&pre, "foo".into(), &post, "".into(), &rule, &ctx);
-        let translation = ResolvedTranslation::new(
-            "foo".into(),
-            "".into(),
-            5,
-            TranslationStage::Main,
-            rule.clone(),
-        )
-        .with_offset(1);
+        builder.insert(&pre, "foo", &post, "", &rule, &ctx);
+        let translation =
+            ResolvedTranslation::new("foo", "", 5, TranslationStage::Main, rule.clone())
+                .with_offset(1);
         let matcher = builder.build();
         assert_eq!(matcher.find("afoo1"), vec![translation.clone()]);
         assert_eq!(matcher.find("bfoo2"), vec![translation.clone()]);
         let translations = vec![
-            ResolvedTranslation::new(
-                "foo".into(),
-                "".into(),
-                9,
-                TranslationStage::Main,
-                rule.clone(),
-            )
-            .with_offset(3),
+            ResolvedTranslation::new("foo", "", 9, TranslationStage::Main, rule.clone())
+                .with_offset(3),
         ];
         assert_eq!(matcher.find("cccfoo333"), translations);
         assert!(matcher.find("def").is_empty());
@@ -355,29 +344,17 @@ mod tests {
         let ctx = CharacterClasses::default();
         let rule = fake_rule();
         let mut builder = MatchPatternsBuilder::new();
-        builder.insert(&pre, "foo".into(), &post, "FOO".into(), &rule, &ctx);
-        builder.insert(&pre, "bar".into(), &post, "BAR".into(), &rule, &ctx);
+        builder.insert(&pre, "foo", &post, "FOO", &rule, &ctx);
+        builder.insert(&pre, "bar", &post, "BAR", &rule, &ctx);
         let translation = vec![
-            ResolvedTranslation::new(
-                "foo".into(),
-                "FOO".into(),
-                7,
-                TranslationStage::Main,
-                rule.clone(),
-            )
-            .with_offset(3),
+            ResolvedTranslation::new("foo", "FOO", 7, TranslationStage::Main, rule.clone())
+                .with_offset(3),
         ];
         let matcher = builder.build();
         assert_eq!(matcher.find("aaafoo333"), translation);
         let translation = vec![
-            ResolvedTranslation::new(
-                "bar".into(),
-                "BAR".into(),
-                7,
-                TranslationStage::Main,
-                rule.clone(),
-            )
-            .with_offset(3),
+            ResolvedTranslation::new("bar", "BAR", 7, TranslationStage::Main, rule.clone())
+                .with_offset(3),
         ];
         assert_eq!(matcher.find("aaabar333"), translation);
         assert_ne!(matcher.find("aaabaz333"), translation);

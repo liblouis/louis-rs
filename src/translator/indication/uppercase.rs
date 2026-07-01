@@ -302,11 +302,11 @@ impl Indicator {
     /// Emits indicators for one run of uppercase letters inside a partial (mixed-case)
     /// word — i.e. a run that cannot participate in a whole-word caps passage.
     fn emit_run(&self, chars: &[char], run: &Run, result: &mut Vec<(usize, ResolvedTranslation)>) {
-        if run.letter_count == 1 {
-            if let Some(t) = &self.capsletter {
-                result.push((run.open, t.clone()));
-                return;
-            }
+        if run.letter_count == 1
+            && let Some(t) = &self.capsletter
+        {
+            result.push((run.open, t.clone()));
+            return;
         }
         if let Some(begt) = &self.begcapsword {
             if !run.needs_close {
@@ -353,11 +353,11 @@ impl Indicator {
         letter_count: usize,
         result: &mut Vec<(usize, ResolvedTranslation)>,
     ) {
-        if letter_count == 1 {
-            if let Some(t) = &self.capsletter {
-                result.push((open, t.clone()));
-                return;
-            }
+        if letter_count == 1
+            && let Some(t) = &self.capsletter
+        {
+            result.push((open, t.clone()));
+            return;
         }
         if let Some(t) = &self.begcapsword {
             // A whole word always ends at a proper word boundary, so no endcapsword
