@@ -14,8 +14,8 @@ use crate::{
         WithClass as ParsedClass, fallback,
     },
     translator::{
-        CharacterDefinition, ResolvedTranslation, Rule, TranslationError, TranslationOptions,
-        TranslationStage, WithClass, WithClasses,
+        CharacterDefinition, ClassConstraint, ResolvedTranslation, Rule, TranslationError,
+        TranslationOptions, TranslationStage,
         context_pattern::{ContextPatterns, ContextPatternsBuilder},
         effect::Environment,
         indication::{
@@ -237,16 +237,18 @@ impl PrimaryTableBuilder {
         .into_iter()
         .flatten()
         .collect();
+        let trie_ctx = match direction {
+            Direction::Forward => ctx.character_classes.clone(),
+            Direction::Backward => ctx.dots_classes().clone(),
+        };
         PrimaryTable {
             undefined: self.undefined,
             character_translations: self.character_translations,
             direction,
             fallback_definitions: ctx.character_definitions().clone(),
-            trie: self.trie.with_context(ctx.character_classes.clone()),
-            comp6_trie: self.comp6_trie.with_context(ctx.character_classes.clone()),
-            nocross_trie: self
-                .nocross_trie
-                .with_context(ctx.character_classes.clone()),
+            trie: self.trie.with_context(trie_ctx.clone()),
+            comp6_trie: self.comp6_trie.with_context(trie_ctx.clone()),
+            nocross_trie: self.nocross_trie.with_context(trie_ctx.clone()),
             hyphenator: self.hyphenator,
             match_patterns: self.match_patterns.build(),
             context_patterns: self.context_patterns.build(),
@@ -552,20 +554,20 @@ impl PrimaryTable {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
-                    let with_classes: WithClasses = with_classes
+                    let class_constraints: Vec<ClassConstraint> = with_classes
                         .iter()
                         .filter_map(|wc| match wc {
+                            // "before CLASS" keyword → lookahead: char after match must be in class
                             ParsedClass::Before { class } => {
                                 let key = CharacterClass::from(class.as_str());
-                                let text = ctx.character_classes.get(&key)?;
-                                let braille = ctx.dots_classes.get(&key).unwrap_or_default();
-                                Some(WithClass::Before { text, braille })
+                                ctx.character_classes.get(&key)?;
+                                Some(ClassConstraint::End(key))
                             }
+                            // "after CLASS" keyword → lookbehind: char before match must be in class
                             ParsedClass::After { class } => {
                                 let key = CharacterClass::from(class.as_str());
-                                let text = ctx.character_classes.get(&key)?;
-                                let braille = ctx.dots_classes.get(&key).unwrap_or_default();
-                                Some(WithClass::After { text, braille })
+                                ctx.character_classes.get(&key)?;
+                                Some(ClassConstraint::Start(key))
                             }
                         })
                         .collect();
@@ -576,7 +578,7 @@ impl PrimaryTable {
                         None,
                         direction,
                         rule.precedence(),
-                        with_classes,
+                        class_constraints,
                         TranslationStage::Main,
                         rule,
                     );
@@ -984,43 +986,6 @@ impl PrimaryTable {
             .partition(|t| t.offset() == 0)
     }
 
-    /// Returns `false` if `t` has a `before`/`after` class constraint that is not satisfied
-    /// at this position.
-    fn satisfies_class_constraints(
-        &self,
-        t: &ResolvedTranslation,
-        remaining: &str,
-        prev: Option<char>,
-    ) -> bool {
-        for wc in t.with_classes() {
-            let satisfied = match wc {
-                WithClass::Before { text, braille } => {
-                    let chars = if self.direction == Direction::Backward {
-                        braille
-                    } else {
-                        text
-                    };
-                    remaining
-                        .chars()
-                        .nth(t.length())
-                        .is_some_and(|c| chars.contains(&c))
-                }
-                WithClass::After { text, braille } => {
-                    let chars = if self.direction == Direction::Backward {
-                        braille
-                    } else {
-                        text
-                    };
-                    prev.is_some_and(|c| chars.contains(&c))
-                }
-            };
-            if !satisfied {
-                return false;
-            }
-        }
-        true
-    }
-
     fn word_hyphenates(&self, input: &str) -> bool {
         match &self.hyphenator {
             Some(hyphenator) => !hyphenator.opportunities(&input.to_lowercase()).is_empty(),
@@ -1118,9 +1083,6 @@ impl PrimaryTable {
             let (current, delayed) = self.partition_delayed_translations(delayed_translations);
             delayed_translations = delayed;
             candidates.extend(current);
-
-            // filter out candidates whose before/after class constraint is not satisfied
-            candidates.retain(|t| self.satisfies_class_constraints(t, chars.as_str(), prev));
 
             // inside a numeric run, suppress multi-character contractions
             if constraints.dont_contract_at(char_pos) {

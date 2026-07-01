@@ -3,11 +3,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    parser::{AnchoredRule, CharacterClasses, Direction, Precedence},
+    parser::{AnchoredRule, CharacterClass, CharacterClasses, Direction, Precedence},
     translator::TranslationStage,
 };
-
-use super::WithClasses;
 
 use super::ResolvedTranslation;
 
@@ -32,7 +30,22 @@ pub enum Transition {
     Character(char),
     Start(Boundary),
     End(Boundary),
+    /// Non-consuming lookbehind: the preceding character must be in this class.
+    /// Inserted at the start of the path (before character transitions).
+    StartClass(CharacterClass),
+    /// Non-consuming lookahead: the character immediately after the match must be in this class.
+    /// Inserted at the end of the path (after character transitions).
+    EndClass(CharacterClass),
     Any,
+}
+
+/// A class-based constraint attached to a rule via the liblouis `before`/`after` keywords.
+#[derive(Debug, Clone)]
+pub enum ClassConstraint {
+    /// `after CLASS` keyword: the character before the match must be in this class (lookbehind).
+    Start(CharacterClass),
+    /// `before CLASS` keyword: the character after the match must be in this class (lookahead).
+    End(CharacterClass),
 }
 
 #[derive(Default, Debug, Clone)]
@@ -65,6 +78,9 @@ impl TrieNode {
 #[derive(Default, Debug, Clone)]
 pub struct Trie {
     root: TrieNode,
+    /// Character classes used for word/number/punctuation boundary checks and for
+    /// `StartClass`/`EndClass` constraint checks. Set to text classes for forward translation,
+    /// braille classes for backward.
     ctx: CharacterClasses,
 }
 
@@ -95,7 +111,7 @@ impl Trie {
             None,
             direction,
             precedence,
-            vec![],
+            vec![], // char rules never carry class constraints
             stage,
             origin,
         );
@@ -109,7 +125,7 @@ impl Trie {
         after: Option<Transition>,
         direction: Direction,
         precedence: Precedence,
-        with_classes: WithClasses,
+        class_constraints: Vec<ClassConstraint>,
         stage: TranslationStage,
         origin: &AnchoredRule,
     ) {
@@ -132,6 +148,17 @@ impl Trie {
         let mut current_node = &mut self.root;
         let mut length = from.chars().count();
 
+        // StartClass constraints are lookbehind checks on `prev` — inserted before char transitions
+        for constraint in &class_constraints {
+            if let ClassConstraint::Start(class) = constraint {
+                length += 1;
+                current_node = current_node
+                    .transitions
+                    .entry(Transition::StartClass(class.clone()))
+                    .or_default();
+            }
+        }
+
         if let Some(t) = before {
             length += 1;
             current_node = current_node.transitions.entry(t).or_default();
@@ -149,27 +176,47 @@ impl Trie {
             current_node = current_node.transitions.entry(t).or_default();
         }
 
+        // EndClass constraints are lookahead checks on the next char — inserted after char transitions
+        for constraint in &class_constraints {
+            if let ClassConstraint::End(class) = constraint {
+                length += 1;
+                current_node = current_node
+                    .transitions
+                    .entry(Transition::EndClass(class.clone()))
+                    .or_default();
+            }
+        }
+
         if let Some(translation) = &current_node.translation {
             // this node already contains a translation
             if precedence > translation.precedence() {
-                current_node.translation = Some(
-                    ResolvedTranslation::new(from, to, from.chars().count(), stage, origin.clone())
-                        .with_class_constraint(with_classes),
-                );
+                current_node.translation = Some(ResolvedTranslation::new(
+                    from,
+                    to,
+                    from.chars().count(),
+                    stage,
+                    origin.clone(),
+                ));
             } else if cfg!(feature = "backwards_compatibility") {
                 // first rule wins, so nothing to insert
             } else {
                 // last rule wins
-                current_node.translation = Some(
-                    ResolvedTranslation::new(from, to, length, stage, origin.clone())
-                        .with_class_constraint(with_classes),
-                );
+                current_node.translation = Some(ResolvedTranslation::new(
+                    from,
+                    to,
+                    length,
+                    stage,
+                    origin.clone(),
+                ));
             }
         } else {
-            current_node.translation = Some(
-                ResolvedTranslation::new(from, to, length, stage, origin.clone())
-                    .with_class_constraint(with_classes),
-            );
+            current_node.translation = Some(ResolvedTranslation::new(
+                from,
+                to,
+                length,
+                stage,
+                origin.clone(),
+            ));
         }
     }
 
@@ -236,6 +283,41 @@ impl Trie {
                         match_length,
                     ));
                 }
+            }
+        }
+        // Class-based non-consuming checks. Iterate only transitions that are class variants to
+        // avoid scanning all transitions on every node visit.
+        // FIXME: `self.ctx.get(class)` is a HashMap lookup on every traversal. This could be
+        // moved to build time by resolving each class to its character set once during `insert`
+        // and storing it directly in the transition (e.g. as a HashSet in a separate Vec in
+        // TrieNode, or as a sorted Vec<char> in the Transition key).
+        for (transition, child_node) in &node.transitions {
+            match transition {
+                Transition::StartClass(class) => {
+                    if let Some(set) = self.ctx.get(class) {
+                        if prev.is_some_and(|p| set.contains(&p)) {
+                            matching_rules.extend(self.find_translations_from_node(
+                                input,
+                                prev,
+                                child_node,
+                                match_length,
+                            ));
+                        }
+                    }
+                }
+                Transition::EndClass(class) => {
+                    if let Some(set) = self.ctx.get(class) {
+                        if c.is_some_and(|ch| set.contains(&ch)) {
+                            matching_rules.extend(self.find_translations_from_node(
+                                input,
+                                prev,
+                                child_node,
+                                match_length,
+                            ));
+                        }
+                    }
+                }
+                _ => {}
             }
         }
         matching_rules
@@ -686,5 +768,123 @@ mod tests {
         assert_eq!(trie.find_translations("Foo", None), vec![foo.clone()]);
         assert_eq!(trie.find_translations("FOO", None), vec![foo.clone()]);
         assert_eq!(trie.find_translations("foO", None), vec![foo.clone()]);
+    }
+
+    #[test]
+    fn find_translations_with_end_class() {
+        let ctx = CharacterClasses::new(&[
+            (CharacterClass::Letter, &['a', 'b', 'c']),
+            (CharacterClass::Digit, &['1', '2']),
+            (CharacterClass::Space, &[' ']),
+        ]);
+        let mut trie = Trie::new().with_context(ctx);
+        let empty = Vec::<ResolvedTranslation>::new();
+        let rule = fake_rule();
+        let foo_before_letter = ResolvedTranslation::new(
+            "foo".into(),
+            "FL".into(),
+            4,
+            TranslationStage::Main,
+            rule.clone(),
+        );
+        let foo_before_digit = ResolvedTranslation::new(
+            "foo".into(),
+            "FD".into(),
+            4,
+            TranslationStage::Main,
+            rule.clone(),
+        );
+        // "before letter always foo FL" — next char after "foo" must be a letter
+        trie.insert(
+            "foo",
+            "FL",
+            None,
+            None,
+            Direction::Forward,
+            Precedence::Default,
+            vec![ClassConstraint::End(CharacterClass::Letter)],
+            TranslationStage::Main,
+            &rule,
+        );
+        // "before digit always foo FD" — next char after "foo" must be a digit
+        trie.insert(
+            "foo",
+            "FD",
+            None,
+            None,
+            Direction::Forward,
+            Precedence::Default,
+            vec![ClassConstraint::End(CharacterClass::Digit)],
+            TranslationStage::Main,
+            &rule,
+        );
+        // Both rules coexist on different paths — neither stomps the other
+        assert_eq!(
+            trie.find_translations("fooa", None),
+            vec![foo_before_letter]
+        );
+        assert_eq!(trie.find_translations("foo1", None), vec![foo_before_digit]);
+        assert_eq!(trie.find_translations("foo ", None), empty);
+        assert_eq!(trie.find_translations("foo", None), empty);
+    }
+
+    #[test]
+    fn find_translations_with_start_class() {
+        let ctx = CharacterClasses::new(&[
+            (CharacterClass::Letter, &['a', 'b', 'c']),
+            (CharacterClass::Digit, &['1', '2']),
+            (CharacterClass::Space, &[' ']),
+        ]);
+        let mut trie = Trie::new().with_context(ctx);
+        let empty = Vec::<ResolvedTranslation>::new();
+        let rule = fake_rule();
+        let foo_after_letter = ResolvedTranslation::new(
+            "foo".into(),
+            "AL".into(),
+            4,
+            TranslationStage::Main,
+            rule.clone(),
+        );
+        let foo_after_digit = ResolvedTranslation::new(
+            "foo".into(),
+            "AD".into(),
+            4,
+            TranslationStage::Main,
+            rule.clone(),
+        );
+        // "after letter always foo AL" — prev char before "foo" must be a letter
+        trie.insert(
+            "foo",
+            "AL",
+            None,
+            None,
+            Direction::Forward,
+            Precedence::Default,
+            vec![ClassConstraint::Start(CharacterClass::Letter)],
+            TranslationStage::Main,
+            &rule,
+        );
+        // "after digit always foo AD" — prev char before "foo" must be a digit
+        trie.insert(
+            "foo",
+            "AD",
+            None,
+            None,
+            Direction::Forward,
+            Precedence::Default,
+            vec![ClassConstraint::Start(CharacterClass::Digit)],
+            TranslationStage::Main,
+            &rule,
+        );
+        assert_eq!(
+            trie.find_translations("foo", Some('a')),
+            vec![foo_after_letter]
+        );
+        assert_eq!(
+            trie.find_translations("foo", Some('1')),
+            vec![foo_after_digit]
+        );
+        assert_eq!(trie.find_translations("foo", Some(' ')), empty);
+        assert_eq!(trie.find_translations("foo", None), empty);
     }
 }
