@@ -287,6 +287,14 @@ impl ResolvedTranslation {
         Self { weight, ..self }
     }
 
+    /// Set the `output` of a translation.
+    pub fn with_output(self, output: &str) -> Self {
+        Self {
+            output: output.to_string(),
+            ..self
+        }
+    }
+
     /// Set the `offset` of a translation.
     pub fn with_offset(self, offset: usize) -> Self {
         Self { offset, ..self }

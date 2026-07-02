@@ -17,15 +17,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   read-only/side-effect-free per file, so no correctness changes were needed.
 
 ### Added
+- Implement indication handling for backward-translation of `capsletter`, `begcapsword`/
+  `endcapsword`, and `numsign`/`nonumsign`. These opcodes were previously invisible to
+  backward translation, so their dots fell through to whatever character definition
+  happened to share the same pattern (e.g. `capsletter 46` read as `punctuation $ 46`
+  in `hu-hu-g1.ctb`), and digits sharing dots with letters always decoded as letters.
+  An opcode is only recognized as an indicator when its dots aren't already claimed by
+  a real letter, since some tables (Malayalam, Punjabi) share a subtable whose
+  `capsletter`/`numsign` coincide with one of their own script letters. Fixes GitHub
+  issue #4.
 - Implement `begcaps`/`endcaps` and `begcapsphrase`/`endcapsphrase`/`lencapsphrase`
   caps-passage indication. A passage of two or more (or `lencapsphrase`, if set)
   consecutive whole-uppercase words is now wrapped in a single indicator instead of
   marking each word individually; hyphenated segments of one word don't count
   toward the threshold, and `begcapsphrase` is preferred over `begcaps` when both
   are defined. `begcaps`/`endcaps` were previously parsed but never emitted, and
-  `begcapsphrase`/`endcapsphrase`/`lencapsphrase` were not wired up at all. This
-  improves `emphasis.yaml` from 82.1% to 96.4% and `capitalization.yaml` from
-  64.7% to 100% (forward direction).
+  `begcapsphrase`/`endcapsphrase`/`lencapsphrase` were not wired up at all.
 
 ### Fixed
 - `base uppercase`/`base lowercase` (case-pairing) rules now also register the
@@ -38,7 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   semantics documented as "translates if preceded or followed by a letter".
   Previously `partword` was compiled identically to `midword`, which required
   letters on both sides and therefore missed word-end and word-start positions.
-  This fix improves Afrikaans (afr-za-g2) from ~77% to ~90% on its test suite.
 - Unicode NFC normalization is no longer applied to input text or trie patterns.
   The normalization was causing spurious mismatches for tables that define rules
   for standalone combining characters (IPA, Hebrew, Yiddish).
@@ -50,15 +56,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   enforced during translation. Previously the class name was parsed but
   silently discarded, causing rules such as
   `before MalayalamVowel always VA 1236-1` to fire unconditionally and
-  produce spurious braille cells. This fix improves Malayalam from 2% to
-  91% and Punjabi from 31% to 95% on their respective test suites.
+  produce spurious braille cells.
 - `before`/`after` class constraints now work correctly in backward
   translation. Previously the constraint was checked against text-side
   character sets even in backward mode, where the surrounding context
   consists of braille Unicode cells, so all constrained rules were
   rejected. Constraints now check against the corresponding braille
-  character set when translating backward, recovering Hindi backward
-  translation from 53.8% to 87.1%.
+  character set when translating backward.
 - Letter-sign isolation was incorrectly firing for isolated letters
   preceded by another letter (e.g. the final letter of `:bc`) or
   preceded by a space (word boundary, e.g. the "I" in "I'm"). The
@@ -126,8 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   behaviour. Previously both had equal precedence, so whichever appeared
   first in the table won — meaning `always` rules intended to override a
   character definition were silently ignored when the definition came from
-  an included file. This fixes translation for many tables; the overall
-  test suite improves from 71.6% to 79.7%.
+  an included file. This fixes translation for many tables.
 - When showing a trace of a translation show all rules in one table,
   instead a table for each stage.
 - `begnum` now correctly matches non-word indicator characters (e.g.

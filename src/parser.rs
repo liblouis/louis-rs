@@ -18,9 +18,8 @@ use search_path::SearchPath;
 
 use crate::parser::braille::BrailleChar;
 
-use self::braille::BrailleChars;
-
 pub use attribute::Attribute;
+pub use braille::BrailleChars;
 pub use braille::fallback;
 pub use character_class::{CharacterClass, CharacterClasses};
 pub use match_rule::{Pattern, PatternParser, Patterns};
@@ -1011,6 +1010,14 @@ impl HasNocross for Rule {
 pub enum Precedence {
     #[default]
     Default,
+    /// Backward-only indicator opcodes (`capsletter`, `numsign`, ...). Ranked above plain
+    /// character-definition opcodes (`letter`, `punctuation`, `sign`, ...), whose dots
+    /// they can coincide with in some tables (e.g. `capsletter 46` vs `punctuation $ 46`
+    /// in hu-hu-g1.ctb) — but *below* [`Precedence::Translation`], since a same-dots
+    /// `always`/word-family rule (e.g. `always ഃ 6` colliding with `capsletter 6` via a
+    /// shared included subtable in Malayalam) reflects a more specific, legitimate
+    /// language rule that must still win.
+    Indicator,
     Translation,
 }
 
@@ -1037,6 +1044,11 @@ impl HasPrecedence for Rule {
             | Rule::Midnum { .. }
             | Rule::Endnum { .. }
             | Rule::Always { .. } => Precedence::Translation,
+            Rule::Capsletter { .. }
+            | Rule::Begcapsword { .. }
+            | Rule::Endcapsword { .. }
+            | Rule::Numsign { .. }
+            | Rule::Nonumsign { .. } => Precedence::Indicator,
             _ => Precedence::Default,
         }
     }

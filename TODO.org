@@ -77,7 +77,11 @@
 
 * Known gaps
 - [ ] hyphen (nocross)
-- [ ] indication + backtranslation
+- [-] indication + backtranslation
+  - [X] capsletter, begcapsword/endcapsword, numsign/nonumsign
+  - [ ] begcaps/endcaps/begcapsphrase/endcapsphrase (passage-level caps)
+  - [ ] emphasis (begemph/endemph etc.) — needs a way to return
+    typeform metadata from backward translation, not just text
 - [X] indication
 - [X] computer braille
 - [ ] inpos + outpos mapping
