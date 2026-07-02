@@ -32,8 +32,8 @@ impl Regexp {
                 Regexp::OneOrMore(Box::new(Regexp::from_pattern(pattern, ctx)))
             }
             Pattern::Either(left, right) => Regexp::Either(
-                Box::new(Regexp::from_pattern(left, ctx)),
-                Box::new(Regexp::from_pattern(right, ctx)),
+                Box::new(Regexp::from_patterns(left, ctx)),
+                Box::new(Regexp::from_patterns(right, ctx)),
             ),
         }
     }

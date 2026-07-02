@@ -32,7 +32,7 @@ pub enum Pattern {
     Optional(Box<Pattern>),
     ZeroOrMore(Box<Pattern>),
     OneOrMore(Box<Pattern>),
-    Either(Box<Pattern>, Box<Pattern>),
+    Either(Patterns, Patterns),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -212,10 +212,7 @@ impl<'a> PatternParser<'a> {
 
     fn group(&mut self) -> Result<Pattern, ParseError> {
         self.consume('(')?;
-        let mut patterns = Patterns(Vec::new());
-        while self.chars.peek() != Some(&')') {
-            patterns.push(self.either()?);
-        }
+        let patterns = self.either()?;
         self.consume(')')?;
         if patterns.is_empty() {
             Err(ParseError::EmptyGroup)
@@ -269,25 +266,41 @@ impl<'a> PatternParser<'a> {
         Ok(inner)
     }
 
-    fn either(&mut self) -> Result<Pattern, ParseError> {
-        let mut left = self.pattern_with_quantifier()?;
+    /// Parses a run of concatenated patterns, stopping at `|`, `)`, or end of input.
+    fn sequence(&mut self) -> Result<Patterns, ParseError> {
+        let mut patterns = Patterns(Vec::new());
+        while !matches!(self.chars.peek(), None | Some('|') | Some(')')) {
+            patterns.push(self.pattern_with_quantifier()?);
+        }
+        Ok(patterns)
+    }
+
+    /// Parses `sequence ('|' sequence)*`, left-associative, matching the lowest-precedence
+    /// alternation semantics of a normal regular expression (concatenation binds tighter
+    /// than `|`).
+    fn either(&mut self) -> Result<Patterns, ParseError> {
+        if self.chars.peek() == Some(&'|') {
+            return Err(ParseError::MissingPatternBeforeEither);
+        }
+        let mut left = self.sequence()?;
         while self.chars.next_if(|&c| c == '|').is_some() {
-            let right = self.pattern_with_quantifier()?;
-            left = Pattern::Either(Box::new(left), Box::new(right));
+            let right = self.sequence()?;
+            if right.is_empty() {
+                return Err(ParseError::EmptyPattern);
+            }
+            left = Patterns(vec![Pattern::Either(left, right)]);
         }
         Ok(left)
     }
 
     pub fn pattern(&mut self) -> Result<Patterns, ParseError> {
-        let mut patterns = Patterns(Vec::new());
         if self.chars.next_if(|&c| c == '-').is_some() {
-            patterns.push(Pattern::Empty);
-        } else {
-            while self.chars.peek().is_some() {
-                patterns.push(self.either()?);
-            }
+            return Ok(Patterns(vec![Pattern::Empty]));
         }
-        Ok(patterns)
+        if self.chars.peek().is_none() {
+            return Ok(Patterns(Vec::new()));
+        }
+        self.either()
     }
 }
 
@@ -400,38 +413,40 @@ mod tests {
     fn either() {
         assert_eq!(
             PatternParser::new("a|b").either(),
-            Ok(Pattern::Either(
-                Box::new(Pattern::Characters("a".into())),
-                Box::new(Pattern::Characters("b".into()))
-            ))
+            Ok(Patterns(vec![Pattern::Either(
+                Patterns(vec![Pattern::Characters("a".into())]),
+                Patterns(vec![Pattern::Characters("b".into())])
+            )]))
         );
         assert_eq!(
             PatternParser::new("a|b|c").either(),
-            Ok(Pattern::Either(
-                Box::new(Pattern::Either(
-                    Box::new(Pattern::Characters("a".into())),
-                    Box::new(Pattern::Characters("b".into()))
-                )),
-                Box::new(Pattern::Characters("c".into())),
-            ))
+            Ok(Patterns(vec![Pattern::Either(
+                Patterns(vec![Pattern::Either(
+                    Patterns(vec![Pattern::Characters("a".into())]),
+                    Patterns(vec![Pattern::Characters("b".into())])
+                )]),
+                Patterns(vec![Pattern::Characters("c".into())]),
+            )]))
         );
         assert_eq!(
             PatternParser::new("a+|[bc]?").either(),
-            Ok(Pattern::Either(
-                Box::new(Pattern::OneOrMore(Box::new(Pattern::Characters(
+            Ok(Patterns(vec![Pattern::Either(
+                Patterns(vec![Pattern::OneOrMore(Box::new(Pattern::Characters(
                     "a".into()
-                )))),
-                Box::new(Pattern::Optional(Box::new(Pattern::Set(HashSet::from([
-                    'b', 'c'
-                ])))))
-            ))
+                )))]),
+                Patterns(vec![Pattern::Optional(Box::new(Pattern::Set(
+                    HashSet::from(['b', 'c'])
+                )))])
+            )]))
         );
         assert_eq!(
             PatternParser::new("(a|b)").either(),
-            Ok(Pattern::Group(Patterns(vec![Pattern::Either(
-                Box::new(Pattern::Characters("a".into())),
-                Box::new(Pattern::Characters("b".into()))
-            )])))
+            Ok(Patterns(vec![Pattern::Group(Patterns(vec![
+                Pattern::Either(
+                    Patterns(vec![Pattern::Characters("a".into())]),
+                    Patterns(vec![Pattern::Characters("b".into())])
+                )
+            ]))]))
         );
         assert_eq!(
             PatternParser::new("|a").either(),
@@ -440,6 +455,20 @@ mod tests {
         assert_eq!(
             PatternParser::new("a|").either(),
             Err(ParseError::EmptyPattern)
+        );
+        assert_eq!(
+            PatternParser::new("e%[^_.]|end").either(),
+            Ok(Patterns(vec![Pattern::Either(
+                Patterns(vec![
+                    Pattern::Characters("e".into()),
+                    Pattern::Attributes(HashSet::from([
+                        Attribute::Boundary,
+                        Attribute::Class(CharacterClass::Space),
+                        Attribute::Class(CharacterClass::Punctuation),
+                    ]))
+                ]),
+                Patterns(vec![Pattern::Characters("end".into())])
+            )]))
         );
     }
 

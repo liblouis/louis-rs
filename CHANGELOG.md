@@ -35,6 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `begcapsphrase`/`endcapsphrase`/`lencapsphrase` were not wired up at all.
 
 ### Fixed
+- The `match`/`context` pattern parser now scopes `|` (alternation) over the whole
+  surrounding sequence of tokens, matching standard regex precedence (concatenation
+  binds tighter than alternation) and liblouis's own semantics. Previously `|` only
+  bound to the single adjacent token, so a pattern like `e%[^_.]|end` was silently
+  misparsed as `e` followed by `(not-punctuation OR "end")` instead of `(e followed
+  by not-punctuation) OR "end"` — affecting any bare, unparenthesized multi-token
+  alternative (e.g. `afr-za-g2.ctb`'s `bew e%[^_.]|end|erasie|erig`).
 - `base uppercase`/`base lowercase` (case-pairing) rules now also register the
   derived character in the `letter` character class, matching what the direct
   `uppercase`/`lowercase` opcodes already do. Previously a derived uppercase
