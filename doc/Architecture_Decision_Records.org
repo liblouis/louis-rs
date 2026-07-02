@@ -370,7 +370,7 @@ callers ask for ~translations_at(pos)~ directly.
 - [[https://github.com/liblouis/liblouis/blob/master/liblouis/lou_translateString.c][liblouis lou_translateString.c]] — authoritative reference for
   ~checkNumericMode~, ~dontContract~, and ~for_selectRule~
 
-* DRAFT Backward-translation indication with pre-computed events
+* ACCEPTED Backward-translation indication with pre-computed events
 - Deciders :: CE
 - Date :: [2026-06-26 Do]
 
@@ -483,32 +483,38 @@ text-character positions.
 
 ** Decision Outcome
 
-/Not yet decided./
+Chosen option: *Separate backward precompute pass over braille input*
+(option 1).
 
-Option 1 is the most consistent with the established forward
-architecture and is the preferred direction to investigate. The key open
-question is how to align braille-cell positions with output-character
-positions — specifically whether a dense braille-position array remains
-the right data structure when braille cells and text characters do not
-correspond one-to-one.
+The alignment worry — that braille-cell positions and output-character
+positions don't correspond one-to-one — turned out not to block
+pre-computation, because detection only ever needs the braille-cell
+index: the pass walks the braille input once and records, per cell,
+which interpretation constraints apply (force uppercase, force digit
+reading, etc.). The translation loop still resolves cells to text via
+normal rule matching; it just consults the constraint at each cell's
+position along the way, the same way forward translation consults its
+precomputed events at each text position.
 
-Option 2 is a pragmatic fallback if the alignment problem proves too
-complex to pre-compute. It accepts mutable state in the backward loop
-but keeps it isolated to indication, which is at least a bounded
-regression from the forward design.
-
-Option 3 is ruled out as it introduces unnecessary complexity and a
-performance penalty.
+In the process this generalized further than either ADR anticipated:
+forward and backward indication now share a single per-position
+constraint mechanism, rather than a ~PrecomputedIndications~-shaped
+type on one side and something bespoke on the other. Numeric-mode
+suppression, computer-braille spans, and the backward caps/digit
+disambiguation this ADR was written for are all instances of the same
+idea — a set of constraints attached to a position, computed once
+before translation, consulted read-only during it.
 
 ** Links
 
 - [[*ACCEPTED Pre-compute indication events before translation][ADR: Pre-compute indication events before translation]] — the forward
   architecture this ADR extends
-- ~src/translator/indication.rs~ — current indication infrastructure
+- ~src/translator/position_constraints.rs~ — the shared per-position
+  constraint mechanism both directions now use
 - [[https://github.com/liblouis/liblouis/blob/master/liblouis/lou_backTranslateString.c][liblouis lou_backTranslateString.c]] — authoritative reference for
   backward indication handling
 
-* DRAFT Regexps duplicate character transitions
+* SUPERSEDED Regexps duplicate character transitions
 - Deciders :: CE
 - Date :: [2024-12-24 Di]
 
@@ -546,14 +552,21 @@ match b(a|o) r z 14
 ** Decision Drivers
 ** Considered Options
 ** Decision Outcome
-Chosen option: "TBD", because ...
 
-** Positive Consequences
--
-** Negative Consequences
--
-** Pros and Cons of the Options
+Superseded — the question is moot. The regex engine was later
+rewritten from a shared character-transition graph to a VM that
+compiles alternation to a pair of branching instructions, each
+alternative getting its own instruction stream rather than a node
+other patterns might also land on. Matching runs all live branches
+in parallel and asks which one finished, so two alternatives that
+happen to start with the same character never need to merge, share,
+or otherwise coordinate — there is no shared node for them to
+collide on in the first place.
+
 ** Links
+
+- ~src/translator/regexp.rs~ — the VM-based engine that replaced the
+  graph model this ADR was written against
 
 * DRAFT Hyphenation
 - Deciders :: CE
@@ -638,21 +651,44 @@ deserialized version of that.
 
 ** Decision Outcome
 
-Chosen option: "TBD", because ...
+Chosen option: the ~hyphenation~ crate, with custom-built dictionaries
+for the languages liblouis ships hyphenation patterns for. The crate
+is wired into table loading (~IncludeHyphenation~) and used to filter
+~nocross~ candidates: a candidate contraction is only offered if the
+hyphenator does *not* find a break point inside it.
+
+This is integration, not verified correctness. There has been no
+confirmation that the resulting behaviour actually matches liblouis's
+own hyphenation-based ~nocross~ handling — it has not been tested
+against the liblouis test suite for this specifically, and it is
+tracked in ~TODO.org~ ("Hyphenation ... this doesn't seem to work" /
+"test it") and listed under Known Gaps ("hyphen (nocross)") as still
+open. The status stays DRAFT rather than ACCEPTED until that
+verification happens.
 
 ** Positive Consequences
 
--
+- Avoids re-implementing a hyphenation pattern matcher from scratch;
+  reuses well-established TeX/OpenOffice pattern dictionaries.
 
 ** Negative Consequences
 
--
+- The dictionary-loading path is fragile: the crate bakes the set of
+  supported languages into an enum at its own build time, so using a
+  liblouis dictionary for a language the crate doesn't already know
+  about required patching the crate's language table and rebuilding
+  it out-of-band — a maintenance burden for adding more languages.
+- Correctness relative to liblouis's ~nocross~ semantics is unverified.
 
 ** Pros and Cons of the Options
 
 ** Links
 
-* DRAFT Handle word boundaries
+- ~TODO.org~ — "Hyphenation" and "Known gaps: hyphen (nocross)" entries
+- ~src/translator/table/primary.rs~ — ~IncludeHyphenation~,
+  ~word_hyphenates~, ~nocross_candidates~
+
+* ACCEPTED Handle word boundaries
 - Deciders :: CE
 - Date :: [2024-03-08 Fr]
 
@@ -887,19 +923,44 @@ seems like a corner case for utdml
 
 ** Decision Outcome
 
-Chosen option: "TBD", because ...
+Chosen option: "Enhance trie with transitions", because it keeps a
+single search structure instead of splitting rules across multiple
+tries or computing candidates first and filtering them afterwards.
+Boundaries are modelled as non-consuming transitions alongside the
+normal character transitions, so a boundary check is just another
+edge to follow during the same trie walk.
+
+This turned out to generalize well: the same non-consuming-transition
+idea was later reused for the liblouis ~before~/~after~
+class-constraint keywords, which are a lookbehind/lookahead against a
+character class rather than a fixed boundary condition.
 
 ** Positive Consequences
 
-- 
+- One trie handles both boundary-constrained and unconstrained rules;
+  nothing to keep in sync across parallel structures.
+- The non-consuming-transition mechanism generalized to other
+  lookbehind/lookahead needs (the ~before~/~after~ keywords) without
+  changing the trie's overall shape.
 
 ** Negative Consequences
 
-- 
+- All boundary conditions are checked at every character position,
+  even when the current node has no boundary transitions to offer.
+  This is a performance cost that has not yet been benchmarked against
+  lazier evaluation.
+- Non-consuming transitions make the trie a less pure prefix tree: a
+  lookup can branch without consuming input, which is a bit more to
+  hold in your head than plain character-by-character descent.
 
 ** Pros and Cons of the Options
 
 ***  Handle different contexts with separate tries
+
+- Bad :: rules unconstrained by any boundary would need to be
+  duplicated across every context-specific trie, or looked up
+  separately and merged, reintroducing the synchronization problem
+  this option was meant to avoid
 
 ***  Enhance trie with transitions
 
