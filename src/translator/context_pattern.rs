@@ -17,7 +17,12 @@ use crate::translator::{ResolvedTranslation, TranslationError, TranslationStage}
 
 impl Regexp {
     fn from_test(test: &Test, ctx: &CharacterClasses) -> Self {
-        Regexp::from_instructions(test.tests(), ctx)
+        let ast = Regexp::from_instructions(test.tests(), ctx);
+        if test.at_end() {
+            Regexp::Concat(Box::new(ast), Box::new(Regexp::EndAnchor))
+        } else {
+            ast
+        }
     }
 
     fn from_instructions(instructions: &[TestInstruction], ctx: &CharacterClasses) -> Self {
@@ -179,9 +184,20 @@ impl Effects {
     }
 }
 
+/// A compiled context regexp paired with whether it is anchored to the beginning of the whole
+/// input (liblouis' `` ` `` test anchor). Unlike the end anchor (`~`), the beginning anchor
+/// cannot be expressed inside the regexp itself: the regexp only ever sees the remaining suffix
+/// of the input, so it has no way to tell whether that suffix starts at position 0 of the
+/// original string. Callers of [`ContextPatterns::find`] must supply that externally.
+#[derive(Debug)]
+struct AnchoredContextRegexp {
+    requires_start: bool,
+    regexp: CompiledRegexp,
+}
+
 #[derive(Debug)]
 pub struct ContextPatternsBuilder {
-    regexps: Vec<CompiledRegexp>,
+    regexps: Vec<AnchoredContextRegexp>,
 }
 
 impl ContextPatternsBuilder {
@@ -229,8 +245,11 @@ impl ContextPatternsBuilder {
                 ctx.dots_classes()
             }
         };
-        let re = Regexp::from_test(&test, character_classes).compile_with_payload(translation);
-        self.regexps.push(re);
+        let regexp = Regexp::from_test(&test, character_classes).compile_with_payload(translation);
+        self.regexps.push(AnchoredContextRegexp {
+            requires_start: test.at_beginning(),
+            regexp,
+        });
         Ok(())
     }
 
@@ -243,14 +262,17 @@ impl ContextPatternsBuilder {
 
 #[derive(Debug)]
 pub struct ContextPatterns {
-    regexps: Vec<CompiledRegexp>,
+    regexps: Vec<AnchoredContextRegexp>,
 }
 
 impl ContextPatterns {
-    pub fn find(&self, input: &str, env: &Environment) -> Vec<ResolvedTranslation> {
+    /// `at_start` tells whether `input` begins at position 0 of the whole string being
+    /// translated — needed to honor liblouis' `` ` `` ("beginning of input") test anchor.
+    pub fn find(&self, input: &str, env: &Environment, at_start: bool) -> Vec<ResolvedTranslation> {
         self.regexps
             .iter()
-            .flat_map(|r| r.find(input, env))
+            .filter(|r| at_start || !r.requires_start)
+            .flat_map(|r| r.regexp.find(input, env))
             .collect()
     }
 }
@@ -637,8 +659,8 @@ mod tests {
         let translation =
             ResolvedTranslation::new("abc", "A_B_C", 3, TranslationStage::Main, origin.clone());
         let patterns = builder.build();
-        assert_eq!(patterns.find("abc", &env), [translation]);
-        assert_eq!(patterns.find("def", &env), []);
+        assert_eq!(patterns.find("abc", &env, true), [translation]);
+        assert_eq!(patterns.find("def", &env, true), []);
     }
 
     #[test]
@@ -655,8 +677,71 @@ mod tests {
         let translation =
             ResolvedTranslation::new("abc", "<abc>", 3, TranslationStage::Main, origin.clone());
         let patterns = builder.build();
-        assert_eq!(patterns.find("abc", &env), [translation]);
-        assert!(patterns.find("def", &env).is_empty());
+        assert_eq!(patterns.find("abc", &env, true), [translation]);
+        assert!(patterns.find("def", &env, true).is_empty());
+    }
+
+    #[test]
+    fn context_at_beginning_anchor() {
+        let env = Environment::new();
+        let tests = test::Parser::new(r#"`"a""#).tests().unwrap();
+        let action = action::Parser::new(r#""X""#).actions().unwrap();
+        let origin = origin(r#"context `"a" "X""#);
+        let stage = TranslationStage::Main;
+        let mut builder = ContextPatternsBuilder::new();
+        builder
+            .insert(&tests, &action, &origin, stage, &TableContext::default())
+            .unwrap();
+        let translation =
+            ResolvedTranslation::new("a", "X", 1, TranslationStage::Main, origin.clone());
+        let patterns = builder.build();
+        // matches when `input` truly starts at position 0 of the whole string being translated
+        assert_eq!(patterns.find("a", &env, true), [translation]);
+        // does not match when we are mid-string, even though the substring looks identical
+        assert!(patterns.find("a", &env, false).is_empty());
+    }
+
+    #[test]
+    fn context_at_end_anchor() {
+        let env = Environment::new();
+        let tests = test::Parser::new(r#""a"~"#).tests().unwrap();
+        let action = action::Parser::new(r#""X""#).actions().unwrap();
+        let origin = origin(r#"context "a"~ "X""#);
+        let stage = TranslationStage::Main;
+        let mut builder = ContextPatternsBuilder::new();
+        builder
+            .insert(&tests, &action, &origin, stage, &TableContext::default())
+            .unwrap();
+        let translation =
+            ResolvedTranslation::new("a", "X", 1, TranslationStage::Main, origin.clone());
+        let patterns = builder.build();
+        // matches when "a" is exactly the whole remaining input
+        assert_eq!(patterns.find("a", &env, true), [translation]);
+        // does not match when there is trailing input after "a"
+        assert!(patterns.find("ab", &env, true).is_empty());
+    }
+
+    #[test]
+    fn context_beginning_and_end_anchor_regression() {
+        // Regression test for da-dk-g26.ctb's `["-"]~ @36-36: a hyphen that is both anchored to
+        // the beginning and the end of input (i.e. the whole input is exactly "-") must not match
+        // when there is trailing text after the hyphen, e.g. "-0". Before this fix, the `~`
+        // anchor was silently ignored, so this rule matched "-0" and doubled the hyphen cell.
+        let env = Environment::new();
+        let tests = test::Parser::new(r#"`["-"]~"#).tests().unwrap();
+        let action = action::Parser::new("*").actions().unwrap();
+        let origin = origin(r#"context `["-"]~ *"#);
+        let stage = TranslationStage::Main;
+        let mut builder = ContextPatternsBuilder::new();
+        builder
+            .insert(&tests, &action, &origin, stage, &TableContext::default())
+            .unwrap();
+        let translation =
+            ResolvedTranslation::new("-", "-", 1, TranslationStage::Main, origin.clone());
+        let patterns = builder.build();
+        assert_eq!(patterns.find("-", &env, true), [translation]);
+        assert!(patterns.find("-0", &env, true).is_empty());
+        assert!(patterns.find("-", &env, false).is_empty());
     }
 
     #[test]
@@ -679,8 +764,8 @@ mod tests {
             ResolvedTranslation::new("⠐", "⠐⠥", 3, TranslationStage::Post1, origin.clone())
                 .with_offset(1);
         let patterns = builder.build();
-        assert_eq!(patterns.find("⠕⠐⠽", &env), [translation]);
-        assert!(patterns.find("⠕", &env).is_empty());
+        assert_eq!(patterns.find("⠕⠐⠽", &env, true), [translation]);
+        assert!(patterns.find("⠕", &env, true).is_empty());
     }
 
     #[test]
@@ -703,8 +788,8 @@ mod tests {
             ResolvedTranslation::new("abc", "<abc>", 9, TranslationStage::Main, origin.clone())
                 .with_offset(3);
         let patterns = builder.build();
-        assert_eq!(patterns.find("{{{abc}}}", &env), [translation]);
-        assert!(patterns.find("def", &env).is_empty());
+        assert_eq!(patterns.find("{{{abc}}}", &env, true), [translation]);
+        assert!(patterns.find("def", &env, true).is_empty());
     }
 
     #[test]
@@ -727,7 +812,7 @@ mod tests {
             ResolvedTranslation::new("abc", "<ABC>", 9, TranslationStage::Main, origin.clone())
                 .with_offset(3);
         let patterns = builder.build();
-        assert_eq!(patterns.find("{{{abc}}}", &env), [translation]);
-        assert!(patterns.find("def", &env).is_empty());
+        assert_eq!(patterns.find("{{{abc}}}", &env, true), [translation]);
+        assert!(patterns.find("def", &env, true).is_empty());
     }
 }

@@ -86,6 +86,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   space nor a letter. This restores correct en-gb-g1 translation while
   preserving the Tamil letsign behaviour (letters after digits, hyphens,
   or other non-letter, non-space characters still fire).
+- The `` ` `` (beginning-of-input) and `~` (end-of-input) test anchors are
+  now enforced for `context`/`correct`/`pass2`/`pass3`/`pass4` rules.
+  Previously both anchors were parsed but silently discarded when a rule
+  was compiled, so an anchored rule matched anywhere in the input instead
+  of only at the boundary it was written for.
 
 ## [0.2.8] - 2026-06-29
 

@@ -26,6 +26,16 @@ impl Test {
         &self.tests
     }
 
+    /// Whether this test is anchored to the beginning of the whole input (`` ` ``).
+    pub fn at_beginning(&self) -> bool {
+        self.at_beginning
+    }
+
+    /// Whether this test is anchored to the end of the whole input (`~`).
+    pub fn at_end(&self) -> bool {
+        self.at_end
+    }
+
     pub fn add_implicit_replace(self) -> Self {
         if !self
             .tests

@@ -46,6 +46,9 @@ pub enum Regexp {
     Group(Box<Regexp>),
     /// To support empty captures, we need an empty AST
     Empty,
+    /// Zero-width assertion that matches only when there is no input left, i.e. the match has
+    /// reached the true end of the whole string being translated
+    EndAnchor,
     /// Stop-gap blanket "implementation" for things that might be needed but are not yet
     /// implemented
     NotImplemented,
@@ -87,6 +90,7 @@ impl Regexp {
             Regexp::NotVariableEqual(_, _) => unreachable!(),
             Regexp::Group(regexp) => Regexp::Group(Box::new(regexp.negate())),
             Regexp::Empty => unreachable!(), // sorry you cannot negate an empty regexp
+            Regexp::EndAnchor => unreachable!(), // negating an anchor makes no sense
             Regexp::NotImplemented => unreachable!(),
         }
     }
@@ -204,6 +208,7 @@ impl Regexp {
                 regexp.emit(instructions, character_classes);
             }
             Regexp::Empty => (),
+            Regexp::EndAnchor => instructions.push(Instruction::AssertEnd),
             Regexp::NotImplemented => (),
         }
     }
@@ -239,6 +244,8 @@ pub enum Instruction {
     /// Test whether a variable is equal to a value
     VariableEqual(VariableIndex, u8),
     NotVariableEqual(VariableIndex, u8),
+    /// Zero-width assertion: succeeds only if there is no input left
+    AssertEnd,
 }
 
 /// Compiled version of [`Regexp`]. Contains bytecode and associated data structures
@@ -335,6 +342,9 @@ impl CompiledRegexp {
                 } else {
                     false
                 }
+            }
+            Instruction::AssertEnd => {
+                input.is_empty() && self.is_match_internal(pc + 1, input, env)
             }
         }
     }
@@ -474,6 +484,13 @@ impl CompiledRegexp {
                 if let Some(&actual) = env.get(var)
                     && actual != expected
                 {
+                    self.find_internal(pc + 1, input, sp, length, env, capture)
+                } else {
+                    None
+                }
+            }
+            Instruction::AssertEnd => {
+                if sp == input.len() {
                     self.find_internal(pc + 1, input, sp, length, env, capture)
                 } else {
                     None

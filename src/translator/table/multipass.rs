@@ -80,9 +80,10 @@ impl MultipassTable {
         input: &str,
         _prev: Option<char>,
         env: &Environment,
+        at_start: bool,
     ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
         self.patterns
-            .find(input, env)
+            .find(input, env, at_start)
             .into_iter()
             .partition(|t| t.offset() == 0)
     }
@@ -118,7 +119,9 @@ impl MultipassTable {
         loop {
             // given an input query the patterns for matching translations. Then split off the
             // translations that are delayed, i.e. have an offset because they have a pre-pattern
-            let (mut candidates, delayed) = self.translation_candidates(chars.as_str(), prev, &env);
+            let at_start = chars.as_str().len() == input.len();
+            let (mut candidates, delayed) =
+                self.translation_candidates(chars.as_str(), prev, &env, at_start);
             delayed_translations.extend(delayed);
 
             // move delayed_translations with zero offset into candidates

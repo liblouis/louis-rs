@@ -1258,9 +1258,10 @@ impl PrimaryTable {
         &self,
         input: &str,
         env: &Environment,
+        at_start: bool,
     ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
         self.context_patterns
-            .find(input, env)
+            .find(input, env, at_start)
             .into_iter()
             .partition(|t| t.offset() == 0)
     }
@@ -1314,8 +1315,9 @@ impl PrimaryTable {
 
             // then search for context patterns. Unless they have empty pre patterns they will all
             // have an offset. Split those off.
+            let at_start = chars.as_str().len() == input.len();
             let (context_candidates, context_delayed) =
-                self.context_candidates(chars.as_str(), &env);
+                self.context_candidates(chars.as_str(), &env, at_start);
             delayed_translations.extend(context_delayed);
             // merge the candidates from the context patters with the candidates from the plain translations
             candidates.extend(context_candidates);
