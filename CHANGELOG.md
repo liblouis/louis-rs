@@ -35,6 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `begcapsphrase`/`endcapsphrase`/`lencapsphrase` were not wired up at all.
 
 ### Fixed
+- `dots_classes`'s `letter` class (used for backward-translation word-boundary checks)
+  now also includes the dots of alphabetic `always` rules (e.g. letter-group contractions
+  like "le" or multi-cell digraphs like "sz"), not just `letter`/`lowercase`/`uppercase`
+  opcodes. Previously such a cell wasn't recognized as part of a word, so a `word`-level
+  rule sharing a prefix with the contraction could wrongly fire mid-word during backward
+  translation (e.g. `⠓⠩` in `sot-za-g2.ctb`, "h" followed by the "le" contraction,
+  backward-decoded to "horele" instead of "hle", because the `word hore` rule thought the
+  word ended right after "h").
 - The `match`/`context` pattern parser now scopes `|` (alternation) over the whole
   surrounding sequence of tokens, matching standard regex precedence (concatenation
   binds tighter than alternation) and liblouis's own semantics. Previously `|` only

@@ -134,6 +134,16 @@ impl TableContext {
                     character_classes.insert(CharacterClass::Punctuation, *character);
                     dots_classes.insert_dots(CharacterClass::Punctuation, dots);
                 }
+                // `always` rules commonly spell out letter-group contractions (e.g. "le", "ing")
+                // as a single cell or short cell sequence. Backward translation's word-boundary
+                // checks rely on `dots_classes` to recognize these cells as letters too, or a
+                // `word`-level rule sharing a prefix with the contraction wrongly thinks the word
+                // ends right after it.
+                Rule::Always { chars, dots, .. } if chars.chars().all(|c| c.is_alphabetic()) => {
+                    for cell in dots.to_string().chars() {
+                        dots_classes.insert(CharacterClass::Letter, cell);
+                    }
+                }
                 _ => (),
             }
         }
@@ -376,6 +386,32 @@ mod tests {
                 .dots_classes
                 .get(&CharacterClass::UserDefined("accent".to_string())),
             Some(HashSet::from(['⠐']))
+        );
+    }
+
+    #[test]
+    fn dots_classes_includes_alphabetic_always_rules() {
+        let rules = [
+            parse_rule("lowercase h 125"),
+            parse_rule("always le 246"),
+            parse_rule("always sz 234-1235"),
+            parse_rule("always -- 36"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+
+        // a single-cell letter-group contraction ("le") is a letter cell, just like "h", and
+        // every cell of a multi-cell contraction ("sz") counts too
+        assert_eq!(
+            context.dots_classes.get(&CharacterClass::Letter),
+            Some(HashSet::from(['⠓', '⠪', '⠎', '⠗']))
+        );
+        // a non-alphabetic always rule (e.g. a dash contraction) is not a letter cell
+        assert!(
+            !context
+                .dots_classes
+                .get(&CharacterClass::Letter)
+                .unwrap()
+                .contains(&'⠤')
         );
     }
 }
