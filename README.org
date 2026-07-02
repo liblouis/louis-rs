@@ -17,7 +17,7 @@ back into liblouis maintenance.
 ** Status
 The re-implementation is in alpha state.
 
-That said, the ~louis~ binary currently passes around 89% of the
+That said, the ~louis~ binary currently passes around 94% of the
 liblouis test suite (forward and backward combined).
 
 The library and its API has not been worked out and is not stable.
