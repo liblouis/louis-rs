@@ -25,6 +25,12 @@
     display table
 - [ ] The boundary functions (~word_start~, etc) only work in forward
   translation
+  - likely the same root cause behind the backward-direction gaps
+    tracked under "Known gaps" below: begcaps/endcaps/begcapsphrase
+    (confirmed via code search — ~uppercase.rs~ has no
+    backward-direction logic at all, not even a partial
+    implementation) and possibly the backward word/group-sign
+    corruption seen in ~sw-ke-dictionary.yaml~
 - [X] implement regexp negation
 - [X] Parse with context
   - currently tables are parsed line by line. Opcodes have no idea
@@ -77,9 +83,19 @@
 
 * Known gaps
 - [ ] hyphen (nocross)
+  - concrete repro: en-ueb.yaml compounds split across a hyphen don't
+    get correct per-segment contraction, e.g. "do-it-yourself" ->
+    expected "d-x-yrf" but actual "do-x-y|rself" ("do" and "yourself"
+    fail to contract on their own side of the hyphen); same for
+    "out-and-out" -> expected "|-&-|" actual "|t-&-|t"
 - [-] indication + backtranslation
   - [X] capsletter, begcapsword/endcapsword, numsign/nonumsign
   - [ ] begcaps/endcaps/begcapsphrase/endcapsphrase (passage-level caps)
+    - confirmed via code search: this isn't partially done, there is
+      currently no backward-direction logic at all in
+      ~uppercase.rs~ (forward tiers were implemented 2026-07-01, see
+      ~emphasis.yaml~/~capitalization.yaml~ gains, but backward
+      recognition of the same markers was never added)
   - [ ] emphasis (begemph/endemph etc.) — needs a way to return
     typeform metadata from backward translation, not just text
 - [X] indication
@@ -87,3 +103,43 @@
 - [ ] inpos + outpos mapping
 - [X] typeform (emphasis input)
 - [ ] regexp infinite loop
+- [ ] ~Regexp::Literal~/~Regexp::Any~ negation is an unimplemented
+  ~todo!()~ (regexp.rs) — panics if a table's ~match~/~context~
+  pattern hits it
+- [ ] ~Attribute::Boundary~/~ByOrder~/~Any~ are silently treated as
+  no-ops in both match_pattern.rs and context_pattern.rs instead of
+  being matched
+- [ ] Word/group-sign ("lower"/part-word sign) contraction is not
+  applied when the word carries a suffix, apostrophe, or is part of a
+  longer compound, even though the same sign fires correctly when the
+  word stands alone
+  - e.g. "Little" -> correct, but "Littlestown" spells out "little"
+    in full instead of contracting it; "'twould", "would've" etc. lose
+    the "would" wordsign; "it"/"was"/"also" lose their UEB short forms
+    when combined with other punctuation/context
+  - by far the largest single contributor to remaining test failures:
+    ~en-ueb-g2-dictionary_harness.yaml~ alone has ~16,600 failing
+    tests from this (56% of all failing tests suite-wide); also hits
+    ~afr-za-g2.yaml~ (Afrikaans groupsigns) and
+    ~hu-hu-g1_dictionary_special_consonants.yaml~ (gy/ggy digraph
+    precedence)
+  - likely a trie precedence/longest-match bug for lower/part-word
+    signs
+- [ ] Backward translation of those same word/group signs sometimes
+  corrupts unrelated surrounding text instead of just failing to
+  contract, e.g. sw-ke-dictionary.yaml backward lookups splicing in
+  unrelated dictionary words ("wote" -> "wizaraote"), or a "be"
+  wordsign backward-translating to "bb"
+- [ ] Single-letter words get a spurious letter-sign prefix inserted
+  (e.g. "a" -> ⠰⠁, "u" -> ⠰⠥) — seen across unrelated tables
+  (en-us-g2, sw-ke), likely one shared root cause
+- [ ] Missing leading indicator when it would apply at the very start
+  of the input string (seen in en-ueb-computer-code.yaml: ".count" is
+  missing its leading ";" marker that mid-string occurrences get)
+- [ ] Numeric-mode/capital-sign interaction: letters used as
+  pseudo-digits (e.g. Rwandan-style date/verse references in
+  rw-rw-g1.yaml) incorrectly receive a capital sign even though
+  they're inside number context
+- [ ] Malayalam conjunct/reph rule: a specific virama/conjunct
+  sequence consistently produces ⠗ instead of the expected ⠻
+  (ml.yaml)
