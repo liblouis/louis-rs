@@ -42,7 +42,21 @@ impl Regexp {
 
     fn from_instruction(instruction: &TestInstruction, ctx: &CharacterClasses) -> Self {
         match instruction {
-            TestInstruction::Lookback { .. } => Regexp::NotImplemented, // ignore
+            // liblouis' `_N` rewinds a single mutable cursor by N so a later test can peek at
+            // already-consumed (or, at the end of a test, not-yet-consumed) text without that
+            // text becoming part of the replaceable span — its own matcher needs this because it
+            // has no other way to look outside the span it's currently walking. We don't: (1)
+            // `ResolvedTranslation::resolve` sets the reported length to the *captured bracket's*
+            // length alone, never however much surrounding "before"/"after" content was checked,
+            // so a check placed before or after the bracket is never mistakenly swallowed into
+            // the consumed span regardless of `_N`'s value; and (2) `context_candidates` is
+            // queried at every cursor position (like `match`'s `pre`), so a check placed before
+            // the bracket is naturally discovered starting at the earlier position and held via
+            // `delayed_translations`/`offset()` until the cursor catches up. Dropping `_N`
+            // entirely and just compiling the surrounding checks in place is therefore already
+            // correct, not a stand-in for a real implementation — hence `Empty`, not some
+            // "unimplemented" marker.
+            TestInstruction::Lookback { .. } => Regexp::Empty,
             TestInstruction::Variable { var, op, operand } => match op {
                 Operator::Eq => Regexp::VariableEqual(*var, *operand),
                 // FIXME: operands other than equal do not seem to exist in the wild (at least not
@@ -728,6 +742,72 @@ mod tests {
         assert_eq!(patterns.find("a", &env, true), [translation]);
         // does not match when there is trailing input after "a"
         assert!(patterns.find("ab", &env, true).is_empty());
+    }
+
+    #[test]
+    fn context_lookback_before_bracket_is_ignored_not_consumed() {
+        // liblouis' `_1$d[...]` rewinds 1, checks the preceding char is a digit, then advances
+        // back to the bracket. We drop the `_1` (see the comment at
+        // `TestInstruction::Lookback`'s match arm) and just check `$d` in place instead. This
+        // still requires a digit immediately before the bracket — discovered when the cursor
+        // sits at that digit, held via `offset()`/`delayed_translations` until it catches up —
+        // and the reported length only ever covers the bracket itself, never the digit.
+        let env = Environment::new();
+        let tests = test::Parser::new(r#"_1$d["b"]"#).tests().unwrap();
+        let action = action::Parser::new(r#""X""#).actions().unwrap();
+        let origin = origin(r#"context _1$d["b"] "X""#);
+        let stage = TranslationStage::Main;
+        let ctx = TableContext::new(
+            CharacterClasses::new(&[(CharacterClass::Digit, &['a'])]),
+            CharacterClasses::default(),
+            SwapClasses::default(),
+        );
+        let mut builder = ContextPatternsBuilder::new();
+        builder
+            .insert(&tests, &action, &origin, stage, &ctx)
+            .unwrap();
+        let patterns = builder.build();
+        // "a" is a digit here, so the rule fires on "b" once found starting at "a"; the digit
+        // itself is not part of the reported match: `length()` is 1 (just "b", derived from
+        // `input`/capture below), even though `weight()` — used only to rank competing
+        // candidates, per the established convention in `context_capture_advanced` above —
+        // reflects the whole 2-char span that was actually checked ("a" + "b")
+        let translation =
+            ResolvedTranslation::new("b", "X", 2, stage, origin.clone()).with_offset(1);
+        assert_eq!(patterns.find("ab", &env, true), [translation]);
+        // does not fire when the preceding character isn't a digit
+        assert!(patterns.find("bb", &env, true).is_empty());
+    }
+
+    #[test]
+    fn context_lookback_after_bracket_is_ignored_not_consumed() {
+        // liblouis' `[...]!$d_` checks the trailing character then rewinds so it isn't counted
+        // as part of the consumed span. We drop the trailing `_` and just check `!$d` in place —
+        // the reported length is always the bracket's own length (see
+        // `ResolvedTranslation::resolve`), never however much trailing context was checked, so
+        // the checked-but-not-bracketed character is correctly left for the next position to
+        // translate on its own.
+        let env = Environment::new();
+        let tests = test::Parser::new(r#"["b"]!$d_"#).tests().unwrap();
+        let action = action::Parser::new(r#""X""#).actions().unwrap();
+        let origin = origin(r#"context ["b"]!$d_ "X""#);
+        let stage = TranslationStage::Main;
+        let ctx = TableContext::new(
+            CharacterClasses::new(&[(CharacterClass::Digit, &['1'])]),
+            CharacterClasses::default(),
+            SwapClasses::default(),
+        );
+        let mut builder = ContextPatternsBuilder::new();
+        builder
+            .insert(&tests, &action, &origin, stage, &ctx)
+            .unwrap();
+        let patterns = builder.build();
+        // matches, and only consumes "b" (`length()` 1), when followed by a non-digit; `weight()`
+        // is 2, reflecting the whole "b"+"z" span that was checked
+        let translation = ResolvedTranslation::new("b", "X", 2, stage, origin.clone());
+        assert_eq!(patterns.find("bz", &env, true), [translation]);
+        // does not fire when followed by a digit
+        assert!(patterns.find("b1", &env, true).is_empty());
     }
 
     #[test]

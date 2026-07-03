@@ -54,9 +54,6 @@ pub enum Regexp {
     NotEndAnchor,
     /// Never matches, regardless of input. The negation of [`Empty`](Regexp::Empty).
     Never,
-    /// Stop-gap blanket "implementation" for things that might be needed but are not yet
-    /// implemented
-    NotImplemented,
 }
 
 impl Regexp {
@@ -98,7 +95,6 @@ impl Regexp {
             Regexp::Never => Regexp::Empty,
             Regexp::EndAnchor => Regexp::NotEndAnchor,
             Regexp::NotEndAnchor => Regexp::EndAnchor,
-            Regexp::NotImplemented => unreachable!(),
         }
     }
 
@@ -152,9 +148,6 @@ impl Regexp {
             Regexp::VariableEqual(_, _) | Regexp::NotVariableEqual(_, _) => true,
             // genuine zero-width assertions
             Regexp::Empty | Regexp::EndAnchor | Regexp::NotEndAnchor => true,
-            // `emit` compiles this to zero instructions, i.e. an unconditional no-op —
-            // behaviorally identical to `Empty`
-            Regexp::NotImplemented => true,
             // `Never` doesn't succeed at all, so the VM's `Split` backs off immediately without
             // ever reaching the loop-back jump — it can't cause the infinite loop this guards
             // against, regardless of how it's classified here
@@ -281,7 +274,6 @@ impl Regexp {
             Regexp::EndAnchor => instructions.push(Instruction::AssertEnd),
             Regexp::NotEndAnchor => instructions.push(Instruction::AssertMoreInput),
             Regexp::Never => instructions.push(Instruction::Fail),
-            Regexp::NotImplemented => (),
         }
     }
 }
