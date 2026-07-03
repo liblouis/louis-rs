@@ -189,6 +189,15 @@ impl Effects {
 /// cannot be expressed inside the regexp itself: the regexp only ever sees the remaining suffix
 /// of the input, so it has no way to tell whether that suffix starts at position 0 of the
 /// original string. Callers of [`ContextPatterns::find`] must supply that externally.
+///
+/// This is deliberately a simpler shape than `match_pattern.rs`'s `AnchoredMatchRegexp` (one
+/// regexp gated by a bool, not two full compiled variants): `` ` ``/`~` are test-level anchors
+/// that appear at most once, at the very start/end of the whole test, so "does this rule apply
+/// at all" is a single yes/no question — skipping the whole compiled regexp is enough. `match`'s
+/// `^` is an *attribute*, usable anywhere a character-class attribute is, including mixed with
+/// other attributes in the same set (`%[_~^]`) — the difference isn't "does the rule apply" but
+/// "what does this one sub-expression mean here", which has to be baked into the compiled
+/// instructions themselves, hence two full variants there instead of a gate on one.
 #[derive(Debug)]
 struct AnchoredContextRegexp {
     requires_start: bool,

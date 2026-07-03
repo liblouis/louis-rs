@@ -148,6 +148,10 @@ impl Regexp {
 
 /// A match rule compiled twice: once assuming `pre` is being matched at the true start of the
 /// whole original input, once assuming it isn't. See [`BoundaryMode`] for why.
+///
+/// This looks like it duplicates `context_pattern.rs`'s `AnchoredContextRegexp` (also
+/// start-anchor-dependent), but that one only needs a bool gate on a single compiled regexp,
+/// not two full variants — see the comment on that struct for why the two can't be unified.
 #[derive(Debug)]
 struct AnchoredMatchRegexp {
     at_start: CompiledRegexp,
