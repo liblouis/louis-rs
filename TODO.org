@@ -149,15 +149,23 @@
     first suspected
   - confirmed fixed for lowercase input: "would", "little", "it",
     "was", "also" etc. now all contract correctly forward
-  - [ ] NEW, more specific remaining gap: capitalized input still
-    doesn't contract ("Would"/"Little"/"Also" still spell out fully) —
-    the ~match~ opcode's literal-string comparison
-    (~Instruction::Char~ in regexp.rs) does exact case-sensitive
-    equality with no case-folding, so any capitalized occurrence of a
-    word-sign falls through. Given a full-word dictionary test is
-    heavily weighted toward capitalized proper nouns and
-    sentence-initial words, this is likely now the largest remaining
-    contributor to ~en-ueb-g2-dictionary_harness.yaml~'s failures
+  - [X] capitalized input ("Would"/"Little"/"Also") now also
+    contracts correctly, verified against a real liblouis build — a
+    ~match~ rule's literal ~chars~ field is found case-insensitively
+    in liblouis (~validMatch~), only ~pre~/~post~ stay case-sensitive.
+    Implemented via ~Regexp::CaseInsensitiveString~, reusing
+    ~trie::TrieNode::char_transition~'s existing convention
+  - [ ] NEW, unrelated gap found while digging further: double-letter
+    contractions ("bb"/"cc"/etc, ~match %a bb %a 23~) fail for any
+    standalone word regardless of case ("abbas" alone fails, "the
+    abbas" works) — a ~BoundaryMode::AssumeAtStart~ bug in
+    match_pattern.rs. The direct fix regresses the suite overall
+    (94.9%→94.4%) by exposing a bigger, pre-existing architectural
+    gap between our weight-based match-rule candidate selection and
+    liblouis's table-definition-order first-match-wins. Reverted
+    rather than shipped — see the ADR "Match-rule candidate
+    selection: weight vs. table-definition order" for the full
+    analysis and options
 - [ ] Backward translation of those same word/group signs sometimes
   corrupts unrelated surrounding text instead of just failing to
   contract, e.g. sw-ke-dictionary.yaml backward lookups splicing in

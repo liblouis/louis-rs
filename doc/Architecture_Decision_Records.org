@@ -1140,6 +1140,136 @@ still have been necessary regardless of the matching backend.
   the same "independent per-rule precedence" problem from a different
   angle
 
+* DRAFT Match-rule candidate selection: weight vs. table-definition order
+- Deciders :: CE
+- Date :: [2026-07-04 Sa]
+
+** Context and Problem Statement
+
+Our engine selects among competing ~match~-rule candidates at a given
+position by collecting every rule that matches there and picking the
+one with the highest ~weight()~ (total characters checked, including
+~pre~/~post~ context — see ~primary.rs~'s ~max_by_key~). liblouis does
+something different: ~for_selectRule~ walks a hash bucket of candidate
+rules in table-definition order and returns on the *first* one that
+validates (~lou_translateString.c~, the ~CTO_Match~ case ends in a
+bare ~return;~) — it never considers the rest of the bucket once one
+rule succeeds.
+
+These two strategies usually agree, but diverge when a well-scoped
+rule and a rule whose ~pre~/~post~ can reach arbitrarily far outward
+both match the same position. Concretely, in ~en-ueb-g2.ctb~:
+
+#+begin_example
+match !%[^_~] ing - 346          # "ing" at the true end of a word
+match %[^_]!%[_1]* in !%[_1]*%[^_] 35   # "in" surrounded by boundary-or-more-letters
+#+end_example
+
+For "abandoning", liblouis tries the "ing" rule first (it's defined
+earlier), it validates, and liblouis stops there. Our engine instead
+discovers *both* candidates — the "in" rule's ~pre~ can walk backward
+through the whole of "abandon" (all ordinary letters) to reach a
+boundary at the true start of input, giving it a much larger weight
+than "ing"'s — and picks "in", producing "abandon" + "in" + "g"
+instead of the correct "abandon" + "ing".
+
+This surfaced while fixing an unrelated bug: ~BoundaryMode::AssumeAtStart~
+(see ~match_pattern.rs~) was wrongly treating any non-boundary ~pre~
+check as automatically failing at position 0, which accidentally
+suppressed rules like the "in" one whenever discovered at the true
+start of input. Fixing that bug correctly (per liblouis semantics) is
+what exposed this pre-existing selection mismatch — it isn't new, it
+was just never triggered clearly enough before.
+
+Worth being explicit about what kind of fix this is. liblouis's own
+first-match-by-definition-order mechanism is genuinely fragile:
+nothing in the rule syntax declares "this beats that rule", it's
+implicit in table position (and in which hash bucket a rule lands in,
+which table authors don't directly control either) — reordering two
+rules, or a table merge that shuffles definitions, can silently
+change output with no warning. That's a real liblouis design smell.
+
+Crucially, though, this project's remit is not limited to "replicate
+liblouis's behavior, however fragile" — louis-rs's ambition includes
+being a *better, more logical* implementation, and its author is
+also a liblouis co-maintainer with the standing to change liblouis's
+own tables, not just louis-rs's engine. That reopens an option a
+strict-compatibility project wouldn't have: fixing the *rule* so it
+is unambiguous by construction (e.g. giving the "in" rule an explicit
+"not followed by g" exclusion), which fixes both engines at once and
+is a more honest expression of what the rule was trying to say in
+the first place, rather than reproducing liblouis's order-dependent
+tie-break as a permanent feature of louis-rs. See
+~feedback_dont_default_to_liblouis_compatibility~ in the assistant's
+memory for the fuller reasoning.
+
+That said, upstream table changes have a much bigger blast radius
+than an engine-side fix confined to this repo — they affect every
+liblouis consumer, not just louis-rs, and go through liblouis's own
+review process on its own timeline. Whether and when to pursue that
+is the co-maintainer's call, not a default.
+
+** Decision Drivers
+
+- For options 1–3 (the engine keeps behaving the same for a given
+  table), matching liblouis's actual output takes priority over how
+  "clever" or general our own selection heuristic is — cleverness
+  that diverges from liblouis's real behavior is a bug there, not an
+  improvement. Option 4 is the deliberate exception: it changes what
+  the table itself considers correct, so it isn't judged against
+  liblouis's current output at all
+- Whatever engine-side fix is chosen must not regress the (large) set
+  of cases where weight-based selection already agrees with liblouis
+- Precedence/definition-order is already a first-class concept
+  elsewhere in the codebase (trie rule precedence, the
+  ~backwards_compatibility~ feature flag) — reusing rather than
+  duplicating that mechanism would be preferable if it fits here
+- Fixing an ambiguous rule upstream is preferable to reproducing its
+  ambiguity when it's genuinely a design smell (not just an engine
+  gap) and the scope/timing works for liblouis's own release process
+
+** Considered Options
+
+1. *Leave weight-based selection as-is* — accept the mismatch as a
+   known gap for the (so far rare) cases it affects.
+2. *Definition-order tie-break* — when multiple match candidates
+   apply at a position, prefer the one defined earliest in the table,
+   falling back to weight only when order is somehow unavailable/tied.
+3. *Full first-match-wins* — replicate liblouis's behavior exactly:
+   stop at the first candidate (in definition order) that validates,
+   never comparing weight at all. Would need care to confirm this
+   doesn't regress cases that currently work by picking the
+   *longest* of several validating candidates.
+4. *Fix the ambiguous rule(s) upstream* — e.g. scope the "in" rule so
+   it cannot match the tail of "abandoning" at all, removing the
+   collision at the source instead of arbitrating it in either
+   engine. Doesn't need to be exclusive of 1–3: even with this
+   pursued for known cases, the engine still needs *some* selection
+   behavior for tables that haven't been (or won't be) revisited.
+   Requires first assessing how common this class of ambiguity is
+   across the shipped tables, to judge whether it's a one-off or a
+   pattern worth addressing systematically.
+
+** Decision Outcome
+
+None yet. A first attempt at fixing the underlying
+~BoundaryMode::AssumeAtStart~ bug (option: just let non-boundary
+checks match normally, same as ~Otherwise~) is correctly targeted for
+that bug in isolation, but caused a net regression on the full test
+corpus (94.9% → 94.4% total, 93.9% → 91.8% on
+~en-ueb-g2-dictionary_harness.yaml~) once it made rules like the "in"
+one above newly reachable at position 0. That fix was reverted rather
+than shipped. Revisiting it requires deciding among the options above
+first.
+
+** Links
+
+- ~TODO.org~ — "Word/group-sign contraction" entry under Known gaps
+  for the concrete repro and regression numbers
+- ~src/translator/table/primary.rs~ — ~match_candidates~,
+  ~context_candidates~, weight-based candidate selection
+- ~src/translator/match_pattern.rs~ — ~BoundaryMode::AssumeAtStart~
+
 * COMMENT [short title of solved problem and solution]                     :Template:
 # - Status :: [proposed | rejected | accepted | deprecated | ... |
 #   superseded by [[file:0005-example.md][ADR-0005]]]
