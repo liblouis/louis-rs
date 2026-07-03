@@ -19,6 +19,15 @@ use crate::translator::{
     translation::{Resolve, Translation},
 };
 
+/// Whether `actual` matches `expected` case-insensitively, lowercasing only `actual` — mirrors
+/// [`trie::TrieNode::char_transition`](crate::translator::trie::TrieNode), which relies on
+/// literal characters in tables being written lowercase by convention rather than folding both
+/// sides. A character without a single-character lowercase mapping never matches, same as the
+/// trie.
+fn chars_match_case_insensitive(actual: char, expected: char) -> bool {
+    actual.to_lowercase().count() == 1 && actual.to_lowercase().next() == Some(expected)
+}
+
 /// Abstract syntax tree representation of regular expressions
 #[derive(Debug, Clone)]
 pub enum Regexp {
@@ -39,6 +48,14 @@ pub enum Regexp {
     String(String),
     /// Convenience that is unrolled into a sequence of [`NotChar`](Instruction#variant.NotChar)
     NotString(String),
+    /// Like [`String`](Regexp::String), but each character is compared case-insensitively —
+    /// mirroring [`trie::TrieNode::char_transition`](crate::translator::trie::TrieNode), which
+    /// lowercases the *input* character before comparing against the (by table-author
+    /// convention, already lowercase) stored one, rather than folding both sides. liblouis' own
+    /// `match` opcode does the same for its literal `chars` field: it's found via the same
+    /// case-insensitive `validMatch`/`toLowercase` used for every other opcode, and only the
+    /// `pre`/`post` context patterns go through the strictly case-sensitive pattern matcher.
+    CaseInsensitiveString(String),
     /// Check whether variable at index is equal to given value
     VariableEqual(VariableIndex, u8),
     /// Check whether variable at index is not equal to given value
@@ -88,6 +105,7 @@ impl Regexp {
             Regexp::Capture(_) => unreachable!(), // negating a capture makes no sense
             Regexp::String(s) => Regexp::NotString(s),
             Regexp::NotString(_) => unreachable!(),
+            Regexp::CaseInsensitiveString(_) => unreachable!(), // only used for match's `chars`, never negated
             Regexp::VariableEqual(slot, value) => Regexp::NotVariableEqual(slot, value),
             Regexp::NotVariableEqual(_, _) => unreachable!(),
             Regexp::Group(regexp) => Regexp::Group(Box::new(regexp.negate())),
@@ -144,7 +162,9 @@ impl Regexp {
             Regexp::RepeatExactly(_, regexp)
             | Regexp::RepeatAtLeast(_, regexp)
             | Regexp::RepeatAtLeastAtMost(_, _, regexp) => regexp.always_zero_width(),
-            Regexp::String(s) | Regexp::NotString(s) => s.is_empty(),
+            Regexp::String(s) | Regexp::NotString(s) | Regexp::CaseInsensitiveString(s) => {
+                s.is_empty()
+            }
             Regexp::VariableEqual(_, _) | Regexp::NotVariableEqual(_, _) => true,
             // genuine zero-width assertions
             Regexp::Empty | Regexp::EndAnchor | Regexp::NotEndAnchor => true,
@@ -261,6 +281,11 @@ impl Regexp {
                     instructions.push(Instruction::NotChar(c))
                 }
             }
+            Regexp::CaseInsensitiveString(s) => {
+                for c in s.chars() {
+                    instructions.push(Instruction::CaseInsensitiveChar(c))
+                }
+            }
             Regexp::VariableEqual(index, value) => {
                 instructions.push(Instruction::VariableEqual(*index, *value))
             }
@@ -289,6 +314,8 @@ pub enum Instruction {
     /// Match a single char
     Char(char),
     NotChar(char),
+    /// Match a single char case-insensitively — see [`Regexp::CaseInsensitiveString`]
+    CaseInsensitiveChar(char),
     /// Match a set of chars. Contains a reference to the character class.
     Class(CharacterClassIndex),
     NotClass(CharacterClassIndex),
@@ -350,6 +377,15 @@ impl CompiledRegexp {
                 let mut chars = input.chars().peekable();
                 if let Some(actual) = chars.peek()
                     && expected != *actual
+                {
+                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..], env)
+                } else {
+                    false
+                }
+            }
+            Instruction::CaseInsensitiveChar(expected) => {
+                if let Some(actual) = input.chars().next()
+                    && chars_match_case_insensitive(actual, expected)
                 {
                     self.is_match_internal(pc + 1, &input[actual.len_utf8()..], env)
                 } else {
@@ -460,6 +496,22 @@ impl CompiledRegexp {
                 let mut chars = input[sp..].chars().peekable();
                 if let Some(actual) = chars.peek()
                     && expected != *actual
+                {
+                    self.find_internal(
+                        pc + 1,
+                        input,
+                        sp + actual.len_utf8(),
+                        length + 1,
+                        env,
+                        capture,
+                    )
+                } else {
+                    None
+                }
+            }
+            Instruction::CaseInsensitiveChar(expected) => {
+                if let Some(actual) = input[sp..].chars().next()
+                    && chars_match_case_insensitive(actual, expected)
                 {
                     self.find_internal(
                         pc + 1,

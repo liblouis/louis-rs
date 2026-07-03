@@ -129,6 +129,13 @@ impl Regexp {
     /// them with concat. `pre_boundary` selects which of the two `pre` variants to compile (see
     /// [`BoundaryMode`]); `post` always uses [`BoundaryMode::Dynamic`] since its boundary checks
     /// don't need a variant.
+    ///
+    /// `chars` is matched case-insensitively ([`Regexp::CaseInsensitiveString`]), unlike `pre`/
+    /// `post`, which stay case-sensitive. This matches liblouis: a `match` rule's literal
+    /// `chars` word is found the same case-insensitive way as every other opcode, so a rule
+    /// written as `match ... little ...` also fires for "Little"/"LITTLE" — but `pre`/`post`
+    /// context patterns are matched case-sensitively, which is why tables sometimes spell out
+    /// both cases explicitly there (e.g. `[Aa][Tt]`) when they need to.
     fn from_match_rule(
         pre: &Patterns,
         chars: String,
@@ -139,7 +146,9 @@ impl Regexp {
         Regexp::Concat(
             Box::new(Regexp::Concat(
                 Box::new(Regexp::from_patterns(pre, ctx, pre_boundary)),
-                Box::new(Regexp::Capture(Box::new(Regexp::String(chars)))),
+                Box::new(Regexp::Capture(Box::new(Regexp::CaseInsensitiveString(
+                    chars,
+                )))),
             )),
             Box::new(Regexp::from_patterns(post, ctx, BoundaryMode::Dynamic)),
         )
