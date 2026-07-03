@@ -166,6 +166,13 @@
     rather than shipped — see the ADR "Match-rule candidate
     selection: weight vs. table-definition order" for the full
     analysis and options
+    - one concrete instance of that gap ("abandoning" picking the
+      "in" wordsign instead of "ing") has a verified table-level fix
+      now (~en-ueb-g2.ctb~'s "in" rule given a new numbered class
+      excluding a following ~g~/~G~), sitting uncommitted in the
+      local liblouis checkout — see the ADR for the diff and
+      verification. Doesn't resolve the general engine-side question,
+      just removes this one case as a live example of it
 - [ ] Backward translation of those same word/group signs sometimes
   corrupts unrelated surrounding text instead of just failing to
   contract, e.g. sw-ke-dictionary.yaml backward lookups splicing in

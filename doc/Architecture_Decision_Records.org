@@ -1250,9 +1250,38 @@ is the co-maintainer's call, not a default.
    across the shipped tables, to judge whether it's a one-off or a
    pattern worth addressing systematically.
 
+   Prototyped for the "in"/"ing" case specifically (not yet committed
+   upstream): give "in" a new numbered class excluding a following
+   ~g~/~G~, so it can no longer match the start of an "-ing" suffix —
+
+   #+begin_example
+   attribute 3 Gg
+   match %[^_]!%[_1]* in %[^_]|!%[_13]!%[_1]*%[^_] 35
+   #+end_example
+
+   Verified against a real liblouis build: identical output on the
+   original collision words plus edge cases (standalone "in" before
+   punctuation, "begin", "ring"/"wing"/"bring"/"sing" — the same "in"
+   + "g" collision recurs there too), and zero regressions across
+   every yaml test exercising ~en-ueb-g2.ctb~ (~112k tests).
+
+   Two liblouis pattern-language traps surfaced while getting this
+   right, worth remembering for any future table-level fix: wrapping
+   a negated check in ~(...)?~ is a no-op (a failed negation is just
+   skipped, and the following token often accepts the same character
+   anyway); and ~!(A|B)~ does *not* De Morgan into "matches neither" —
+   liblouis's alternation ORs the two negated branches instead of
+   ANDing them, so it degenerates to "matches almost anything" whenever
+   the two branches are mutually exclusive. The same mistake already
+   exists unnoticed in ~afr-za-g2.ctb:229~. Combining an attribute-set
+   exclusion with a literal-character exclusion into one real check
+   only works by folding both into a single numbered class.
+
 ** Decision Outcome
 
-None yet. A first attempt at fixing the underlying
+The general engine-side question (options 1–3) is still undecided —
+no change has been made to ~match_pattern.rs~ or the candidate
+selection logic. A first attempt at fixing the underlying
 ~BoundaryMode::AssumeAtStart~ bug (option: just let non-boundary
 checks match normally, same as ~Otherwise~) is correctly targeted for
 that bug in isolation, but caused a net regression on the full test
@@ -1261,6 +1290,14 @@ corpus (94.9% → 94.4% total, 93.9% → 91.8% on
 one above newly reachable at position 0. That fix was reverted rather
 than shipped. Revisiting it requires deciding among the options above
 first.
+
+Option 4 has been carried out for this one concrete collision (see
+prototype above) and left sitting uncommitted in the local liblouis
+checkout — pushing it upstream is the co-maintainer's call on timing,
+not done as part of this work. It removes the "abandoning" case from
+being a live example of the mismatch, but the underlying engine
+question remains open for every other table that hasn't been (and may
+never be) similarly revisited.
 
 ** Links
 
