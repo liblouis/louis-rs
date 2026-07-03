@@ -20,7 +20,7 @@ use crate::translator::{
 };
 
 /// Abstract syntax tree representation of regular expressions
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Regexp {
     Literal(char),
     Concat(Box<Regexp>, Box<Regexp>),
@@ -49,6 +49,11 @@ pub enum Regexp {
     /// Zero-width assertion that matches only when there is no input left, i.e. the match has
     /// reached the true end of the whole string being translated
     EndAnchor,
+    /// Zero-width assertion that matches only when there is still input left. The negation of
+    /// [`EndAnchor`](Regexp::EndAnchor).
+    NotEndAnchor,
+    /// Never matches, regardless of input. The negation of [`Empty`](Regexp::Empty).
+    Never,
     /// Stop-gap blanket "implementation" for things that might be needed but are not yet
     /// implemented
     NotImplemented,
@@ -89,8 +94,10 @@ impl Regexp {
             Regexp::VariableEqual(slot, value) => Regexp::NotVariableEqual(slot, value),
             Regexp::NotVariableEqual(_, _) => unreachable!(),
             Regexp::Group(regexp) => Regexp::Group(Box::new(regexp.negate())),
-            Regexp::Empty => unreachable!(), // sorry you cannot negate an empty regexp
-            Regexp::EndAnchor => unreachable!(), // negating an anchor makes no sense
+            Regexp::Empty => Regexp::Never,
+            Regexp::Never => Regexp::Empty,
+            Regexp::EndAnchor => Regexp::NotEndAnchor,
+            Regexp::NotEndAnchor => Regexp::EndAnchor,
             Regexp::NotImplemented => unreachable!(),
         }
     }
@@ -105,6 +112,50 @@ impl Regexp {
             instructions,
             character_classes,
             translations,
+        }
+    }
+
+    /// Whether *every* successful match of this regexp consumes no input at all (not merely
+    /// "can this match the empty string" — a regexp that sometimes consumes and sometimes
+    /// doesn't, like `Either(CharacterClass, EndAnchor)`, is not "always" zero-width).
+    ///
+    /// Used to guard `ZeroOrMore`/`OneOrMore`/`RepeatAtLeast` against infinite loops: their
+    /// emitted bytecode repeats the body by jumping back to a `Split` that tries the body again
+    /// before giving up, and the VM always explores the body's own preferred (leftmost) branch
+    /// fully before backtracking — so if the body is always zero-width, every attempt resolves
+    /// the same way, forever, without ever advancing `sp`. When that's the case, further
+    /// repetitions can't add any matching power beyond the first attempt, so we cap the loop at
+    /// one instead of building a self-referencing jump. A body that only *sometimes* matches
+    /// zero-width (like the `EndAnchor` alternative above) is left with its normal unbounded
+    /// loop — safe as long as it keeps making progress until it actually runs out of input,
+    /// which is exactly when the zero-width alternative becomes the only option and the loop
+    /// should stop; that per-iteration case isn't guarded here (see `TODO.org`'s "regexp
+    /// infinite loop" entry), but no shipped liblouis table exercises it today.
+    fn always_zero_width(&self) -> bool {
+        match self {
+            Regexp::Literal(_) | Regexp::Any | Regexp::CharacterClass(_) => false,
+            Regexp::NotCharacterClass(_) => false,
+            Regexp::Concat(left, right) => left.always_zero_width() && right.always_zero_width(),
+            // both branches must be zero-width: the VM commits to whichever branch succeeds
+            // first, and either one might be the one taken
+            Regexp::Either(left, right) => left.always_zero_width() && right.always_zero_width(),
+            Regexp::Optional(regexp)
+            | Regexp::ZeroOrMore(regexp)
+            | Regexp::OneOrMore(regexp)
+            | Regexp::Group(regexp)
+            | Regexp::Capture(regexp) => regexp.always_zero_width(),
+            Regexp::RepeatExactly(0, _) => true,
+            Regexp::RepeatExactly(_, regexp)
+            | Regexp::RepeatAtLeast(_, regexp)
+            | Regexp::RepeatAtLeastAtMost(_, _, regexp) => regexp.always_zero_width(),
+            Regexp::String(s) | Regexp::NotString(s) => s.is_empty(),
+            Regexp::VariableEqual(_, _) | Regexp::NotVariableEqual(_, _) => true,
+            Regexp::Empty | Regexp::EndAnchor | Regexp::NotEndAnchor => true,
+            // `Never` doesn't succeed at all, so the VM's `Split` backs off immediately without
+            // ever reaching the loop-back jump — it can't cause the infinite loop this guards
+            // against, regardless of how it's classified here
+            Regexp::Never => false,
+            Regexp::NotImplemented => false,
         }
     }
 
@@ -135,12 +186,22 @@ impl Regexp {
                 regexp.emit(instructions, character_classes);
                 instructions[pos] = Instruction::Split(pos + 1, instructions.len());
             }
+            Regexp::ZeroOrMore(regexp) if regexp.always_zero_width() => {
+                // see `always_zero_width`: repeating a zero-width-first body forever would never
+                // make progress, so cap it at zero-or-one attempt instead of zero-or-more
+                Regexp::Optional(regexp.clone()).emit(instructions, character_classes);
+            }
             Regexp::ZeroOrMore(regexp) => {
                 let pos = instructions.len();
                 instructions.push(Instruction::Split(pos + 1, 0));
                 regexp.emit(instructions, character_classes);
                 instructions.push(Instruction::Jump(pos));
                 instructions[pos] = Instruction::Split(pos + 1, instructions.len());
+            }
+            Regexp::OneOrMore(regexp) if regexp.always_zero_width() => {
+                // see `always_zero_width`: cap at exactly one (mandatory) attempt instead of
+                // looping forever on a zero-width-first body
+                regexp.emit(instructions, character_classes);
             }
             Regexp::OneOrMore(regexp) => {
                 let pos = instructions.len();
@@ -165,11 +226,17 @@ impl Regexp {
                 for _ in 0..*min {
                     regexp.emit(instructions, character_classes);
                 }
-                let pos = instructions.len();
-                instructions.push(Instruction::Split(pos + 1, 0));
-                regexp.emit(instructions, character_classes);
-                instructions.push(Instruction::Jump(pos));
-                instructions[pos] = Instruction::Split(pos + 1, instructions.len());
+                if regexp.always_zero_width() {
+                    // see `always_zero_width`: the unbounded tail can't safely loop, so cap it
+                    // at the mandatory `min` copies plus at most one more
+                    Regexp::Optional(regexp.clone()).emit(instructions, character_classes);
+                } else {
+                    let pos = instructions.len();
+                    instructions.push(Instruction::Split(pos + 1, 0));
+                    regexp.emit(instructions, character_classes);
+                    instructions.push(Instruction::Jump(pos));
+                    instructions[pos] = Instruction::Split(pos + 1, instructions.len());
+                }
             }
             Regexp::RepeatAtLeastAtMost(min, max, regexp) => {
                 for _ in 0..*min {
@@ -209,6 +276,8 @@ impl Regexp {
             }
             Regexp::Empty => (),
             Regexp::EndAnchor => instructions.push(Instruction::AssertEnd),
+            Regexp::NotEndAnchor => instructions.push(Instruction::AssertMoreInput),
+            Regexp::Never => instructions.push(Instruction::Fail),
             Regexp::NotImplemented => (),
         }
     }
@@ -246,6 +315,10 @@ pub enum Instruction {
     NotVariableEqual(VariableIndex, u8),
     /// Zero-width assertion: succeeds only if there is no input left
     AssertEnd,
+    /// Zero-width assertion: succeeds only if there is still input left
+    AssertMoreInput,
+    /// Never matches, regardless of input
+    Fail,
 }
 
 /// Compiled version of [`Regexp`]. Contains bytecode and associated data structures
@@ -346,6 +419,10 @@ impl CompiledRegexp {
             Instruction::AssertEnd => {
                 input.is_empty() && self.is_match_internal(pc + 1, input, env)
             }
+            Instruction::AssertMoreInput => {
+                !input.is_empty() && self.is_match_internal(pc + 1, input, env)
+            }
+            Instruction::Fail => false,
         }
     }
 
@@ -496,6 +573,14 @@ impl CompiledRegexp {
                     None
                 }
             }
+            Instruction::AssertMoreInput => {
+                if sp != input.len() {
+                    self.find_internal(pc + 1, input, sp, length, env, capture)
+                } else {
+                    None
+                }
+            }
+            Instruction::Fail => None,
         }
     }
 

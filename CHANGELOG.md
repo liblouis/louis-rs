@@ -91,6 +91,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   Previously both anchors were parsed but silently discarded when a rule
   was compiled, so an anchored rule matched anywhere in the input instead
   of only at the boundary it was written for.
+- The `^` boundary attribute inside `match` opcode patterns (e.g.
+  `%[_~^]`, meaning "space, sequence-delimiter, or string boundary") is
+  now enforced instead of silently contributing nothing.
+- Fixed a latent infinite loop (stack overflow) in the regexp engine:
+  a `*`/`+`-quantified pattern whose body always matches zero-width
+  caused the matcher to recurse forever without ever advancing,
+  instead of terminating after one attempt. This was previously
+  unreachable but is now exercised by the `^` boundary attribute fix
+  above (a quantified group can contain a boundary-only attribute set,
+  which always matches zero-width once the caller confirms we're at
+  the true start of input).
 
 ## [0.2.8] - 2026-06-29
 

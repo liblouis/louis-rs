@@ -500,33 +500,32 @@ mod display {
 
     impl std::fmt::Display for Attribute {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            let attr = match self {
+            match self {
                 Attribute::Class(class) => match class {
-                    CharacterClass::Space => "s",
-                    CharacterClass::Digit => "d",
-                    CharacterClass::Litdigit => "D",
-                    CharacterClass::Letter => "l",
-                    CharacterClass::Uppercase => "U",
-                    CharacterClass::Lowercase => "u",
-                    CharacterClass::Punctuation => "p",
-                    CharacterClass::Sign => "S",
-                    CharacterClass::Math => "m",
-                    CharacterClass::Seqdelimiter => todo!(),
-                    CharacterClass::Seqbeforechars => todo!(),
-                    CharacterClass::Seqafterchars => todo!(),
-                    CharacterClass::UserDefined(_) => todo!(),
+                    CharacterClass::Space => write!(f, "s"),
+                    CharacterClass::Digit => write!(f, "d"),
+                    CharacterClass::Litdigit => write!(f, "D"),
+                    CharacterClass::Letter => write!(f, "l"),
+                    CharacterClass::Uppercase => write!(f, "U"),
+                    CharacterClass::Lowercase => write!(f, "u"),
+                    CharacterClass::Punctuation => write!(f, "p"),
+                    CharacterClass::Sign => write!(f, "S"),
+                    CharacterClass::Math => write!(f, "m"),
+                    CharacterClass::Seqdelimiter => write!(f, "~"),
+                    CharacterClass::Seqbeforechars => write!(f, "<"),
+                    CharacterClass::Seqafterchars => write!(f, ">"),
+                    CharacterClass::UserDefined(name) => write!(f, "{}", name),
                 },
                 Attribute::ByOrder(order) => match order {
-                    1 => "w",
-                    2 => "x",
-                    3 => "y",
-                    4 => "z",
+                    1 => write!(f, "w"),
+                    2 => write!(f, "x"),
+                    3 => write!(f, "y"),
+                    4 => write!(f, "z"),
                     _ => todo!(),
                 },
-                Attribute::Any => "a",
-                Attribute::Boundary => "^",
-            };
-            write!(f, "{}", attr)
+                Attribute::Any => write!(f, "a"),
+                Attribute::Boundary => write!(f, "^"),
+            }
         }
     }
 

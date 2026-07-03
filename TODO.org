@@ -1,7 +1,21 @@
 * Todo [14/23]
 - [ ] Move the display tables into the Pipeline
 - [ ] implement "libhyphen"
-- [ ] guard against "()+" regexp?
+- [-] guard against "()+" regexp?
+  - [X] a body that is *unconditionally* zero-width (e.g. ~Regexp::Empty~)
+    is now guarded: ~Regexp::always_zero_width()~ caps
+    ~ZeroOrMore~/~OneOrMore~/~RepeatAtLeast~ at one attempt instead of
+    an infinite self-referencing jump
+  - [ ] a body that is only *conditionally* zero-width (e.g.
+    ~Either(CharacterClass, EndAnchor)~ — consumes a real character
+    when one is available, only resolves zero-width once input is
+    truly exhausted) is not guarded — liblouis itself handles this
+    with a genuine per-iteration progress check (does the loop body
+    advance the cursor each time it's tried, not just "can it match
+    empty in isolation"), which our VM doesn't have. No shipped
+    liblouis table currently combines a quantifier with a boundary
+    attribute, so this hasn't been observed to crash, but it's a
+    real gap if one ever does
 - [X] Indication [3/3]
   - Indication is pre-computed before translation via ~Indicators::precompute()~,
     which produces an immutable ~PrecomputedIndications~ value. Both built-in
@@ -102,29 +116,47 @@
 - [X] computer braille
 - [ ] inpos + outpos mapping
 - [X] typeform (emphasis input)
-- [ ] regexp infinite loop
+- [-] regexp infinite loop — see the "guard against ()+ regexp?" entry
+  in the Todo section above: unconditionally zero-width loop bodies
+  are now guarded, conditionally zero-width ones (e.g. a quantified
+  boundary attribute) are not, though nothing shipped exercises that
+  gap today
 - [ ] ~Regexp::Literal~/~Regexp::Any~ negation is an unimplemented
   ~todo!()~ (regexp.rs) — panics if a table's ~match~/~context~
   pattern hits it
-- [ ] ~Attribute::Boundary~/~ByOrder~/~Any~ are silently treated as
+- [-] ~Attribute::Boundary~/~ByOrder~/~Any~ are silently treated as
   no-ops in both match_pattern.rs and context_pattern.rs instead of
   being matched
-- [ ] Word/group-sign ("lower"/part-word sign) contraction is not
-  applied when the word carries a suffix, apostrophe, or is part of a
-  longer compound, even though the same sign fires correctly when the
-  word stands alone
-  - e.g. "Little" -> correct, but "Littlestown" spells out "little"
-    in full instead of contracting it; "'twould", "would've" etc. lose
-    the "would" wordsign; "it"/"was"/"also" lose their UEB short forms
-    when combined with other punctuation/context
-  - by far the largest single contributor to remaining test failures:
-    ~en-ueb-g2-dictionary_harness.yaml~ alone has ~16,600 failing
-    tests from this (56% of all failing tests suite-wide); also hits
-    ~afr-za-g2.yaml~ (Afrikaans groupsigns) and
-    ~hu-hu-g1_dictionary_special_consonants.yaml~ (gy/ggy digraph
-    precedence)
-  - likely a trie precedence/longest-match bug for lower/part-word
-    signs
+  - [X] ~Attribute::Boundary~ in match_pattern.rs (the ~^~ attribute
+    inside a ~match~ opcode's ~%[...]~ set) is now enforced — see the
+    word/group-sign entry below, this was the single highest-impact
+    fix found so far
+  - [ ] ~Attribute::ByOrder~/~Any~ in match_pattern.rs, and all three
+    (~Boundary~/~ByOrder~/~Any~) in context_pattern.rs (i.e. the same
+    attribute used inside a ~context~/~correct~/passN rule's ~$...~
+    attribute set, as opposed to the whole-test ~`~/~~~ anchors,
+    which are a separate, already-fixed mechanism) are still no-ops
+- [X] Word/group-sign ("lower"/part-word sign) contraction not applied
+  when the word carries a suffix, apostrophe, or is part of a longer
+  compound, even though the same sign fires correctly when the word
+  stands alone
+  - root cause found and fixed: nearly all forward-direction UEB
+    word/group-signs ("would", "little", "it", "was", ...) are defined
+    only via ~match~ rules gated on the ~^~ boundary attribute (see
+    above), so none of them fired at all, for any input shape,
+    lowercase or not — not a trie precedence/longest-match issue as
+    first suspected
+  - confirmed fixed for lowercase input: "would", "little", "it",
+    "was", "also" etc. now all contract correctly forward
+  - [ ] NEW, more specific remaining gap: capitalized input still
+    doesn't contract ("Would"/"Little"/"Also" still spell out fully) —
+    the ~match~ opcode's literal-string comparison
+    (~Instruction::Char~ in regexp.rs) does exact case-sensitive
+    equality with no case-folding, so any capitalized occurrence of a
+    word-sign falls through. Given a full-word dictionary test is
+    heavily weighted toward capitalized proper nouns and
+    sentence-initial words, this is likely now the largest remaining
+    contributor to ~en-ueb-g2-dictionary_harness.yaml~'s failures
 - [ ] Backward translation of those same word/group signs sometimes
   corrupts unrelated surrounding text instead of just failing to
   contract, e.g. sw-ke-dictionary.yaml backward lookups splicing in

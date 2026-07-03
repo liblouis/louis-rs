@@ -1247,9 +1247,10 @@ impl PrimaryTable {
     fn match_candidates(
         &self,
         input: &str,
+        at_start: bool,
     ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
         self.match_patterns
-            .find(input)
+            .find(input, at_start)
             .into_iter()
             .partition(|t| t.offset() == 0)
     }
@@ -1295,6 +1296,10 @@ impl PrimaryTable {
         loop {
             translations.extend(indications.translations_at(char_pos));
 
+            // whether we're about to match starting at the true beginning of the whole input,
+            // needed by match/context rules anchored with liblouis' `^`/`` ` `` boundary markers
+            let at_start = chars.as_str().len() == input.len();
+
             // First check for nocross candidates
             let nocross_candidate = self
                 .nocross_candidates(chars.as_str(), prev)
@@ -1308,14 +1313,13 @@ impl PrimaryTable {
 
             // then search for matching match patterns. Unless they have empty pre patterns they will all have
             // an offset. Split those off.
-            let (match_candidates, match_delayed) = self.match_candidates(chars.as_str());
+            let (match_candidates, match_delayed) = self.match_candidates(chars.as_str(), at_start);
             delayed_translations.extend(match_delayed);
             // merge the candidates from the match patters with the candidates from the plain translations
             candidates.extend(match_candidates);
 
             // then search for context patterns. Unless they have empty pre patterns they will all
             // have an offset. Split those off.
-            let at_start = chars.as_str().len() == input.len();
             let (context_candidates, context_delayed) =
                 self.context_candidates(chars.as_str(), &env, at_start);
             delayed_translations.extend(context_delayed);
