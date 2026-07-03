@@ -90,6 +90,7 @@
   regular expressions we should use [[https://docs.rs/regex-automata/latest/regex_automata/][regex_automata]].
   - no, for now keep the hand-rolled regexp engine
   - as we need to support effects and negation
+  - see ADR in [[file:doc/Architecture_Decision_Records.org][Architecture Decision Records]] for the fuller reasoning
 - [ ] performance
   - put translations into offset buckets
   - measure performance

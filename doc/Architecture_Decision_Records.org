@@ -974,6 +974,172 @@ character class rather than a fixed boundary condition.
 
 ** Links
 
+* ACCEPTED Hand-rolled regexp VM instead of the ~regex~/~regex-automata~ crates
+- Deciders :: CE
+- Date :: [2026-07-04 Sa]
+
+** Context and Problem Statement
+
+liblouis' ~match~, ~context~, ~correct~, and ~pass2~/~pass3~/~pass4~
+opcodes use a regex-like pattern language (character classes,
+alternation, quantifiers, negation, boundary anchors). Louis-rs
+implements this with its own small VM-based regexp engine
+(~translator/regexp.rs~) rather than the well-established, heavily
+optimized ~regex~ crate or its lower-level ~regex-automata~ API. Given
+how much engineering effort goes into a correct, fast regex engine,
+and how much of that effort duplicates what those crates already
+provide, is hand-rolling still the right call?
+
+This was already considered once, tersely, in ~TODO.org~: "Instead of
+hand-rolling a finite state machine to implement regular expressions
+we should use regex_automata. — no, for now keep the hand-rolled
+regexp engine, as we need to support effects and negation." This ADR
+records the fuller reasoning behind that call, which surfaced again
+while implementing the ~^~ boundary attribute and ~_N~ lookback for
+~match~/~context~ rules (2026-07-03/04).
+
+There is also a data point from this codebase's own history: an
+earlier version of the engine ([[*Regexps duplicate character transitions][Regexps duplicate character
+transitions]], superseded) shared character-transition nodes across
+multiple rules in one graph, DFA-style. It was abandoned specifically
+because liblouis rules aren't just "does this match" — each one
+carries its own translation payload with its own precedence, and two
+rules whose patterns would share a transition node in a merged graph
+have no principled way to decide whose payload wins there. The fix
+was giving every rule its own independent instruction stream
+(branching via VM ~Split~, not shared graph nodes) rather than a
+merged automaton.
+
+** Decision Drivers
+
+- ~correct~/~pass2~/~pass3~/~pass4~ rules can guard on, and mutate,
+  numbered *pass-variables* — external, mutable state set by one
+  rule's action and checked by a *different* rule's pattern later on
+  (~VariableEqual~/~NotVariableEqual~, and *effects*). This isn't
+  matching text against a pattern; it's an imperative condition on
+  state unrelated to the string being scanned.
+- Rule selection is precedence/weight-based across potentially
+  thousands of independently-compiled patterns per table, some of
+  which must be discovered starting at an earlier cursor position and
+  held via ~delayed_translations~/~offset()~ until the cursor catches
+  up (built for ~match~'s ~pre~, reused for ~context~'s "before
+  bracket" checks and lookback). This doesn't correspond to anything
+  in a single compiled pattern object's API.
+- ~trace~ (the CLI subcommand showing exactly which rule fired at each
+  translation step) depends on an inspectable instruction stream with
+  attached payloads, not just a match/no-match answer.
+- Negation needs to apply to arbitrary sub-patterns (attribute sets,
+  groups, boundary checks), not just single characters or classes.
+
+** Considered Options
+
+1. *Hand-rolled VM* (status quo) — a small instruction set
+   (~Char~/~Class~/~Split~/~Jump~/~Capture*~/~VariableEqual~/anchors/…)
+   interpreted directly, in the style of Russ Cox's [[https://swtch.com/~rsc/regexp/regexp2.html][Regular Expression
+   Matching: the Virtual Machine Approach]].
+2. *~regex~ crate* — compile each rule's pattern to a ~Regex~, matching
+   with the standard library-grade engine.
+3. *~regex-automata~ low-level API* — build a custom VM on top of its
+   NFA/DFA primitives, reusing its (well-tested, Unicode-aware)
+   automaton construction while keeping our own instruction set for
+   the parts it can't express.
+
+** Decision Outcome
+
+Chosen option: *Hand-rolled VM* (option 1).
+
+Neither library option can express pass-variable guards or effects —
+these are checks against, and mutations of, state external to the
+matched text, which has no representation in the theory of regular
+languages either crate's API is built on. Both would need a bespoke
+layer wrapped around the library to handle them, at which point the
+"pure regex" subset the library actually helps with is a minority of
+what these rules need — everything involving variables, effects, or
+weight-based multi-rule dispatch would still need our own VM.
+Building *two* execution models (library automaton for the regular
+part, custom interpreter for the rest) and keeping them in sync
+seemed like more complexity, not less, for the parts that matter most.
+
+The ~regex~ crate specifically also does not support arbitrary
+lookaround or backreferences (a deliberate trade-off for guaranteed
+linear-time matching) — so even the "boundary anchor" work
+(~EndAnchor~/~NotEndAnchor~, 2026-07-03) would not have come for free
+from it; the same external-state-threading (an ~at_start: bool~
+computed by the translation loop, since the regexp only ever sees the
+remaining suffix and can't determine its own absolute position) would
+still have been necessary regardless of the matching backend.
+
+*** Positive Consequences
+
+- Effects, pass-variables, and weight-based rule selection compose
+  naturally with the rest of the translation pipeline, since they're
+  just more instruction types in the same VM rather than a bolt-on
+  layer around a foreign library.
+- ~trace~ gets exact per-rule attribution for free — every instruction
+  stream carries its own origin rule and precedence.
+- Adding a new liblouis construct (as with ~EndAnchor~/~NotEndAnchor~/
+  ~Never~ this week) is a small, local, well-understood change: a new
+  ~Regexp~ variant, an ~emit~ arm, and one or two VM instruction cases.
+
+*** Negative Consequences
+
+- Slower than a production-grade regex engine (no SIMD, no DFA
+  caching) — ~TODO.org~'s still-open "performance" item (offset
+  buckets, shrinking the opcode operand) is a standing acknowledgment
+  of this cost, not an oversight.
+- We own every correctness bug a mature regex engine would have
+  already found and fixed. This session alone surfaced several in our
+  own engine: ~negate()~ on ~Concat~/~Either~ not honoring De Morgan's
+  laws (pre-existing, still open), an infinite VM loop on a
+  zero-width-succeeding quantified body (found and fixed 2026-07-03),
+  and a missing negation case for the new end-anchor that would have
+  panicked (found in review and fixed the same day).
+
+** Pros and Cons of the Options
+
+*** Hand-rolled VM
+
+- Good, because it handles effects, pass-variables, and weight-based
+  precedence natively, with no impedance mismatch
+- Good, because ~trace~-level introspection is a natural consequence
+  of the design, not an add-on
+- Bad, because we maintain regex-engine correctness ourselves,
+  including edge cases (negation, infinite loops) a mature crate would
+  already have solved
+- Bad, because raw matching performance is well below what ~regex~/
+  ~regex-automata~ achieve
+
+*** ~regex~ crate
+
+- Good, because it is heavily optimized and extensively tested
+- Bad, because it has no notion of external state guards or effects —
+  every pass-variable-dependent rule would need custom logic wrapped
+  around it anyway
+- Bad, because it deliberately excludes lookaround/backreferences, so
+  boundary-anchor support still needs the same external-state
+  workaround we already built
+- Bad, because weight-based selection across many independently
+  compiled patterns, and per-rule ~trace~ attribution, aren't things
+  its API is shaped for
+
+*** ~regex-automata~ low-level API
+
+- Good, because it reuses well-tested, Unicode-aware NFA/DFA
+  construction while allowing more custom control than the ~regex~
+  crate's high-level API
+- Bad, because pass-variables/effects/weight-based dispatch still need
+  a separate custom interpreter layered on top, meaning two execution
+  models to keep in sync instead of one
+- Bad, because this was the option ~TODO.org~ already named and
+  rejected for exactly this reason
+
+** Links
+
+- Related to :: [[*Regexps duplicate character transitions][Regexps duplicate character transitions]] (superseded) — prior,
+  concrete experience with a shared-automaton approach running into
+  the same "independent per-rule precedence" problem from a different
+  angle
+
 * COMMENT [short title of solved problem and solution]                     :Template:
 # - Status :: [proposed | rejected | accepted | deprecated | ... |
 #   superseded by [[file:0005-example.md][ADR-0005]]]
