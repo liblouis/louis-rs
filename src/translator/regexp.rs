@@ -150,12 +150,15 @@ impl Regexp {
             | Regexp::RepeatAtLeastAtMost(_, _, regexp) => regexp.always_zero_width(),
             Regexp::String(s) | Regexp::NotString(s) => s.is_empty(),
             Regexp::VariableEqual(_, _) | Regexp::NotVariableEqual(_, _) => true,
+            // genuine zero-width assertions
             Regexp::Empty | Regexp::EndAnchor | Regexp::NotEndAnchor => true,
+            // `emit` compiles this to zero instructions, i.e. an unconditional no-op —
+            // behaviorally identical to `Empty`
+            Regexp::NotImplemented => true,
             // `Never` doesn't succeed at all, so the VM's `Split` backs off immediately without
             // ever reaching the loop-back jump — it can't cause the infinite loop this guards
             // against, regardless of how it's classified here
             Regexp::Never => false,
-            Regexp::NotImplemented => false,
         }
     }
 
