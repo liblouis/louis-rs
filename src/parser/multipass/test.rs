@@ -157,6 +157,8 @@ fn is_attribute(c: &char) -> bool {
     )
 }
 
+// Must not include `~`: that keeps the end anchor out of reach of `negate()`, which relies on
+// never seeing (and negating) a `Regexp::EndAnchor`.
 fn is_test(c: &char) -> bool {
     matches!(c, '_' | '%' | '@' | '"' | '$' | '[' | '#' | '!')
 }
