@@ -79,7 +79,7 @@ impl TryFrom<char> for BrailleDot {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BrailleChar(EnumSet<BrailleDot>);
 
 impl From<EnumSet<BrailleDot>> for BrailleChar {
@@ -141,7 +141,7 @@ impl FromIterator<BrailleDot> for BrailleChar {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BrailleChars(Vec<BrailleChar>);
 
 impl BrailleChars {

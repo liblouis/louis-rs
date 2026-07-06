@@ -25,6 +25,7 @@ assert_eq!(braille, "⠓⠑⠇⠇⠕⠀⠺⠕⠗⠇⠙");
 
 */
 
+mod bundle;
 mod emphasis;
 mod hyphenation;
 mod parser;
@@ -32,6 +33,7 @@ mod translator;
 
 use std::path::Path;
 
+pub use bundle::BundleError;
 pub use emphasis::EmphasisSpan;
 pub use parser::Direction;
 use translator::TranslationPipeline;
@@ -45,6 +47,8 @@ pub enum TranslationError {
     TranslationFailed(#[from] translator::TranslationError),
     #[error("Errors when reading given braille table(s)")]
     ParseFailed(Vec<parser::TableError>),
+    #[error(transparent)]
+    BundleFailed(#[from] BundleError),
 }
 #[derive(Debug, Clone)]
 pub struct SpacingInfo {
@@ -77,6 +81,17 @@ impl Translator {
             all_rules.extend(rules);
         }
 
+        Ok(Self(TranslationPipeline::compile(&all_rules, direction)?))
+    }
+
+    /// Build a translator from one or more pre-compiled table bundles (see the `bundle` CLI
+    /// subcommand), instead of parsing `.ctb`/`.utb` files from a `LOUIS_TABLE_PATH`-style
+    /// search path.
+    pub fn from_bundles(bundles: &[&[u8]], direction: Direction) -> Result<Self, TranslationError> {
+        let mut all_rules = Vec::new();
+        for bytes in bundles {
+            all_rules.extend(bundle::deserialize_rules(bytes)?);
+        }
         Ok(Self(TranslationPipeline::compile(&all_rules, direction)?))
     }
 
