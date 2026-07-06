@@ -11,113 +11,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - The `check` subcommand now runs YAML test files concurrently, and further
   parallelizes across the individual tests within each file/table
-  combination, using `rayon`. This cuts the wall-clock time of running the
-  full liblouis test suite locally from ~3m30s to ~35s on an 8-core machine,
-  with byte-identical output. Table compilation and translation were already
-  read-only/side-effect-free per file, so no correctness changes were needed.
+  combination, using `rayon`.
 
 ### Added
-- Implement indication handling for backward-translation of `capsletter`, `begcapsword`/
-  `endcapsword`, and `numsign`/`nonumsign`. These opcodes were previously invisible to
-  backward translation, so their dots fell through to whatever character definition
-  happened to share the same pattern (e.g. `capsletter 46` read as `punctuation $ 46`
-  in `hu-hu-g1.ctb`), and digits sharing dots with letters always decoded as letters.
-  An opcode is only recognized as an indicator when its dots aren't already claimed by
-  a real letter, since some tables (Malayalam, Punjabi) share a subtable whose
-  `capsletter`/`numsign` coincide with one of their own script letters. Fixes GitHub
-  issue #4.
-- Implement `begcaps`/`endcaps` and `begcapsphrase`/`endcapsphrase`/`lencapsphrase`
-  caps-passage indication. A passage of two or more (or `lencapsphrase`, if set)
-  consecutive whole-uppercase words is now wrapped in a single indicator instead of
-  marking each word individually; hyphenated segments of one word don't count
-  toward the threshold, and `begcapsphrase` is preferred over `begcaps` when both
-  are defined. `begcaps`/`endcaps` were previously parsed but never emitted, and
-  `begcapsphrase`/`endcapsphrase`/`lencapsphrase` were not wired up at all.
+- Implement indication handling for backward-translation of `capsletter`,
+  `begcapsword`/ `endcapsword`, and `numsign`/`nonumsign`. An opcode is only
+  recognized as an indicator when its dots aren't already claimed by a real
+  letter, since some tables (Malayalam, Punjabi) share a subtable whose
+  `capsletter`/`numsign` coincide with one of their own script letters.
+- Implement `begcaps`/`endcaps` and
+  `begcapsphrase`/`endcapsphrase`/`lencapsphrase` caps-passage indication. A
+  passage of two or more (or `lencapsphrase`, if set) consecutive
+  whole-uppercase words is now wrapped in a single indicator instead of marking
+  each word individually; hyphenated segments of one word don't count toward the
+  threshold, and `begcapsphrase` is preferred over `begcaps` when both are
+  defined.
 
 ### Fixed
-- `dots_classes`'s `letter` class (used for backward-translation word-boundary checks)
-  now also includes the dots of alphabetic `always` rules (e.g. letter-group contractions
-  like "le" or multi-cell digraphs like "sz"), not just `letter`/`lowercase`/`uppercase`
-  opcodes. Previously such a cell wasn't recognized as part of a word, so a `word`-level
-  rule sharing a prefix with the contraction could wrongly fire mid-word during backward
-  translation (e.g. `⠓⠩` in `sot-za-g2.ctb`, "h" followed by the "le" contraction,
-  backward-decoded to "horele" instead of "hle", because the `word hore` rule thought the
-  word ended right after "h").
-- The `match`/`context` pattern parser now scopes `|` (alternation) over the whole
-  surrounding sequence of tokens, matching standard regex precedence (concatenation
-  binds tighter than alternation) and liblouis's own semantics. Previously `|` only
-  bound to the single adjacent token, so a pattern like `e%[^_.]|end` was silently
-  misparsed as `e` followed by `(not-punctuation OR "end")` instead of `(e followed
-  by not-punctuation) OR "end"` — affecting any bare, unparenthesized multi-token
-  alternative (e.g. `afr-za-g2.ctb`'s `bew e%[^_.]|end|erasie|erig`).
+- `dots_classes`'s `letter` class (used for backward-translation word-boundary
+  checks) now also includes the dots of alphabetic `always` rules, not just
+  `letter`/`lowercase`/`uppercase` opcodes.
+- The `match`/`context` pattern parser now scopes `|` (alternation) over the
+  whole surrounding sequence of tokens, matching standard regex precedence
+  (concatenation binds tighter than alternation) and liblouis's own semantics.
 - `base uppercase`/`base lowercase` (case-pairing) rules now also register the
   derived character in the `letter` character class, matching what the direct
-  `uppercase`/`lowercase` opcodes already do. Previously a derived uppercase
-  letter (e.g. `A` in `base uppercase A a`) was missing from the letter class,
-  which could confuse word-boundary detection.
-- `partword` rules now fire when the pattern is preceded or followed by a
-  letter (i.e. anywhere inside or adjacent to a word), matching the liblouis
-  semantics documented as "translates if preceded or followed by a letter".
-  Previously `partword` was compiled identically to `midword`, which required
-  letters on both sides and therefore missed word-end and word-start positions.
+  `uppercase`/`lowercase` opcodes already do.
+- `partword` rules now fire when the pattern is preceded or followed by a letter
+  (i.e. anywhere inside or adjacent to a word), matching the liblouis semantics.
 - Unicode NFC normalization is no longer applied to input text or trie patterns.
   The normalization was causing spurious mismatches for tables that define rules
   for standalone combining characters (IPA, Hebrew, Yiddish).
 - Whitespace detection now uses the table's own `space` class instead of Rust's
-  built-in `char::is_whitespace()`, which is broader than the braille standard
-  requires. This affects word-separator detection in emphasis indication and
-  computer braille region scanning.
-- `before CLASS always` and `after CLASS always` constraints are now
-  enforced during translation. Previously the class name was parsed but
-  silently discarded, causing rules such as
-  `before MalayalamVowel always VA 1236-1` to fire unconditionally and
-  produce spurious braille cells.
-- `before`/`after` class constraints now work correctly in backward
-  translation. Previously the constraint was checked against text-side
-  character sets even in backward mode, where the surrounding context
-  consists of braille Unicode cells, so all constrained rules were
-  rejected. Constraints now check against the corresponding braille
-  character set when translating backward.
-- Letter-sign isolation was incorrectly firing for isolated letters
-  preceded by another letter (e.g. the final letter of `:bc`) or
-  preceded by a space (word boundary, e.g. the "I" in "I'm"). The
-  condition is now: fire only when the letter is isolated (not followed
-  by another letter) AND its preceding character, if any, is neither a
-  space nor a letter. This restores correct en-gb-g1 translation while
-  preserving the Tamil letsign behaviour (letters after digits, hyphens,
-  or other non-letter, non-space characters still fire).
+  built-in `char::is_whitespace()`.
+- `before CLASS always` and `after CLASS always` constraints are now enforced
+  during translation.
+- `before`/`after` class constraints now work correctly in backward translation.
+  Constraints now check against the corresponding braille character set when
+  translating backward.
+- Letter-sign isolation was incorrectly firing for isolated letters preceded by
+  another letter (e.g. the final letter of `:bc`) or preceded by a space (word
+  boundary, e.g. the "I" in "I'm"). The condition is now: fire only when the
+  letter is isolated (not followed by another letter) AND its preceding
+  character, if any, is neither a space nor a letter.
 - The `` ` `` (beginning-of-input) and `~` (end-of-input) test anchors are
   now enforced for `context`/`correct`/`pass2`/`pass3`/`pass4` rules.
-  Previously both anchors were parsed but silently discarded when a rule
-  was compiled, so an anchored rule matched anywhere in the input instead
-  of only at the boundary it was written for.
 - The `^` boundary attribute inside `match` opcode patterns (e.g.
   `%[_~^]`, meaning "space, sequence-delimiter, or string boundary") is
   now enforced instead of silently contributing nothing.
 - Fixed a latent infinite loop (stack overflow) in the regexp engine:
   a `*`/`+`-quantified pattern whose body always matches zero-width
   caused the matcher to recurse forever without ever advancing,
-  instead of terminating after one attempt. This was previously
-  unreachable but is now exercised by the `^` boundary attribute fix
-  above (a quantified group can contain a boundary-only attribute set,
-  which always matches zero-width once the caller confirms we're at
-  the true start of input).
+  instead of terminating after one attempt.
 
 ## [0.2.8] - 2026-06-29
 
 ### Fixed
 - `litdigit` rules now take precedence over `digit` rules in forward
-  translation. In literary braille tables both opcodes are often present for
-  the same character: `digit` carries the computer-style dot pattern used for
+  translation. In literary braille tables both opcodes are often present for the
+  same character: `digit` carries the computer-style dot pattern used for
   backward translation, while `litdigit` carries the literary form used in
   numeric mode. Previously the winner was determined by insertion order, which
   caused Hungarian numbers to be translated with the wrong dot pattern.
 - `\xHHHH` Unicode escape sequences in the test and action operands of
   `correct`, `pass2`, `pass3`, and `pass4` rules are now decoded correctly.
-  They were previously passed through as literal backslash sequences, making
-  rules like `correct "\x34C6" "\x51D4"` silently ineffective. This affected
-  the Chinese braille table (zh-tw.ctb), which uses ~6800 such rules, causing
-  96% of its test suite to fail.
 - `\xHHHH` escape sequences in YAML test file expected values are now decoded.
   liblouis test files use this non-standard syntax even in single-quoted YAML
   strings; our test runner now matches liblouis's own behaviour.
@@ -125,28 +82,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - Implement emphasis (typeform) indication: `emphletter`, `begemphword`,
   `endemphword`, `begemphphrase`, `endemphphrase`, `begemph`, `endemph`,
-  `emphmodechars`, and `noemphchars` are all supported. When multiple
-  emphasis classes open or close at the same position their indicators are
-  ordered according to the liblouis stack rule (the class that closes last
-  opens first).
+  `emphmodechars`, and `noemphchars` are all supported. When multiple emphasis
+  classes open or close at the same position their indicators are ordered
+  according to the liblouis stack rule (the class that closes last opens first).
 - Implement computer braille: `comp6` rules are now activated only inside
   computer braille regions instead of firing unconditionally. Computer
   braille regions are detected from the `computer_braille` typeform and
   from `compbrl` pattern matches (which expand to the surrounding word).
   `begcomp` and `endcomp` indicators are emitted at region boundaries.
-- The library now has a basic API that covers both simple and advanced
-  use cases. See `translator.translate` and
-  `translator.translate_with_options` in `lib.rs`.
+- The library now has a basic API that covers both simple and advanced use
+  cases. See `translator.translate` and `translator.translate_with_options` in
+  `lib.rs`.
 - Implement (at least partly) the `largesign` opcode.
 - Implement the basic behaviour of the `decpoint` and `hyphen` opcode.
 - Add `trace` as a separate command (instead of `translate --tracing`)
 - Add an option to change the style of the traces
-- Normalize all input text to NFC Unicode form before translation.
-  Users can supply NFD or NFC text and get correct output for tables
-  that define rules for precomposed characters. Note: tables that
-  define rules for standalone combining characters (IPA, Hebrew,
-  Yiddish) are currently broken by NFC; NFD normalization is being
-  evaluated as a better alternative.
+- Normalize all input text to NFC Unicode form before translation. Users can
+  supply NFD or NFC text and get correct output for tables that define rules for
+  precomposed characters. Note: tables that define rules for standalone
+  combining characters (IPA, Hebrew, Yiddish) are currently broken by NFC.
 
 ### Changed
 - Braille indication (numeric, uppercase, letter sign, no-contract) is now
