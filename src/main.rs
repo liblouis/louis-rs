@@ -19,6 +19,7 @@ use crate::translator::ResolvedTranslation;
 use crate::translator::TranslationPipeline;
 use crate::translator::TranslationStage;
 
+mod bundle;
 pub mod emphasis;
 mod hyphenation;
 mod metadata;
@@ -93,6 +94,16 @@ enum Commands {
         /// Metadata search query <key=value,...>
         query: String,
     },
+    /// Parse and fully expand `table` (following all `include` directives), then serialize the
+    /// resulting rules to a compact, gzip-compressed bincode bundle for distribution.
+    Bundle {
+        /// Braille table to bundle
+        table: PathBuf,
+        /// Where to write the bundle. Defaults to `table` with its extension replaced by
+        /// `.bincode.gz`.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Parser)] // requires `derive` feature
@@ -126,6 +137,29 @@ fn parse(file: &Path) {
         Err(errors) => {
             print_errors(errors);
         }
+    }
+}
+
+fn bundle_table(table: &Path, output: Option<PathBuf>) {
+    let output = output.unwrap_or_else(|| {
+        let mut path = table.to_path_buf();
+        path.set_extension("bincode.gz");
+        path
+    });
+    match parser::table_expanded(table) {
+        Ok(rules) => match bundle::serialize_rules(&rules) {
+            Ok(bytes) => match std::fs::write(&output, &bytes) {
+                Ok(()) => println!(
+                    "Wrote {} rules ({} bytes) to {}",
+                    rules.len(),
+                    bytes.len(),
+                    output.display()
+                ),
+                Err(e) => eprintln!("Could not write bundle to {}: {}", output.display(), e),
+            },
+            Err(e) => eprintln!("Could not serialize rules: {}", e),
+        },
+        Err(errors) => print_errors(errors),
     }
 }
 
@@ -451,5 +485,6 @@ fn main() {
                 eprint!("Could not index all tables: {:?}", e)
             }
         },
+        Commands::Bundle { table, output } => bundle_table(&table, output),
     }
 }

@@ -60,7 +60,7 @@ impl std::fmt::Display for Constraint {
 /// A set of [`Constraint`]s.
 ///
 /// A tiny facade around an [`EnumSet`] of [`Constraint`].
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct Constraints(EnumSet<Constraint>);
 
 impl Constraints {
@@ -121,7 +121,7 @@ pub enum Direction {
     Backward,
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum WithClass {
     Before { class: String },
     After { class: String },
@@ -129,7 +129,7 @@ pub enum WithClass {
 
 type WithClasses = Vec<WithClass>;
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub enum WithMatch {
     Before,
     After,
@@ -331,7 +331,7 @@ pub enum Opcode {
 ///
 /// A translation rule is often composed of three parts: the translation command ([`Opcode`]), the
 /// character(s) and the corresponding braille dots ([`BrailleChars`]).
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Rule {
     Include {
         file: String,
@@ -1057,7 +1057,7 @@ impl HasPrecedence for Rule {
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Braille {
     Implicit,
     Explicit(BrailleChars),
@@ -1072,7 +1072,7 @@ impl std::fmt::Display for Braille {
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Position {
     Before,
     After,
@@ -2325,7 +2325,7 @@ pub enum TableError {
 }
 
 /// A [`Rule`] combined with information about which table file it originated from.
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AnchoredRule {
     pub rule: Rule,
     path: Option<PathBuf>,

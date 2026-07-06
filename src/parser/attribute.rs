@@ -1,6 +1,6 @@
 use crate::parser::CharacterClass;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Attribute {
     Class(CharacterClass),
     ByOrder(u8),
