@@ -67,6 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `nocross always en`) were never applied at all: they only competed for a
   position when a plain rule also matched there. They now compete for the
   position on their own.
+- The `noletsign` opcode (letters that must never themselves be preceded by
+  a letter sign) was parsed but silently ignored.
 
 ## [0.2.8] - 2026-06-29
 

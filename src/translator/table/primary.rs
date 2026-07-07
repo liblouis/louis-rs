@@ -692,6 +692,9 @@ impl PrimaryTable {
                         .lettersign_indicator
                         .letsign(&dots.to_string(), rule);
                 }
+                Rule::Noletsign { chars } => {
+                    builder.lettersign_indicator.noletsign(chars);
+                }
                 Rule::Noletsignafter { chars } => {
                     builder.lettersign_indicator.noletsignafter(chars);
                 }

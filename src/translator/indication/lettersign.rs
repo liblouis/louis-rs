@@ -13,7 +13,8 @@
 //! start before punctuation (`b:`), or a Tamil consonant followed by a vowel sign or virama.
 //! Letters preceded by a space (word boundary) or by another letter (tail of a letter run) do not fire.
 //! The `noletsignafter` and `noletsignbefore` opcodes list characters adjacent to a letter that
-//! suppress the indicator.
+//! suppress the indicator. The `noletsign` opcode lists letters that must never themselves be
+//! preceded by a letter sign, regardless of context.
 
 use std::collections::HashSet;
 
@@ -35,6 +36,7 @@ use std::collections::HashMap;
 pub struct IndicatorBuilder {
     lettersign: Option<(String, AnchoredRule)>,
     contractions: HashMap<String, AnchoredRule>,
+    noletsign_chars: HashSet<char>,
     noletsignafter_chars: HashSet<char>,
     noletsignbefore_chars: HashSet<char>,
 }
@@ -44,6 +46,7 @@ impl IndicatorBuilder {
         Self {
             lettersign: None,
             contractions: HashMap::new(),
+            noletsign_chars: HashSet::new(),
             noletsignafter_chars: HashSet::new(),
             noletsignbefore_chars: HashSet::new(),
         }
@@ -100,6 +103,7 @@ impl IndicatorBuilder {
             start_translation,
             letter_chars,
             space_chars,
+            noletsign_chars: self.noletsign_chars,
             noletsignafter_chars: self.noletsignafter_chars,
             noletsignbefore_chars: self.noletsignbefore_chars,
         })
@@ -111,6 +115,10 @@ impl IndicatorBuilder {
 
     pub fn contraction(&mut self, s: &str, origin: &AnchoredRule) {
         self.contractions.insert(s.to_string(), origin.clone());
+    }
+
+    pub fn noletsign(&mut self, s: &str) {
+        self.noletsign_chars.extend(s.chars());
     }
 
     pub fn noletsignafter(&mut self, s: &str) {
@@ -130,6 +138,8 @@ pub struct Indicator {
     letter_chars: HashSet<char>,
     /// Characters that are considered spaces (Space class).
     space_chars: HashSet<char>,
+    /// These letters must never themselves be preceded by a letter sign.
+    noletsign_chars: HashSet<char>,
     /// After these characters the letsign must NOT be inserted.
     noletsignafter_chars: HashSet<char>,
     /// Before these characters the letsign must NOT be inserted.
@@ -155,7 +165,7 @@ impl Indicator {
         // It does NOT fire when preceded by a space (word boundary: "a", "I'm")
         // or by another letter (tail of a word: `:bc` — 'c' has prev='b').
         for (i, &c) in chars.iter().enumerate() {
-            if !self.letter_chars.contains(&c) {
+            if !self.letter_chars.contains(&c) || self.noletsign_chars.contains(&c) {
                 continue;
             }
             let prev = if i > 0 { Some(chars[i - 1]) } else { None };
@@ -184,7 +194,9 @@ impl Indicator {
             let mut prev: Option<char> = None;
             let mut char_pos = 0;
             for (byte_pos, c) in input.char_indices() {
-                if self.next(&input[byte_pos..], prev).is_some() {
+                if !self.noletsign_chars.contains(&c)
+                    && self.next(&input[byte_pos..], prev).is_some()
+                {
                     fire.insert(char_pos);
                 }
                 prev = Some(c);
@@ -286,6 +298,42 @@ mod tests {
         assert_eq!(pairs(&indicator.precompute(":bc")), vec![]);
         // multi-letter word: no letsign
         assert_eq!(pairs(&indicator.precompute("abc")), vec![]);
+    }
+
+    #[test]
+    fn noletsign_suppresses_isolation_letsign() {
+        let mut builder = IndicatorBuilder::new();
+        builder.letsign("⠠", &rule("letsign 6"));
+        builder.noletsign("i");
+        let cc = CharacterClasses::new(&[
+            (CharacterClass::Letter, &['a', 'b', 'i']),
+            (CharacterClass::Space, &[' ']),
+        ]);
+        let ctx = TableContext::new(cc, CharacterClasses::default(), Default::default());
+        let indicator = builder.build(&ctx).unwrap();
+
+        // 'i' is listed in noletsign: never gets a letsign, even isolated after a
+        // non-space, non-letter character.
+        assert_eq!(pairs(&indicator.precompute("2i")), vec![]);
+        // other isolated letters are unaffected.
+        assert_eq!(
+            pairs(&indicator.precompute("2b")),
+            vec![(1, "⠠".to_string())]
+        );
+    }
+
+    #[test]
+    fn noletsign_suppresses_contraction_letsign() {
+        let mut builder = IndicatorBuilder::new();
+        builder.letsign("⠠", &rule("letsign 6"));
+        builder.contraction("ab", &rule("contraction ab"));
+        builder.noletsign("a");
+        let cc = CharacterClasses::new(&[(CharacterClass::Letter, &['a', 'b'])]);
+        let ctx = TableContext::new(cc, CharacterClasses::default(), Default::default());
+        let indicator = builder.build(&ctx).unwrap();
+
+        // "ab" is a contraction, but 'a' is listed in noletsign, so no letsign fires.
+        assert_eq!(pairs(&indicator.precompute("ab")), vec![]);
     }
 
     #[test]
