@@ -1286,6 +1286,10 @@ impl PrimaryTable {
         let mut prev: Option<char> = None;
         let mut seen: HashSet<TranslationSubset> = HashSet::default();
         let mut char_pos: usize = 0;
+        // A zero-length candidate (e.g. a zero-width `context`/`match` action) re-enters
+        // the loop at the same char_pos without advancing, so indications must only be
+        // emitted the first time a given position is visited, not on every re-entry.
+        let mut last_indications_pos: Option<usize> = None;
 
         // Enrich spans with compbrl-detected regions.
         let enriched_spans = match &self.compbrl_scanner {
@@ -1297,7 +1301,10 @@ impl PrimaryTable {
         let constraints = self.constrainers.precompute(input, &enriched_spans);
 
         loop {
-            translations.extend(indications.translations_at(char_pos));
+            if last_indications_pos != Some(char_pos) {
+                translations.extend(indications.translations_at(char_pos));
+                last_indications_pos = Some(char_pos);
+            }
 
             // whether we're about to match starting at the true beginning of the whole input,
             // needed by match/context rules anchored with liblouis' `^`/`` ` `` boundary markers
@@ -2015,6 +2022,29 @@ mod tests {
         assert_eq!(table.translate("⠇⠸"), "foobar");
         assert_eq!(table.translate("⠀⠀"), "  ");
         assert_eq!(table.translate("⠄⠈⠈"), "foo");
+    }
+
+    #[test]
+    fn indication_not_reemitted_at_zero_length_candidate() {
+        // A zero-length `context` action (e.g. liblouis' `$d[]$l`, used to insert a
+        // letsign between a digit and a single trailing letter) legitimately overlaps
+        // with the letsign indicator that also fires there, producing two signs — a
+        // table author relies on a later pass rule to collapse that expected overlap
+        // (see da-dk-g28.ctb's "Remove any superfluous letsigns" pass3 rule). What must
+        // not happen is a *third* sign: the translation loop revisits this position
+        // without advancing (the context action is zero-length), and the indicator
+        // must not be re-emitted on that second visit.
+        let rules = [
+            parse_rule("digit 0 1"),
+            parse_rule("lowercase i 24"),
+            parse_rule("letsign 6"),
+            parse_rule("context $d[]$l @6"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        assert_eq!(table.translate("0i"), "⠁⠠⠠⠊");
     }
 
     #[test]

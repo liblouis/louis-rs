@@ -239,6 +239,17 @@ mod tests {
     }
 
     #[test]
+    fn pass3_collapse_doubled_cell() {
+        let rules = [parse_rule("noback pass3 @12-12 @12")];
+        let ctx = TableContext::default();
+        let transform =
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Post2, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("⠃⠃"), "⠃");
+        assert_eq!(transform.translate("⠃⠙⠃"), "⠃⠙⠃");
+    }
+
+    #[test]
     fn effects() {
         let rules = [
             // when encountering @123 set var 1 to 1

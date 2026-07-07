@@ -69,6 +69,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   position on their own.
 - The `noletsign` opcode (letters that must never themselves be preceded by
   a letter sign) was parsed but silently ignored.
+- A zero-length `context`/`match` action (e.g. liblouis' `$d[]$l`, used to
+  insert a letsign between a digit and a single trailing letter) re-enters
+  the translation loop at the same position without advancing, which caused
+  any indicator scheduled there (letsign, numsign, capsletter, ...) to be
+  emitted again on that second visit. Indicators are now emitted at most
+  once per position.
 
 ## [0.2.8] - 2026-06-29
 
