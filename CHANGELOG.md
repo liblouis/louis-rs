@@ -63,6 +63,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   a `*`/`+`-quantified pattern whose body always matches zero-width
   caused the matcher to recurse forever without ever advancing,
   instead of terminating after one attempt.
+- `nocross` rules with no plain counterpart (the common case, e.g. liblouis'
+  `nocross always en`) were never applied at all: they only competed for a
+  position when a plain rule also matched there. They now compete for the
+  position on their own.
 
 ## [0.2.8] - 2026-06-29
 

@@ -1390,42 +1390,41 @@ impl PrimaryTable {
                 // input
                 .filter(|t| !seen.contains(&TranslationSubset::from(*t)))
                 .max_by_key(|translation| translation.weight());
-            if let Some(t) = candidate {
-                if let Some(nocross) = nocross_candidate
-                    && nocross.weight() >= t.weight()
-                {
-                    // Use the nocross translation if it is at least as long as the normal translation
-                    let translation = nocross.clone();
-                    let translation = uppercase_if_needed(translation);
-                    // move the iterator forward by the number of characters in the translation
-                    chars.nth(nocross.length() - 1);
-                    prev = translation.input().chars().last();
-                    char_pos += nocross.length();
-                    translations.push(translation);
-                    delayed_translations = self.update_offsets(delayed_translations, t.length());
+            // A nocross rule wins if there is no plain candidate to beat (many, e.g.
+            // liblouis' `nocross always en`, have no plain counterpart at all).
+            if let Some(nocross) = &nocross_candidate
+                && candidate.is_none_or(|t| nocross.weight() >= t.weight())
+            {
+                let translation = nocross.clone();
+                let translation = uppercase_if_needed(translation);
+                // move the iterator forward by the number of characters in the translation
+                chars.nth(nocross.length() - 1);
+                prev = translation.input().chars().last();
+                char_pos += nocross.length();
+                translations.push(translation);
+                delayed_translations = self.update_offsets(delayed_translations, nocross.length());
+            } else if let Some(t) = candidate {
+                if t.length() == 0 {
+                    // if there is a zero-length translation candiate we run the risk of an infinite
+                    // loop, so remember the current translation so we only apply it once
+                    seen.insert(TranslationSubset::from(t));
                 } else {
-                    if t.length() == 0 {
-                        // if there is a zero-length translation candiate we run the risk of an infinite
-                        // loop, so remember the current translation so we only apply it once
-                        seen.insert(TranslationSubset::from(t));
-                    } else {
-                        seen.clear();
-                        // move the iterator forward by the number of characters in the translation
-                        chars.nth(t.length() - 1);
-                        prev = t.input().chars().last();
-                        char_pos += t.length();
-                    }
-                    // there is a matching translation rule
-                    let translation = t.clone();
-                    let translation = uppercase_if_needed(translation);
-                    translations.push(translation);
-                    delayed_translations = self.update_offsets(delayed_translations, t.length());
+                    seen.clear();
+                    // move the iterator forward by the number of characters in the translation
+                    chars.nth(t.length() - 1);
+                    prev = t.input().chars().last();
+                    char_pos += t.length();
+                }
+                // there is a matching translation rule
+                let translation = t.clone();
+                let translation = uppercase_if_needed(translation);
+                translations.push(translation);
+                delayed_translations = self.update_offsets(delayed_translations, t.length());
 
-                    // update the environment if needed
-                    if !t.effects().is_empty() {
-                        for effect in t.effects() {
-                            env.apply(effect);
-                        }
+                // update the environment if needed
+                if !t.effects().is_empty() {
+                    for effect in t.effects() {
+                        env.apply(effect);
                     }
                 }
             } else if let Some(next_char) = chars.next() {
@@ -1971,6 +1970,25 @@ mod tests {
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
                 .unwrap();
         assert_eq!(table.translate("hausboot"), "⠇");
+        assert_eq!(table.translate("fff"), "⠸");
+    }
+
+    #[test]
+    fn nocross_without_plain_counterpart() {
+        // liblouis tables routinely define a `nocross` rule with no plain counterpart
+        // (e.g. da-dk-g28.ctb's `nocross always en`) — it must still win when it's the
+        // only candidate at a position, not just when it out-weighs a competing plain rule.
+        let rules = vec![
+            parse_rule("include dictionaries/de-g2-core-patterns.dic"),
+            parse_rule("lowercase f 124"),
+            parse_rule("nocross always fff 456"),
+            parse_rule("space \\s 0"),
+        ];
+        let rules = expand_includes(rules, &SearchPath::new_or("LOUIS_TABLE_PATH", ".")).unwrap();
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
         assert_eq!(table.translate("fff"), "⠸");
     }
 
