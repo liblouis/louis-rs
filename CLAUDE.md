@@ -242,6 +242,7 @@ See `TODO.org` for detailed tracking.
 | Improve regex engine | `src/translator/regexp.rs` |
 | Optimize performance | `src/translator/trie.rs`, `src/translator/table/primary.rs` |
 | Handle new character class | `src/parser/character_class.rs`, `src/translator/table.rs` |
+| Add/update a hyphenation dictionary | `dictionaries/README.org` |
 
 ## Running the Full Test Suite
 
