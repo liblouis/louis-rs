@@ -1949,10 +1949,9 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Doesn't seem to work at the moment"]
     fn nocross() {
         let rules = vec![
-            parse_rule("include dictionaries/de-g1-core-patterns.dic"),
+            parse_rule("include dictionaries/de-g2-core-patterns.dic"),
             parse_rule("lowercase a 1"),
             parse_rule("lowercase b 12"),
             parse_rule("lowercase h 125"),
