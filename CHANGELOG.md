@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The `check` subcommand now runs YAML test files concurrently, and further
   parallelizes across the individual tests within each file/table
   combination, using `rayon`.
+- Hyphenation dictionaries are now parsed natively (`src/hyphenation.rs`)
+  instead of via the `hyphenation` crate. A `.dic` hyphenation-pattern file is
+  resolved through the same `LOUIS_TABLE_PATH` search path as every other
+  liblouis table, with no separate build/conversion step required.
+  `LEFTHYPHENMIN`/`RIGHTHYPHENMIN`, unsupported encodings, and patterns
+  carrying no hyphenation value now fail to parse instead of being silently
+  accepted.
 
 ### Added
 - Implement indication handling for backward-translation of `capsletter`,
