@@ -1,6 +1,7 @@
 """Python bindings for the louis braille translator."""
 from ._louis_py import (
     __version__,
+    Direction,
     LouisError,
     TableParseError,
     TranslationError,
@@ -8,6 +9,7 @@ from ._louis_py import (
 
 __all__ = [
     "__version__",
+    "Direction",
     "LouisError",
     "TableParseError",
     "TranslationError",

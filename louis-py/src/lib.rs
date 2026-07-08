@@ -36,12 +36,30 @@ fn to_pyerr(py: Python<'_>, err: louis::TranslationError) -> PyErr {
     }
 }
 
+/// Translation direction, mirrors `louis::Direction`.
+#[pyclass(eq, eq_int)]
+#[derive(Clone, Copy, PartialEq)]
+pub enum Direction {
+    FORWARD = 0,
+    BACKWARD = 1,
+}
+
+impl From<Direction> for louis::Direction {
+    fn from(d: Direction) -> Self {
+        match d {
+            Direction::FORWARD => louis::Direction::Forward,
+            Direction::BACKWARD => louis::Direction::Backward,
+        }
+    }
+}
+
 /// The `_louis_py` extension module. Public API lives in the `louis_py`
 /// Python package, which re-exports from here.
 #[pymodule]
 fn _louis_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+    m.add_class::<Direction>()?;
     m.add("LouisError", py.get_type::<LouisError>())?;
     m.add("TableParseError", py.get_type::<TableParseError>())?;
     m.add("TranslationError", py.get_type::<TranslationError>())?;
