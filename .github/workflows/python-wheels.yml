@@ -1,0 +1,92 @@
+name: python-wheels
+
+on:
+  pull_request:
+    paths:
+      - "louis-py/**"
+      - "src/**"
+      - "Cargo.toml"
+      - ".github/workflows/python-wheels.yml"
+  push:
+    tags:
+      - "py-v*"
+
+jobs:
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build and install
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --manifest-path louis-py/Cargo.toml --out dist
+      - name: Install wheel and test
+        run: |
+          pip install --find-links dist louis-py
+          pip install pytest
+          pytest louis-py/tests -v
+
+  wheels:
+    if: startsWith(github.ref, 'refs/tags/py-v')
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            target: x64
+          - os: windows-latest
+            target: x86
+          - os: ubuntu-latest
+            target: x86_64
+          - os: ubuntu-latest
+            target: aarch64
+          - os: macos-latest
+            target: x86_64
+          - os: macos-latest
+            target: aarch64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          command: build
+          args: --release --manifest-path louis-py/Cargo.toml --out dist
+          manylinux: "2014"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}-${{ matrix.target }}
+          path: dist
+
+  sdist:
+    if: startsWith(github.ref, 'refs/tags/py-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --manifest-path louis-py/Cargo.toml --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist
+          path: dist
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/py-v')
+    needs: [wheels, sdist]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          merge-multiple: true
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
