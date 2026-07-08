@@ -36,7 +36,7 @@ pub enum TranslationError {
     #[error(transparent)]
     HyphenationTableIoError(#[from] io::Error),
     #[error(transparent)]
-    HyphenationTableLoadError(#[from] hyphenation::load::Error),
+    HyphenationTableParseError(#[from] crate::hyphenation::ParseError),
 }
 
 #[derive(Debug, Default, Clone)]

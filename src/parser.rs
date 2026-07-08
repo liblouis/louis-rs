@@ -2425,13 +2425,12 @@ fn expand_include(
         Rule::Include { ref file } => {
             let path = Path::new(file);
             if path.extension().and_then(OsStr::to_str) == Some("dic") {
-                // including hyphenation dictionaries needs to be handled differently. Try to find a
-                // bincode file with the same name in the search path
-                let mut path = path.to_path_buf();
-                path.set_extension("bincode");
+                // Hyphenation dictionaries are liblouis's own pattern-dictionary
+                // format (see the `hyphenation` module), not a translation table --
+                // resolve the path as-is and hand it through untouched.
                 let path = search_path
-                    .find_file(&path)
-                    .ok_or(vec![TableError::HyphenationTableNotFound(path)])?;
+                    .find_file(path)
+                    .ok_or(vec![TableError::HyphenationTableNotFound(path.into())])?;
                 return Ok(vec![AnchoredRule::new(
                     Rule::IncludeHyphenation { path },
                     rule.path,

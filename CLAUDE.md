@@ -210,7 +210,7 @@ This order is crucial for correct braille generation and must be reversed for ba
 
 Tests use YAML files from the liblouis project. Current gaps:
 - Emphasis indication (partial support)
-- Hyphenation/nocross handling (TODO)
+- Compound-word contraction across a nocross hyphen (see `TODO.org`'s "Known gaps")
 - Some backward translation rules
 - Computer braille (incomplete)
 - Input/output position mapping (typeforms and cursors)
@@ -227,7 +227,7 @@ See `TODO.org` for detailed tracking.
 ### Known Limitations (from TODO.org)
 
 - Emphasis indication not fully implemented
-- Hyphenation support (nocross opcode) needs work
+- nocross-driven hyphenation dictionary lookup works natively (`src/hyphenation.rs`), but compound-word contraction across a hyphen still has a known gap
 - Some backward translation modes missing
 - Computer braille incomplete
 - Regexp infinite loop potential (needs guarding against recursive patterns)
@@ -242,7 +242,7 @@ See `TODO.org` for detailed tracking.
 | Improve regex engine | `src/translator/regexp.rs` |
 | Optimize performance | `src/translator/trie.rs`, `src/translator/table/primary.rs` |
 | Handle new character class | `src/parser/character_class.rs`, `src/translator/table.rs` |
-| Add/update a hyphenation dictionary | `dictionaries/README.org` |
+| Change hyphenation behavior | `src/hyphenation.rs` -- parses liblouis's `.dic` hyphenation-pattern format directly, no external crate or build step |
 
 ## Running the Full Test Suite
 

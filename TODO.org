@@ -1,6 +1,11 @@
-* Todo [14/23]
+* Todo [15/23]
 - [ ] Move the display tables into the Pipeline
-- [ ] implement "libhyphen"
+- [X] implement "libhyphen"
+  - implemented natively in ~src/hyphenation.rs~, parsing liblouis's own
+    ~.dic~ hyphenation-pattern format directly (no external crate, no
+    build-time conversion step); verified byte-identical to the old
+    ~hyphenation~-crate-based behavior across liblouis's full yaml test
+    suite (278k test cases across the en-g3 and da-dk-g26 dictionaries)
 - [-] guard against "()+" regexp?
   - [X] a body that is *unconditionally* zero-width (e.g. ~Regexp::Empty~)
     is now guarded: ~Regexp::always_zero_width()~ caps
@@ -26,10 +31,14 @@
   - [X] Emphasis indication
 - [X] Typeforms
 - [ ] Cursor handling
-- [ ] Hyphenation
-  - will probably be delegated to the [[https://docs.rs/hyphenation/latest/hyphenation/][hyphenation crate]]
-  - this doesn't seem to work
-    - [ ] test it
+- [-] Hyphenation
+  - previously delegated to the [[https://docs.rs/hyphenation/latest/hyphenation/][hyphenation crate]]; now implemented
+    natively (see "implement libhyphen" above and ~src/hyphenation.rs~)
+  - [X] test it -- unit-tested and verified against liblouis's full yaml
+    test suite
+  - the dictionary-loading/lookup mechanism itself works; the remaining
+    nocross/compound-word contraction gaps are tracked separately under
+    "Known gaps" (the two hyphen-related entries)
 - [X] Add an API so that the functionality can be used as a library
   - end expose it as a C ABI so that it can be used from other
     languages (see also [[https://github.com/mozilla/cbindgen][cbindgen]] or even better [[https://github.com/rust-diplomat/diplomat][Diplomat]])
@@ -97,12 +106,40 @@
   - reduce the regexp opcode operand to only 32 bit
 
 * Known gaps
-- [ ] hyphen (nocross)
+- [ ] Literal hyphen character breaks per-segment contraction in compounds
   - concrete repro: en-ueb.yaml compounds split across a hyphen don't
     get correct per-segment contraction, e.g. "do-it-yourself" ->
     expected "d-x-yrf" but actual "do-x-y|rself" ("do" and "yourself"
     fail to contract on their own side of the hyphen); same for
     "out-and-out" -> expected "|-&-|" actual "|t-&-|t"
+  - likely cause: ~src/translator/table.rs~'s ~Rule::Hyphen~ handling
+    files the literal hyphen character under generic
+    ~CharacterClass::Punctuation~ (see the ~FIXME: In what character
+    class is the hyphen (if any)?~ comment there) rather than whatever
+    classification word-boundary detection needs to treat each side as
+    its own word for contraction purposes. Unrelated to
+    ~src/hyphenation.rs~/dictionary-based hyphenation -- liblouis's own
+    ~syllableBreak()~ already stops at non-letter characters like ~-~
+    when finding the enclosing word, so no hyphenation-dictionary lookup
+    is even involved in this repro
+- [ ] nocross only checks "can this matched text hyphenate at all", not
+  "does *this* candidate's span cross a break"
+  - liblouis's real nocross-crossing check (~syllableBreak()~ in
+    ~lou_translateString.c~) is positional: it computes every
+    hyphenation break across the whole enclosing word (bounded by
+    non-letter characters), then rejects a ~nocross~ rule only if a
+    break falls strictly inside *that rule's* matched span
+  - our ~word_hyphenates()~/~HyphenationTable::can_hyphenate()~
+    (~src/translator/table/primary.rs~) is a coarser stand-in: it asks
+    whether the matched candidate substring itself has any break
+    anywhere, treating it as an isolated word rather than a span inside
+    a larger one. This predates the native hyphenation rewrite (the old
+    ~hyphenation~-crate-based ~opportunities().is_empty()~ check was
+    exactly as coarse) and isn't caused by it -- fixing it properly
+    would mean giving ~HyphenationTable~ a position-aware query again
+    (it currently only returns a bool, by design, since nothing today
+    needs positions) plus computing the correct enclosing-word bounds
+    before calling it, which ~nocross_candidates()~ doesn't do either
 - [-] indication + backtranslation
   - [X] capsletter, begcapsword/endcapsword, numsign/nonumsign
   - [ ] begcaps/endcaps/begcapsphrase/endcapsphrase (passage-level caps)

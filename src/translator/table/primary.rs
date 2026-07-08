@@ -1,15 +1,14 @@
 use std::{
     collections::{HashMap, HashSet},
-    fs::File,
-    io,
+    fs,
 };
 
-use hyphenation::{Hyphenator, Load, Standard};
 use log::warn;
 
 use crate::{
     Direction,
     emphasis::EmphasisSpan,
+    hyphenation::HyphenationTable,
     parser::{
         AnchoredRule, Braille, BrailleChars, CharacterClass, CharacterClasses, HasNocross,
         HasPrecedence, WithClass as ParsedClass, fallback,
@@ -129,7 +128,7 @@ pub struct PrimaryTable {
     context_patterns: ContextPatterns,
     /// All the nocross translation rules are stored in a separate trie
     nocross_trie: Trie,
-    hyphenator: Option<Standard>,
+    hyphenator: Option<HyphenationTable>,
     indicators: Indicators,
     constrainers: Constrainers,
     /// Detects compbrl-triggered computer braille regions.
@@ -151,7 +150,7 @@ struct PrimaryTableBuilder {
     trie: Trie,
     comp6_trie: Trie,
     nocross_trie: Trie,
-    hyphenator: Option<Standard>,
+    hyphenator: Option<HyphenationTable>,
     match_patterns: MatchPatternsBuilder,
     context_patterns: ContextPatternsBuilder,
     numeric_indicator: numeric::IndicatorBuilder,
@@ -1130,9 +1129,8 @@ impl PrimaryTable {
                     )?;
                 }
                 Rule::IncludeHyphenation { path } => {
-                    let file = File::open(path)?;
-                    let mut reader = io::BufReader::new(file);
-                    builder.hyphenator = Some(Standard::any_from_reader(&mut reader)?);
+                    let source = fs::read_to_string(path)?;
+                    builder.hyphenator = Some(HyphenationTable::parse(&source)?);
                 }
                 _ => (),
             }
@@ -1232,7 +1230,7 @@ impl PrimaryTable {
 
     fn word_hyphenates(&self, input: &str) -> bool {
         match &self.hyphenator {
-            Some(hyphenator) => !hyphenator.opportunities(&input.to_lowercase()).is_empty(),
+            Some(hyphenator) => hyphenator.can_hyphenate(&input.to_lowercase()),
             // if there is no hyphenator claim that the word hyphenates. Then it will not be used as
             // a nocross candidate
             _ => true,
@@ -1960,7 +1958,7 @@ mod tests {
     #[test]
     fn nocross() {
         let rules = vec![
-            parse_rule("include dictionaries/de-g2-core-patterns.dic"),
+            parse_rule("include dictionaries/nocross-test.dic"),
             parse_rule("lowercase a 1"),
             parse_rule("lowercase b 12"),
             parse_rule("lowercase h 125"),
@@ -1989,7 +1987,7 @@ mod tests {
         // (e.g. da-dk-g28.ctb's `nocross always en`) — it must still win when it's the
         // only candidate at a position, not just when it out-weighs a competing plain rule.
         let rules = vec![
-            parse_rule("include dictionaries/de-g2-core-patterns.dic"),
+            parse_rule("include dictionaries/nocross-test.dic"),
             parse_rule("lowercase f 124"),
             parse_rule("nocross always fff 456"),
             parse_rule("space \\s 0"),

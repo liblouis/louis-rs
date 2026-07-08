@@ -1,0 +1,6 @@
+UTF-8
+# Minimal, self-owned fixture for the nocross unit tests in
+# src/translator/table/primary.rs. Not derived from any liblouis table --
+# it exists purely to give "hausboot" a hyphenation break (between 's'
+# and 'b') while giving "fff" none, which is all those tests check.
+s1b
