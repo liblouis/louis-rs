@@ -27,13 +27,14 @@ jobs:
           args: --release --manifest-path louis-py/Cargo.toml --out dist
       - name: Install wheel and test
         run: |
-          pip install --find-links dist louis-py
+          pip install --no-index --find-links dist louis-py
           pip install pytest
           pytest louis-py/tests -v
 
   wheels:
     if: startsWith(github.ref, 'refs/tags/py-v')
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
