@@ -20,6 +20,7 @@ use crate::translator::TranslationPipeline;
 use crate::translator::TranslationStage;
 
 pub mod emphasis;
+mod hyphenation;
 mod metadata;
 mod test;
 mod translator;
