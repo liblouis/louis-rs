@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   accepted.
 
 ### Added
+- Add `louis-py`, Python bindings for the translator built with
+  [PyO3](https://pyo3.rs/). The bindings live in a new Cargo workspace
+  member (`louis-py/`) and ship as the `louis-py` package (import name
+  `louis_py`) with type stubs and a `py.typed` marker.
 - Implement indication handling for backward-translation of `capsletter`,
   `begcapsword`/ `endcapsword`, and `numsign`/`nonumsign`. An opcode is only
   recognized as an indicator when its dots aren't already claimed by a real
