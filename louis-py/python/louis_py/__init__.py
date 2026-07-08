@@ -2,6 +2,7 @@
 from ._louis_py import (
     __version__,
     Direction,
+    Translator,
     LouisError,
     TableParseError,
     TranslationError,
@@ -10,6 +11,7 @@ from ._louis_py import (
 __all__ = [
     "__version__",
     "Direction",
+    "Translator",
     "LouisError",
     "TableParseError",
     "TranslationError",
