@@ -39,15 +39,38 @@ impl TranslationModes {
 /// Per-call options for a translation.
 #[derive(Debug, Clone, Default)]
 pub struct TranslationOptions {
-    pub mode: TranslationModes,
+    mode: TranslationModes,
     /// Per-character emphasis annotations (which emphasis classes are active where).
-    pub emphasis: Vec<EmphasisSpan>,
-    pub cursor_pos: Option<usize>,
+    emphasis: Vec<EmphasisSpan>,
+    cursor_pos: Option<usize>,
 }
 
 impl TranslationOptions {
+    pub fn with_mode(mut self, mode: TranslationModes) -> Self {
+        self.mode = mode;
+        self
+    }
+
+    pub fn with_emphasis(mut self, emphasis: Vec<EmphasisSpan>) -> Self {
+        self.emphasis = emphasis;
+        self
+    }
+
+    pub fn with_cursor_pos(mut self, cursor_pos: usize) -> Self {
+        self.cursor_pos = Some(cursor_pos);
+        self
+    }
+
+    pub fn mode(&self) -> &TranslationModes {
+        &self.mode
+    }
+
     pub fn emphasis(&self) -> &[EmphasisSpan] {
         &self.emphasis
+    }
+
+    pub fn cursor_pos(&self) -> Option<usize> {
+        self.cursor_pos
     }
 }
 

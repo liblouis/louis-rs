@@ -287,11 +287,9 @@ impl Test {
         display_table: &DisplayTable,
         direction: Direction,
     ) -> TestResult {
-        let options = TranslationOptions {
-            mode: self.modes.clone(),
-            emphasis: self.emphasis.clone(),
-            cursor_pos: None,
-        };
+        let options = TranslationOptions::default()
+            .with_mode(self.modes.clone())
+            .with_emphasis(self.emphasis.clone());
         let translated = table.translate_with_options(&self.input, &options);
         let displayed = display_table.translate(&translated);
         if displayed == self.expected {

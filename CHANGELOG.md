@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Changed
+- `TranslationOptions` fields are now private. Construct it with
+  `TranslationOptions::default()` and the `with_mode`/`with_emphasis`/
+  `with_cursor_pos` builder methods, and read it back with the `mode`/
+  `emphasis`/`cursor_pos` accessors.
 - The `check` subcommand now runs YAML test files concurrently, and further
   parallelizes across the individual tests within each file/table
   combination, using `rayon`.
