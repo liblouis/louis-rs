@@ -1,0 +1,5 @@
+lowercase o 135
+lowercase ύ 5-13456
+sign ΄ 5
+attribute accent ΄
+noback pass2 @135[%accent]@13456 *@136

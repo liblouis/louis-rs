@@ -1,0 +1,71 @@
+# Literals referenced by fuzz_maximal.ctb (and its overlay) that text
+# inputs need to contain to reach rare translation rules. Any text is a
+# valid input; this dict only speeds up coverage discovery by giving
+# libFuzzer atomic tokens to splice in during mutation.
+
+# noback correct
+"teh"
+"adn"
+
+# always / word / contraction rules from the synthetic overlay
+"foo"
+"bar"
+"qux"
+"about"
+"and"
+"pre"
+"sub"
+"in"
+"zz"
+"oo"
+"ally"
+"ing"
+"com"
+"ness"
+"con"
+"to"
+"be"
+"go"
+"ab"
+"cd"
+
+# match anchors
+"a foo b"
+".oo."
+"foof"
+"zooz"
+
+# context / swap literals
+"abc"
+"cab"
+
+# punctuation / sign / numeric context
+"("
+")"
+"["
+"]"
+":"
+";"
+"#"
+","
+"."
+"/"
+"%"
+"{"
+"}"
+"#123"
+"1,234"
+"1.5"
+"50%"
+
+# attribute + multipass chain (Greek tonos + upsilon with tonos, UTF-8)
+"\xce\xb4"
+"\xcd\xbd"
+"\xce\xb4\xcd\xbd"
+
+# Mixed fragments that exercise several rules at once
+"(abc)"
+"the foo"
+"precom"
+"kindness"
+"going to"

@@ -1,0 +1,31 @@
+[package]
+name = "louis-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+# libfuzzer is deprecated, so we replaced it with the libafl_libfuzzer shim
+libfuzzer-sys = { git = "https://github.com/AFLplusplus/LibAFL.git", package = "libafl_libfuzzer" }
+louis-rs = { path = ".." }
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "translate"
+path = "fuzz_targets/translate.rs"
+doc = false
+
+[[bin]]
+name = "table"
+path = "fuzz_targets/table.rs"
+doc = false
+
+[[bin]]
+name = "parse"
+path = "fuzz_targets/parse.rs"
+doc = false
