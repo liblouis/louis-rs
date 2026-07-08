@@ -35,3 +35,4 @@ backwards_compatibility = []
 
 [workspace]
 members = [".", "louis-py"]
+default-members = ["."]
