@@ -1,0 +1,18 @@
+[package]
+name = "louis-py"
+version = "0.1.0"
+edition = "2024"
+description = "Python bindings for the louis braille translator"
+license = "LGPL-2.1-or-later"
+repository = "https://github.com/liblouis/louis-rs"
+
+[lib]
+name = "_louis_py"
+crate-type = ["cdylib"]
+
+[dependencies]
+louis-rs = { path = ".." }
+pyo3 = { version = "0.29", features = ["extension-module", "abi3-py39"] }
+
+[dev-dependencies]
+static_assertions = "1"

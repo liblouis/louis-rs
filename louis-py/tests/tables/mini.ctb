@@ -1,0 +1,30 @@
+# Minimal self-contained table for louis-py test suite.
+# Lowercase Latin letters + space, mapped to their standard braille dots.
+# Deterministic, no includes, no external dependencies.
+space \s 0
+letter a 1
+letter b 12
+letter c 14
+letter d 145
+letter e 15
+letter f 124
+letter g 1245
+letter h 125
+letter i 24
+letter j 245
+letter k 13
+letter l 123
+letter m 134
+letter n 1345
+letter o 135
+letter p 1234
+letter q 12345
+letter r 1235
+letter s 234
+letter t 2345
+letter u 136
+letter v 1236
+letter w 2456
+letter x 1346
+letter y 13456
+letter z 1356

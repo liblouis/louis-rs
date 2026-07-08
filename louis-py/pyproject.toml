@@ -1,0 +1,21 @@
+[build-system]
+requires = ["maturin>=1.14,<2"]
+build-backend = "maturin"
+
+[project]
+name = "louis-py"
+version = "0.1.0"
+description = "Python bindings for the louis braille translator"
+requires-python = ">=3.9"
+license = { text = "LGPL-2.1-or-later" }
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Topic :: Adaptive Technologies",
+]
+
+[tool.maturin]
+module-name = "louis_py._louis_py"
+python-source = "python"
+features = ["pyo3/extension-module"]

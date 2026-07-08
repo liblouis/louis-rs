@@ -32,3 +32,6 @@ rayon = "1.12.0"
 [features]
 default = ["backwards_compatibility"]
 backwards_compatibility = []
+
+[workspace]
+members = [".", "louis-py"]
