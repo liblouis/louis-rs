@@ -37,7 +37,7 @@ fn to_pyerr(py: Python<'_>, err: louis::TranslationError) -> PyErr {
 }
 
 /// Translation direction, mirrors `louis::Direction`.
-#[pyclass(eq, eq_int)]
+#[pyclass(eq, eq_int, from_py_object)]
 #[derive(Clone, Copy, PartialEq)]
 pub enum Direction {
     FORWARD = 0,
