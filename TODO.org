@@ -113,6 +113,44 @@
       recognition of the same markers was never added)
   - [ ] emphasis (begemph/endemph etc.) — needs a way to return
     typeform metadata from backward translation, not just text
+- [ ] capsletter/uppercase-mode indication needs liblouis's
+  begin/end/word/symbol model, not a flat "fire once per position" one
+  - found while investigating a regression in de-g0-detailed.utb
+    (German): a zero-width ~context~ marker used to signal an
+    isolated single-letter capital (e.g. input "A") needs *two*
+    capsletter cells flanking the marker to satisfy the table's own
+    pass2 collapse rule (~@46-ad-46 -> @45~), while the same
+    construct mid-word (e.g. "kW") needs only *one*, in the *opposite*
+    order (~@ad-46~, not ~@46-ad~) — confirmed against a real liblouis
+    3.36.0 build
+  - root cause (confirmed by reading ~lou_translateString.c~):
+    ~capsletter~ compiles to ~CTO_ModeLetter~ for the built-in
+    ~CTC_UpperCase~ mode — it is not a standalone indicator like
+    ~letsign~/~numsign~, it goes through the same multi-pass
+    emphasis/mode framework as ~begcapsword~/~begcaps~/custom emphasis
+    classes: per-position ~begin~/~end~/~word~/~symbol~ flags are
+    resolved globally before translation
+    (~resolveEmphasisBeginEnd~/~resolveEmphasisWords~/~resolveEmphasisAllSymbols~/etc.),
+    then ~insertEmphasesAt()~ unconditionally calls *both*
+    ~insertEmphasisBegin()~ and ~insertEmphasisSymbol()~ for mode
+    classes at the same position — a design that already anticipates
+    more than one indicator emission per character, unlike our single
+    flat ~indications~ precomputed table (~Indicators::precompute()~)
+  - ~uppercase.rs~ (capsletter/begcapsword/begcaps/begcapsphrase tiers)
+    and ~emphasis.rs~ (emphletter/begemphword/begemphphrase tiers)
+    independently reimplement the same escalating letter/word/phrase
+    tier model liblouis unifies via ~emphRules~/~insertEmphasesAt()~
+    for both mode classes and custom emphasis classes — neither
+    currently implements the begin+symbol dual-insertion above (each
+    picks one tier per run, not both). Fixing this properly probably
+    means unifying the two modules into one shared model first, then
+    implementing the begin/symbol distinction once there, benefiting
+    both capsletter and custom emphasis classes (which could plausibly
+    hit the same liblouis quirk via begemph-style context interactions)
+    rather than the flat "does this position need a sign" bit both
+    modules use today; that flat model stays correct for
+    ~letsign~/~numsign~, which liblouis treats as simple, single-flag,
+    directly-inserted indicators outside the mode/emphasis framework
 - [X] indication
 - [X] computer braille
 - [ ] inpos + outpos mapping
