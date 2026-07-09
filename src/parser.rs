@@ -339,9 +339,12 @@ pub enum Rule {
     /// A rule for including a hyphenation table.
     ///
     /// There is no specific opcode for this but we make this an extra rule to separate the
-    /// inclusion of braille tables vs hyphenation pattern
+    /// inclusion of braille tables vs hyphenation pattern. The dictionary's source text is
+    /// embedded directly (rather than kept as a path) so that a fully expanded rule list is
+    /// self-contained and doesn't depend on the search path it was resolved from remaining
+    /// available later -- e.g. when the rules are serialized and used elsewhere.
     IncludeHyphenation {
-        path: PathBuf,
+        source: String,
     },
     Undefined {
         dots: BrailleChars,
@@ -2436,12 +2439,15 @@ fn expand_include(
             if path.extension().and_then(OsStr::to_str) == Some("dic") {
                 // Hyphenation dictionaries are liblouis's own pattern-dictionary
                 // format (see the `hyphenation` module), not a translation table --
-                // resolve the path as-is and hand it through untouched.
+                // resolve and read it now, so the resulting rule carries the dictionary
+                // itself rather than a path that may not resolve later.
                 let path = search_path
                     .find_file(path)
                     .ok_or(vec![TableError::HyphenationTableNotFound(path.into())])?;
+                let source =
+                    read_to_string(&path).map_err(|e| vec![TableError::TableNotReadable(e)])?;
                 return Ok(vec![AnchoredRule::new(
-                    Rule::IncludeHyphenation { path },
+                    Rule::IncludeHyphenation { source },
                     rule.path,
                     rule.line,
                 )]);
