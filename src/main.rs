@@ -155,11 +155,20 @@ fn bundle_table(table: &Path, output: Option<PathBuf>) {
                     bytes.len(),
                     output.display()
                 ),
-                Err(e) => eprintln!("Could not write bundle to {}: {}", output.display(), e),
+                Err(e) => {
+                    eprintln!("Could not write bundle to {}: {}", output.display(), e);
+                    exit(1);
+                }
             },
-            Err(e) => eprintln!("Could not serialize rules: {}", e),
+            Err(e) => {
+                eprintln!("Could not serialize rules: {}", e);
+                exit(1);
+            }
         },
-        Err(errors) => print_errors(errors),
+        Err(errors) => {
+            print_errors(errors);
+            exit(1);
+        }
     }
 }
 
