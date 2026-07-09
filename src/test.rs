@@ -290,9 +290,21 @@ impl Test {
         let options = TranslationOptions::default()
             .with_mode(self.modes.clone())
             .with_emphasis(self.emphasis.clone());
-        let translated = table.translate_with_options(&self.input, &options);
-        let displayed = display_table.translate(&translated);
-        if displayed == self.expected {
+        let translated = match direction {
+            // For forward translation we first translate the input and then apply the display table
+            // on the result
+            Direction::Forward => {
+                let translated = table.translate_with_options(&self.input, &options);
+                display_table.translate(&translated)
+            }
+            // For backward translation we first apply the display table on the input and then
+            // translate the result
+            Direction::Backward => {
+                let displayed = display_table.translate(&self.input);
+                table.translate_with_options(&displayed, &options)
+            }
+        };
+        if translated == self.expected {
             if !self.xfail.is_failure(direction) {
                 TestResult::Success
             } else {
@@ -305,14 +317,14 @@ impl Test {
             TestResult::ExpectedFailure {
                 input: self.input.to_string(),
                 expected: self.expected.to_string(),
-                actual: displayed,
+                actual: translated,
                 direction,
             }
         } else {
             TestResult::Failure {
                 input: self.input.to_string(),
                 expected: self.expected.to_string(),
-                actual: displayed,
+                actual: translated,
                 direction,
             }
         }
