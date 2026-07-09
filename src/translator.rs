@@ -106,13 +106,18 @@ impl DisplayTable {
                 Rule::Display {
                     character, dots, ..
                 } => {
+                    let braille = dots.to_unicode();
+                    // swap `from` and `to` for backwards translation
+                    let (from, to) = match direction {
+                        Direction::Forward => (braille, *character),
+                        Direction::Backward => (*character, braille),
+                    };
                     if cfg!(feature = "backwards_compatibility") {
                         // first rule wins
-                        let key = dots.to_string().chars().nth(0).unwrap();
-                        mapping.entry(key).or_insert(*character);
+                        mapping.entry(from).or_insert(to);
                     } else {
                         // last rule wins
-                        mapping.insert(dots.to_string().chars().nth(0).unwrap(), *character);
+                        mapping.insert(from, to);
                     }
                 }
                 _ => (), // ignore all other rules for display tables
