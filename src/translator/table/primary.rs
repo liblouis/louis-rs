@@ -25,7 +25,8 @@ use crate::{
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
         position_constraints::{
             BackwardCapsConstrainerBuilder, BackwardNumericConstrainerBuilder,
-            ComputerBrailleConstrainer, Constrainer, Constrainers, NumericConstrainerBuilder,
+            ComputerBrailleConstrainer, Constrainer, Constrainers, HyphenationConstrainerBuilder,
+            NumericConstrainerBuilder, PositionConstraints,
         },
         table::TableContext,
         translation::TranslationSubset,
@@ -128,7 +129,6 @@ pub struct PrimaryTable {
     context_patterns: ContextPatterns,
     /// All the nocross translation rules are stored in a separate trie
     nocross_trie: Trie,
-    hyphenator: Option<HyphenationTable>,
     indicators: Indicators,
     constrainers: Constrainers,
     /// Detects compbrl-triggered computer braille regions.
@@ -150,7 +150,6 @@ struct PrimaryTableBuilder {
     trie: Trie,
     comp6_trie: Trie,
     nocross_trie: Trie,
-    hyphenator: Option<HyphenationTable>,
     match_patterns: MatchPatternsBuilder,
     context_patterns: ContextPatternsBuilder,
     numeric_indicator: numeric::IndicatorBuilder,
@@ -162,6 +161,7 @@ struct PrimaryTableBuilder {
     numeric_constrainer: NumericConstrainerBuilder,
     backward_caps_constrainer: BackwardCapsConstrainerBuilder,
     backward_numeric_constrainer: BackwardNumericConstrainerBuilder,
+    hyphenation_constrainer: HyphenationConstrainerBuilder,
     backward_digit_overrides: HashMap<char, ResolvedTranslation>,
     compbrl_triggers: Vec<String>,
 }
@@ -174,7 +174,6 @@ impl PrimaryTableBuilder {
             trie: Trie::new(),
             comp6_trie: Trie::new(),
             nocross_trie: Trie::new(),
-            hyphenator: None,
             match_patterns: MatchPatternsBuilder::new(),
             context_patterns: ContextPatternsBuilder::new(),
             numeric_indicator: numeric::IndicatorBuilder::new(),
@@ -186,6 +185,7 @@ impl PrimaryTableBuilder {
             numeric_constrainer: NumericConstrainerBuilder::new(),
             backward_caps_constrainer: BackwardCapsConstrainerBuilder::new(),
             backward_numeric_constrainer: BackwardNumericConstrainerBuilder::new(),
+            hyphenation_constrainer: HyphenationConstrainerBuilder::new(),
             backward_digit_overrides: HashMap::new(),
             compbrl_triggers: Vec::new(),
         }
@@ -339,7 +339,6 @@ impl PrimaryTableBuilder {
             trie: self.trie.with_context(trie_ctx.clone()),
             comp6_trie: self.comp6_trie.with_context(trie_ctx.clone()),
             nocross_trie: self.nocross_trie.with_context(trie_ctx.clone()),
-            hyphenator: self.hyphenator,
             match_patterns: self.match_patterns.build(),
             context_patterns: self.context_patterns.build(),
             indicators: Indicators::new(indicators),
@@ -353,6 +352,14 @@ impl PrimaryTableBuilder {
                     self.backward_numeric_constrainer
                         .build()
                         .map(Constrainer::BackwardNumeric),
+                    // liblouis's `nocross`/hyphenation-based syllable-break check is a
+                    // forward-translation-only mechanism (lou_backTranslateString.c never
+                    // consults it); a nocross rule is always an unrestricted candidate
+                    // during backward translation.
+                    (direction == Direction::Forward)
+                        .then(|| self.hyphenation_constrainer.build())
+                        .flatten()
+                        .map(Constrainer::Hyphenation),
                 ]
                 .into_iter()
                 .flatten()
@@ -1130,7 +1137,9 @@ impl PrimaryTable {
                 }
                 Rule::IncludeHyphenation { path } => {
                     let source = fs::read_to_string(path)?;
-                    builder.hyphenator = Some(HyphenationTable::parse(&source)?);
+                    builder
+                        .hyphenation_constrainer
+                        .hyphenator(HyphenationTable::parse(&source)?);
                 }
                 _ => (),
             }
@@ -1151,6 +1160,11 @@ impl PrimaryTable {
                 .unwrap_or_default(),
         );
         builder.uppercase_indicator.letter_characters(
+            ctx.character_classes()
+                .get(&CharacterClass::Letter)
+                .unwrap_or_default(),
+        );
+        builder.hyphenation_constrainer.letter_characters(
             ctx.character_classes()
                 .get(&CharacterClass::Letter)
                 .unwrap_or_default(),
@@ -1228,20 +1242,24 @@ impl PrimaryTable {
             .partition(|t| t.offset() == 0)
     }
 
-    fn word_hyphenates(&self, input: &str) -> bool {
-        match &self.hyphenator {
-            Some(hyphenator) => hyphenator.can_hyphenate(&input.to_lowercase()),
-            // if there is no hyphenator claim that the word hyphenates. Then it will not be used as
-            // a nocross candidate
-            _ => true,
-        }
-    }
-
-    fn nocross_candidates(&self, input: &str, prev: Option<char>) -> Vec<ResolvedTranslation> {
+    /// A nocross candidate is valid only if it doesn't cross an internal
+    /// hyphenation break of the word it's part of, mirroring liblouis's
+    /// `syllableBreak`. `char_pos` is the candidate's starting position in
+    /// the whole input, needed to look up the precomputed breaks.
+    fn nocross_candidates(
+        &self,
+        input: &str,
+        prev: Option<char>,
+        char_pos: usize,
+        constraints: &PositionConstraints,
+    ) -> Vec<ResolvedTranslation> {
         self.nocross_trie
             .find_translations(input, prev)
             .into_iter()
-            .filter(|t| !self.word_hyphenates(&t.input()))
+            .filter(|t| {
+                !(char_pos..char_pos + t.length().saturating_sub(1))
+                    .any(|pos| constraints.hyphenation_break_at(pos))
+            })
             .collect()
     }
 
@@ -1310,7 +1328,7 @@ impl PrimaryTable {
 
             // First check for nocross candidates
             let nocross_candidate = self
-                .nocross_candidates(chars.as_str(), prev)
+                .nocross_candidates(chars.as_str(), prev, char_pos, &constraints)
                 .into_iter()
                 .max_by_key(|t| t.weight());
 
@@ -1998,6 +2016,29 @@ mod tests {
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
                 .unwrap();
         assert_eq!(table.translate("fff"), "⠸");
+    }
+
+    #[test]
+    fn nocross_precedence_follows_word_hyphenation() {
+        // da-dk-g28.ctb defines `nocross always er` and `nocross partword re` with no
+        // plain counterparts. For the word "ere" the real hyphenation break falls
+        // between 'e' and 'r' ("e-re"), which disqualifies `er` (it would cross that
+        // break) but not `re` (fully inside the second syllable) -- so `re` must win,
+        // even though `er` starts earlier in the word.
+        let rules = vec![
+            parse_rule("include dictionaries/nocross-precedence-test.dic"),
+            parse_rule("lowercase e 1"),
+            parse_rule("lowercase r 12"),
+            parse_rule("nocross always er 6"),
+            parse_rule("nocross partword re 56"),
+        ];
+        let rules = expand_includes(rules, &SearchPath::new_or("LOUIS_TABLE_PATH", ".")).unwrap();
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        // literal 'e' (⠁) + the `re` contraction (⠰), not the `er` contraction (⠠) + 'e'
+        assert_eq!(table.translate("ere"), "⠁⠰");
     }
 
     #[test]

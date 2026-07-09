@@ -12,6 +12,7 @@ use enumset::{EnumSet, EnumSetType};
 use std::collections::HashSet;
 
 use crate::emphasis::EmphasisSpan;
+use crate::hyphenation::HyphenationTable;
 
 /// A rule-selection constraint that can be set at a character position.
 #[derive(EnumSetType, Debug)]
@@ -46,6 +47,13 @@ pub enum Constraint {
     /// Set for every digit cell inside a `numsign`/`nonumsign` span, disambiguating
     /// dots shared between a digit and a letter (common in six-dot literary codes).
     PreferDigit,
+    /// There's a valid hyphenation break between this character and the next, in
+    /// forward translation.
+    ///
+    /// Set for every internal gap of a word (as delimited by the table's `letter`
+    /// class) that the word's hyphenation dictionary marks as a valid break point.
+    /// Consulted to decide whether a `nocross` rule may cross this gap.
+    HyphenationBreak,
 }
 
 pub type Constraints = EnumSet<Constraint>;
@@ -86,6 +94,12 @@ impl PositionConstraints {
         self.0
             .get(pos)
             .is_some_and(|f| f.contains(Constraint::PreferDigit))
+    }
+
+    pub fn hyphenation_break_at(&self, pos: usize) -> bool {
+        self.0
+            .get(pos)
+            .is_some_and(|f| f.contains(Constraint::HyphenationBreak))
     }
 }
 
@@ -133,6 +147,46 @@ impl NumericConstrainer {
             }
         }
         constraints
+    }
+}
+
+/// Detects the table's `letter`-delimited words in the input and sets
+/// [`Constraint::HyphenationBreak`] at every internal gap the hyphenation
+/// dictionary marks as a valid break, mirroring liblouis's `syllableBreak`
+/// (forward translation only -- back-translation never consults it).
+#[derive(Debug, Clone)]
+pub struct HyphenationConstrainer {
+    hyphenator: HyphenationTable,
+    letter_chars: HashSet<char>,
+}
+
+impl HyphenationConstrainer {
+    fn compute(&self, input: &str) -> Vec<Constraints> {
+        let chars: Vec<char> = input.chars().collect();
+        let mut constraints: Vec<Constraints> = vec![Constraints::empty(); chars.len()];
+        let mut word_start = None;
+        for (pos, &c) in chars.iter().enumerate() {
+            if self.letter_chars.contains(&c) {
+                word_start.get_or_insert(pos);
+            } else if let Some(start) = word_start.take() {
+                self.mark_word(&mut constraints, &chars, start, pos);
+            }
+        }
+        if let Some(start) = word_start {
+            self.mark_word(&mut constraints, &chars, start, chars.len());
+        }
+        constraints
+    }
+
+    /// Marks the breaks of the word spanning `chars[start..end]` at their
+    /// absolute positions in `constraints`.
+    fn mark_word(&self, constraints: &mut [Constraints], chars: &[char], start: usize, end: usize) {
+        let word: String = chars[start..end].iter().collect();
+        for (i, is_break) in self.hyphenator.break_points(&word).into_iter().enumerate() {
+            if is_break {
+                constraints[start + i].insert(Constraint::HyphenationBreak);
+            }
+        }
     }
 }
 
@@ -290,6 +344,8 @@ pub enum Constrainer {
     BackwardCaps(BackwardCapsConstrainer),
     /// Detects backward `numsign`/`nonumsign` dots and sets [`Constraint::PreferDigit`].
     BackwardNumeric(BackwardNumericConstrainer),
+    /// Detects hyphenation-dictionary breaks and sets [`Constraint::HyphenationBreak`].
+    Hyphenation(HyphenationConstrainer),
 }
 
 impl Constrainer {
@@ -299,6 +355,7 @@ impl Constrainer {
             Constrainer::ComputerBraille(c) => c.compute(input, spans),
             Constrainer::BackwardCaps(c) => c.compute(input),
             Constrainer::BackwardNumeric(c) => c.compute(input),
+            Constrainer::Hyphenation(c) => c.compute(input),
         }
     }
 }
@@ -450,6 +507,34 @@ impl BackwardNumericConstrainerBuilder {
                 letter_cells: self.letter_cells,
             })
         }
+    }
+}
+
+/// A builder for [`Constrainer::Hyphenation`].
+#[derive(Debug, Default)]
+pub struct HyphenationConstrainerBuilder {
+    hyphenator: Option<HyphenationTable>,
+    letter_chars: HashSet<char>,
+}
+
+impl HyphenationConstrainerBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn hyphenator(&mut self, hyphenator: HyphenationTable) {
+        self.hyphenator = Some(hyphenator);
+    }
+
+    pub fn letter_characters(&mut self, chars: HashSet<char>) {
+        self.letter_chars = chars;
+    }
+
+    pub fn build(self) -> Option<HyphenationConstrainer> {
+        Some(HyphenationConstrainer {
+            hyphenator: self.hyphenator?,
+            letter_chars: self.letter_chars,
+        })
     }
 }
 

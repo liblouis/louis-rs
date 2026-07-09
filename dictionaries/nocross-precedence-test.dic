@@ -1,0 +1,10 @@
+UTF-8
+# Minimal, self-owned fixture for the nocross-precedence unit test in
+# src/translator/table/primary.rs. Not derived from any liblouis table --
+# it exists purely to give "ere" a hyphenation break between 'e' and 'r'
+# ("e-re"), so that a `nocross always er` rule and a `nocross partword re`
+# rule compete for the same letters and only one can win depending on
+# where the real word's syllable break falls.
+LEFTHYPHENMIN 1
+RIGHTHYPHENMIN 1
+.e1r

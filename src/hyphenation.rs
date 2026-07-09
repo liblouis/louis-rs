@@ -89,12 +89,18 @@ impl HyphenationTable {
         Ok(table)
     }
 
-    /// Whether `word` has any valid hyphenation break -- odd score,
-    /// staying `left_min`/`right_min` characters away from either edge.
-    pub fn can_hyphenate(&self, word: &str) -> bool {
+    /// For each internal gap of `word`, whether it's a valid hyphenation
+    /// break (odd score, staying `left_min`/`right_min` characters away
+    /// from either edge). `result[i]` is the gap between word-char `i`
+    /// and word-char `i + 1`; a word of fewer than two characters has no
+    /// internal gaps and returns an empty vector.
+    pub fn break_points(&self, word: &str) -> Vec<bool> {
         let char_count = word.chars().count();
+        if char_count < 2 {
+            return Vec::new();
+        }
         if char_count < self.left_min + self.right_min {
-            return false;
+            return vec![false; char_count - 1];
         }
 
         let wrapped = format!(".{word}.");
@@ -111,8 +117,8 @@ impl HyphenationTable {
         // the gap immediately before the g-th character of `wrapped`. A
         // gap's final score can only be known once every pattern has been
         // tried, since a later match may raise it past an earlier one --
-        // so this pass can't stop early even though we only need a yes/no
-        // answer in the end.
+        // so this pass can't stop early even though each gap only needs a
+        // yes/no answer in the end.
         let mut scores = vec![0u8; wrapped_chars + 1];
         for start in 0..wrapped_chars {
             for end in (start + 1)..=wrapped_chars {
@@ -131,13 +137,16 @@ impl HyphenationTable {
         // word-char `i - 1` (wrapped-char 0 is the leading '.'). So `g` is
         // a genuine internal word break -- between word chars (g-2) and
         // (g-1) -- for g in [2, char_count], landing on word char-index
-        // (g - 1).
-        (2..=char_count).any(|g| {
-            let char_idx = g - 1;
-            !scores[g].is_multiple_of(2)
-                && char_idx >= self.left_min
-                && char_idx <= char_count - self.right_min
-        })
+        // (g - 1). `result[i]` is that break for g = i + 2.
+        (0..char_count - 1)
+            .map(|i| {
+                let g = i + 2;
+                let char_idx = g - 1;
+                !scores[g].is_multiple_of(2)
+                    && char_idx >= self.left_min
+                    && char_idx <= char_count - self.right_min
+            })
+            .collect()
     }
 }
 
@@ -213,7 +222,7 @@ mod tests {
         // the word "aba" that's a break after 2 characters: "ab|a".
         let t =
             HyphenationTable::parse("UTF-8\nLEFTHYPHENMIN 1\nRIGHTHYPHENMIN 1\n.ab3a\n").unwrap();
-        assert!(t.can_hyphenate("aba"));
+        assert_eq!(t.break_points("aba"), vec![false, true]);
     }
 
     #[test]
@@ -221,18 +230,25 @@ mod tests {
         let t =
             HyphenationTable::parse("UTF-8\nLEFTHYPHENMIN 2\nRIGHTHYPHENMIN 2\n.ab3a\n").unwrap();
         // break at char-index 2 is not <= char_count(3) - right_min(2) = 1
-        assert!(!t.can_hyphenate("aba"));
+        assert_eq!(t.break_points("aba"), vec![false, false]);
     }
 
     #[test]
     fn no_match_means_no_breaks() {
         let t = HyphenationTable::parse("UTF-8\ns1b\n").unwrap();
-        assert!(!t.can_hyphenate("fff"));
+        assert_eq!(t.break_points("fff"), vec![false, false]);
     }
 
     #[test]
     fn skips_comments_and_blank_lines() {
         let t = HyphenationTable::parse("UTF-8\n# a comment\n\n% also a comment\n.ab3a\n").unwrap();
-        assert!(t.can_hyphenate("aba"));
+        assert_eq!(t.break_points("aba"), vec![false, true]);
+    }
+
+    #[test]
+    fn short_word_has_no_gaps() {
+        let t = HyphenationTable::parse("UTF-8\n.ab3a\n").unwrap();
+        assert_eq!(t.break_points(""), Vec::<bool>::new());
+        assert_eq!(t.break_points("a"), Vec::<bool>::new());
     }
 }

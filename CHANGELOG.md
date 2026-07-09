@@ -39,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   defined.
 
 ### Fixed
+- A `nocross` rule is now only rejected when it would cross a hyphenation break
+  of the *whole word* it's part of (mirroring liblouis's `syllableBreak`). This
+  check is now also forward translation only, matching liblouis
+  (back-translation never consults it).
 - YAML test files' `display`/`table` fields are now correctly recognized as an
   inline table by their YAML scalar style (block literal `|` or folded `>`)
   instead of guessing from whether the value happens to contain a newline.
