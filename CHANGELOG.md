@@ -39,6 +39,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   defined.
 
 ### Fixed
+- YAML test files' `display`/`table` fields are now correctly recognized as an
+  inline table by their YAML scalar style (block literal `|` or folded `>`)
+  instead of guessing from whether the value happens to contain a newline.
+- The `display` opcode's dots-to-character mapping is now also built correctly
+  for backward translation.
+- The `display` opcode's dots operand is now parsed as a single braille cell,
+  as required by the liblouis spec.
 - `dots_classes`'s `letter` class (used for backward-translation word-boundary
   checks) now also includes the dots of alphabetic `always` rules, not just
   `letter`/`lowercase`/`uppercase` opcodes.
