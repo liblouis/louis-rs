@@ -10,5 +10,5 @@ t = Translator(["en-us-g1.ctb"], Direction.FORWARD)
 print(t.translate("hello world"))  # ⠓⠑⠇⠇⠕⠀⠺⠕⠗⠇⠙
 ```
 
-Tables are resolved via `LOUIS_TABLE_PATH`. See the design spec in
-`docs/superpowers/specs/` for the full API.
+Tables are resolved via `LOUIS_TABLE_PATH`. See `python/louis_py/_louis_py.pyi`
+for the full API.

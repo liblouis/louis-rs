@@ -7,9 +7,6 @@ on:
       - "src/**"
       - "Cargo.toml"
       - ".github/workflows/python-wheels.yml"
-  push:
-    tags:
-      - "py-v*"
 
 jobs:
   test:
@@ -36,7 +33,6 @@ jobs:
         run: uv run ty check python
 
   wheels:
-    if: startsWith(github.ref, 'refs/tags/py-v')
     strategy:
       fail-fast: false
       matrix:
@@ -66,7 +62,6 @@ jobs:
           path: dist
 
   sdist:
-    if: startsWith(github.ref, 'refs/tags/py-v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -78,18 +73,3 @@ jobs:
         with:
           name: wheels-sdist
           path: dist
-
-  publish:
-    if: startsWith(github.ref, 'refs/tags/py-v')
-    needs: [wheels, sdist]
-    runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: wheels-*
-          merge-multiple: true
-          path: dist
-      - uses: pypa/gh-action-pypi-publish@release/v1
