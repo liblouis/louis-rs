@@ -348,7 +348,7 @@ pub enum Rule {
     },
     Display {
         character: char,
-        dots: BrailleChars,
+        dots: BrailleChar,
         constraints: Constraints,
     },
     Multind {
@@ -1509,6 +1509,15 @@ impl<'a> RuleParser<'a> {
             .collect()
     }
 
+    /// Parse a single cell braille dot pattern.
+    fn single_braillechar(&mut self) -> Result<BrailleChar, ParseError> {
+        self.tokens
+            .next()
+            .ok_or(ParseError::DotsExpected)?
+            .try_into()
+            .map_err(ParseError::InvalidBraille)
+    }
+
     /// Parse many single cell braille chars separated by ','
     fn many_braillechar(&mut self) -> Result<BrailleChars, ParseError> {
         self.tokens
@@ -1585,7 +1594,7 @@ impl<'a> RuleParser<'a> {
                 fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Display {
                     character: self.one_char()?,
-                    dots: self.explicit_dots()?,
+                    dots: self.single_braillechar()?,
                     constraints,
                 }
             }
@@ -2644,7 +2653,7 @@ mod tests {
         assert_eq!(
             Ok(Rule::Display {
                 character: 'a',
-                dots: BrailleChars::from(vec![BrailleChar::from(enum_set!(BrailleDot::Dot1))]),
+                dots: BrailleChar::from(enum_set!(BrailleDot::Dot1)),
                 constraints: Constraints::empty()
             }),
             RuleParser::new("display a 1").rule()
