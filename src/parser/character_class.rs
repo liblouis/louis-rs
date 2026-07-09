@@ -17,7 +17,7 @@ pub enum CharacterClassReference {
     Any,
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum CharacterClass {
     Space,
     Digit,

@@ -19,7 +19,7 @@ pub enum ParseError {
     InvalidEscape,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Pattern {
     Empty,
     Characters(String),
@@ -35,7 +35,7 @@ pub enum Pattern {
     Either(Patterns, Patterns),
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Patterns(Vec<Pattern>);
 
 impl std::ops::Deref for Patterns {

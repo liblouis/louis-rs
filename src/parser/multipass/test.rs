@@ -6,7 +6,7 @@ use crate::parser::multipass::{ConversionError, IsLiteral, ParseError};
 
 use super::braille::{self, BrailleChars, is_braille_dot};
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Test {
     at_beginning: bool,
     at_end: bool,
@@ -81,7 +81,7 @@ impl TryFrom<&Test> for String {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Operator {
     Eq,
     Gt,
@@ -90,14 +90,14 @@ pub enum Operator {
     LtEq,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Quantifier {
     Number(u8),
     Range(u8, u8),
     OneOrMore,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub enum TestInstruction {
     Lookback {
         len: u8,

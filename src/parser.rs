@@ -60,7 +60,7 @@ impl std::fmt::Display for Constraint {
 /// A set of [`Constraint`]s.
 ///
 /// A tiny facade around an [`EnumSet`] of [`Constraint`].
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct Constraints(EnumSet<Constraint>);
 
 impl Constraints {
@@ -121,7 +121,7 @@ pub enum Direction {
     Backward,
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum WithClass {
     Before { class: String },
     After { class: String },
@@ -129,7 +129,7 @@ pub enum WithClass {
 
 type WithClasses = Vec<WithClass>;
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub enum WithMatch {
     Before,
     After,
@@ -331,7 +331,7 @@ pub enum Opcode {
 ///
 /// A translation rule is often composed of three parts: the translation command ([`Opcode`]), the
 /// character(s) and the corresponding braille dots ([`BrailleChars`]).
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Rule {
     Include {
         file: String,
@@ -339,9 +339,12 @@ pub enum Rule {
     /// A rule for including a hyphenation table.
     ///
     /// There is no specific opcode for this but we make this an extra rule to separate the
-    /// inclusion of braille tables vs hyphenation pattern
+    /// inclusion of braille tables vs hyphenation pattern. The dictionary's source text is
+    /// embedded directly (rather than kept as a path) so that a fully expanded rule list is
+    /// self-contained and doesn't depend on the search path it was resolved from remaining
+    /// available later -- e.g. when the rules are serialized and used elsewhere.
     IncludeHyphenation {
-        path: PathBuf,
+        source: String,
     },
     Undefined {
         dots: BrailleChars,
@@ -1054,7 +1057,7 @@ impl HasPrecedence for Rule {
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Braille {
     Implicit,
     Explicit(BrailleChars),
@@ -1069,7 +1072,7 @@ impl std::fmt::Display for Braille {
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Position {
     Before,
     After,
@@ -2322,7 +2325,7 @@ pub enum TableError {
 }
 
 /// A [`Rule`] combined with information about which table file it originated from.
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AnchoredRule {
     pub rule: Rule,
     path: Option<PathBuf>,
@@ -2436,12 +2439,15 @@ fn expand_include(
             if path.extension().and_then(OsStr::to_str) == Some("dic") {
                 // Hyphenation dictionaries are liblouis's own pattern-dictionary
                 // format (see the `hyphenation` module), not a translation table --
-                // resolve the path as-is and hand it through untouched.
+                // resolve and read it now, so the resulting rule carries the dictionary
+                // itself rather than a path that may not resolve later.
                 let path = search_path
                     .find_file(path)
                     .ok_or(vec![TableError::HyphenationTableNotFound(path.into())])?;
+                let source =
+                    read_to_string(&path).map_err(|e| vec![TableError::TableNotReadable(e)])?;
                 return Ok(vec![AnchoredRule::new(
-                    Rule::IncludeHyphenation { path },
+                    Rule::IncludeHyphenation { source },
                     rule.path,
                     rule.line,
                 )]);

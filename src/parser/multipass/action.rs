@@ -7,7 +7,7 @@ use crate::parser::multipass::ConversionError;
 use crate::parser::multipass::IsLiteral;
 use crate::parser::multipass::ParseError;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Action {
     actions: Vec<ActionInstruction>,
 }
@@ -55,7 +55,7 @@ impl TryFrom<&Action> for String {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ActionInstruction {
     String { s: String },
     Dots { dots: BrailleChars },

@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fs,
-};
+use std::collections::{HashMap, HashSet};
 
 use log::warn;
 
@@ -1135,11 +1132,10 @@ impl PrimaryTable {
                         ctx,
                     )?;
                 }
-                Rule::IncludeHyphenation { path } => {
-                    let source = fs::read_to_string(path)?;
+                Rule::IncludeHyphenation { source } => {
                     builder
                         .hyphenation_constrainer
-                        .hyphenator(HyphenationTable::parse(&source)?);
+                        .hyphenator(HyphenationTable::parse(source)?);
                 }
                 _ => (),
             }

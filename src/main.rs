@@ -19,6 +19,7 @@ use crate::translator::ResolvedTranslation;
 use crate::translator::TranslationPipeline;
 use crate::translator::TranslationStage;
 
+mod bundle;
 pub mod emphasis;
 mod hyphenation;
 mod metadata;
@@ -93,6 +94,27 @@ enum Commands {
         /// Metadata search query <key=value,...>
         query: String,
     },
+    /// Parse and fully expand `table` (following all `include` directives), then serialize the
+    /// resulting rules to a compact, gzip-compressed bincode bundle for distribution.
+    Bundle {
+        /// Braille table to bundle
+        table: PathBuf,
+        /// Where to write the bundle. Defaults to `table` with its extension replaced by
+        /// `.bincode.gz`.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
+    /// Bundle every table discoverable via the metadata index (optionally filtered by a
+    /// metadata query), writing one self-contained `.bincode.gz` file per table into
+    /// `output_dir`. Tables are searched in `LOUIS_TABLE_PATH`, same as `query`.
+    BundleAll {
+        /// Directory to write bundles into (created if it doesn't exist)
+        output_dir: PathBuf,
+        /// Metadata query to filter which tables get bundled <key=value,...>. Omit to
+        /// bundle every table found in the metadata index.
+        #[arg(short, long)]
+        query: Option<String>,
+    },
 }
 
 #[derive(Debug, Parser)] // requires `derive` feature
@@ -104,15 +126,19 @@ struct Cli {
     command: Commands,
 }
 
+fn format_table_error(error: &TableError) -> String {
+    match error {
+        TableError::ParseError { path, line, error } => match path {
+            Some(path) => format!("{}:{}: {}", path.display(), line, error),
+            None => format!("{}: {}", line, error),
+        },
+        error => error.to_string(),
+    }
+}
+
 fn print_errors(errors: Vec<TableError>) {
-    for error in errors {
-        match error {
-            TableError::ParseError { path, line, error } => match path {
-                Some(path) => eprintln!("{}:{}: {}", path.display(), line, error),
-                None => eprintln!("{}: {}", line, error),
-            },
-            _ => eprintln!("{}", error),
-        }
+    for error in &errors {
+        eprintln!("{}", format_table_error(error));
     }
 }
 
@@ -126,6 +152,135 @@ fn parse(file: &Path) {
         Err(errors) => {
             print_errors(errors);
         }
+    }
+}
+
+fn default_bundle_output(table: &Path) -> PathBuf {
+    let mut path = table.to_path_buf();
+    path.set_extension("bincode.gz");
+    path
+}
+
+fn parse_metadata_query(query: &str) -> Vec<(String, String)> {
+    query
+        .split(',')
+        .map(|s| {
+            let parts: Vec<_> = s.split('=').collect();
+            (parts[0].to_string(), parts[1].to_string())
+        })
+        .collect()
+}
+
+/// Parse, fully expand, and serialize `table` to `output`. Returns the rule and byte counts on
+/// success, or a human-readable error message on failure -- never prints or exits, so it can be
+/// used both for a single interactive bundle and as a rayon worker across many tables.
+fn bundle_one(table: &Path, output: &Path) -> Result<(usize, usize), String> {
+    let rules = parser::table_expanded(table).map_err(|errors| {
+        errors
+            .iter()
+            .map(format_table_error)
+            .collect::<Vec<_>>()
+            .join("\n")
+    })?;
+    let bytes = bundle::serialize_rules(&rules)
+        .map_err(|e| format!("Could not serialize rules for {}: {}", table.display(), e))?;
+    std::fs::write(output, &bytes)
+        .map_err(|e| format!("Could not write bundle to {}: {}", output.display(), e))?;
+    Ok((rules.len(), bytes.len()))
+}
+
+fn bundle_table(table: &Path, output: Option<PathBuf>) {
+    let output = output.unwrap_or_else(|| default_bundle_output(table));
+    match bundle_one(table, &output) {
+        Ok((rule_count, byte_count)) => println!(
+            "Wrote {} rules ({} bytes) to {}",
+            rule_count,
+            byte_count,
+            output.display()
+        ),
+        Err(message) => {
+            eprintln!("{}", message);
+            exit(1);
+        }
+    }
+}
+
+fn bundle_all(output_dir: &Path, query: Option<String>) {
+    let index = match metadata::index() {
+        Ok(index) => index,
+        Err(e) => {
+            eprintln!("Could not index tables: {:?}", e);
+            exit(1);
+        }
+    };
+
+    let mut tables: Vec<PathBuf> = match query {
+        Some(query) => metadata::find(&index, parse_metadata_query(&query))
+            .into_iter()
+            .cloned()
+            .collect(),
+        None => index
+            .values()
+            .flatten()
+            .cloned()
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect(),
+    };
+    tables.sort();
+
+    if tables.is_empty() {
+        eprintln!("No tables found to bundle");
+        exit(1);
+    }
+
+    if let Err(e) = std::fs::create_dir_all(output_dir) {
+        eprintln!(
+            "Could not create output directory {}: {}",
+            output_dir.display(),
+            e
+        );
+        exit(1);
+    }
+
+    type BundleResult<'a> = (&'a PathBuf, Result<(usize, usize), String>);
+    let results: Vec<BundleResult> = tables
+        .par_iter()
+        .map(|table| {
+            let file_name = table
+                .file_name()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| table.clone());
+            let output = output_dir.join(default_bundle_output(&file_name));
+            (table, bundle_one(table, &output))
+        })
+        .collect();
+
+    let mut failures = 0;
+    for (table, result) in &results {
+        match result {
+            Ok((rule_count, byte_count)) => {
+                println!(
+                    "{}: {} rules, {} bytes",
+                    table.display(),
+                    rule_count,
+                    byte_count
+                )
+            }
+            Err(message) => {
+                eprintln!("{}: {}", table.display(), message);
+                failures += 1;
+            }
+        }
+    }
+
+    println!(
+        "Bundled {} of {} tables",
+        results.len() - failures,
+        results.len()
+    );
+    if failures > 0 {
+        exit(1);
     }
 }
 
@@ -438,18 +593,13 @@ fn main() {
         } => check_yaml(yaml_files, summary),
         Commands::Query { query } => match metadata::index() {
             Ok(index) => {
-                let query = query
-                    .split(',')
-                    .map(|s| {
-                        let parts: Vec<_> = s.split('=').collect();
-                        (parts[0].to_string(), parts[1].to_string())
-                    })
-                    .collect();
-                println!("{:?}", metadata::find(&index, query));
+                println!("{:?}", metadata::find(&index, parse_metadata_query(&query)));
             }
             Err(e) => {
                 eprint!("Could not index all tables: {:?}", e)
             }
         },
+        Commands::Bundle { table, output } => bundle_table(&table, output),
+        Commands::BundleAll { output_dir, query } => bundle_all(&output_dir, query),
     }
 }
