@@ -1,4 +1,5 @@
 """Python bindings for the louis braille translator."""
+
 import enum
 from typing import NamedTuple
 
@@ -26,7 +27,7 @@ class TranslationMode(enum.IntFlag):
 class EmphasisSpan(NamedTuple):
     class_: str
     start: int  # inclusive
-    end: int    # exclusive
+    end: int  # exclusive
 
 
 __all__ = [

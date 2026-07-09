@@ -3,6 +3,7 @@ import threading
 
 def test_concurrent_translate_no_deadlock():
     from louis_py import Translator
+
     t = Translator(["mini.ctb"])
     expected = t.translate("hello world")
     results = []

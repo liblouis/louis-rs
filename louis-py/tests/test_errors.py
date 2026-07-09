@@ -2,7 +2,6 @@ import pytest
 
 
 def test_bogus_table_raises_table_parse_error():
-    import louis_py
     from louis_py import Translator, LouisError, TableParseError
 
     with pytest.raises(TableParseError) as excinfo:
@@ -17,6 +16,7 @@ def test_bogus_table_raises_table_parse_error():
 
 def test_exception_hierarchy():
     from louis_py import LouisError, TableParseError, TranslationError
+
     assert issubclass(TableParseError, LouisError)
     assert issubclass(TranslationError, LouisError)
     assert issubclass(LouisError, Exception)

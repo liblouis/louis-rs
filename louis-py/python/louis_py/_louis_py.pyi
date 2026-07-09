@@ -30,8 +30,10 @@ class Translator:
     ) -> TranslationResult: ...
 
 class LouisError(Exception): ...
+
 class TableParseError(LouisError):
     errors: list[str]
+
 class TranslationError(LouisError): ...
 
 __version__: str
