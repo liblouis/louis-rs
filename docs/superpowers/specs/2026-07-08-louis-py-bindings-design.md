@@ -320,7 +320,7 @@ maturin build --release
 - **On PR** touching `louis-py/**`: build wheel on `ubuntu-latest`, run `pytest`.
   No publish.
 - **On tag `py-v*`**: full matrix:
-  - `windows-latest` × `x86_64`, `x86` (32-bit — required for current NVDA)
+  - `windows-latest` × `x86_64` (NVDA is 64-bit as of 2026.1, so no 32-bit `x86` wheel)
   - `ubuntu-latest` × `x86_64` (manylinux2014), `aarch64`
   - `macos-latest` × `x86_64`, `aarch64`
   - plus `sdist`; publish to PyPI via `pypa/gh-action-pypi-publish` (Trusted
