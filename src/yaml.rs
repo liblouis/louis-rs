@@ -4,7 +4,7 @@ use std::{collections::HashMap, fs::File, iter::Peekable, num::ParseIntError, pa
 
 use crate::{parser, parser::EscapingContext, parser::unescape};
 
-use libyaml::{Encoding, Event, Parser, ParserIter};
+use libyaml::{Encoding, Event, Parser, ParserIter, ScalarStyle};
 
 use crate::emphasis::EmphasisSpan;
 use crate::parser::Direction;
@@ -106,14 +106,25 @@ impl YAMLParser<'_> {
     }
 
     fn display_table(&mut self) -> Result<Display, ParseError> {
-        let value = self.scalar()?;
-        let table = if value.contains(',') {
-            let tables = value.split(',').map(|s| s.into()).collect();
-            Display::List(tables)
-        } else if value.contains('\n') {
-            Display::Inline(value)
-        } else {
-            Display::Simple(value.into())
+        let table = match self.events.peek() {
+            Some(Ok(Event::SequenceStart { .. })) => Display::List(self.table_list()?),
+            // a block literal (`|`) or folded (`>`) scalar is an inline table
+            Some(Ok(Event::Scalar {
+                style: Some(ScalarStyle::Literal | ScalarStyle::Folded),
+                ..
+            })) => Display::Inline(self.scalar()?),
+            Some(Ok(Event::Scalar { .. })) => {
+                let value = self.scalar()?;
+                if value.contains(',') {
+                    let tables = value.split(',').map(|s| s.into()).collect();
+                    Display::List(tables)
+                } else {
+                    Display::Simple(value.into())
+                }
+            }
+            _ => {
+                return Err(ParseError::InvalidTableValue);
+            }
         };
         Ok(table)
     }
@@ -152,15 +163,12 @@ impl YAMLParser<'_> {
                 }
             }
             Some(Ok(Event::SequenceStart { .. })) => Table::List(self.table_list()?),
-            Some(Ok(Event::Scalar { .. })) => {
-                let value = self.scalar()?;
-                // if the scalar contains newlines we assume it is an inline table
-                if value.contains('\n') {
-                    Table::Inline(value)
-                } else {
-                    Table::Simple(value.into())
-                }
-            }
+            // a block literal (`|`) or folded (`>`) scalar is an inline table
+            Some(Ok(Event::Scalar {
+                style: Some(ScalarStyle::Literal | ScalarStyle::Folded),
+                ..
+            })) => Table::Inline(self.scalar()?),
+            Some(Ok(Event::Scalar { .. })) => Table::Simple(self.scalar()?.into()),
             _ => {
                 return Err(ParseError::InvalidTableValue);
             }
