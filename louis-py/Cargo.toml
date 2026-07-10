@@ -13,6 +13,3 @@ crate-type = ["cdylib"]
 [dependencies]
 louis-rs = { path = ".." }
 pyo3 = { version = "0.29", features = ["extension-module", "abi3-py311"] }
-
-[dev-dependencies]
-static_assertions = "1"

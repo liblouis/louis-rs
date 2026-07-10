@@ -2,7 +2,7 @@
 use std::path::PathBuf;
 
 use pyo3::create_exception;
-use pyo3::exceptions::PyException;
+use pyo3::exceptions::{PyException, PyValueError};
 use pyo3::prelude::*;
 
 create_exception!(
@@ -25,21 +25,19 @@ create_exception!(
 );
 
 /// Wrap a `louis::TranslationError` into the appropriate Python exception.
-fn to_pyerr(py: Python<'_>, err: louis::TranslationError) -> PyErr {
+/// Re-attaches to the interpreter so it can be used directly in `.map_err`.
+fn to_pyerr(err: louis::TranslationError) -> PyErr {
     match err {
         louis::TranslationError::ParseFailed(errs) => {
-            let msgs: Vec<String> = errs.iter().map(|e| format!("{e}")).collect();
+            let msgs: Vec<String> = errs.iter().map(ToString::to_string).collect();
             let exc = TableParseError::new_err("Errors when reading given braille table(s)");
-            let _ = exc.value(py).setattr("errors", msgs);
+            Python::attach(|py| {
+                let _ = exc.value(py).setattr("errors", msgs);
+            });
             exc
         }
         other => TranslationError::new_err(format!("{other}")),
     }
-}
-
-/// Convert without needing an explicit `Python` token (re-attaches to the interpreter).
-fn to_pyerr_nogil(err: louis::TranslationError) -> PyErr {
-    Python::attach(|py| to_pyerr(py, err))
 }
 
 /// Translation direction, mirrors `louis::Direction`.
@@ -96,44 +94,6 @@ impl TranslationResult {
     }
 }
 
-/// Explicit Python-side bit values (must match `TranslationMode` IntFlag in __init__.py).
-mod mode_bits {
-    pub const NO_CONTRACTIONS: u32 = 1 << 0;
-    pub const COMPBRL_AT_CURSOR: u32 = 1 << 1;
-    pub const DOTS_IO: u32 = 1 << 2;
-    pub const COMPBRL_LEFT_CURSOR: u32 = 1 << 3;
-    pub const UC_BRL: u32 = 1 << 4;
-    pub const NO_UNDEFINED: u32 = 1 << 5;
-    pub const PARTIAL_TRANS: u32 = 1 << 6;
-}
-
-fn modes_from_bits(bits: u32) -> louis::TranslationModes {
-    use louis::TranslationMode as M;
-    let mut modes = louis::TranslationModes::empty();
-    if bits & mode_bits::NO_CONTRACTIONS != 0 {
-        modes.insert(M::NoContractions);
-    }
-    if bits & mode_bits::COMPBRL_AT_CURSOR != 0 {
-        modes.insert(M::CompbrlAtCursor);
-    }
-    if bits & mode_bits::DOTS_IO != 0 {
-        modes.insert(M::DotsIo);
-    }
-    if bits & mode_bits::COMPBRL_LEFT_CURSOR != 0 {
-        modes.insert(M::CompbrlLeftCursor);
-    }
-    if bits & mode_bits::UC_BRL != 0 {
-        modes.insert(M::UcBrl);
-    }
-    if bits & mode_bits::NO_UNDEFINED != 0 {
-        modes.insert(M::NoUndefined);
-    }
-    if bits & mode_bits::PARTIAL_TRANS != 0 {
-        modes.insert(M::PartialTrans);
-    }
-    modes
-}
-
 /// A compiled braille translator. Immutable and safe to share across threads.
 #[pyclass(frozen)]
 pub struct Translator {
@@ -148,14 +108,14 @@ impl Translator {
         let dir: louis::Direction = direction.into();
         let inner = py
             .detach(|| louis::Translator::new(&tables, dir))
-            .map_err(to_pyerr_nogil)?;
+            .map_err(to_pyerr)?;
         Ok(Self { inner })
     }
 
     /// Translate `text` to braille.
     fn translate(&self, py: Python<'_>, text: &str) -> PyResult<String> {
         py.detach(|| self.inner.translate(text))
-            .map_err(to_pyerr_nogil)
+            .map_err(to_pyerr)
     }
 
     /// Translate `text` to braille with full options.
@@ -168,7 +128,10 @@ impl Translator {
         emphasis: Option<Vec<(String, usize, usize)>>,
         cursor_pos: Option<usize>,
     ) -> PyResult<TranslationResult> {
-        let mut options = louis::TranslationOptions::default().with_mode(modes_from_bits(mode));
+        let modes = louis::TranslationModes::from_bits(mode).ok_or_else(|| {
+            PyValueError::new_err(format!("invalid translation mode bits: {mode:#x}"))
+        })?;
+        let mut options = louis::TranslationOptions::default().with_mode(modes);
         if let Some(spans) = emphasis {
             let rust_spans: Vec<louis::EmphasisSpan> = spans
                 .into_iter()
@@ -181,7 +144,7 @@ impl Translator {
         }
         let result = py
             .detach(|| self.inner.translate_with_options(text, options))
-            .map_err(to_pyerr_nogil)?;
+            .map_err(to_pyerr)?;
         Ok(TranslationResult::from_rust(result))
     }
 }
@@ -199,10 +162,4 @@ fn _louis_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("TableParseError", py.get_type::<TableParseError>())?;
     m.add("TranslationError", py.get_type::<TranslationError>())?;
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use static_assertions::assert_impl_all;
-    assert_impl_all!(louis::Translator: Send, Sync);
 }

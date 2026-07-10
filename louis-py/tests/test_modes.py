@@ -13,3 +13,13 @@ def test_mode_accepted_by_translate():
     # Should not raise; mini.ctb has no contractions so output is unchanged.
     r = t.translate_with_options("abc", mode=TranslationMode.NO_CONTRACTIONS)
     assert r.output == "⠁⠃⠉"
+
+
+def test_unknown_mode_bits_rejected():
+    import pytest
+
+    from louis_py import Translator
+
+    t = Translator(["mini.ctb"])
+    with pytest.raises(ValueError):
+        t.translate_with_options("abc", mode=1 << 30)
