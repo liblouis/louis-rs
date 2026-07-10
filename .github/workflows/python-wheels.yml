@@ -1,0 +1,74 @@
+name: python-wheels
+
+on:
+  pull_request:
+    paths:
+      - "louis-py/**"
+      - "src/**"
+      - "Cargo.toml"
+      - ".github/workflows/python-wheels.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Lint
+        uses: astral-sh/ruff-action@v4.1.0
+        with:
+          src: louis-py
+      - name: Format check
+        uses: astral-sh/ruff-action@v4.1.0
+        with:
+          src: louis-py
+          args: "format --check"
+      - uses: astral-sh/setup-uv@v8.3.2
+      - name: Test
+        working-directory: louis-py
+        run: uv run pytest tests -v
+      - name: Type check (non-blocking)
+        working-directory: louis-py
+        continue-on-error: true
+        run: uv run ty check python
+
+  wheels:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x64
+          - os: ubuntu-latest
+            target: x86_64
+          - os: ubuntu-latest
+            target: aarch64
+          - os: macos-latest
+            target: x86_64
+          - os: macos-latest
+            target: aarch64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          command: build
+          args: --release --manifest-path louis-py/Cargo.toml --out dist
+          manylinux: "2014"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheels-${{ matrix.os }}-${{ matrix.target }}
+          path: dist
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --manifest-path louis-py/Cargo.toml --out dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheels-sdist
+          path: dist
