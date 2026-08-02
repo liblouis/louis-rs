@@ -5,7 +5,6 @@ use log::warn;
 use crate::{
     Direction,
     emphasis::EmphasisSpan,
-    hyphenation::HyphenationTable,
     parser::{
         AnchoredRule, Braille, BrailleChars, CharacterClass, CharacterClasses, HasNocross,
         HasPrecedence, WithClass as ParsedClass, fallback,
@@ -1132,10 +1131,8 @@ impl PrimaryTable {
                         ctx,
                     )?;
                 }
-                Rule::IncludeHyphenation { source } => {
-                    builder
-                        .hyphenation_constrainer
-                        .hyphenator(HyphenationTable::parse(source)?);
+                Rule::IncludeHyphenation { table } => {
+                    builder.hyphenation_constrainer.hyphenator(table.clone());
                 }
                 _ => (),
             }

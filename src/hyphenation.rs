@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 /// A parsed hyphenation table: patterns plus the boundary minima
 /// liblouis's `LEFTHYPHENMIN`/`RIGHTHYPHENMIN` header declares.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct HyphenationTable {
     // Key: a pattern's letters, e.g. "ab" for the source pattern ".ab3a"
     // (the leading '.' is a literal word-boundary marker character, kept
