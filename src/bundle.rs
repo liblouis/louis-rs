@@ -59,4 +59,19 @@ mod tests {
         let decoded = deserialize_rules(&bytes).unwrap();
         assert_eq!(rules, decoded);
     }
+
+    #[test]
+    fn round_trips_an_embedded_hyphenation_table() {
+        use crate::hyphenation::HyphenationTable;
+        use crate::parser::Rule;
+
+        let dic = "LEFTHYPHENMIN 2\nRIGHTHYPHENMIN 2\n.ab3a\n";
+        let table = HyphenationTable::parse(dic).unwrap();
+        let rules = vec![AnchoredRule::from(Rule::IncludeHyphenation { table })];
+
+        let bytes = serialize_rules(&rules).unwrap();
+        let decoded = deserialize_rules(&bytes).unwrap();
+
+        assert_eq!(rules, decoded);
+    }
 }
