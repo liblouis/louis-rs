@@ -1,14 +1,10 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fs,
-};
+use std::collections::{HashMap, HashSet};
 
 use log::warn;
 
 use crate::{
     Direction,
     emphasis::EmphasisSpan,
-    hyphenation::HyphenationTable,
     parser::{
         AnchoredRule, Braille, BrailleChars, CharacterClass, CharacterClasses, HasNocross,
         HasPrecedence, WithClass as ParsedClass, fallback,
@@ -1135,11 +1131,8 @@ impl PrimaryTable {
                         ctx,
                     )?;
                 }
-                Rule::IncludeHyphenation { path } => {
-                    let source = fs::read_to_string(path)?;
-                    builder
-                        .hyphenation_constrainer
-                        .hyphenator(HyphenationTable::parse(&source)?);
+                Rule::IncludeHyphenation { table } => {
+                    builder.hyphenation_constrainer.hyphenator(table.clone());
                 }
                 _ => (),
             }
