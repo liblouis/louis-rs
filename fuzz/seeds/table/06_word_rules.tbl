@@ -1,0 +1,11 @@
+lowercase f 3
+lowercase o 4
+lowercase b 12
+lowercase a 1
+lowercase r 5
+punctuation . 6
+always foo 14
+midword bar 15
+endword bar 26
+partword foo 24
+space \s 0

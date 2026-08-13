@@ -1,0 +1,4 @@
+always foo 123
+always bar 456
+noback correct "baz" "bar"
+space \s 0

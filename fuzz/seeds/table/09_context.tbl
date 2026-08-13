@@ -1,0 +1,6 @@
+lowercase a 1
+sign : 123
+sign ; 456
+context ":" @123#1=1
+context #1=1"a" @3#1=1
+context ";" @456#1=0

@@ -1,0 +1,7 @@
+target/
+artifacts/
+corpus/table/*
+!corpus/table/.gitkeep
+corpus/translate/*
+!corpus/translate/.gitkeep
+seeds/table/upstream__*

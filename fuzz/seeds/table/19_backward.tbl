@@ -1,0 +1,5 @@
+display A 1
+display \s 0
+letter a 1
+space \s 0
+nofor correct "A" "a"
