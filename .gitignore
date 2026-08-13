@@ -1,5 +1,6 @@
 /target
 Cargo.lock
+!fuzz/Cargo.lock
 /chats/
 /notes.org
 

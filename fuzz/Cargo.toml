@@ -9,7 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 # libfuzzer is deprecated, so we replaced it with the libafl_libfuzzer shim
-libfuzzer-sys = { git = "https://github.com/AFLplusplus/LibAFL.git", package = "libafl_libfuzzer" }
+libfuzzer-sys = { version = "0.16.1", package = "libafl_libfuzzer" }
 louis-rs = { path = ".." }
 
 [workspace]
