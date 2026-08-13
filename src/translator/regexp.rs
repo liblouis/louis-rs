@@ -359,283 +359,229 @@ pub struct CompiledRegexp {
     translations: Vec<Translation>,
 }
 
-impl CompiledRegexp {
-    fn is_match_internal(&self, pc: usize, input: &str, env: &Environment) -> bool {
-        if pc >= self.instructions.len() {
-            return false;
-        }
+/// A single candidate execution path through the compiled program at the current input
+/// position, carrying the capture span in progress along that path. The current input position
+/// and `env` aren't part of a thread: every thread in the same [`ThreadList`] was reached by
+/// consuming the same characters in lockstep, and `env` is read-only context shared by the whole
+/// match rather than per-path state.
+struct Thread {
+    pc: InstructionIndex,
+    capture: (usize, usize),
+}
 
+/// The threads alive at one input position, in priority order: an earlier entry was reached via
+/// a higher-priority `Split` branch and wins over a later entry that also reaches `Match`.
+/// `seen` records which `pc`s have already been added during the current step, so a `pc`
+/// reachable by more than one epsilon path (e.g. looping back to the `Split` a quantifier
+/// compiles to) is only ever added once. That dedup bounds a whole match to
+/// `O(instructions.len() * input.len())` instead of the exponential blowup backtracking gives on
+/// a pattern like `(a+)+b` matched against a long non-matching input.
+struct ThreadList {
+    threads: Vec<Thread>,
+    seen: Vec<u32>,
+    generation: u32,
+}
+
+impl ThreadList {
+    fn new(program_len: usize) -> Self {
+        Self {
+            threads: Vec::new(),
+            seen: vec![0; program_len],
+            generation: 0,
+        }
+    }
+
+    fn start_step(&mut self) {
+        self.threads.clear();
+        self.generation += 1;
+    }
+}
+
+impl CompiledRegexp {
+    /// Follows every epsilon transition (anything that doesn't consume a character) reachable
+    /// from `pc` without consuming input, adding each character-consuming or `Match` instruction
+    /// reached to `list`, in priority order. A path whose assertion or variable check fails is
+    /// simply dropped instead of being added.
+    fn add_thread(
+        &self,
+        list: &mut ThreadList,
+        pc: InstructionIndex,
+        capture: (usize, usize),
+        sp: usize,
+        input_len: usize,
+        env: &Environment,
+    ) {
+        if list.seen[pc] == list.generation {
+            return;
+        }
+        list.seen[pc] = list.generation;
         match self.instructions[pc] {
-            Instruction::Char(expected) => {
-                let mut chars = input.chars().peekable();
-                if let Some(actual) = chars.peek()
-                    && expected == *actual
-                {
-                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..], env)
-                } else {
-                    false
-                }
+            Instruction::Jump(target) => self.add_thread(list, target, capture, sp, input_len, env),
+            Instruction::Split(a, b) => {
+                self.add_thread(list, a, capture, sp, input_len, env);
+                self.add_thread(list, b, capture, sp, input_len, env);
             }
-            Instruction::NotChar(expected) => {
-                let mut chars = input.chars().peekable();
-                if let Some(actual) = chars.peek()
-                    && expected != *actual
-                {
-                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..], env)
-                } else {
-                    false
-                }
-            }
-            Instruction::CaseInsensitiveChar(expected) => {
-                if let Some(actual) = input.chars().next()
-                    && chars_match_case_insensitive(actual, expected)
-                {
-                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..], env)
-                } else {
-                    false
-                }
-            }
-            Instruction::Class(index) => {
-                let mut chars = input.chars().peekable();
-                if let Some(actual) = chars.peek()
-                    && self.character_classes[index].contains(actual)
-                {
-                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..], env)
-                } else {
-                    false
-                }
-            }
-            Instruction::NotClass(index) => {
-                let mut chars = input.chars().peekable();
-                if let Some(actual) = chars.peek()
-                    && !self.character_classes[index].contains(actual)
-                {
-                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..], env)
-                } else {
-                    false
-                }
-            }
-            Instruction::Any => {
-                let mut chars = input.chars();
-                if let Some(actual) = chars.next() {
-                    self.is_match_internal(pc + 1, &input[actual.len_utf8()..], env)
-                } else {
-                    false
-                }
-            }
-            Instruction::Match(_) => true,
-            Instruction::Jump(index) => self.is_match_internal(index, input, env),
-            Instruction::Split(index1, index2) => {
-                self.is_match_internal(index1, input, env)
-                    || self.is_match_internal(index2, input, env)
-            }
-            Instruction::CaptureStart | Instruction::CaptureEnd => {
-                self.is_match_internal(pc + 1, input, env)
+            Instruction::CaptureStart => self.add_thread(list, pc + 1, (sp, 0), sp, input_len, env),
+            Instruction::CaptureEnd => {
+                self.add_thread(list, pc + 1, (capture.0, sp), sp, input_len, env)
             }
             Instruction::VariableEqual(var, expected) => {
-                if let Some(&actual) = env.get(var)
-                    && actual == expected
-                {
-                    self.is_match_internal(pc + 1, input, env)
-                } else {
-                    false
+                if env.get(var) == Some(&expected) {
+                    self.add_thread(list, pc + 1, capture, sp, input_len, env);
                 }
             }
             Instruction::NotVariableEqual(var, expected) => {
-                if let Some(&actual) = env.get(var)
-                    && actual != expected
-                {
-                    self.is_match_internal(pc + 1, input, env)
-                } else {
-                    false
+                if env.get(var).is_some_and(|&actual| actual != expected) {
+                    self.add_thread(list, pc + 1, capture, sp, input_len, env);
                 }
             }
             Instruction::AssertEnd => {
-                input.is_empty() && self.is_match_internal(pc + 1, input, env)
+                if sp == input_len {
+                    self.add_thread(list, pc + 1, capture, sp, input_len, env);
+                }
             }
             Instruction::AssertMoreInput => {
-                !input.is_empty() && self.is_match_internal(pc + 1, input, env)
+                if sp != input_len {
+                    self.add_thread(list, pc + 1, capture, sp, input_len, env);
+                }
             }
-            Instruction::Fail => false,
+            Instruction::Fail => (),
+            // Char/NotChar/CaseInsensitiveChar/Class/NotClass/Any/Match: nothing left to resolve
+            // without consuming a character (or, for `Match`, without the whole match being
+            // decided), so the epsilon closure ends here.
+            _ => list.threads.push(Thread { pc, capture }),
         }
     }
 
     pub fn is_match(&self, input: &str, env: &Environment) -> bool {
-        self.is_match_internal(0, input, env)
-    }
-
-    fn find_internal(
-        &self,
-        pc: usize,
-        input: &str,
-        sp: usize,
-        length: usize,
-        env: &Environment,
-        capture: (usize, usize),
-    ) -> Option<ResolvedTranslation> {
-        if pc >= self.instructions.len() {
-            return None;
-        }
-
-        match self.instructions[pc] {
-            Instruction::Char(expected) => {
-                let mut chars = input[sp..].chars().peekable();
-                if let Some(actual) = chars.peek()
-                    && expected == *actual
-                {
-                    self.find_internal(
-                        pc + 1,
-                        input,
-                        sp + actual.len_utf8(),
-                        length + 1,
-                        env,
-                        capture,
-                    )
-                } else {
-                    None
-                }
-            }
-            Instruction::NotChar(expected) => {
-                let mut chars = input[sp..].chars().peekable();
-                if let Some(actual) = chars.peek()
-                    && expected != *actual
-                {
-                    self.find_internal(
-                        pc + 1,
-                        input,
-                        sp + actual.len_utf8(),
-                        length + 1,
-                        env,
-                        capture,
-                    )
-                } else {
-                    None
-                }
-            }
-            Instruction::CaseInsensitiveChar(expected) => {
-                if let Some(actual) = input[sp..].chars().next()
-                    && chars_match_case_insensitive(actual, expected)
-                {
-                    self.find_internal(
-                        pc + 1,
-                        input,
-                        sp + actual.len_utf8(),
-                        length + 1,
-                        env,
-                        capture,
-                    )
-                } else {
-                    None
-                }
-            }
-            Instruction::Class(index) => {
-                let mut chars = input[sp..].chars().peekable();
-                if let Some(actual) = chars.peek()
-                    && self.character_classes[index].contains(actual)
-                {
-                    self.find_internal(
-                        pc + 1,
-                        input,
-                        sp + actual.len_utf8(),
-                        length + 1,
-                        env,
-                        capture,
-                    )
-                } else {
-                    None
-                }
-            }
-            Instruction::NotClass(index) => {
-                let mut chars = input[sp..].chars().peekable();
-                if let Some(actual) = chars.peek()
-                    && !self.character_classes[index].contains(actual)
-                {
-                    self.find_internal(
-                        pc + 1,
-                        input,
-                        sp + actual.len_utf8(),
-                        length + 1,
-                        env,
-                        capture,
-                    )
-                } else {
-                    None
-                }
-            }
-            Instruction::Any => {
-                let mut chars = input[sp..].chars();
-                if let Some(actual) = chars.next() {
-                    self.find_internal(
-                        pc + 1,
-                        input,
-                        sp + actual.len_utf8(),
-                        length + 1,
-                        env,
-                        capture,
-                    )
-                } else {
-                    None
-                }
-            }
-            Instruction::Match(index) => {
-                let (start, end) = capture;
-                let capture = &input[start..end];
-                // offset is in number of chars not a byte offset
-                let offset = &input[..start].chars().count();
-                Some(
-                    self.translations[index]
-                        .clone()
-                        .resolve(capture, length, *offset),
-                )
-            }
-            Instruction::Jump(index) => self.find_internal(index, input, sp, length, env, capture),
-            Instruction::Split(index1, index2) => self
-                .find_internal(index1, input, sp, length, env, capture)
-                .or_else(|| self.find_internal(index2, input, sp, length, env, capture)),
-            Instruction::CaptureStart => {
-                self.find_internal(pc + 1, input, sp, length, env, (sp, 0))
-            }
-            Instruction::CaptureEnd => {
-                self.find_internal(pc + 1, input, sp, length, env, (capture.0, sp))
-            }
-            Instruction::VariableEqual(var, expected) => {
-                if let Some(&actual) = env.get(var)
-                    && actual == expected
-                {
-                    self.find_internal(pc + 1, input, sp, length, env, capture)
-                } else {
-                    None
-                }
-            }
-            Instruction::NotVariableEqual(var, expected) => {
-                if let Some(&actual) = env.get(var)
-                    && actual != expected
-                {
-                    self.find_internal(pc + 1, input, sp, length, env, capture)
-                } else {
-                    None
-                }
-            }
-            Instruction::AssertEnd => {
-                if sp == input.len() {
-                    self.find_internal(pc + 1, input, sp, length, env, capture)
-                } else {
-                    None
-                }
-            }
-            Instruction::AssertMoreInput => {
-                if sp != input.len() {
-                    self.find_internal(pc + 1, input, sp, length, env, capture)
-                } else {
-                    None
-                }
-            }
-            Instruction::Fail => None,
-        }
+        self.find(input, env).is_some()
     }
 
     pub fn find(&self, input: &str, env: &Environment) -> Option<ResolvedTranslation> {
-        self.find_internal(0, input, 0, 0, env, (0, 0))
+        let mut current = ThreadList::new(self.instructions.len());
+        let mut next = ThreadList::new(self.instructions.len());
+        let mut sp = 0;
+        let mut length = 0;
+        // The capture span, consumed-char count and translation of the best match found so far.
+        // A lower-priority thread reaching `Match` doesn't end the search immediately: a
+        // still-alive higher-priority thread might go on to match later, at which point it must
+        // win instead -- exactly like backtracking would explore that higher-priority branch
+        // first and only fall back to this one if the former's entire subtree failed.
+        let mut matched: Option<((usize, usize), usize, TranslationIndex)> = None;
+
+        current.start_step();
+        self.add_thread(&mut current, 0, (0, 0), sp, input.len(), env);
+
+        while !current.threads.is_empty() {
+            let next_char = input[sp..].chars().next();
+            next.start_step();
+            for thread in &current.threads {
+                match self.instructions[thread.pc] {
+                    Instruction::Match(index) => {
+                        matched = Some((thread.capture, length, index));
+                        // every remaining thread in this step is lower priority than the one
+                        // that just matched, and so could never improve on it
+                        break;
+                    }
+                    Instruction::Char(expected) => {
+                        if next_char == Some(expected) {
+                            self.add_thread(
+                                &mut next,
+                                thread.pc + 1,
+                                thread.capture,
+                                sp + expected.len_utf8(),
+                                input.len(),
+                                env,
+                            );
+                        }
+                    }
+                    Instruction::NotChar(expected) => {
+                        if let Some(actual) = next_char
+                            && actual != expected
+                        {
+                            self.add_thread(
+                                &mut next,
+                                thread.pc + 1,
+                                thread.capture,
+                                sp + actual.len_utf8(),
+                                input.len(),
+                                env,
+                            );
+                        }
+                    }
+                    Instruction::CaseInsensitiveChar(expected) => {
+                        if let Some(actual) = next_char
+                            && chars_match_case_insensitive(actual, expected)
+                        {
+                            self.add_thread(
+                                &mut next,
+                                thread.pc + 1,
+                                thread.capture,
+                                sp + actual.len_utf8(),
+                                input.len(),
+                                env,
+                            );
+                        }
+                    }
+                    Instruction::Class(index) => {
+                        if let Some(actual) = next_char
+                            && self.character_classes[index].contains(&actual)
+                        {
+                            self.add_thread(
+                                &mut next,
+                                thread.pc + 1,
+                                thread.capture,
+                                sp + actual.len_utf8(),
+                                input.len(),
+                                env,
+                            );
+                        }
+                    }
+                    Instruction::NotClass(index) => {
+                        if let Some(actual) = next_char
+                            && !self.character_classes[index].contains(&actual)
+                        {
+                            self.add_thread(
+                                &mut next,
+                                thread.pc + 1,
+                                thread.capture,
+                                sp + actual.len_utf8(),
+                                input.len(),
+                                env,
+                            );
+                        }
+                    }
+                    Instruction::Any => {
+                        if let Some(actual) = next_char {
+                            self.add_thread(
+                                &mut next,
+                                thread.pc + 1,
+                                thread.capture,
+                                sp + actual.len_utf8(),
+                                input.len(),
+                                env,
+                            );
+                        }
+                    }
+                    _ => unreachable!(
+                        "add_thread only ever adds Char/NotChar/CaseInsensitiveChar/Class/NotClass/Any/Match instructions to a thread list"
+                    ),
+                }
+            }
+            let Some(c) = next_char else { break };
+            std::mem::swap(&mut current, &mut next);
+            sp += c.len_utf8();
+            length += 1;
+        }
+
+        matched.map(|((start, end), length, index)| {
+            let capture = &input[start..end];
+            // offset is in number of chars not a byte offset
+            let offset = input[..start].chars().count();
+            self.translations[index]
+                .clone()
+                .resolve(capture, length, offset)
+        })
     }
 }
 
@@ -706,6 +652,29 @@ mod tests {
         assert!(!re.is_match("b", &env));
         assert!(!re.is_match("ba", &env));
         assert!(!re.is_match("c", &env));
+    }
+
+    #[test]
+    fn catastrophic_backtracking_pattern_is_bounded() {
+        // Regression test for "Denial of Service via Regex Catastrophic Backtracking on Custom
+        // Tables" (Shielder/OSTIF security audit, April 2026): `(a+)+b` matched against a long
+        // run of `a`s with no trailing `b` took exponential time under the old recursive
+        // backtracking matcher (confirmed to still be running after an 8s timeout on a 43-char
+        // input); the thread-list VM this replaced it with bounds the whole match to
+        // `instructions * input length`, regardless of how many ways the input could be
+        // partitioned between the nested quantifiers.
+        let env = Environment::new();
+        let re = Regexp::Concat(
+            Box::new(Regexp::OneOrMore(Box::new(Regexp::OneOrMore(Box::new(
+                Regexp::Literal('a'),
+            ))))),
+            Box::new(Regexp::Literal('b')),
+        )
+        .compile();
+        let input = "a".repeat(10_000);
+        let start = std::time::Instant::now();
+        assert!(!re.is_match(&input, &env));
+        assert!(start.elapsed() < std::time::Duration::from_secs(1));
     }
 
     #[test]
