@@ -84,10 +84,7 @@ impl Translator {
     ///
     /// This parses only the inline table text. Unlike [`Self::new`], it does
     /// not resolve `include` directives from the filesystem.
-    pub fn from_table_source(
-        table: &str,
-        direction: Direction,
-    ) -> Result<Self, TranslationError> {
+    pub fn from_table_source(table: &str, direction: Direction) -> Result<Self, TranslationError> {
         let rules = parser::table(table, None).map_err(TranslationError::ParseFailed)?;
         if rules
             .iter()
@@ -171,8 +168,8 @@ mod tests {
 
     #[test]
     fn translator_from_table_source_rejects_include() {
-        let error = Translator::from_table_source("include en-us-g1.ctb", Direction::Forward)
-            .unwrap_err();
+        let error =
+            Translator::from_table_source("include en-us-g1.ctb", Direction::Forward).unwrap_err();
         match error {
             TranslationError::ParseFailed(errors) => {
                 assert!(matches!(
