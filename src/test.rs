@@ -109,7 +109,7 @@ impl<'a> TestMatrix<'a> {
             Some(Display::Simple(path)) => parser::table_expanded(path.as_path())?,
             Some(Display::Inline(text)) => {
                 let rules = parser::table(text, None)?;
-                parser::expand_includes(rules, &search_path)?
+                parser::expand_includes(rules, &search_path, &mut Vec::new())?
             }
             Some(Display::List(paths)) => {
                 let mut rules = Vec::new();
@@ -140,7 +140,7 @@ impl<'a> TestMatrix<'a> {
             }
             Table::Inline(text) => {
                 let rules = parser::table(text, None)?;
-                parser::expand_includes(rules, &search_path)?
+                parser::expand_includes(rules, &search_path, &mut Vec::new())?
             }
             Table::Query(..) => return Err(TestError::NotImplemented("Table queries".to_string())),
         };
