@@ -2420,18 +2420,19 @@ pub fn table_file(path: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
 
 pub fn table_expanded(file: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
-    table_expanded_with(file, &search_path, &mut Vec::new())
+    table_expanded_with(file, &search_path, &[])
 }
 
 /// `chain` holds the canonicalized path of every table currently being expanded, from the root
 /// down to (but not including) `file` -- i.e. the ancestor chain, not a global "already seen"
 /// set. This lets the same table be legitimately included multiple times from different
 /// branches (a diamond dependency, common for shared base tables) while still catching a table
-/// that includes itself, directly or transitively.
+/// that includes itself, directly or transitively: each recursive call extends its own copy of
+/// the chain, so a sibling include never sees paths pushed by another branch's descendants.
 fn table_expanded_with(
     file: &Path,
     search_path: &SearchPath,
-    chain: &mut Vec<PathBuf>,
+    chain: &[PathBuf],
 ) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     match search_path.find_file(file) {
         Some(path) => {
@@ -2442,15 +2443,13 @@ fn table_expanded_with(
                 return Err(vec![TableError::IncludeTooDeep(MAX_INCLUDE_DEPTH)]);
             }
             if chain.contains(&canonical) {
-                let mut cycle = chain.clone();
+                let mut cycle = chain.to_vec();
                 cycle.push(canonical);
                 return Err(vec![TableError::CircularInclude(cycle)]);
             }
+            let mut chain = chain.to_vec();
             chain.push(canonical);
-            let result = table_file(path.as_path())
-                .and_then(|rules| expand_includes(rules, search_path, chain));
-            chain.pop();
-            result
+            table_file(path.as_path()).and_then(|rules| expand_includes(rules, search_path, &chain))
         }
         None => Err(vec![TableError::TableNotFound(file.into())]),
     }
@@ -2459,7 +2458,7 @@ fn table_expanded_with(
 fn expand_include(
     rule: AnchoredRule,
     search_path: &SearchPath,
-    chain: &mut Vec<PathBuf>,
+    chain: &[PathBuf],
 ) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     match rule.rule {
         Rule::Include { ref file } => {
@@ -2485,11 +2484,11 @@ fn expand_include(
 
 /// See [`table_expanded_with`] for what `chain` tracks. Callers expanding a rule set that isn't
 /// itself nested inside another include expansion (e.g. an inline/in-memory table) should pass
-/// `&mut Vec::new()`.
+/// `&[]`.
 pub fn expand_includes(
     rules: Vec<AnchoredRule>,
     search_path: &SearchPath,
-    chain: &mut Vec<PathBuf>,
+    chain: &[PathBuf],
 ) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     let (rules, errors): (Vec<_>, Vec<_>) = rules
         .into_iter()
@@ -2783,7 +2782,7 @@ mod tests {
     fn table_expanded_rejects_self_include() {
         let (dir, search_path) = include_test_dir("self");
         std::fs::write(dir.join("a.utb"), "include a.utb\n").unwrap();
-        let result = table_expanded_with(Path::new("a.utb"), &search_path, &mut Vec::new());
+        let result = table_expanded_with(Path::new("a.utb"), &search_path, &[]);
         assert!(matches!(
             result,
             Err(errors) if matches!(errors.as_slice(), [TableError::CircularInclude(_)])
@@ -2795,7 +2794,7 @@ mod tests {
         let (dir, search_path) = include_test_dir("indirect-cycle");
         std::fs::write(dir.join("a.utb"), "include b.utb\n").unwrap();
         std::fs::write(dir.join("b.utb"), "include a.utb\n").unwrap();
-        let result = table_expanded_with(Path::new("a.utb"), &search_path, &mut Vec::new());
+        let result = table_expanded_with(Path::new("a.utb"), &search_path, &[]);
         assert!(matches!(
             result,
             Err(errors) if matches!(errors.as_slice(), [TableError::CircularInclude(_)])
@@ -2816,7 +2815,7 @@ mod tests {
         let result = table_expanded_with(
             Path::new(&format!("chain{MAX_INCLUDE_DEPTH}.utb")),
             &search_path,
-            &mut Vec::new(),
+            &[],
         );
         assert!(matches!(
             result,
@@ -2833,7 +2832,7 @@ mod tests {
         std::fs::write(dir.join("left.utb"), "include base.utb\n").unwrap();
         std::fs::write(dir.join("right.utb"), "include base.utb\n").unwrap();
         std::fs::write(dir.join("top.utb"), "include left.utb\ninclude right.utb\n").unwrap();
-        let result = table_expanded_with(Path::new("top.utb"), &search_path, &mut Vec::new());
+        let result = table_expanded_with(Path::new("top.utb"), &search_path, &[]);
         assert!(result.is_ok());
     }
 }

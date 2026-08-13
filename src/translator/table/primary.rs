@@ -1990,12 +1990,8 @@ mod tests {
             parse_rule("nocross always fff 456"),
             parse_rule("space \\s 0"),
         ];
-        let rules = expand_includes(
-            rules,
-            &SearchPath::new_or("LOUIS_TABLE_PATH", "."),
-            &mut Vec::new(),
-        )
-        .unwrap();
+        let rules =
+            expand_includes(rules, &SearchPath::new_or("LOUIS_TABLE_PATH", "."), &[]).unwrap();
         let context = TableContext::compile(&rules).unwrap();
         let table =
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
@@ -2015,12 +2011,8 @@ mod tests {
             parse_rule("nocross always fff 456"),
             parse_rule("space \\s 0"),
         ];
-        let rules = expand_includes(
-            rules,
-            &SearchPath::new_or("LOUIS_TABLE_PATH", "."),
-            &mut Vec::new(),
-        )
-        .unwrap();
+        let rules =
+            expand_includes(rules, &SearchPath::new_or("LOUIS_TABLE_PATH", "."), &[]).unwrap();
         let context = TableContext::compile(&rules).unwrap();
         let table =
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
@@ -2042,12 +2034,8 @@ mod tests {
             parse_rule("nocross always er 6"),
             parse_rule("nocross partword re 56"),
         ];
-        let rules = expand_includes(
-            rules,
-            &SearchPath::new_or("LOUIS_TABLE_PATH", "."),
-            &mut Vec::new(),
-        )
-        .unwrap();
+        let rules =
+            expand_includes(rules, &SearchPath::new_or("LOUIS_TABLE_PATH", "."), &[]).unwrap();
         let context = TableContext::compile(&rules).unwrap();
         let table =
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
