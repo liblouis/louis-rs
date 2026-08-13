@@ -1,4 +1,4 @@
-* Todo [15/23]
+* Todo [16/23]
 - [ ] Move the display tables into the Pipeline
 - [X] implement "libhyphen"
   - implemented natively in ~src/hyphenation.rs~, parsing liblouis's own
@@ -6,21 +6,21 @@
     build-time conversion step); verified byte-identical to the old
     ~hyphenation~-crate-based behavior across liblouis's full yaml test
     suite (278k test cases across the en-g3 and da-dk-g26 dictionaries)
-- [-] guard against "()+" regexp?
+- [X] guard against "()+" regexp?
   - [X] a body that is *unconditionally* zero-width (e.g. ~Regexp::Empty~)
-    is now guarded: ~Regexp::always_zero_width()~ caps
+    is guarded: ~Regexp::always_zero_width()~ caps
     ~ZeroOrMore~/~OneOrMore~/~RepeatAtLeast~ at one attempt instead of
     an infinite self-referencing jump
-  - [ ] a body that is only *conditionally* zero-width (e.g.
-    ~Either(CharacterClass, EndAnchor)~ — consumes a real character
-    when one is available, only resolves zero-width once input is
-    truly exhausted) is not guarded — liblouis itself handles this
-    with a genuine per-iteration progress check (does the loop body
-    advance the cursor each time it's tried, not just "can it match
-    empty in isolation"), which our VM doesn't have. No shipped
-    liblouis table currently combines a quantifier with a boundary
-    attribute, so this hasn't been observed to crash, but it's a
-    real gap if one ever does
+  - [X] a body that is only *conditionally* zero-width (e.g.
+    ~Either(CharacterClass, EndAnchor)~) was still a real gap under the
+    old recursive-backtracking matcher, since ~always_zero_width()~
+    doesn't classify it as always zero-width and it kept its normal
+    unbounded loop. Replacing that matcher with a Pike VM
+    (~CompiledRegexp::find~ in regexp.rs) closed this for free: the
+    VM dedupes instruction pointers already visited at the current
+    input position, so looping back to the same ~Split~ without
+    consuming a character is a no-op regardless of *why* the body is
+    zero-width this time around
 - [X] Indication [3/3]
   - Indication is pre-computed before translation via ~Indicators::precompute()~,
     which produces an immutable ~PrecomputedIndications~ value. Both built-in
@@ -192,11 +192,10 @@
 - [X] computer braille
 - [ ] inpos + outpos mapping
 - [X] typeform (emphasis input)
-- [-] regexp infinite loop — see the "guard against ()+ regexp?" entry
-  in the Todo section above: unconditionally zero-width loop bodies
-  are now guarded, conditionally zero-width ones (e.g. a quantified
-  boundary attribute) are not, though nothing shipped exercises that
-  gap today
+- [X] regexp infinite loop — see the "guard against ()+ regexp?" entry
+  in the Todo section above: resolved for both unconditionally and
+  conditionally zero-width loop bodies once the matcher became a
+  Pike VM
 - [ ] ~Regexp::Literal~/~Regexp::Any~ negation is an unimplemented
   ~todo!()~ (regexp.rs) — panics if a table's ~match~/~context~
   pattern hits it
