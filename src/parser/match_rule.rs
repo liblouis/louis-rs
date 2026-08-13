@@ -17,6 +17,8 @@ pub enum ParseError {
     EmptyGroup,
     #[error("invalid escape sequence")]
     InvalidEscape,
+    #[error("double negation ('!!') is not allowed")]
+    DoubleNegation,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -224,6 +226,9 @@ impl<'a> PatternParser<'a> {
     fn negate(&mut self) -> Result<Pattern, ParseError> {
         self.consume('!')?;
         let pattern = self.pattern_with_quantifier()?;
+        if matches!(pattern, Pattern::Negate(_)) {
+            return Err(ParseError::DoubleNegation);
+        }
         Ok(Pattern::Negate(Box::new(pattern)))
     }
 
@@ -386,6 +391,22 @@ mod tests {
         assert_eq!(
             PatternParser::new(r"[\a]]").set(),
             Ok(Pattern::Set(HashSet::from(['a'])))
+        );
+    }
+
+    #[test]
+    fn negate() {
+        assert_eq!(
+            PatternParser::new("!a").pattern_with_quantifier(),
+            Ok(Pattern::Negate(Box::new(Pattern::Characters("a".into()))))
+        );
+        assert_eq!(
+            PatternParser::new("!!a").pattern_with_quantifier(),
+            Err(ParseError::DoubleNegation)
+        );
+        assert_eq!(
+            PatternParser::new("!!a+").pattern_with_quantifier(),
+            Err(ParseError::DoubleNegation)
         );
     }
 

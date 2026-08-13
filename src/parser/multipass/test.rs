@@ -428,6 +428,9 @@ impl<'a> Parser<'a> {
     fn negate(&mut self) -> Result<TestInstruction, ParseError> {
         self.consume('!')?;
         let test = self.test()?;
+        if matches!(test, TestInstruction::Negate { .. }) {
+            return Err(ParseError::DoubleNegation);
+        }
         Ok(TestInstruction::Negate {
             test: Box::new(test),
         })
@@ -672,6 +675,20 @@ mod tests {
         assert_eq!(
             Parser::new(r#"".\s\"""#).string(),
             Ok(TestInstruction::String { s: ". \"".into() })
+        );
+    }
+
+    #[test]
+    fn negate() {
+        assert_eq!(
+            Parser::new(r#"!"a""#).negate(),
+            Ok(TestInstruction::Negate {
+                test: Box::new(TestInstruction::String { s: "a".into() })
+            })
+        );
+        assert_eq!(
+            Parser::new(r#"!!"a""#).negate(),
+            Err(ParseError::DoubleNegation)
         );
     }
 

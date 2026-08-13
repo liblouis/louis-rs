@@ -40,6 +40,8 @@ pub enum ParseError {
     InvalidOperator { found: Option<char> },
     #[error("Invalid escape sequence")]
     InvalidEscapeSequence { found: Option<char> },
+    #[error("double negation ('!!') is not allowed")]
+    DoubleNegation,
 }
 
 #[derive(thiserror::Error, Debug, PartialEq)]

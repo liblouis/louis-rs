@@ -78,6 +78,9 @@ impl Regexp {
         self.compile_with_payload(Translation::default())
     }
 
+    // FIXME: the `Not*` arms below are unreachable only because parsers currently reject double
+    // negation (`!!x`) before it gets here. A future caller that negates a `Regexp` without going
+    // through that check would panic; consider returning a `Result` instead as a backstop.
     pub fn negate(self) -> Regexp {
         match self {
             Regexp::Literal(_) => todo!(),
