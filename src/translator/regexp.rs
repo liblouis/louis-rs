@@ -376,22 +376,20 @@ struct ThreadList {
     threads: Vec<Thread>,
     /// Which `pc`s have already been added during the current step, to ensure a `pc` reachable by
     /// more than one epsilon path is only ever added once.
-    seen: Vec<u32>,
-    generation: u32,
+    seen: Vec<bool>,
 }
 
 impl ThreadList {
     fn new(program_len: usize) -> Self {
         Self {
             threads: Vec::new(),
-            seen: vec![0; program_len],
-            generation: 0,
+            seen: vec![false; program_len],
         }
     }
 
     fn start_step(&mut self) {
         self.threads.clear();
-        self.generation += 1;
+        self.seen.fill(false);
     }
 }
 
@@ -408,10 +406,10 @@ impl CompiledRegexp {
         input_len: usize,
         env: &Environment,
     ) {
-        if list.seen[pc] == list.generation {
+        if list.seen[pc] {
             return;
         }
-        list.seen[pc] = list.generation;
+        list.seen[pc] = true;
         match self.instructions[pc] {
             Instruction::Jump(target) => self.add_thread(list, target, capture, sp, input_len, env),
             Instruction::Split(a, b) => {
