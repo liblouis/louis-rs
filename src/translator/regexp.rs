@@ -19,11 +19,8 @@ use crate::translator::{
     translation::{Resolve, Translation},
 };
 
-/// Whether `actual` matches `expected` case-insensitively, lowercasing only `actual` — mirrors
-/// [`trie::TrieNode::char_transition`](crate::translator::trie::TrieNode), which relies on
-/// literal characters in tables being written lowercase by convention rather than folding both
-/// sides. A character without a single-character lowercase mapping never matches, same as the
-/// trie.
+/// Whether `actual` matches `expected` case-insensitively, lowercasing only `actual`.
+/// A character without a single-character lowercase mapping never matches.
 fn chars_match_case_insensitive(actual: char, expected: char) -> bool {
     actual.to_lowercase().count() == 1 && actual.to_lowercase().next() == Some(expected)
 }
@@ -119,6 +116,7 @@ impl Regexp {
         }
     }
 
+    /// Compile a regular expression and attach the given translation as a payload
     pub fn compile_with_payload(&self, payload: Translation) -> CompiledRegexp {
         let mut instructions = Vec::new();
         let mut character_classes = Vec::new();
@@ -132,9 +130,7 @@ impl Regexp {
         }
     }
 
-    /// Whether *every* successful match of this regexp consumes no input at all (not merely
-    /// "can this match the empty string" — a regexp that sometimes consumes and sometimes
-    /// doesn't, like `Either(CharacterClass, EndAnchor)`, is not "always" zero-width).
+    /// Whether *every* successful match of this regexp consumes no input at all.
     ///
     /// Used to guard `ZeroOrMore`/`OneOrMore`/`RepeatAtLeast` against infinite loops: their
     /// emitted bytecode repeats the body by jumping back to a `Split` that tries the body again
@@ -178,6 +174,8 @@ impl Regexp {
         }
     }
 
+    /// Emit byte code instructions for the RegExp AST and collect all character classes
+    /// used in the RegExp.
     fn emit(
         &self,
         instructions: &mut Vec<Instruction>,
@@ -316,11 +314,13 @@ type VariableIndex = u8;
 pub enum Instruction {
     /// Match a single char
     Char(char),
+    /// Match any character that is not char.
     NotChar(char),
     /// Match a single char case-insensitively — see [`Regexp::CaseInsensitiveString`]
     CaseInsensitiveChar(char),
     /// Match a set of chars. Contains a reference to the character class.
     Class(CharacterClassIndex),
+    /// Match any character that is not in the set of chars.
     NotClass(CharacterClassIndex),
     /// Match any character
     Any,
@@ -337,6 +337,7 @@ pub enum Instruction {
     CaptureEnd,
     /// Test whether a variable is equal to a value
     VariableEqual(VariableIndex, u8),
+    /// Test whether a variable is not equal to a value
     NotVariableEqual(VariableIndex, u8),
     /// Zero-width assertion: succeeds only if there is no input left
     AssertEnd,
@@ -359,25 +360,22 @@ pub struct CompiledRegexp {
     translations: Vec<Translation>,
 }
 
-/// A single candidate execution path through the compiled program at the current input
-/// position, carrying the capture span in progress along that path. The current input position
-/// and `env` aren't part of a thread: every thread in the same [`ThreadList`] was reached by
-/// consuming the same characters in lockstep, and `env` is read-only context shared by the whole
-/// match rather than per-path state.
+/// A single candidate execution path through the RegExp compiled program at the current
+/// input position, carrying the capture span in progress along that path.
+///
+/// See the section "Pike's Implementation" at https://swtch.com/~rsc/regexp/regexp2.html
 struct Thread {
     pc: InstructionIndex,
     capture: (usize, usize),
 }
 
-/// The threads alive at one input position, in priority order: an earlier entry was reached via
-/// a higher-priority `Split` branch and wins over a later entry that also reaches `Match`.
-/// `seen` records which `pc`s have already been added during the current step, so a `pc`
-/// reachable by more than one epsilon path (e.g. looping back to the `Split` a quantifier
-/// compiles to) is only ever added once. That dedup bounds a whole match to
-/// `O(instructions.len() * input.len())` instead of the exponential blowup backtracking gives on
-/// a pattern like `(a+)+b` matched against a long non-matching input.
+/// The threads alive at one input position, in priority order, i.e. the preference order between
+/// alternatives that determines which one wins when both succeed (leftmost-first/Perl semantics, as
+/// opposed to POSIX leftmost-longest which would pick differently).
 struct ThreadList {
     threads: Vec<Thread>,
+    /// Which `pc`s have already been added during the current step, to ensure a `pc` reachable by
+    /// more than one epsilon path is only ever added once.
     seen: Vec<u32>,
     generation: u32,
 }
@@ -398,10 +396,9 @@ impl ThreadList {
 }
 
 impl CompiledRegexp {
-    /// Follows every epsilon transition (anything that doesn't consume a character) reachable
-    /// from `pc` without consuming input, adding each character-consuming or `Match` instruction
-    /// reached to `list`, in priority order. A path whose assertion or variable check fails is
-    /// simply dropped instead of being added.
+    /// Follow every epsilon transition reachable from `pc` without consuming input,
+    /// adding each character-consuming or `Match` instruction reached to `list`, in
+    /// priority order. A path whose assertion or variable check fails is simply dropped.
     fn add_thread(
         &self,
         list: &mut ThreadList,
@@ -446,27 +443,26 @@ impl CompiledRegexp {
                 }
             }
             Instruction::Fail => (),
-            // Char/NotChar/CaseInsensitiveChar/Class/NotClass/Any/Match: nothing left to resolve
-            // without consuming a character (or, for `Match`, without the whole match being
-            // decided), so the epsilon closure ends here.
+            // Add a Thread for character consuming instructions. The epsilon closure ends here.
             _ => list.threads.push(Thread { pc, capture }),
         }
     }
 
+    /// Does the input match the regular expression in the given environment?
     pub fn is_match(&self, input: &str, env: &Environment) -> bool {
         self.find(input, env).is_some()
     }
 
+    /// If the input matches the regular expression in the given environment return the
+    /// associated translation, otherwise return None.
     pub fn find(&self, input: &str, env: &Environment) -> Option<ResolvedTranslation> {
         let mut current = ThreadList::new(self.instructions.len());
         let mut next = ThreadList::new(self.instructions.len());
         let mut sp = 0;
         let mut length = 0;
-        // The capture span, consumed-char count and translation of the best match found so far.
-        // A lower-priority thread reaching `Match` doesn't end the search immediately: a
-        // still-alive higher-priority thread might go on to match later, at which point it must
-        // win instead -- exactly like backtracking would explore that higher-priority branch
-        // first and only fall back to this one if the former's entire subtree failed.
+        // The capture span, consumed-char count and translation of the best match found so far. A
+        // lower-priority thread reaching `Match` doesn't end the search immediately: a still-alive
+        // higher-priority thread might go on to match later
         let mut matched: Option<((usize, usize), usize, TranslationIndex)> = None;
 
         current.start_step();
