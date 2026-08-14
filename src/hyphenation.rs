@@ -99,7 +99,7 @@ impl HyphenationTable {
         if char_count < 2 {
             return Vec::new();
         }
-        if char_count < self.left_min + self.right_min {
+        if char_count < self.left_min.saturating_add(self.right_min) {
             return vec![false; char_count - 1];
         }
 
@@ -204,6 +204,16 @@ mod tests {
     fn defaults_when_header_absent() {
         let t = HyphenationTable::parse("UTF-8\n.ab3a\n").unwrap();
         assert_eq!((t.left_min, t.right_min), (1, 1));
+    }
+
+    #[test]
+    fn huge_hyphenmin_does_not_overflow() {
+        // Regression test: left_min + right_min used to overflow usize in break_points when a
+        // .dic file declared an unreasonably large LEFTHYPHENMIN/RIGHTHYPHENMIN. A word can never
+        // be long enough to satisfy such a bound anyway, so it should just report no breaks.
+        let t =
+            HyphenationTable::parse("UTF-8\nLEFTHYPHENMIN 18446744073709551615\n.ab3a\n").unwrap();
+        assert_eq!(t.break_points("ab"), vec![false]);
     }
 
     #[test]
