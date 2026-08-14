@@ -75,9 +75,6 @@ impl Regexp {
         self.compile_with_payload(Translation::default())
     }
 
-    // FIXME: the `Not*` arms below are unreachable only because parsers currently reject double
-    // negation (`!!x`) before it gets here. A future caller that negates a `Regexp` without going
-    // through that check would panic; consider returning a `Result` instead as a backstop.
     pub fn negate(self) -> Regexp {
         match self {
             Regexp::Literal(_) => todo!(),
@@ -98,17 +95,21 @@ impl Regexp {
             // its negation can therefore never succeed.
             Regexp::Any => Regexp::Never,
             Regexp::CharacterClass(class) => Regexp::NotCharacterClass(class),
+            // unreachable: the parser rejects double negation before it reaches here
             Regexp::NotCharacterClass(_) => unreachable!(),
             Regexp::RepeatExactly(n, regexp) => Regexp::RepeatExactly(n, Box::new(regexp.negate())),
             Regexp::RepeatAtLeast(n, regexp) => Regexp::RepeatAtLeast(n, Box::new(regexp.negate())),
             Regexp::RepeatAtLeastAtMost(n, m, regexp) => {
                 Regexp::RepeatAtLeastAtMost(n, m, Box::new(regexp.negate()))
             }
-            Regexp::Capture(_) => unreachable!(), // negating a capture makes no sense
+            // unreachable: the parser rejects negating a capture before it reaches here
+            Regexp::Capture(_) => unreachable!(),
             Regexp::String(s) => Regexp::NotString(s),
+            // unreachable: the parser rejects double negation before it reaches here
             Regexp::NotString(_) => unreachable!(),
             Regexp::CaseInsensitiveString(_) => unreachable!(), // only used for match's `chars`, never negated
             Regexp::VariableEqual(slot, value) => Regexp::NotVariableEqual(slot, value),
+            // unreachable: the parser rejects double negation before it reaches here
             Regexp::NotVariableEqual(_, _) => unreachable!(),
             Regexp::Group(regexp) => Regexp::Group(Box::new(regexp.negate())),
             Regexp::Empty => Regexp::Never,
