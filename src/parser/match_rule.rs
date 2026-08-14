@@ -19,6 +19,8 @@ pub enum ParseError {
     InvalidEscape,
     #[error("double negation ('!!') is not allowed")]
     DoubleNegation,
+    #[error("unexpected {0:?} after pattern")]
+    TrailingInput(char),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -305,7 +307,11 @@ impl<'a> PatternParser<'a> {
         if self.chars.peek().is_none() {
             return Ok(Patterns(Vec::new()));
         }
-        self.either()
+        let patterns = self.either()?;
+        if let Some(&c) = self.chars.peek() {
+            return Err(ParseError::TrailingInput(c));
+        }
+        Ok(patterns)
     }
 }
 
@@ -526,6 +532,16 @@ mod tests {
         assert_eq!(
             PatternParser::new("-").pattern(),
             Ok(Patterns(vec![Pattern::Empty]))
+        );
+        // Regression test: a stray ')' with no enclosing group used to be silently accepted,
+        // producing an empty Patterns instead of an error.
+        assert_eq!(
+            PatternParser::new(")").pattern(),
+            Err(ParseError::TrailingInput(')'))
+        );
+        assert_eq!(
+            PatternParser::new("a)").pattern(),
+            Err(ParseError::TrailingInput(')'))
         );
     }
 }
