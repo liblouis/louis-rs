@@ -196,9 +196,7 @@
   in the Todo section above: resolved for both unconditionally and
   conditionally zero-width loop bodies once the matcher became a
   Pike VM
-- [ ] ~Regexp::Literal~/~Regexp::Any~ negation is an unimplemented
-  ~todo!()~ (regexp.rs) — panics if a table's ~match~/~context~
-  pattern hits it
+- [X] ~Regexp::Any~ negation (~!.~ in a ~match~/~context~ pattern).
 - [-] ~Attribute::Boundary~/~ByOrder~/~Any~ are silently treated as
   no-ops in both match_pattern.rs and context_pattern.rs instead of
   being matched
@@ -211,7 +209,7 @@
     attribute used inside a ~context~/~correct~/passN rule's ~$...~
     attribute set, as opposed to the whole-test ~`~/~~~ anchors,
     which are a separate, already-fixed mechanism) are still no-ops
-- [X] Word/group-sign ("lower"/part-word sign) contraction not applied
+- [-] Word/group-sign ("lower"/part-word sign) contraction not applied
   when the word carries a suffix, apostrophe, or is part of a longer
   compound, even though the same sign fires correctly when the word
   stands alone

@@ -94,7 +94,9 @@ impl Regexp {
             Regexp::Optional(regexp) => Regexp::Optional(Box::new(regexp.negate())),
             Regexp::ZeroOrMore(regexp) => Regexp::ZeroOrMore(Box::new(regexp.negate())),
             Regexp::OneOrMore(regexp) => Regexp::OneOrMore(Box::new(regexp.negate())),
-            Regexp::Any => todo!(), // how are you supposed to negate any?
+            // `Any` matches every possible character, so no character fails to match it --
+            // its negation can therefore never succeed.
+            Regexp::Any => Regexp::Never,
             Regexp::CharacterClass(class) => Regexp::NotCharacterClass(class),
             Regexp::NotCharacterClass(_) => unreachable!(),
             Regexp::RepeatExactly(n, regexp) => Regexp::RepeatExactly(n, Box::new(regexp.negate())),
@@ -671,6 +673,15 @@ mod tests {
         let env = Environment::new();
         let re = Regexp::Any.compile();
         assert!(re.is_match("abb", &env));
+    }
+
+    #[test]
+    fn negate_any() {
+        // Every character matches Any, so nothing matches its negation.
+        let env = Environment::new();
+        let re = Regexp::Any.negate().compile();
+        assert!(!re.is_match("a", &env));
+        assert!(!re.is_match("", &env));
     }
 
     #[test]

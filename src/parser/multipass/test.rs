@@ -431,6 +431,9 @@ impl<'a> Parser<'a> {
         if matches!(test, TestInstruction::Negate { .. }) {
             return Err(ParseError::DoubleNegation);
         }
+        if matches!(test, TestInstruction::Replace { .. }) {
+            return Err(ParseError::NegatedReplacement);
+        }
         Ok(TestInstruction::Negate {
             test: Box::new(test),
         })
@@ -689,6 +692,10 @@ mod tests {
         assert_eq!(
             Parser::new(r#"!!"a""#).negate(),
             Err(ParseError::DoubleNegation)
+        );
+        assert_eq!(
+            Parser::new("![$d]").negate(),
+            Err(ParseError::NegatedReplacement)
         );
     }
 
