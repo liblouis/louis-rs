@@ -107,7 +107,9 @@ impl Regexp {
             Regexp::String(s) => Regexp::NotString(s),
             // unreachable: the parser rejects double negation before it reaches here
             Regexp::NotString(_) => unreachable!(),
-            Regexp::CaseInsensitiveString(_) => unreachable!(), // only used for match's `chars`, never negated
+            // unreachable: only ever built from a match rule's `chars` operand, which is parsed
+            // separately from `pre`/`post` as a plain string and never goes through `Pattern::Negate`
+            Regexp::CaseInsensitiveString(_) => unreachable!(),
             Regexp::VariableEqual(slot, value) => Regexp::NotVariableEqual(slot, value),
             // unreachable: the parser rejects double negation before it reaches here
             Regexp::NotVariableEqual(_, _) => unreachable!(),
