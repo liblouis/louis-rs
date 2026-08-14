@@ -130,50 +130,6 @@ impl Regexp {
         }
     }
 
-    /// Whether *every* successful match of this regexp consumes no input at all.
-    ///
-    /// Used to guard `ZeroOrMore`/`OneOrMore`/`RepeatAtLeast` against infinite loops: their
-    /// emitted bytecode repeats the body by jumping back to a `Split` that tries the body again
-    /// before giving up, and the VM always explores the body's own preferred (leftmost) branch
-    /// fully before backtracking — so if the body is always zero-width, every attempt resolves
-    /// the same way, forever, without ever advancing `sp`. When that's the case, further
-    /// repetitions can't add any matching power beyond the first attempt, so we cap the loop at
-    /// one instead of building a self-referencing jump. A body that only *sometimes* matches
-    /// zero-width (like the `EndAnchor` alternative above) is left with its normal unbounded
-    /// loop — safe as long as it keeps making progress until it actually runs out of input,
-    /// which is exactly when the zero-width alternative becomes the only option and the loop
-    /// should stop; that per-iteration case isn't guarded here (see `TODO.org`'s "regexp
-    /// infinite loop" entry), but no shipped liblouis table exercises it today.
-    fn always_zero_width(&self) -> bool {
-        match self {
-            Regexp::Literal(_) | Regexp::Any | Regexp::CharacterClass(_) => false,
-            Regexp::NotCharacterClass(_) => false,
-            Regexp::Concat(left, right) => left.always_zero_width() && right.always_zero_width(),
-            // both branches must be zero-width: the VM commits to whichever branch succeeds
-            // first, and either one might be the one taken
-            Regexp::Either(left, right) => left.always_zero_width() && right.always_zero_width(),
-            Regexp::Optional(regexp)
-            | Regexp::ZeroOrMore(regexp)
-            | Regexp::OneOrMore(regexp)
-            | Regexp::Group(regexp)
-            | Regexp::Capture(regexp) => regexp.always_zero_width(),
-            Regexp::RepeatExactly(0, _) => true,
-            Regexp::RepeatExactly(_, regexp)
-            | Regexp::RepeatAtLeast(_, regexp)
-            | Regexp::RepeatAtLeastAtMost(_, _, regexp) => regexp.always_zero_width(),
-            Regexp::String(s) | Regexp::NotString(s) | Regexp::CaseInsensitiveString(s) => {
-                s.is_empty()
-            }
-            Regexp::VariableEqual(_, _) | Regexp::NotVariableEqual(_, _) => true,
-            // genuine zero-width assertions
-            Regexp::Empty | Regexp::EndAnchor | Regexp::NotEndAnchor => true,
-            // `Never` doesn't succeed at all, so the VM's `Split` backs off immediately without
-            // ever reaching the loop-back jump — it can't cause the infinite loop this guards
-            // against, regardless of how it's classified here
-            Regexp::Never => false,
-        }
-    }
-
     /// Emit byte code instructions for the RegExp AST and collect all character classes
     /// used in the RegExp.
     fn emit(
@@ -203,22 +159,12 @@ impl Regexp {
                 regexp.emit(instructions, character_classes);
                 instructions[pos] = Instruction::Split(pos + 1, instructions.len());
             }
-            Regexp::ZeroOrMore(regexp) if regexp.always_zero_width() => {
-                // see `always_zero_width`: repeating a zero-width-first body forever would never
-                // make progress, so cap it at zero-or-one attempt instead of zero-or-more
-                Regexp::Optional(regexp.clone()).emit(instructions, character_classes);
-            }
             Regexp::ZeroOrMore(regexp) => {
                 let pos = instructions.len();
                 instructions.push(Instruction::Split(pos + 1, 0));
                 regexp.emit(instructions, character_classes);
                 instructions.push(Instruction::Jump(pos));
                 instructions[pos] = Instruction::Split(pos + 1, instructions.len());
-            }
-            Regexp::OneOrMore(regexp) if regexp.always_zero_width() => {
-                // see `always_zero_width`: cap at exactly one (mandatory) attempt instead of
-                // looping forever on a zero-width-first body
-                regexp.emit(instructions, character_classes);
             }
             Regexp::OneOrMore(regexp) => {
                 let pos = instructions.len();
@@ -243,17 +189,11 @@ impl Regexp {
                 for _ in 0..*min {
                     regexp.emit(instructions, character_classes);
                 }
-                if regexp.always_zero_width() {
-                    // see `always_zero_width`: the unbounded tail can't safely loop, so cap it
-                    // at the mandatory `min` copies plus at most one more
-                    Regexp::Optional(regexp.clone()).emit(instructions, character_classes);
-                } else {
-                    let pos = instructions.len();
-                    instructions.push(Instruction::Split(pos + 1, 0));
-                    regexp.emit(instructions, character_classes);
-                    instructions.push(Instruction::Jump(pos));
-                    instructions[pos] = Instruction::Split(pos + 1, instructions.len());
-                }
+                let pos = instructions.len();
+                instructions.push(Instruction::Split(pos + 1, 0));
+                regexp.emit(instructions, character_classes);
+                instructions.push(Instruction::Jump(pos));
+                instructions[pos] = Instruction::Split(pos + 1, instructions.len());
             }
             Regexp::RepeatAtLeastAtMost(min, max, regexp) => {
                 for _ in 0..*min {
@@ -669,6 +609,31 @@ mod tests {
         let start = std::time::Instant::now();
         assert!(!re.is_match(&input, &env));
         assert!(start.elapsed() < std::time::Duration::from_secs(1));
+    }
+
+    #[test]
+    fn zero_width_loop_body_is_bounded() {
+        // A quantifier whose body never consumes any input (e.g. Empty) compiles to bytecode
+        // that jumps back to its own Split without ever advancing the input position. The VM's
+        // per-step pc dedup terminates that epsilon cycle after one extra (immediately discarded)
+        // visit, regardless of quantifier kind, so this doesn't need any special-casing at
+        // compile time.
+        let env = Environment::new();
+        assert!(
+            Regexp::ZeroOrMore(Box::new(Regexp::Empty))
+                .compile()
+                .is_match("", &env)
+        );
+        assert!(
+            Regexp::OneOrMore(Box::new(Regexp::Empty))
+                .compile()
+                .is_match("", &env)
+        );
+        assert!(
+            Regexp::RepeatAtLeast(2, Box::new(Regexp::Empty))
+                .compile()
+                .is_match("", &env)
+        );
     }
 
     #[test]
