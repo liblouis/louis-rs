@@ -83,7 +83,13 @@ impl std::fmt::Display for TranslationTargets {
 }
 
 pub trait Resolve {
-    fn resolve(self, capture: &str, weight: usize, offset: usize) -> ResolvedTranslation;
+    fn resolve(
+        self,
+        capture: &str,
+        matched: &str,
+        weight: usize,
+        offset: usize,
+    ) -> ResolvedTranslation;
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -93,6 +99,13 @@ pub struct UnresolvedTranslation {
     stage: TranslationStage,
     effects: Vec<Effect>,
     origin: Option<AnchoredRule>,
+    /// Whether the action contains a `*` ([`TranslationTarget::Capture`]). Per liblouis, `*`
+    /// copies the captured focus and discards everything else that was matched, so such a
+    /// translation consumes the whole matched test, not only the focus.
+    replaces: bool,
+    /// The number of characters a leading `_N` in the test rewinds over. The test re-examines
+    /// them, but they lie before the matched span, so `replaces` must not consume them.
+    lookback: usize,
 }
 
 impl UnresolvedTranslation {
@@ -109,12 +122,25 @@ impl UnresolvedTranslation {
             stage,
             effects: effects.to_vec(),
             origin: origin.into(),
+            replaces: output.contains(&TranslationTarget::Capture),
+            lookback: 0,
         }
+    }
+
+    /// Set the number of characters a leading `_N` in the test rewinds over.
+    pub fn with_lookback(self, lookback: usize) -> Self {
+        Self { lookback, ..self }
     }
 }
 
 impl Resolve for UnresolvedTranslation {
-    fn resolve(self, capture: &str, weight: usize, offset: usize) -> ResolvedTranslation {
+    fn resolve(
+        self,
+        capture: &str,
+        matched: &str,
+        weight: usize,
+        offset: usize,
+    ) -> ResolvedTranslation {
         let resolved: String = self
             .output
             .iter()
@@ -122,9 +148,22 @@ impl Resolve for UnresolvedTranslation {
             .map(|t| t.resolve(capture))
             .map(|t| t.to_string())
             .collect();
-        let length = capture.chars().count();
+        // With a `*` in the action the whole match is consumed and any context around the focus
+        // is discarded; without it only the focus is consumed and trailing context is scanned
+        // again. Characters a leading `_N` rewinds over precede the match and stay untouched
+        // either way.
+        let (input, offset) = if self.replaces {
+            let start = matched
+                .char_indices()
+                .nth(self.lookback)
+                .map_or(matched.len(), |(i, _)| i);
+            (&matched[start..], self.lookback)
+        } else {
+            (capture, offset)
+        };
+        let length = input.chars().count();
         ResolvedTranslation {
-            input: capture.to_string(),
+            input: input.to_string(),
             output: resolved,
             length,
             weight,
@@ -150,12 +189,20 @@ impl Default for Translation {
 }
 
 impl Resolve for Translation {
-    fn resolve(self, capture: &str, weight: usize, offset: usize) -> ResolvedTranslation {
+    fn resolve(
+        self,
+        capture: &str,
+        matched: &str,
+        weight: usize,
+        offset: usize,
+    ) -> ResolvedTranslation {
         match self {
             Translation::Resolved(translation) => {
                 translation.with_weight(weight).with_offset(offset)
             }
-            Translation::Unresolved(unresolved) => unresolved.resolve(capture, weight, offset),
+            Translation::Unresolved(unresolved) => {
+                unresolved.resolve(capture, matched, weight, offset)
+            }
         }
     }
 }
@@ -345,7 +392,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("", 5, 0);
+        let result = translation.resolve("", "", 5, 0);
 
         assert_eq!(result.input(), "");
         assert_eq!(result.output(), "");
@@ -360,7 +407,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("captured", 8, 0);
+        let result = translation.resolve("captured", "captured", 8, 0);
 
         assert_eq!(result.input(), "captured");
         assert_eq!(result.output(), "captured");
@@ -379,7 +426,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("MIDDLE", 8, 0);
+        let result = translation.resolve("MIDDLE", "MIDDLE", 8, 0);
 
         assert_eq!(result.input(), "MIDDLE");
         assert_eq!(result.output(), "<MIDDLE>");
@@ -400,7 +447,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("xyz", 8, 0);
+        let result = translation.resolve("xyz", "xyz", 8, 0);
 
         assert_eq!(result.input(), "xyz");
         assert_eq!(result.output(), "<XYz>");
@@ -419,7 +466,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("café🚀🚀", 6, 0);
+        let result = translation.resolve("café🚀🚀", "café🚀🚀", 6, 0);
 
         assert_eq!(result.input(), "café🚀🚀");
         assert_eq!(result.length(), 6);

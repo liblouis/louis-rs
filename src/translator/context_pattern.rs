@@ -46,12 +46,14 @@ impl Regexp {
             // already-consumed (or, at the end of a test, not-yet-consumed) text without that
             // text becoming part of the replaceable span — its own matcher needs this because it
             // has no other way to look outside the span it's currently walking. We don't: (1)
-            // `ResolvedTranslation::resolve` sets the reported length to the *captured bracket's*
-            // length alone, never however much surrounding "before"/"after" content was checked,
-            // so a check placed before or after the bracket is never mistakenly swallowed into
-            // the consumed span regardless of `_N`'s value; and (2) `context_candidates` is
-            // queried at every cursor position (like `match`'s `pre`), so a check placed before
-            // the bracket is naturally discovered starting at the earlier position and held via
+            // without a `*` in the action, `ResolvedTranslation::resolve` sets the reported
+            // length to the *captured bracket's* length alone, never however much surrounding
+            // "before"/"after" content was checked, so a check placed before or after the
+            // bracket is never mistakenly swallowed into the consumed span regardless of `_N`'s
+            // value (with a `*` the whole match is consumed on purpose — liblouis discards the
+            // context there too); and (2) `context_candidates` is queried at every cursor
+            // position (like `match`'s `pre`), so a check placed before the bracket is naturally
+            // discovered starting at the earlier position and held via
             // `delayed_translations`/`offset()` until the cursor catches up. Dropping `_N`
             // entirely and just compiling the surrounding checks in place is therefore already
             // correct, not a stand-in for a real implementation — hence `Empty`, not some
@@ -257,8 +259,10 @@ impl ContextPatternsBuilder {
         stage: TranslationStage,
         ctx: &TableContext,
     ) -> Result<(), TranslationError> {
-        let translation =
-            Translation::Unresolved(self.translation(action, origin, stage, ctx.swap_classes())?);
+        let translation = Translation::Unresolved(
+            self.translation(action, origin, stage, ctx.swap_classes())?
+                .with_lookback(test.leading_lookback()),
+        );
         let test = test.clone().add_implicit_replace();
         // for the multipass stages where we translate from braille to braille the character classes
         // need to be the dots_classes
@@ -849,9 +853,10 @@ mod tests {
         builder
             .insert(&tests, &action, &origin, stage, &ctx)
             .unwrap();
+        // The action contains a capture (`*`), so the translation consumes the whole match and
+        // discards the context around the focus
         let translation =
-            ResolvedTranslation::new("⠐", "⠐⠥", 3, TranslationStage::Post1, origin.clone())
-                .with_offset(1);
+            ResolvedTranslation::new("⠕⠐⠽", "⠐⠥", 3, TranslationStage::Post1, origin.clone());
         let patterns = builder.build();
         assert_eq!(patterns.find("⠕⠐⠽", &env, true), [translation]);
         assert!(patterns.find("⠕", &env, true).is_empty());
@@ -873,9 +878,15 @@ mod tests {
         builder
             .insert(&tests, &action, &origin, stage, &context)
             .unwrap();
-        let translation =
-            ResolvedTranslation::new("abc", "<abc>", 9, TranslationStage::Main, origin.clone())
-                .with_offset(3);
+        // The action contains a capture (`*`), so the translation consumes the whole match and
+        // discards the context around the focus
+        let translation = ResolvedTranslation::new(
+            "{{{abc}}}",
+            "<abc>",
+            9,
+            TranslationStage::Main,
+            origin.clone(),
+        );
         let patterns = builder.build();
         assert_eq!(patterns.find("{{{abc}}}", &env, true), [translation]);
         assert!(patterns.find("def", &env, true).is_empty());
