@@ -177,6 +177,10 @@ impl TableContext {
                 }
                 Rule::Attribute { name, chars } => {
                     let class = CharacterClass::from(name.as_str());
+                    // claim the class' position in the definition order (for the `$w`-`$z`
+                    // shorthands) even when no character makes it into the map
+                    character_classes.declare(&class);
+                    dots_classes.declare(&class);
                     for c in chars.chars() {
                         character_classes.insert(class.clone(), c);
                         dots_classes.insert_associated_dot(

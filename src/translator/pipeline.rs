@@ -205,6 +205,23 @@ mod tests {
     }
 
     #[test]
+    fn correct_with_by_order_attributes() {
+        // `$w`-`$z` refer to the first four user-defined attribute classes in
+        // definition order; here `$x` is the second one, matching only `b`.
+        let rules = [
+            parse_rule("letter a 1"),
+            parse_rule("letter b 12"),
+            parse_rule("letter c 14"),
+            parse_rule("attribute first a"),
+            parse_rule("attribute second b"),
+            parse_rule("noback correct [$x.] \"c\""),
+        ];
+        let pipeline = TranslationPipeline::compile(&rules, Direction::Forward).unwrap();
+        assert_eq!(pipeline.translate("abba"), "⠁⠉⠁");
+        assert_eq!(pipeline.translate("aa"), "⠁⠁");
+    }
+
+    #[test]
     fn pass3() {
         let rules = [
             parse_rule("always foo 123"),

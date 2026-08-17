@@ -114,9 +114,14 @@ impl Regexp {
                         characters.extend(chars);
                     }
                 }
-                Attribute::Boundary => (),   // TODO
-                Attribute::ByOrder(_) => (), // TODO
-                Attribute::Any => (),        // TODO
+                // `$w`-`$z` refer to the first four user-defined classes in definition order
+                Attribute::ByOrder(order) => {
+                    if let Some(chars) = ctx.get_by_order(*order) {
+                        characters.extend(chars);
+                    }
+                }
+                Attribute::Boundary => (), // TODO
+                Attribute::Any => (),      // TODO
             }
         }
         if let Some(quantifier) = quantifier {

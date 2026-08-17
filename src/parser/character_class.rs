@@ -54,21 +54,48 @@ impl From<&str> for CharacterClass {
 
 /// A mapping between a character class and the associated set of characters
 #[derive(Debug, Default, Clone)]
-pub struct CharacterClasses(HashMap<CharacterClass, HashSet<char>>);
+pub struct CharacterClasses {
+    classes: HashMap<CharacterClass, HashSet<char>>,
+    /// User-defined classes in definition order, so that the `$w`-`$z` shorthands in multipass
+    /// tests can refer to the first four of them by position
+    user_defined: Vec<CharacterClass>,
+}
 
 impl CharacterClasses {
     pub fn new(mappings: &[(CharacterClass, &[char])]) -> Self {
-        Self(HashMap::from_iter(mappings.iter().cloned().map(
-            |(class, chars)| (class, HashSet::from_iter(chars.iter().cloned())),
-        )))
+        let mut character_classes = Self::default();
+        for (class, chars) in mappings.iter().cloned() {
+            for c in chars {
+                character_classes.insert(class.clone(), *c);
+            }
+        }
+        character_classes
+    }
+
+    /// Record a class in the definition order, without inserting any characters. Inserting also
+    /// records, but a class whose characters all lack single-cell dots would otherwise never
+    /// claim its position in the dots classes. Numbered attribute classes are excluded: liblouis
+    /// keeps those in their own pool, separate from the classes `$w`-`$z` refer to.
+    pub fn declare(&mut self, class: &CharacterClass) {
+        if let CharacterClass::UserDefined(name) = class
+            && !name.chars().all(|c| c.is_ascii_digit())
+            && !self.user_defined.contains(class)
+        {
+            self.user_defined.push(class.clone());
+        }
     }
 
     pub fn insert(&mut self, class: CharacterClass, c: char) -> bool {
-        self.0.entry(class).or_default().insert(c)
+        self.declare(&class);
+        self.classes.entry(class).or_default().insert(c)
     }
 
     pub fn insert_dot(&mut self, class: CharacterClass, dot: &BrailleChar) -> bool {
-        self.0.entry(class).or_default().insert(dot.to_unicode())
+        self.declare(&class);
+        self.classes
+            .entry(class)
+            .or_default()
+            .insert(dot.to_unicode())
     }
 
     pub fn insert_dots(&mut self, class: CharacterClass, dots: &BrailleChars) -> bool {
@@ -99,7 +126,14 @@ impl CharacterClasses {
     }
 
     pub fn get(&self, class: &CharacterClass) -> Option<HashSet<char>> {
-        self.0.get(class).cloned()
+        self.classes.get(class).cloned()
+    }
+
+    /// Get the characters of the nth user-defined class, in definition order and starting at 1,
+    /// as referenced by the `$w`-`$z` shorthands in multipass tests
+    pub fn get_by_order(&self, order: u8) -> Option<HashSet<char>> {
+        let class = self.user_defined.get(usize::from(order).checked_sub(1)?)?;
+        self.get(class)
     }
 
     pub fn is_punctuation(&self, c: char) -> bool {
@@ -243,6 +277,32 @@ mod tests {
     use crate::parser::CharacterClass;
 
     use super::*;
+
+    #[test]
+    fn by_order_follows_definition_order() {
+        let mut classes = CharacterClasses::default();
+        // built-in classes claim no position
+        classes.insert(CharacterClass::Letter, 'a');
+        classes.insert(CharacterClass::UserDefined("first".to_string()), 'x');
+        // a declared but empty class still claims its position
+        classes.declare(&CharacterClass::UserDefined("second".to_string()));
+        classes.insert(CharacterClass::UserDefined("third".to_string()), 'y');
+        assert_eq!(classes.get_by_order(1), Some(HashSet::from(['x'])));
+        assert_eq!(classes.get_by_order(2), None);
+        assert_eq!(classes.get_by_order(3), Some(HashSet::from(['y'])));
+        assert_eq!(classes.get_by_order(4), None);
+        assert_eq!(classes.get_by_order(0), None);
+    }
+
+    #[test]
+    fn numbered_attributes_claim_no_by_order_position() {
+        // Numbered attribute classes live in their own pool in liblouis and
+        // never occupy the positions the `$w`-`$z` shorthands refer to.
+        let mut classes = CharacterClasses::default();
+        classes.insert(CharacterClass::UserDefined("1".to_string()), 'n');
+        classes.insert(CharacterClass::UserDefined("vowel".to_string()), 'v');
+        assert_eq!(classes.get_by_order(1), Some(HashSet::from(['v'])));
+    }
 
     #[test]
     fn word_start() {
