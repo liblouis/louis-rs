@@ -487,10 +487,10 @@ impl CompiledRegexp {
         let mut next = &mut next_storage;
         let mut sp = 0;
         let mut length = 0;
-        // The capture span, consumed-char count and translation of the best match found so far. A
-        // lower-priority thread reaching `Match` doesn't end the search immediately: a still-alive
-        // higher-priority thread might go on to match later
-        let mut matched: Option<((usize, usize), usize, TranslationIndex)> = None;
+        // The capture span, consumed-char count, consumed byte length and translation of the best
+        // match found so far. A lower-priority thread reaching `Match` doesn't end the search
+        // immediately: a still-alive higher-priority thread might go on to match later
+        let mut matched: Option<((usize, usize), usize, usize, TranslationIndex)> = None;
 
         current.start_step();
         self.add_thread(current, 0, (0, 0), sp, input.len(), at_start, env);
@@ -501,7 +501,7 @@ impl CompiledRegexp {
             for thread in &current.threads {
                 match self.instructions[thread.pc] {
                     Instruction::Match(index) => {
-                        matched = Some((thread.capture, length, index));
+                        matched = Some((thread.capture, length, sp, index));
                         // every remaining thread in this step is lower priority than the one
                         // that just matched, and so could never improve on it
                         break;
@@ -603,13 +603,15 @@ impl CompiledRegexp {
             length += 1;
         }
 
-        matched.map(|((start, end), length, index)| {
+        matched.map(|((start, end), length, matched_bytes, index)| {
             let capture = &input[start..end];
+            // the whole span the test matched, context around the focus included
+            let matched = &input[..matched_bytes];
             // offset is in number of chars not a byte offset
             let offset = input[..start].chars().count();
             self.translations[index]
                 .clone()
-                .resolve(capture, length, offset)
+                .resolve(capture, matched, length, offset)
         })
     }
 }
@@ -954,23 +956,19 @@ mod tests {
 
         assert_eq!(re.find("foo", &env), None);
         assert_eq!(re.find("foobar", &env), None);
+        // The action contains a capture (`*`), so the translation consumes the whole match and
+        // discards the context around the focus
         assert_eq!(
             re.find("foobarfoo", &env).unwrap(),
-            ResolvedTranslation::new("bar", "bar", 3, TranslationStage::Main, None)
-                .with_offset(3)
-                .with_weight(9)
+            ResolvedTranslation::new("foobarfoo", "bar", 9, TranslationStage::Main, None)
         );
         assert_eq!(
             re.find("fooxarfoo", &env).unwrap(),
-            ResolvedTranslation::new("xar", "xar", 3, TranslationStage::Main, None)
-                .with_offset(3)
-                .with_weight(9)
+            ResolvedTranslation::new("fooxarfoo", "xar", 9, TranslationStage::Main, None)
         );
         assert_eq!(
             re.find("foobarfoobar", &env).unwrap(),
-            ResolvedTranslation::new("bar", "bar", 3, TranslationStage::Main, None)
-                .with_offset(3)
-                .with_weight(9)
+            ResolvedTranslation::new("foobarfoo", "bar", 9, TranslationStage::Main, None)
         );
         assert_eq!(re.find("aaaaaa", &env), None);
         assert_eq!(re.find("bbb", &env), None);

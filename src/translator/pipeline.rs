@@ -218,7 +218,9 @@ mod tests {
         ];
         let pipeline = TranslationPipeline::compile(&rules, Direction::Forward).unwrap();
         assert_eq!(pipeline.translate("o"), "⠕");
-        assert_eq!(pipeline.translate("oύ"), "⠕⠐⠥⠽");
+        // The action contains a capture (`*`), so the pass2 rule consumes the whole match and
+        // discards the cells around the focus
+        assert_eq!(pipeline.translate("oύ"), "⠐⠥");
     }
 
     #[test]

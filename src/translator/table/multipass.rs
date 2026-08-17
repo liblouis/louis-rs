@@ -250,6 +250,75 @@ mod tests {
     }
 
     #[test]
+    fn star_consumes_trailing_context() {
+        // The swap idiom: move the context character before the focus. Per
+        // liblouis, `*` in the action discards everything else that was
+        // matched, so the trailing context must not be emitted again.
+        let rules = [parse_rule("correct [\"a\"]\"b\" \"b\"*")];
+        let ctx = TableContext::default();
+        let transform =
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Pre, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("ab"), "ba");
+        assert_eq!(transform.translate("aa"), "aa");
+        assert_eq!(transform.translate("abab"), "baba");
+    }
+
+    #[test]
+    fn star_consumes_leading_context() {
+        let rules = [parse_rule("correct \"a\"[\"b\"] *\"c\"")];
+        let ctx = TableContext::default();
+        let transform =
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Pre, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("ab"), "bc");
+        assert_eq!(transform.translate("b"), "b");
+    }
+
+    #[test]
+    fn without_star_only_the_focus_is_replaced() {
+        // Without `*` the action replaces the focus and the context stays in
+        // the stream, matching the manual's description of the replacement.
+        let rules = [parse_rule("correct [\"a\"]\"b\" \"x\"")];
+        let ctx = TableContext::default();
+        let transform =
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Pre, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("ab"), "xb");
+    }
+
+    #[test]
+    fn pass2_star_moves_cell_to_the_end() {
+        // The idiom that walks a cell over the rest of the word, as in the
+        // etnahta rule of the Hebrew tables.
+        let rules = [parse_rule("pass2 @23[@1-1] *@23")];
+        let ctx = TableContext::default();
+        let transform =
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Post1, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("⠆⠁⠁"), "⠁⠁⠆");
+    }
+
+    #[test]
+    fn star_does_not_consume_lookback_context() {
+        // Modeled on es-g2.ctb's capital rules (`noback pass2 _$s[%kwx] @5*`):
+        // the space is examined through the `_` rewind, so it lies outside the
+        // matched span and must survive the replacement.
+        use crate::parser::{CharacterClass, CharacterClasses};
+        use crate::translator::swap::SwapClasses;
+        let rules = [parse_rule("pass2 _$s[@13] @5*")];
+        let ctx = TableContext::new(
+            CharacterClasses::default(),
+            CharacterClasses::new(&[(CharacterClass::Space, &['⠀'])]),
+            SwapClasses::default(),
+        );
+        let transform =
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Post1, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("⠀⠅"), "⠀⠐⠅");
+    }
+
+    #[test]
     fn effects() {
         let rules = [
             // when encountering @123 set var 1 to 1

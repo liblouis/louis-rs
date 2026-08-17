@@ -20,6 +20,16 @@ impl Test {
         &self.tests
     }
 
+    /// The number of characters a leading `_N` rewinds over. Those characters were already
+    /// consumed before the rule was selected; the test re-examines them, but they lie outside
+    /// the matched span.
+    pub fn leading_lookback(&self) -> usize {
+        match self.tests.first() {
+            Some(TestInstruction::Lookback { len }) => usize::from(*len),
+            _ => 0,
+        }
+    }
+
     pub fn add_implicit_replace(self) -> Self {
         if !self
             .tests
