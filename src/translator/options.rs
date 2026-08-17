@@ -34,6 +34,13 @@ impl TranslationModes {
     pub fn insert(&mut self, value: TranslationMode) -> bool {
         self.0.insert(value)
     }
+
+    /// Build from a raw bit mask, where bit `i` selects the i-th
+    /// [`TranslationMode`] variant. Returns `None` if any bit does not
+    /// correspond to a defined mode.
+    pub fn from_bits(bits: u32) -> Option<Self> {
+        EnumSet::try_from_u32(bits).map(Self)
+    }
 }
 
 /// Per-call options for a translation.
