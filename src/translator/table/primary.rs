@@ -11,7 +11,7 @@ use crate::{
     hyphenation::HyphenationTable,
     parser::{
         AnchoredRule, Braille, BrailleChars, CharacterClass, CharacterClasses, HasNocross,
-        HasPrecedence, WithClass as ParsedClass, fallback,
+        HasPrecedence, WithClass, fallback,
     },
     translator::{
         CharacterDefinition, ClassConstraint, ResolvedTranslation, Rule, TranslationError,
@@ -375,6 +375,31 @@ impl PrimaryTableBuilder {
 }
 
 impl PrimaryTable {
+    /// Resolves `before CLASS`/`after CLASS` rule modifiers into the trie's
+    /// `ClassConstraint`s. `before` is a lookahead (the character *after* the match must be
+    /// in the class); `after` is a lookbehind (the character *before* the match must be in
+    /// the class).
+    fn resolve_class_constraints(
+        ctx: &TableContext,
+        with_classes: &[WithClass],
+    ) -> Vec<ClassConstraint> {
+        with_classes
+            .iter()
+            .filter_map(|wc| match wc {
+                WithClass::Before { class } => {
+                    let key = CharacterClass::from(class.as_str());
+                    ctx.character_classes.get(&key)?;
+                    Some(ClassConstraint::End(key))
+                }
+                WithClass::After { class } => {
+                    let key = CharacterClass::from(class.as_str());
+                    ctx.character_classes.get(&key)?;
+                    Some(ClassConstraint::Start(key))
+                }
+            })
+            .collect()
+    }
+
     pub fn compile(
         rules: &[AnchoredRule],
         direction: Direction,
@@ -772,23 +797,7 @@ impl PrimaryTable {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
-                    let class_constraints: Vec<ClassConstraint> = with_classes
-                        .iter()
-                        .filter_map(|wc| match wc {
-                            // "before CLASS" keyword → lookahead: char after match must be in class
-                            ParsedClass::Before { class } => {
-                                let key = CharacterClass::from(class.as_str());
-                                ctx.character_classes.get(&key)?;
-                                Some(ClassConstraint::End(key))
-                            }
-                            // "after CLASS" keyword → lookbehind: char before match must be in class
-                            ParsedClass::After { class } => {
-                                let key = CharacterClass::from(class.as_str());
-                                ctx.character_classes.get(&key)?;
-                                Some(ClassConstraint::Start(key))
-                            }
-                        })
-                        .collect();
+                    let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
@@ -827,10 +836,16 @@ impl PrimaryTable {
                         rule,
                     );
                 }
-                Rule::Word { chars, dots, .. } => {
+                Rule::Word {
+                    chars,
+                    dots,
+                    with_classes,
+                    ..
+                } => {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
+                    let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
@@ -838,15 +853,21 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
-                        vec![],
+                        class_constraints,
                         TranslationStage::Main,
                         rule,
                     );
                 }
-                Rule::Begword { chars, dots, .. } => {
+                Rule::Begword {
+                    chars,
+                    dots,
+                    with_classes,
+                    ..
+                } => {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
+                    let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
@@ -854,15 +875,21 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::NotWord)),
                         direction,
                         rule.precedence(),
-                        vec![],
+                        class_constraints,
                         TranslationStage::Main,
                         rule,
                     )
                 }
-                Rule::Midword { chars, dots, .. } => {
+                Rule::Midword {
+                    chars,
+                    dots,
+                    with_classes,
+                    ..
+                } => {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
+                    let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
@@ -870,12 +897,17 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::NotWord)),
                         direction,
                         rule.precedence(),
-                        vec![],
+                        class_constraints,
                         TranslationStage::Main,
                         rule,
                     )
                 }
-                Rule::Partword { chars, dots, .. } => {
+                Rule::Partword {
+                    chars,
+                    dots,
+                    with_classes,
+                    ..
+                } => {
                     // partword fires when preceded OR followed by a letter (i.e. not standalone).
                     // Two insertions cover all non-standalone positions:
                     // 1. preceded by word char (midword + endword)
@@ -883,6 +915,7 @@ impl PrimaryTable {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
+                    let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
@@ -890,7 +923,7 @@ impl PrimaryTable {
                         None,
                         direction,
                         rule.precedence(),
-                        vec![],
+                        class_constraints.clone(),
                         TranslationStage::Main,
                         rule,
                     );
@@ -901,15 +934,21 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::NotWord)),
                         direction,
                         rule.precedence(),
-                        vec![],
+                        class_constraints,
                         TranslationStage::Main,
                         rule,
                     );
                 }
-                Rule::Midendword { chars, dots, .. } => {
+                Rule::Midendword {
+                    chars,
+                    dots,
+                    with_classes,
+                    ..
+                } => {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
+                    let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
@@ -917,15 +956,21 @@ impl PrimaryTable {
                         None,
                         direction,
                         rule.precedence(),
-                        vec![],
+                        class_constraints,
                         TranslationStage::Main,
                         rule,
                     );
                 }
-                Rule::Endword { chars, dots, .. } => {
+                Rule::Endword {
+                    chars,
+                    dots,
+                    with_classes,
+                    ..
+                } => {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
+                    let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
@@ -933,15 +978,21 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
-                        vec![],
+                        class_constraints,
                         TranslationStage::Main,
                         rule,
                     );
                 }
-                Rule::Prfword { chars, dots, .. } => {
+                Rule::Prfword {
+                    chars,
+                    dots,
+                    with_classes,
+                    ..
+                } => {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
+                    let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     // a prfword is basically syntactic sugar for a word rule combined with an
                     // endword rule. So just make the two appropriate insertions in the trie
                     builder.get_trie_mut(rule).insert(
@@ -951,7 +1002,7 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
-                        vec![],
+                        class_constraints.clone(),
                         TranslationStage::Main,
                         rule,
                     );
@@ -962,15 +1013,21 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
-                        vec![],
+                        class_constraints,
                         TranslationStage::Main,
                         rule,
                     );
                 }
-                Rule::Sufword { chars, dots, .. } => {
+                Rule::Sufword {
+                    chars,
+                    dots,
+                    with_classes,
+                    ..
+                } => {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
+                    let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     // a sufword is basically syntactic sugar for a word rule combined with an
                     // begword rule. So just make the two appropriate insertions in the trie
                     builder.get_trie_mut(rule).insert(
@@ -980,7 +1037,7 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::Word)),
                         direction,
                         rule.precedence(),
-                        vec![],
+                        class_constraints.clone(),
                         TranslationStage::Main,
                         rule,
                     );
@@ -991,15 +1048,21 @@ impl PrimaryTable {
                         None,
                         direction,
                         rule.precedence(),
-                        vec![],
+                        class_constraints,
                         TranslationStage::Main,
                         rule,
                     );
                 }
-                Rule::Begmidword { chars, dots, .. } => {
+                Rule::Begmidword {
+                    chars,
+                    dots,
+                    with_classes,
+                    ..
+                } => {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
+                    let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
@@ -1007,7 +1070,7 @@ impl PrimaryTable {
                         Some(Transition::End(Boundary::NotWord)),
                         direction,
                         rule.precedence(),
-                        vec![],
+                        class_constraints,
                         TranslationStage::Main,
                         rule,
                     );

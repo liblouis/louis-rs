@@ -631,6 +631,7 @@ pub enum Rule {
         chars: String,
         dots: Braille,
         constraints: Constraints,
+        with_classes: Vec<WithClass>,
     },
     Syllable {
         chars: String,
@@ -652,41 +653,49 @@ pub enum Rule {
         chars: String,
         dots: Braille,
         constraints: Constraints,
+        with_classes: Vec<WithClass>,
     },
     Prfword {
         chars: String,
         dots: Braille,
         constraints: Constraints,
+        with_classes: Vec<WithClass>,
     },
     Begword {
         chars: String,
         dots: Braille,
         constraints: Constraints,
+        with_classes: Vec<WithClass>,
     },
     Begmidword {
         chars: String,
         dots: Braille,
         constraints: Constraints,
+        with_classes: Vec<WithClass>,
     },
     Midword {
         chars: String,
         dots: Braille,
         constraints: Constraints,
+        with_classes: Vec<WithClass>,
     },
     Midendword {
         chars: String,
         dots: Braille,
         constraints: Constraints,
+        with_classes: Vec<WithClass>,
     },
     Endword {
         chars: String,
         dots: Braille,
         constraints: Constraints,
+        with_classes: Vec<WithClass>,
     },
     Partword {
         chars: String,
         dots: Braille,
         constraints: Constraints,
+        with_classes: Vec<WithClass>,
     },
     Exactdots {
         chars: String,
@@ -2090,6 +2099,7 @@ impl<'a> RuleParser<'a> {
                     chars: self.chars()?,
                     dots: self.dots()?,
                     constraints,
+                    with_classes: classes,
                 }
             }
             Opcode::Syllable => {
@@ -2124,41 +2134,49 @@ impl<'a> RuleParser<'a> {
                 chars: self.chars()?,
                 dots: self.dots()?,
                 constraints,
+                with_classes: classes,
             },
             Opcode::Prfword => Rule::Prfword {
                 chars: self.chars()?,
                 dots: self.dots()?,
                 constraints,
+                with_classes: classes,
             },
             Opcode::Begword => Rule::Begword {
                 chars: self.chars()?,
                 dots: self.dots()?,
                 constraints,
+                with_classes: classes,
             },
             Opcode::Begmidword => Rule::Begmidword {
                 chars: self.chars()?,
                 dots: self.dots()?,
                 constraints,
+                with_classes: classes,
             },
             Opcode::Midword => Rule::Midword {
                 chars: self.chars()?,
                 dots: self.dots()?,
                 constraints,
+                with_classes: classes,
             },
             Opcode::Midendword => Rule::Midendword {
                 chars: self.chars()?,
                 dots: self.dots()?,
                 constraints,
+                with_classes: classes,
             },
             Opcode::Endword => Rule::Endword {
                 chars: self.chars()?,
                 dots: self.dots()?,
                 constraints,
+                with_classes: classes,
             },
             Opcode::Partword => Rule::Partword {
                 chars: self.chars()?,
                 dots: self.dots()?,
                 constraints,
+                with_classes: classes,
             },
             Opcode::Exactdots => {
                 fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
