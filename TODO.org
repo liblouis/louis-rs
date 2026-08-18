@@ -1,5 +1,6 @@
-* Todo [16/23]
+* Todo [17/24]
 - [ ] Move the display tables into the Pipeline
+- [ ] Implement the ~syllable~ opcode with boundary checking
 - [X] implement "libhyphen"
   - implemented natively in ~src/hyphenation.rs~, parsing liblouis's own
     ~.dic~ hyphenation-pattern format directly (no external crate, no
@@ -31,7 +32,7 @@
   - [X] Emphasis indication
 - [X] Typeforms
 - [ ] Cursor handling
-- [-] Hyphenation
+- [X] Hyphenation
   - previously delegated to the [[https://docs.rs/hyphenation/latest/hyphenation/][hyphenation crate]]; now implemented
     natively (see "implement libhyphen" above and ~src/hyphenation.rs~)
   - [X] test it -- unit-tested and verified against liblouis's full yaml
