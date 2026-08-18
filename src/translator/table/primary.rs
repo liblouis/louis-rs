@@ -810,6 +810,27 @@ impl PrimaryTable {
                         rule,
                     );
                 }
+                // A syllable is an unconditional substitution, like `always`. However it also
+                // restricts other contractions from crossing a syllable's boundaries, which is
+                // not implemented here.
+                //
+                // TODO: Implement the cross-boundary restriction.
+                Rule::Syllable { chars, dots } => {
+                    let dots = ctx
+                        .character_definitions()
+                        .braille_to_unicode(dots, chars)?;
+                    builder.get_trie_mut(rule).insert(
+                        chars,
+                        &dots,
+                        None,
+                        None,
+                        direction,
+                        rule.precedence(),
+                        vec![],
+                        TranslationStage::Main,
+                        rule,
+                    );
+                }
                 Rule::Begcomp { dots, .. } => {
                     builder
                         .computer_braille_indicator
