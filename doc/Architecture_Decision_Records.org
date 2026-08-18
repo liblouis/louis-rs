@@ -171,6 +171,115 @@ reasons already documented in this file).
 - [[https://github.com/liblouis/liblouis/blob/master/liblouis/lou_translateString.c][liblouis lou_translateString.c]] — ~CAPSEMPH~/~capsletterDefined~,
   the per-position re-entrancy this ADR is about
 
+* DRAFT Unify word/number-boundary checks onto class-constraint lookaround
+- Deciders :: CE
+- Date :: [2026-08-18 Di]
+
+** Context and Problem Statement
+
+~midword ! ⠠⠖~ fires on an isolated ~"!"~ with nothing around it,
+producing ~⠠⠖~ instead of ~⠖~. Cause: ~Rule::Midword~ compiles to
+~Boundary::NotWord~ transitions, evaluated by
+~is_word_start~/~is_word_end~. ~is_word_start~ gates on ~is_word(c)~
+before ever consulting the true preceding character, so for a rule
+whose own text isn't a letter, the gate fails and the check
+degenerates to "always true" regardless of what actually precedes the
+match — the true neighbor is never consulted. Correct by accident for
+ordinary letter-based rules (gate always passes), wrong for
+punctuation.
+
+liblouis itself computes ~beforeAttributes~/~afterAttributes~ from
+~input->chars[pos-1]~ and ~input->chars[pos+length]~. Every
+word/number opcode reduces to one shape, "does the real neighbor's
+attributes intersect a required set", differing only in which set
+(Letter, Space, Punctuation, Digit, SeqDelim):
+
+| Opcode       | before                            | after                             | combine |
+|--------------+-----------------------------------+-----------------------------------+---------|
+| ~begword~    | Space,Punctuation                 | Letter                            | AND     |
+| ~begmidword~ | Letter,Space,Punctuation          | Letter                            | AND     |
+| ~midword~    | Letter                            | Letter                            | AND     |
+| ~midendword~ | Letter                            | Letter,Space,Punctuation          | AND     |
+| ~endword~    | Letter                            | Space,Punctuation                 | AND     |
+| ~partword~   | Letter                            | Letter                            | *OR*    |
+| ~sufword~    | Space,Punctuation,SeqDelim        | Space,Letter,Punctuation,SeqDelim | AND     |
+| ~prfword~    | Space,Letter,Punctuation,SeqDelim | Space,Punctuation,SeqDelim        | AND     |
+| ~begnum~     | Space,Punctuation                 | Digit                             | AND     |
+| ~midnum~     | Digit                             | Digit                             | AND     |
+| ~endnum~     | Digit                             | —                                 | —       |
+
+liblouis is fine-grained and table-driven (most sides are a union of
+classes, not one "word-ness" bit). Our ~Boundary~ enum's bug is
+checking the wrong pair (neighbor *and* the rule's own edge character)
+instead of the neighbor alone.
+
+An enhanced ~Boundary~ checking only the real neighbor would be
+sufficient — and structurally identical to the ~ClassConstraint~/
+~StartClass~/~EndClass~ mechanism already used for ~before~/~after~
+(the "Handle word boundaries" ADR already flags this reuse). The one
+gap shared by both mechanisms today: most opcodes need a class *union*
+(~Space,Punctuation~ etc.), which neither expresses directly —
+~Boundary~ hardcodes one variant per union, ~ClassConstraint~ only
+ANDs.
+
+Not checked yet: whether ~Boundary::Number~/~WordNumber~/
+~NumberWord~/~Punctuation~/~WordPunctuation~/~PunctuationWord~/
+~AfterSpaceOrPunct~ (~begnum~/~midnum~/~prepunc~/~postpunc~/others)
+share the same bug — plausible, unconfirmed.
+
+** Decision Drivers
+
+- Don't maintain two differently-coded mechanisms for the same
+  non-consuming-lookaround idea
+- Fix the actual bug (wrong pair of characters checked), not just the
+  one opcode with a failing test
+- Minimize regression risk: most passing tests exercise letter-based
+  rules, where the current checks already agree with liblouis
+- Reuse ~ClassConstraint~ (already general, already wired to a real
+  liblouis feature) over inventing a parallel construct
+
+** Considered Options
+
+1. *Narrow fix only* — fix ~midword~ alone via ad hoc
+   ~class_constraints~, leave ~Boundary~ and the rest of the family
+   as-is. Minimal and safe; leaves the same bug live in ~begword~/
+   ~endword~/~begmidword~/~midendword~/~partword~.
+
+2. *Fix the whole word/number family* — re-express every opcode
+   above as ~ClassConstraint~s with its correct set, retiring
+   ~is_word_start~/~is_word_end~ for these opcodes. Needs class-union
+   support first. Other ~Boundary~ variants stay as-is until audited.
+
+3. *Full consolidation* — add class-union support, re-express every
+   ~Boundary~ variant as class-constraints, delete ~Boundary~
+   entirely. Largest option; needs every remaining variant audited
+   against the C source first.
+
+4. *Status quo* — no change beyond Bug B's narrow fix; leave the
+   wider question open.
+
+** Decision Outcome
+
+Not yet decided. Leaning toward option 3 — the decision drivers argue
+for a single mechanism, not a partially-consolidated one, and there's
+little value in leaving ~Boundary~'s Number/Punctuation variants in
+place if they turn out to share the same bug. Blocked on: adding
+class-union support to ~ClassConstraint~, and auditing the remaining
+~Boundary~ variants against the C source (both currently unscoped).
+
+** Links
+
+- [[https://github.com/liblouis/liblouis/blob/master/liblouis/lou_translateString.c][liblouis lou_translateString.c]] — ~setBefore~/~setAfter~ and the
+  per-opcode attribute switch
+- ~src/parser/character_class.rs~ — ~is_word_start~, ~is_word_end~
+- ~src/translator/trie.rs~ — ~Boundary~, ~ClassConstraint~,
+  ~Transition::StartClass~/~EndClass~
+- [[*ACCEPTED Handle word boundaries][ADR: Handle word boundaries]] — chose non-consuming trie
+  transitions, already noting the ~before~/~after~ generalization
+  this ADR proposes finishing
+- Related to :: the capsletter/begcapsword ADR above — a second case
+  this session of liblouis being cleaner than our encoding of it
+
 * DRAFT Normalize input text and translation rules to a canonical Unicode form
 - Deciders :: CE
 - Date :: [2026-06-23 Di]
