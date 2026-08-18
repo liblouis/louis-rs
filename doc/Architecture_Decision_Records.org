@@ -7,6 +7,170 @@
 
 #+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
 
+* DRAFT Isolated single-letter capitalization: capsletter vs. begcapsword tier selection
+- Deciders :: CE
+- Date :: [2026-08-18 Di]
+
+** Context and Problem Statement
+
+~de-g0-detailed.utb~ fails 62/77 forward tests in
+~de-g0-detailed-specs.yaml~ by leaking a stray Private Use Area
+codepoint: ~"A"~ produces ~⠨\x{f1200}⠁~ instead of ~⠘⠁~. Trace:
+
+#+begin_example
+1 │      │ ⠨  │ capsletter ⠨
+2 │      │ 󱈀  │ context `[]$U~ 󱈀
+3 │ A    │ ⠁  │ base uppercase A a
+#+end_example
+
+The table declares ~capsletter 46~ (⠨), but the German Systematik
+wants dots 45 (⠘, same as ~begcapsword 45~) for an isolated capital.
+liblouis's ~capsletter~ opcode takes one dot pattern with no way to
+special-case "unless this letter is also a whole word/segment", so
+the table works around it (~de-g0-core.uti:665-675~, comment inline):
+
+#+begin_example
+# According to the Systematik single letter capitals are to be
+# announced with 45. This is not supported by liblouis so we use a
+# context rule to mark those places and fix them later in a pass2 rule below
+noback context `[]$U~ @ad
+noback context !$U[]$U!$l @ad
+noback pass2 @46-ad-46 @45
+#+end_example
+
+A zero-width ~context~ rule stamps a virtual-dot marker (~@ad~) after
+an isolated capital not followed by a letter; ~pass2~ collapses the
+literal sequence /46, ad, 46/ into /45/. This only works because
+liblouis's real per-position loop, after inserting the zero-width
+marker, revisits the same position and its independent generic
+capsletter check (~CAPSEMPH~, ~lou_translateString.c~) fires again —
+coincidentally producing the second ~46~ the ~pass2~ rule expects. Two
+unrelated mechanisms colliding at one position by accident, not a
+documented feature. The same hack shape recurs for numeric indication
+in the same table (~"'56"~/~".303"~ leak two other PUA codepoints the
+same way).
+
+Our indication architecture (see [[*ACCEPTED Pre-compute indication events before translation][ADR: Pre-compute indication events
+before translation]]) computes capsletter/begcapsword placement in one
+immutable pass /before/ translation, independent of the ~context~
+engine. Confirmed our ~pass2~ engine correctly collapses a genuine
+~46-ad-46~ sequence when one is actually present, so the gap is
+upstream: our precompute never emits the second ~46~, so the marker
+leaks through unconverted.
+
+*** A tempting but empirically false generalization
+
+~"kW kVA hPa"~ expects ~⠅⠘⠺ ⠅⠘⠧⠁ ⠓⠨⠏⠁~: the lone capital in ~"kW"~
+(word boundary follows) gets /45/, the lone capital in ~"hPa"~ (more
+letters follow) gets /46/ — exactly the ~needs_close~ signal
+~upper_runs()~ already computes. Looked like the fix: ~emit_whole_word()~
+and ~emit_run()~ (~src/translator/indication/uppercase.rs~) both check
+~letter_count == 1~ and jump to ~capsletter~ before ever consulting
+~begcapsword~/~needs_close~; reordering so a run that doesn't need
+closing prefers ~begcapsword~ regardless of length looked like a
+strict generalization.
+
+Prototyped and run against the full corpus (2,221,658 tests) — *wrong*
+as a general rule. Regressed dozens of unrelated tables, with zero
+gain on the target file (the leak just changed shape, since ~pass2~'s
+precondition no longer matches once the main stage emits ~45~ directly):
+
+| Table                          | Before | After  | Change  |
+|---------------------------------+--------+--------+---------|
+| ~tr.yaml~                       |  60.4% |  45.3% | −15.1pp |
+| ~en-ueb-symbols_harness.yaml~   |  99.5% |  68.5% | −31.0pp |
+| ~eo-g1_harness.yaml~            |  99.6% |  78.6% | −21.0pp |
+| ~ga-g1_harness.yaml~            | 100.0% |  88.2% | −11.8pp |
+| ~el-forward.yaml~               |  87.1% |  62.4% | −24.7pp |
+| ~pl-g1.yaml~                    |  90.1% |  72.3% | −17.8pp |
+| ~de-g0-detailed-specs.yaml~     |  63.4% |  63.4% |    flat |
+
+Every regressed table defines ~begcapsword~ as the /same/ cell as
+~capsletter~, just doubled (e.g. ~tr-g2.ctb~: ~capsletter 6~,
+~begcapsword 6-6~) — capsletter-for-isolated-singles is the right
+default almost everywhere. The German table is a genuine outlier:
+its 46-vs-45 values are unrelated, and it specifically wants the
+word-tier form for a standalone letter. A few other shipped tables
+share that "unrelated, not doubled" shape (~bg.utb~, ~da-dk-g16~/
+~g26~, ~lt-6dot.utb~, ~mk-g1.utb~, ~nl-NL-g0.utb~, ~no-no-g0.utb~,
+~ru-comp6.utb~, ~sl-si-g1.utb~, ~vi-vn-g0/g1/g2~) and may or may not
+have the same real need — untested, none of their suites exercise an
+isolated single-letter word.
+
+** Decision Drivers
+
+- Replicating liblouis's re-entrant quirk is explicitly ruled out
+- Any fix must not regress the tables that correctly rely on
+  capsletter-first behavior for isolated single letters
+- Prefer addressing the actual capability gap (liblouis's opcode
+  grammar can't express a per-table exception here) over a
+  table-specific special case hardcoded into the engine
+- A clean mechanism would make the German ~context~/~pass2~ hack
+  unnecessary, worth proposing for removal upstream (the author's
+  employer is a liblouis co-maintainer) — but that's a follow-on
+  action gated on a real fix landing, not a substitute for one
+
+** Considered Options
+
+1. *Replicate the liblouis quirk* — make ~context~ zero-width
+   insertions retrigger the per-position indicator check. Ruled out:
+   this is the problem the table works around, not a solution, and
+   reintroduces the re-entrant state our precomputed architecture
+   avoids.
+
+2. *Blanket engine change* — prefer ~begcapsword~ over ~capsletter~
+   whenever a run doesn't need closing, regardless of length.
+   Prototyped, empirically falsified (see table above). Ruled out.
+
+3. *Status quo* — accept as a known limitation. Zero risk and cost,
+   doesn't solve the goal.
+
+4. *New louis-rs table extension* — a declarative opt-in signal (e.g.
+   ~#-single-letter-caps-tier: begcapsword~) letting a table request
+   the word tier for non-closing single-letter runs explicitly. Zero
+   blast radius on tables that don't opt in; lets the German hack be
+   deleted upstream once implemented. Not liblouis-compatible unless
+   liblouis adopts the same directive.
+
+5. *Structural fix: interleave context-pattern application with
+   indicator computation* — liblouis's loop applies ~context~ rules
+   and the indicator check in the same per-position pass, which is why
+   they can interact at all. Our architecture deliberately keeps them
+   separate (see the pre-compute ADR). This option would let a
+   zero-width ~context~ insertion influence indicator selection at
+   that position — modeling the real interaction the table's rule
+   wants, not liblouis's specific double-firing. Not yet scoped: needs
+   a concrete signal/direction between the two subsystems, and a plan
+   for tables using ~context~/~pass2~ for unrelated purposes.
+
+6. *Upstream table cleanup* — remove the now-superfluous ~context~/
+   ~pass2~ hack (caps and numeric) from ~de-g0-core.uti~ once option 4
+   or 5 lands. Not standalone; depends on one of them landing first.
+
+** Decision Outcome
+
+Not yet decided. Option 2 — the "obvious general fix" — is now known
+wrong. The live choice is between option 3 (accept the gap), option 4
+(a new declarative extension: scoped and low-risk, diverges from
+strict liblouis compatibility), and option 5 (a deeper architectural
+change: unscoped, would make the feature compose the way the table
+author intended, but touches a boundary deliberately decoupled for
+reasons already documented in this file).
+
+** Links
+
+- [[*ACCEPTED Pre-compute indication events before translation][ADR: Pre-compute indication events before translation]] — the
+  architecture this problem sits on top of
+- ~src/translator/indication/uppercase.rs~ — ~emit_whole_word~,
+  ~emit_run~, ~upper_runs~ (the ~needs_close~ signal)
+- ~src/translator/table/multipass.rs~ — verified working correctly in
+  isolation against a synthetic ~46-ad-46 -> 45~ pass2 rule
+- ~/home/eglic/src/liblouis/tables/de-g0-core.uti:665-676~ — the
+  ~context~/~pass2~ workaround and its own comment acknowledging the
+  liblouis limitation
+- [[https://github.com/liblouis/liblouis/blob/master/liblouis/lou_translateString.c][liblouis lou_translateString.c]] — ~CAPSEMPH~/~capsletterDefined~,
+  the per-position re-entrancy this ADR is about
+
 * DRAFT Normalize input text and translation rules to a canonical Unicode form
 - Deciders :: CE
 - Date :: [2026-06-23 Di]
