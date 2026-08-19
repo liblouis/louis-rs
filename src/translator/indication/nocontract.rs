@@ -14,9 +14,10 @@
 //! indicator](crate::translator::indication::lettersign::Indicator). In liblouis they do not seem
 //! to have exactly the same behaviour. Find a way to merge them.
 
+use crate::parser::CharacterClass;
 use crate::translator::TranslationStage;
 use crate::translator::table::TableContext;
-use crate::translator::trie::{Boundary, Transition};
+use crate::translator::trie::Transition;
 use crate::{
     parser::{AnchoredRule, Direction, Precedence},
     translator::{ResolvedTranslation, trie::Trie},
@@ -58,8 +59,14 @@ impl IndicatorBuilder {
                     trie.insert(
                         &contraction,
                         &nocontractsign,
-                        Some(Transition::Start(Boundary::Word)),
-                        Some(Transition::End(Boundary::Word)),
+                        Some(Transition::Start(vec![
+                            CharacterClass::Space,
+                            CharacterClass::Punctuation,
+                        ])),
+                        Some(Transition::End(vec![
+                            CharacterClass::Space,
+                            CharacterClass::Punctuation,
+                        ])),
                         Direction::Forward,
                         Precedence::Default,
                         vec![],

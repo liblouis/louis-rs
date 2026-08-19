@@ -21,7 +21,7 @@ use std::collections::HashSet;
 use crate::parser::CharacterClass;
 use crate::translator::TranslationStage;
 use crate::translator::table::TableContext;
-use crate::translator::trie::{Boundary, Transition};
+use crate::translator::trie::Transition;
 use crate::{
     parser::{AnchoredRule, Direction, Precedence},
     translator::{ResolvedTranslation, trie::Trie},
@@ -71,8 +71,14 @@ impl IndicatorBuilder {
             trie.insert(
                 &contraction,
                 &lettersign,
-                Some(Transition::Start(Boundary::Word)),
-                Some(Transition::End(Boundary::Word)),
+                Some(Transition::Start(vec![
+                    CharacterClass::Space,
+                    CharacterClass::Punctuation,
+                ])),
+                Some(Transition::End(vec![
+                    CharacterClass::Space,
+                    CharacterClass::Punctuation,
+                ])),
                 Direction::Forward,
                 Precedence::Default,
                 vec![],

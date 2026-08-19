@@ -10,32 +10,14 @@ use crate::{
 use super::ResolvedTranslation;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub enum Boundary {
-    Word,
-    NotWord,
-    Number,
-    NumberWord,
-    WordNumber,
-    Punctuation,
-    PunctuationWord,
-    WordPunctuation,
-    /// Checks only the preceding character (space, punctuation, or start of string).
-    /// Unlike the other variants, this is a lookbehind-only condition and does not
-    /// encode a two-class transition in the usual XY naming convention.
-    AfterSpaceOrPunct,
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Transition {
     Character(char),
-    Start(Boundary),
-    End(Boundary),
-    /// Non-consuming lookbehind: the preceding character must be in this class.
+    /// Non-consuming lookbehind: the preceding character must be in these classes.
     /// Inserted at the start of the path (before character transitions).
-    StartClass(CharacterClass),
-    /// Non-consuming lookahead: the character immediately after the match must be in this class.
+    Start(Vec<CharacterClass>),
+    /// Non-consuming lookahead: the character immediately after the match must be in these classes.
     /// Inserted at the end of the path (after character transitions).
-    EndClass(CharacterClass),
+    End(Vec<CharacterClass>),
     Any,
 }
 
@@ -68,10 +50,6 @@ impl TrieNode {
 
     fn any_transition(&self) -> Option<&TrieNode> {
         self.transitions.get(&Transition::Any)
-    }
-
-    fn boundary_transition(&self, t: &Transition) -> Option<&TrieNode> {
-        self.transitions.get(t)
     }
 }
 
@@ -154,7 +132,7 @@ impl Trie {
                 length += 1;
                 current_node = current_node
                     .transitions
-                    .entry(Transition::StartClass(class.clone()))
+                    .entry(Transition::Start(vec![class.clone()]))
                     .or_default();
             }
         }
@@ -182,7 +160,7 @@ impl Trie {
                 length += 1;
                 current_node = current_node
                     .transitions
-                    .entry(Transition::EndClass(class.clone()))
+                    .entry(Transition::End(vec![class.clone()]))
                     .or_default();
             }
         }
@@ -254,35 +232,6 @@ impl Trie {
                 ));
             }
         }
-        // TODO: all 12 conditions are evaluated eagerly even when the node has no boundary
-        // branches. Lazy evaluation (closures, check trie first) would be cheaper for the common
-        // case, but needs benchmarks to justify the added complexity.
-        #[rustfmt::skip]
-        let boundary_checks = [
-            (Transition::Start(Boundary::Word),            self.ctx.is_word_start(prev, c)),
-            (Transition::Start(Boundary::NotWord),        !self.ctx.is_word_start(prev, c)),
-            (Transition::End(Boundary::Word),              self.ctx.is_word_end(prev, c)),
-            (Transition::End(Boundary::NotWord),          !self.ctx.is_word_end(prev, c)),
-            (Transition::End(Boundary::WordNumber),        self.ctx.is_word_number(prev, c)),
-            (Transition::Start(Boundary::NumberWord),      self.ctx.is_number_word(prev, c)),
-            (Transition::Start(Boundary::Number),          self.ctx.is_number_start(prev, c)),
-            (Transition::End(Boundary::Number),            self.ctx.is_number_end(prev, c)),
-            (Transition::Start(Boundary::Punctuation),     self.ctx.is_punctuation_start(prev, c)),
-            (Transition::End(Boundary::Punctuation),       self.ctx.is_punctuation_end(prev, c)),
-            (Transition::Start(Boundary::WordPunctuation),  self.ctx.is_word_punctuation(prev, c)),
-            (Transition::End(Boundary::PunctuationWord),    self.ctx.is_punctuation_word(prev, c)),
-            (Transition::Start(Boundary::AfterSpaceOrPunct), self.ctx.is_after_space_or_punct(prev)),
-        ];
-        for (transition, matches) in &boundary_checks {
-            if *matches && let Some(node) = node.boundary_transition(transition) {
-                matching_rules.extend(self.find_translations_from_node(
-                    input,
-                    prev,
-                    node,
-                    match_length,
-                ));
-            }
-        }
         // Class-based non-consuming checks. Iterate only transitions that are class variants to
         // avoid scanning all transitions on every node visit.
         // FIXME: `self.ctx.get(class)` is a HashMap lookup on every traversal. This could be
@@ -291,10 +240,11 @@ impl Trie {
         // TrieNode, or as a sorted Vec<char> in the Transition key).
         for (transition, child_node) in &node.transitions {
             match transition {
-                Transition::StartClass(class) => {
-                    if let Some(set) = self.ctx.get(class)
-                        && prev.is_some_and(|p| set.contains(&p))
-                    {
+                Transition::Start(classes) => {
+                    if classes.iter().any(|class| match prev {
+                        Some(p) => self.ctx.get(class).is_some_and(|set| set.contains(&p)),
+                        None => *class == CharacterClass::Space,
+                    }) {
                         matching_rules.extend(self.find_translations_from_node(
                             input,
                             prev,
@@ -303,10 +253,11 @@ impl Trie {
                         ));
                     }
                 }
-                Transition::EndClass(class) => {
-                    if let Some(set) = self.ctx.get(class)
-                        && c.is_some_and(|ch| set.contains(&ch))
-                    {
+                Transition::End(classes) => {
+                    if classes.iter().any(|class| match c {
+                        Some(ch) => self.ctx.get(class).is_some_and(|set| set.contains(&ch)),
+                        None => *class == CharacterClass::Space,
+                    }) {
                         matching_rules.extend(self.find_translations_from_node(
                             input,
                             prev,
@@ -449,8 +400,14 @@ mod tests {
         trie.insert(
             "a",
             "A",
-            Some(Transition::Start(Boundary::Word)),
-            Some(Transition::End(Boundary::Word)),
+            Some(Transition::Start(vec![
+                CharacterClass::Space,
+                CharacterClass::Punctuation,
+            ])),
+            Some(Transition::End(vec![
+                CharacterClass::Space,
+                CharacterClass::Punctuation,
+            ])),
             Direction::Forward,
             Precedence::Default,
             vec![],
@@ -475,8 +432,11 @@ mod tests {
         trie.insert(
             "foo",
             "FOO",
-            Some(Transition::Start(Boundary::Word)),
-            Some(Transition::End(Boundary::NotWord)),
+            Some(Transition::Start(vec![
+                CharacterClass::Space,
+                CharacterClass::Punctuation,
+            ])),
+            Some(Transition::End(vec![CharacterClass::Letter])),
             Direction::Forward,
             Precedence::Default,
             vec![],
@@ -503,7 +463,7 @@ mod tests {
         trie.insert(
             "foo",
             "FOO",
-            Some(Transition::Start(Boundary::NotWord)),
+            Some(Transition::Start(vec![CharacterClass::Letter])),
             None,
             Direction::Forward,
             Precedence::Default,
@@ -531,8 +491,8 @@ mod tests {
         trie.insert(
             "foo",
             "FOO",
-            Some(Transition::Start(Boundary::NotWord)),
-            Some(Transition::End(Boundary::NotWord)),
+            Some(Transition::Start(vec![CharacterClass::Letter])),
+            Some(Transition::End(vec![CharacterClass::Letter])),
             Direction::Forward,
             Precedence::Default,
             vec![],
@@ -561,8 +521,11 @@ mod tests {
         trie.insert(
             "aaa",
             "A",
-            Some(Transition::Start(Boundary::Word)),
-            Some(Transition::End(Boundary::WordNumber)),
+            Some(Transition::Start(vec![
+                CharacterClass::Space,
+                CharacterClass::Punctuation,
+            ])),
+            Some(Transition::End(vec![CharacterClass::Litdigit])),
             Direction::Forward,
             Precedence::Default,
             vec![],
@@ -590,8 +553,11 @@ mod tests {
         trie.insert(
             "st",
             "S",
-            Some(Transition::Start(Boundary::NumberWord)),
-            Some(Transition::End(Boundary::Word)),
+            Some(Transition::Start(vec![CharacterClass::Litdigit])),
+            Some(Transition::End(vec![
+                CharacterClass::Space,
+                CharacterClass::Punctuation,
+            ])),
             Direction::Forward,
             Precedence::Default,
             vec![],
@@ -619,7 +585,7 @@ mod tests {
         trie.insert(
             "(",
             "[",
-            Some(Transition::Start(Boundary::WordPunctuation)),
+            Some(Transition::Start(vec![CharacterClass::Letter])),
             None,
             Direction::Forward,
             Precedence::Default,
@@ -648,7 +614,7 @@ mod tests {
             "(",
             "[",
             None,
-            Some(Transition::End(Boundary::PunctuationWord)),
+            Some(Transition::End(vec![CharacterClass::Letter])),
             Direction::Forward,
             Precedence::Default,
             vec![],
