@@ -194,19 +194,31 @@ word/number opcode reduces to one shape, "does the real neighbor's
 attributes intersect a required set", differing only in which set
 (Letter, Space, Punctuation, Digit, SeqDelim):
 
-| Opcode       | before                            | after                             | combine |
-|--------------+-----------------------------------+-----------------------------------+---------|
-| ~begword~    | Space,Punctuation                 | Letter                            | AND     |
-| ~begmidword~ | Letter,Space,Punctuation          | Letter                            | AND     |
-| ~midword~    | Letter                            | Letter                            | AND     |
-| ~midendword~ | Letter                            | Letter,Space,Punctuation          | AND     |
-| ~endword~    | Letter                            | Space,Punctuation                 | AND     |
-| ~partword~   | Letter                            | Letter                            | *OR*    |
-| ~sufword~    | Space,Punctuation,SeqDelim        | Space,Letter,Punctuation,SeqDelim | AND     |
-| ~prfword~    | Space,Letter,Punctuation,SeqDelim | Space,Punctuation,SeqDelim        | AND     |
-| ~begnum~     | Space,Punctuation                 | Digit                             | AND     |
-| ~midnum~     | Digit                             | Digit                             | AND     |
-| ~endnum~     | Digit                             | —                                 | —       |
+| Opcode       | before                            | after                             | combine    |
+|--------------+-----------------------------------+-----------------------------------+------------|
+| ~word~       | Space,Punctuation                 | Space,Punctuation                 | AND        |
+| ~begword~    | Space,Punctuation                 | Letter                            | AND        |
+| ~begmidword~ | Letter,Space,Punctuation          | Letter                            | AND        |
+| ~midword~    | Letter                            | Letter                            | AND        |
+| ~midendword~ | Letter                            | Letter,Space,Punctuation          | AND        |
+| ~endword~    | Letter                            | Space,Punctuation                 | AND        |
+| ~partword~   | Letter                            | Letter                            | *OR*       |
+| ~sufword~    | Space,Punctuation,SeqDelim        | Space,Letter,Punctuation,SeqDelim | AND        |
+| ~prfword~    | Space,Letter,Punctuation,SeqDelim | Space,Punctuation,SeqDelim        | AND        |
+| ~begnum~     | Space,Punctuation                 | Digit                             | AND        |
+| ~midnum~     | Digit                             | Digit                             | AND        |
+| ~endnum~     | Digit                             | —                                 | —          |
+| ~decpoint~   | Digit                             | Digit (required)                  | reclassify |
+
+~word~ uses ~Boundary::Word~ in our code, same gate bug and
+same-too-broad-neighbor-set issue as noted below. ~decpoint~ doesn't
+go through ~Boundary~ at all in either engine's sense we've been
+discussing — liblouis reclassifies it to ~midnum~ on the spot if a
+digit precedes; our own ~Decpoint~ arm skips the trie boundary
+mechanism entirely and instead tags the character for the numeric
+indicator/constrainer as if it were a ~midnum~ character. No live bug
+there, just a different existing mechanism — not part of this ADR's
+fix.
 
 liblouis is fine-grained and table-driven (most sides are a union of
 classes, not one "word-ness" bit). Our ~Boundary~ enum's bug is
@@ -222,58 +234,87 @@ gap shared by both mechanisms today: most opcodes need a class *union*
 ~Boundary~ hardcodes one variant per union, ~ClassConstraint~ only
 ANDs.
 
-Not checked yet: whether ~Boundary::Number~/~WordNumber~/
-~NumberWord~/~Punctuation~/~WordPunctuation~/~PunctuationWord~/
-~AfterSpaceOrPunct~ (~begnum~/~midnum~/~prepunc~/~postpunc~/others)
-share the same bug — plausible, unconfirmed.
+~midnum~ and ~endnum~ share the same bug. It only manifests when the
+matched rule's own text shares the class being tested for.
+
+~begnum~ already sidesteps half the problem: its "before" side uses
+~Boundary::AfterSpaceOrPunct~, a genuine lookbehind-only check on the
+real neighbor that never touches ~c~.
+
+Confirmed which opcodes our ~Boundary~ mechanism is actually wired to
+(by reading every ~insert()~ call in ~primary.rs~): twelve of the
+thirteen above (~decpoint~ excepted, per the note), plus four more —
+
+~joinword~, ~lowword~, ~prepunc~ and ~postpunc~ are implemented in
+liblouis via a *scan* (~onlyLettersAhead~, an outward scan) and we
+currently approximate with a plain ~Boundary~ check. No
+single-neighbor class lookup expresses a scan — these four need their
+own follow-up.
 
 ** Decision Drivers
 
 - Don't maintain two differently-coded mechanisms for the same
   non-consuming-lookaround idea
-- Fix the actual bug (wrong pair of characters checked), not just the
-  one opcode with a failing test
+- Fix the actual bug (wrong pair of characters checked) *and* the
+  per-opcode set precision, not just the one opcode with a failing
+  test
 - Minimize regression risk: most passing tests exercise letter-based
-  rules, where the current checks already agree with liblouis
-- Reuse ~ClassConstraint~ (already general, already wired to a real
-  liblouis feature) over inventing a parallel construct
+  rules
+- Reuse ~ClassConstraint~ if possible
+- Don't conflate this with the four scan-based opcodes
+  (~joinword~/~lowword~/~prepunc~/~postpunc~), which need a different
+  fix entirely
 
 ** Considered Options
 
 1. *Narrow fix only* — fix ~midword~ alone via ad hoc
    ~class_constraints~, leave ~Boundary~ and the rest of the family
-   as-is. Minimal and safe; leaves the same bug live in ~begword~/
-   ~endword~/~begmidword~/~midendword~/~partword~.
+   as-is. Minimal and safe; leaves the same bug live in the other
+   eleven single-neighbor opcodes.
 
-2. *Fix the whole word/number family* — re-express every opcode
-   above as ~ClassConstraint~s with its correct set, retiring
-   ~is_word_start~/~is_word_end~ for these opcodes. Needs class-union
-   support first. Other ~Boundary~ variants stay as-is until audited.
+2. *Fix the whole single-neighbor family* — re-express all twelve
+   opcodes above as ~ClassConstraint~s with their correct sets,
+   retiring ~is_word_start~/~is_word_end~/~is_number_start~/
+   ~is_number_end~ for these opcodes. Needs class-union support
+   first. The four scan-based opcodes are untouched either way.
 
 3. *Full consolidation* — add class-union support, re-express every
-   ~Boundary~ variant as class-constraints, delete ~Boundary~
-   entirely. Largest option; needs every remaining variant audited
-   against the C source first.
+   remaining ~Boundary~ variant (Punctuation/WordPunctuation/
+   PunctuationWord, used by the scan-based opcodes) as
+   class-constraints too, delete ~Boundary~ entirely. Doesn't
+   actually fix the scan-based opcodes' real gap (they'd still be
+   approximations, just with a different-shaped primitive
+   underneath) — so this buys mechanism uniformity, not correctness,
+   for those four.
 
 4. *Status quo* — no change beyond Bug B's narrow fix; leave the
    wider question open.
 
 ** Decision Outcome
 
-Not yet decided. Leaning toward option 3 — the decision drivers argue
-for a single mechanism, not a partially-consolidated one, and there's
-little value in leaving ~Boundary~'s Number/Punctuation variants in
-place if they turn out to share the same bug. Blocked on: adding
-class-union support to ~ClassConstraint~, and auditing the remaining
-~Boundary~ variants against the C source (both currently unscoped).
+Not yet decided. Leaning toward option 2 now that the scope is
+clearer: it fixes every confirmed and latent instance of the actual
+bug, and option 3's extra step (retiring ~Boundary~ for the scan-based
+opcodes too) doesn't fix anything further for them — they need a real
+scan implementation regardless, tracked separately. Blocked on adding
+class-union support to ~ClassConstraint~ (unscoped).
 
 ** Links
 
-- [[https://github.com/liblouis/liblouis/blob/master/liblouis/lou_translateString.c][liblouis lou_translateString.c]] — ~setBefore~/~setAfter~ and the
-  per-opcode attribute switch
-- ~src/parser/character_class.rs~ — ~is_word_start~, ~is_word_end~
+- [[https://github.com/liblouis/liblouis/blob/master/liblouis/lou_translateString.c][liblouis lou_translateString.c]] — ~for_selectRule~ in full: the
+  generic ~before~/~after~/~nocross~ layer, then the per-opcode
+  switch (single-neighbor checks, the scan-based opcodes'
+  ~onlyLettersAhead~/~onlyLettersBehind~, ~largesign~'s
+  reject-or-reclassify pattern, ~match~/~context~'s own pattern
+  language, ~repword~'s repetition algorithm) — surveyed in full to
+  answer "is it always a before/after class check" (no)
+- ~src/parser/character_class.rs~ — ~is_word_start~/~is_word_end~
+  (the bug) and ~is_number_start~/~is_number_end~ (the same bug,
+  latent), ~is_after_space_or_punct~ (the already-correct shape)
 - ~src/translator/trie.rs~ — ~Boundary~, ~ClassConstraint~,
   ~Transition::StartClass~/~EndClass~
+- ~src/translator/table/primary.rs~ — every ~Boundary~-using
+  ~insert()~ call, confirming exactly which opcodes are affected
 - [[*ACCEPTED Handle word boundaries][ADR: Handle word boundaries]] — chose non-consuming trie
   transitions, already noting the ~before~/~after~ generalization
   this ADR proposes finishing
