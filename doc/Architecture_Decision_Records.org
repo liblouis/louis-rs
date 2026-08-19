@@ -1637,6 +1637,203 @@ still have been necessary regardless of the matching backend.
   the same "independent per-rule precedence" problem from a different
   angle
 
+* DRAFT Keep ~ThreadList~'s plain cleared ~Vec<bool>~ instead of pooling ~CompiledRegexp::find~'s scratch state
+- Deciders :: CE
+- Date :: [2026-08-19 Mi]
+
+** Context and Problem Statement
+
+Profiling a full liblouis-test-suite run showed around 41% of total
+self-time going to the memory allocator, traced to
+~CompiledRegexp::find~: every call allocates two fresh ~ThreadList~s
+(the Pike-VM "current"/"next" thread sets), each carrying a ~seen:
+Vec<bool>~ sized to the compiled program's instruction count, to dedup
+epsilon-closure visits within ~add_thread~. Since ~find~/~is_match~
+back every ~match~/~context~ rule check and run at every input
+position across millions of translation calls, this
+allocate-and-discard cycle dominated the profile.
+
+Commit 3d0ebac6 ("Simplify ThreadList's visited-set to a plain cleared
+Vec<bool>") replaced an earlier generation-counter ~seen: Vec<u32>~
+with a plain ~Vec<bool>~ cleared via ~fill(false)~ each step,
+reasoning that the O(1)-vs-O(n) clear was "a constant-factor saving on
+top of a per-step cost the algorithm already pays elsewhere."
+Revisiting the profile showed that reasoning undersold the trick's
+real value: the generational scheme isn't just about avoiding an O(n)
+clear per step -- it's what makes it cheap to *reuse the same
+~ThreadList~ across many ~find~ calls*, not just across steps within
+one call. A pooled plain ~Vec<bool>~ would still need an O(n)
+~fill(false)~ on every reuse to stay correct; that cost is separate
+from, and much smaller than, the allocation cost this ADR addresses
+(~2.4% ~memset~ vs. 35%+ allocator calls in the profile), but
+conflating the two delayed noticing the bigger win.
+
+** Decision Drivers
+
+- ~find~/~is_match~ are called an enormous number of times during a
+  single translation run (millions, per the profile) -- any per-call
+  fixed cost dominates.
+- The same compiled ~CompiledRegexp~ can be matched concurrently
+  against different input from multiple ~rayon~ worker threads, so any
+  reused scratch state must not require synchronization/locking, and
+  must stay correct under concurrent, independent use.
+- Capture positions (~CaptureStart~/~CaptureEnd~) and runtime-
+  conditional epsilon edges (~VariableEqual~/~NotVariableEqual~ on
+  ~Environment~, ~AssertEnd~/~AssertMoreInput~ on input position) are
+  inherently per-call, per-position data -- whatever the fix, it can't
+  assume the epsilon-closure computation itself can be hoisted to
+  compile time.
+- Minimize code complexity/invasiveness given this is a hot-path fix,
+  not a rewrite: ~find~'s own control flow (the ~while~ loop,
+  ~add_thread~ recursion, ~mem::swap~) should stay unchanged.
+
+** Considered Options
+
+1. *Status quo* -- ~Vec<bool>~ ~seen~, fresh ~ThreadList::new()~
+   allocated on every ~find~ call.
+2. *Generational ~seen~ + per-thread pool* -- revert to
+   ~seen: Vec<u32>~ stamped with a per-~ThreadList~ generation counter
+   (bumped, not cleared, each step), and pool ~(current, next)~ pairs
+   in a ~thread_local!~ ~RefCell<Vec<...>>~, checked out at the start
+   of ~find~ and returned at the end.
+3. *Precompute epsilon closures at compile time* -- eliminate
+   ~add_thread~'s recursive walk by precomputing, per instruction, the
+   reachable consuming/~Match~ instructions.
+4. *Convert the NFA to a DFA* -- subset-construct the compiled program
+   into a DFA with O(1) per-byte transitions and no thread-list/
+   epsilon-closure bookkeeping at all.
+
+** Decision Outcome
+
+Chosen option for now: *Status quo* (option 1).
+
+Option 2 (generational ~seen~ + per-thread pool) was fully
+implemented, tested, and benchmarked this session before being
+reverted in favor of keeping the status quo. It genuinely fixed the
+bottleneck the profile identified: ~find~'s own body stayed untouched,
+~ThreadList~ gained a ~generation: u32~ field and an
+~ensure_capacity~ method, and a ~thread_local!~ ~RefCell<Vec<...>>~
+pool replaced the two ~ThreadList::new()~ calls at the top of ~find~
+and a push at the end -- mirroring how RE2's ~NFA~ class and Rust's
+~regex-automata~ (~Cache~/~create_cache()~) solve the identical
+tension between reusing scratch state and staying correct under
+concurrent use of one compiled program. It was verified correct (all
+unit tests, and the 2,221,196-test liblouis suite via ~check~
+producing identical pass/fail/xfail percentages before and after) and
+measured a genuine 9--14% end-to-end ~Translator::translate~ speedup
+via the new ~benches/translate.rs~ criterion benchmark against
+~en-ueb-g2.ctb~ (word/sentence/paragraph inputs, p < 0.05).
+
+Despite that, the decision is to keep the status quo for now and defer
+the pool. The benchmark stays in the tree specifically so this trade
+-- a real, measured win against a small but real increase in
+~regexp.rs~'s state (a pooled allocation, a generation counter, a
+wraparound-reset branch) -- can be revisited on real data without
+re-deriving the baseline, whenever regexp-engine performance becomes a
+priority again.
+
+Options 3 and 4 were both discussed and set aside for now, not
+rejected outright, independent of the option 1 vs. 2 reversal above:
+
+- Option 3 (precomputed closures) only partially applies: ~Jump~/
+  ~Split~ chains are static and could be precomputed, but
+  ~VariableEqual~/~NotVariableEqual~ (gated on ~Environment~) and
+  ~AssertEnd~/~AssertMoreInput~ (gated on input position) are runtime-
+  conditional, so ~add_thread~ would still need to walk those edges
+  live every step -- and it's orthogonal to this fix anyway:
+  precomputing reachability doesn't remove the need for *somewhere to
+  hold the current step's active thread set*, so the pool would still
+  be needed regardless.
+- Option 4 (DFA) can't preserve per-thread capture positions --
+  collapsing NFA states into DFA states loses exactly the
+  ~(usize, usize)~ capture span every ~match~/~context~ rule relies on
+  to build its ~ResolvedTranslation~. Production engines that use a
+  DFA (RE2, Rust's ~regex-automata~) do so only for a fast existence/
+  boundary check, falling back to NFA simulation specifically to
+  extract captures -- adopting that would mean building and
+  maintaining two execution models, a much larger investment than the
+  size of this fix warrants right now.
+
+*** Positive Consequences
+
+- Code stays exactly as simple as before -- no ~thread_local!~ pool, no
+  generation counter, no wraparound edge case to reason about, in a
+  hot-path module that already owns its share of correctness
+  complexity (see the sibling VM-choice ADR's own list of regexp bugs
+  found this codebase had to fix itself).
+- ~benches/translate.rs~ (kept in the tree) preserves the 9--14%
+  figure and the ~en-ueb-g2.ctb~ baseline for whoever revisits this,
+  so the option-2 prototype doesn't need to be re-derived from
+  scratch.
+
+*** Negative Consequences
+
+- The ~41% allocator overhead the profile identified is still there;
+  ~CompiledRegexp::find~ remains the dominant self-time contributor in
+  a full ~check~ run.
+- The measured 9--14% end-to-end ~translate~ speedup is left on the
+  table for now.
+
+** Pros and Cons of the Options
+
+*** Status quo
+
+- Good, because it's the simplest possible code -- no pool, no
+  generation counter, no wraparound edge case
+- Bad, because it's what the profile identified as ~41% of total
+  self-time in a full test-suite run, and a measured 9--14%
+  ~translate~ speedup is left unclaimed as a result
+
+*** Generational ~seen~ + per-thread pool
+
+- Good, because it directly targets the allocation cost the profile
+  measured, not just the clearing cost
+- Good, because it requires no changes to ~find~'s matching logic, and
+  mirrors how RE2/~regex-automata~ solve the same problem
+- Good, because it was actually built and measured this session: a
+  genuine 9--14% ~translate~ speedup, with correctness verified against
+  the full liblouis suite
+- Bad, because it reintroduces the ~u32~ wraparound question 3d0ebac6
+  explicitly wanted to avoid (mitigated: reset-on-wraparound branch,
+  practically unreachable)
+- Bad, because a per-thread pool that only ever grows (never shrinks)
+  means a program that used one large pattern once and then only small
+  ones keeps that oversized ~ThreadList~ allocation alive for the
+  process's lifetime
+
+*** Precompute epsilon closures
+
+- Good, because it would reduce ~add_thread~'s own recursive-call
+  overhead, a real (if smaller) line item in the profile
+- Bad, because runtime-conditional edges (~VariableEqual~/~AssertEnd~/
+  etc.) can only be partially precomputed -- the live walk, and
+  therefore the per-step thread list and its dedup, can't be
+  eliminated
+- Bad, because it's a materially larger, more invasive change for a
+  benefit that hasn't been profiled/quantified yet
+
+*** Convert NFA to DFA
+
+- Good, because DFA execution has no per-step thread-list/epsilon-
+  closure bookkeeping at all -- O(1) per byte
+- Bad, because it can't represent per-thread capture positions without
+  a second, NFA-based execution path for captures (as RE2/
+  ~regex-automata~ do) -- effectively building and maintaining two
+  engines
+- Bad, because our patterns are short and locally-anchored, not the
+  long free-text scans DFA engines are built to accelerate, so the win
+  is unclear relative to the cost
+
+** Links
+
+- Related to :: [[*Hand-rolled regexp VM instead of the ~regex~/~regex-automata~ crates][Hand-rolled regexp VM instead of the ~regex~/~regex-automata~ crates]]
+  -- this decision operates entirely within the VM that ADR chose to
+  keep
+- Supersedes the effect of :: 3d0ebac6b1dd1054a6d840920be22f7342dfb6a1
+  ("Simplify ThreadList's visited-set to a plain cleared Vec<bool>")
+  -- restores the generational counter that commit removed, now
+  justified by pooling rather than by the step-clear cost alone
+
 * COMMENT [short title of solved problem and solution]                     :Template:
 # - Status :: [proposed | rejected | accepted | deprecated | ... |
 #   superseded by [[file:0005-example.md][ADR-0005]]]
