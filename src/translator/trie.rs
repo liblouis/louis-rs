@@ -9,15 +9,60 @@ use crate::{
 
 use super::ResolvedTranslation;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+/// The union of one or more character classes, pre-resolved to their actual member
+/// characters.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
+pub struct ResolvedClasses {
+    /// The characters contained in this character class
+    chars: Vec<char>,
+    /// Whether `Space` was one of the requested classes. A missing neighbor (start/end
+    /// of input) is treated as a literal space.
+    includes_space: bool,
+}
+
+impl ResolvedClasses {
+    pub fn resolve(ctx: &CharacterClasses, classes: &[CharacterClass]) -> Self {
+        let mut chars: Vec<char> = classes
+            .iter()
+            .filter_map(|class| ctx.get(class))
+            .flatten()
+            .collect();
+        chars.sort_unstable();
+        chars.dedup();
+        ResolvedClasses {
+            chars,
+            includes_space: classes.contains(&CharacterClass::Space),
+        }
+    }
+
+    fn matches(&self, c: Option<char>) -> bool {
+        match c {
+            Some(c) => self.chars.binary_search(&c).is_ok(),
+            None => self.includes_space,
+        }
+    }
+}
+
+/// A non-consuming boundary check to attach when inserting a rule, expressed as the character
+/// classes a neighboring character must belong to. Resolved to concrete characters inside
+/// `Trie::insert` against the trie's own context.
+#[derive(Debug, Clone)]
 pub enum Transition {
-    Character(char),
-    /// Non-consuming lookbehind: the preceding character must be in these classes.
+    /// Non-consuming lookbehind: the preceding character must be in one of these classes.
     /// Inserted at the start of the path (before character transitions).
     Start(Vec<CharacterClass>),
-    /// Non-consuming lookahead: the character immediately after the match must be in these classes.
-    /// Inserted at the end of the path (after character transitions).
+    /// Non-consuming lookahead: the character immediately after the match must be in one of
+    /// these classes. Inserted at the end of the path (after character transitions).
     End(Vec<CharacterClass>),
+}
+
+/// The resolved, trie-internal counterpart of [`Transition`] plus the transitions that only ever
+/// arise while inserting a plain character sequence.
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+enum ResolvedTransition {
+    Character(char),
+    Start(ResolvedClasses),
+    End(ResolvedClasses),
     Any,
 }
 
@@ -33,7 +78,7 @@ pub enum ClassConstraint {
 #[derive(Default, Debug, Clone)]
 struct TrieNode {
     translation: Option<ResolvedTranslation>,
-    transitions: HashMap<Transition, TrieNode>,
+    transitions: HashMap<ResolvedTransition, TrieNode>,
 }
 
 impl TrieNode {
@@ -45,11 +90,12 @@ impl TrieNode {
         };
         // character transitions are always case insensitive
         let lowercase = c.to_lowercase().next().unwrap();
-        self.transitions.get(&Transition::Character(lowercase))
+        self.transitions
+            .get(&ResolvedTransition::Character(lowercase))
     }
 
     fn any_transition(&self) -> Option<&TrieNode> {
-        self.transitions.get(&Transition::Any)
+        self.transitions.get(&ResolvedTransition::Any)
     }
 }
 
@@ -72,6 +118,17 @@ impl Trie {
 
     pub fn with_context(self, ctx: CharacterClasses) -> Self {
         Trie { ctx, ..self }
+    }
+
+    fn resolve_transition(&self, transition: Transition) -> ResolvedTransition {
+        match transition {
+            Transition::Start(classes) => {
+                ResolvedTransition::Start(ResolvedClasses::resolve(&self.ctx, &classes))
+            }
+            Transition::End(classes) => {
+                ResolvedTransition::End(ResolvedClasses::resolve(&self.ctx, &classes))
+            }
+        }
     }
     pub fn insert_char(
         &mut self,
@@ -123,6 +180,9 @@ impl Trie {
             "Cannot insert empty `from` string (or `to` string in case of backward translation) - this causes infinite loops when translating"
         );
 
+        let before = before.map(|t| self.resolve_transition(t));
+        let after = after.map(|t| self.resolve_transition(t));
+
         let mut current_node = &mut self.root;
         let mut length = from.chars().count();
 
@@ -130,9 +190,10 @@ impl Trie {
         for constraint in &class_constraints {
             if let ClassConstraint::Start(class) = constraint {
                 length += 1;
+                let resolved = ResolvedClasses::resolve(&self.ctx, &[class.clone()]);
                 current_node = current_node
                     .transitions
-                    .entry(Transition::Start(vec![class.clone()]))
+                    .entry(ResolvedTransition::Start(resolved))
                     .or_default();
             }
         }
@@ -145,7 +206,7 @@ impl Trie {
         for c in from.chars() {
             current_node = current_node
                 .transitions
-                .entry(Transition::Character(c))
+                .entry(ResolvedTransition::Character(c))
                 .or_default();
         }
 
@@ -158,9 +219,10 @@ impl Trie {
         for constraint in &class_constraints {
             if let ClassConstraint::End(class) = constraint {
                 length += 1;
+                let resolved = ResolvedClasses::resolve(&self.ctx, &[class.clone()]);
                 current_node = current_node
                     .transitions
-                    .entry(Transition::End(vec![class.clone()]))
+                    .entry(ResolvedTransition::End(resolved))
                     .or_default();
             }
         }
@@ -233,18 +295,13 @@ impl Trie {
             }
         }
         // Class-based non-consuming checks. Iterate only transitions that are class variants to
-        // avoid scanning all transitions on every node visit.
-        // FIXME: `self.ctx.get(class)` is a HashMap lookup on every traversal. This could be
-        // moved to build time by resolving each class to its character set once during `insert`
-        // and storing it directly in the transition (e.g. as a HashSet in a separate Vec in
-        // TrieNode, or as a sorted Vec<char> in the Transition key).
+        // avoid scanning all transitions on every node visit. The character sets themselves are
+        // already resolved at insert time (see `ResolvedClasses::resolve`), so this is a plain
+        // binary search, not a `CharacterClasses` lookup.
         for (transition, child_node) in &node.transitions {
             match transition {
-                Transition::Start(classes) => {
-                    if classes.iter().any(|class| match prev {
-                        Some(p) => self.ctx.get(class).is_some_and(|set| set.contains(&p)),
-                        None => *class == CharacterClass::Space,
-                    }) {
+                ResolvedTransition::Start(resolved) => {
+                    if resolved.matches(prev) {
                         matching_rules.extend(self.find_translations_from_node(
                             input,
                             prev,
@@ -253,11 +310,8 @@ impl Trie {
                         ));
                     }
                 }
-                Transition::End(classes) => {
-                    if classes.iter().any(|class| match c {
-                        Some(ch) => self.ctx.get(class).is_some_and(|set| set.contains(&ch)),
-                        None => *class == CharacterClass::Space,
-                    }) {
+                ResolvedTransition::End(resolved) => {
+                    if resolved.matches(c) {
                         matching_rules.extend(self.find_translations_from_node(
                             input,
                             prev,
@@ -397,17 +451,12 @@ mod tests {
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
         let a = ResolvedTranslation::new("a", "A", 3, TranslationStage::Main, rule.clone());
+        let boundary = vec![CharacterClass::Space, CharacterClass::Punctuation];
         trie.insert(
             "a",
             "A",
-            Some(Transition::Start(vec![
-                CharacterClass::Space,
-                CharacterClass::Punctuation,
-            ])),
-            Some(Transition::End(vec![
-                CharacterClass::Space,
-                CharacterClass::Punctuation,
-            ])),
+            Some(Transition::Start(boundary.clone())),
+            Some(Transition::End(boundary)),
             Direction::Forward,
             Precedence::Default,
             vec![],
@@ -488,11 +537,12 @@ mod tests {
         let empty = Vec::<ResolvedTranslation>::new();
         let rule = fake_rule();
         let foo = ResolvedTranslation::new("foo", "FOO", 5, TranslationStage::Main, rule.clone());
+        let boundary = vec![CharacterClass::Letter];
         trie.insert(
             "foo",
             "FOO",
-            Some(Transition::Start(vec![CharacterClass::Letter])),
-            Some(Transition::End(vec![CharacterClass::Letter])),
+            Some(Transition::Start(boundary.clone())),
+            Some(Transition::End(boundary)),
             Direction::Forward,
             Precedence::Default,
             vec![],

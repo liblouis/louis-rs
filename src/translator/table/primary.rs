@@ -168,13 +168,17 @@ struct PrimaryTableBuilder {
 }
 
 impl PrimaryTableBuilder {
-    fn new() -> Self {
+    /// `trie_ctx` must be the character classes to resolve `Transition`/`ClassConstraint`
+    /// boundary checks against: text classes for forward translation, dots classes for
+    /// backward. The tries need it from construction on, since `Trie::insert` resolves those
+    /// checks against its own context immediately rather than deferring to match time.
+    fn new(trie_ctx: CharacterClasses) -> Self {
         Self {
             undefined: None,
             character_translations: CharacterTranslation::new(),
-            trie: Trie::new(),
-            comp6_trie: Trie::new(),
-            nocross_trie: Trie::new(),
+            trie: Trie::new().with_context(trie_ctx.clone()),
+            comp6_trie: Trie::new().with_context(trie_ctx.clone()),
+            nocross_trie: Trie::new().with_context(trie_ctx),
             match_patterns: MatchPatternsBuilder::new(),
             context_patterns: ContextPatternsBuilder::new(),
             numeric_indicator: numeric::IndicatorBuilder::new(),
@@ -329,18 +333,14 @@ impl PrimaryTableBuilder {
         .into_iter()
         .flatten()
         .collect();
-        let trie_ctx = match direction {
-            Direction::Forward => ctx.character_classes.clone(),
-            Direction::Backward => ctx.dots_classes().clone(),
-        };
         PrimaryTable {
             undefined: self.undefined,
             character_translations: self.character_translations,
             direction,
             fallback_definitions: ctx.character_definitions().clone(),
-            trie: self.trie.with_context(trie_ctx.clone()),
-            comp6_trie: self.comp6_trie.with_context(trie_ctx.clone()),
-            nocross_trie: self.nocross_trie.with_context(trie_ctx.clone()),
+            trie: self.trie,
+            comp6_trie: self.comp6_trie,
+            nocross_trie: self.nocross_trie,
             match_patterns: self.match_patterns.build(),
             context_patterns: self.context_patterns.build(),
             indicators: Indicators::new(indicators),
@@ -414,7 +414,16 @@ impl PrimaryTable {
         _stage: TranslationStage,
         ctx: &TableContext,
     ) -> Result<Self, TranslationError> {
-        let mut builder = PrimaryTableBuilder::new();
+        // Word/number boundary checks (`Transition::Start`/`End`, `ClassConstraint`) must
+        // consult the same character classes the compiled trie itself is built over:
+        // text-based classes for forward translation, but braille-based (dots) classes for
+        // backward translation, since the trie's neighbor characters are dots in that
+        // direction.
+        let trie_ctx = match direction {
+            Direction::Forward => ctx.character_classes.clone(),
+            Direction::Backward => ctx.dots_classes().clone(),
+        };
+        let mut builder = PrimaryTableBuilder::new(trie_ctx);
 
         // In literary braille tables, digit and litdigit serve distinct roles:
         //

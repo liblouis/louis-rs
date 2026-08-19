@@ -67,18 +67,13 @@ impl IndicatorBuilder {
 
         let cc = ctx.character_classes();
         let mut trie = Trie::new().with_context(cc.clone());
+        let word_boundary = vec![CharacterClass::Space, CharacterClass::Punctuation];
         for (contraction, _origin) in self.contractions {
             trie.insert(
                 &contraction,
                 &lettersign,
-                Some(Transition::Start(vec![
-                    CharacterClass::Space,
-                    CharacterClass::Punctuation,
-                ])),
-                Some(Transition::End(vec![
-                    CharacterClass::Space,
-                    CharacterClass::Punctuation,
-                ])),
+                Some(Transition::Start(word_boundary.clone())),
+                Some(Transition::End(word_boundary.clone())),
                 Direction::Forward,
                 Precedence::Default,
                 vec![],
