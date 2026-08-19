@@ -26,7 +26,7 @@ use crate::{
         position_constraints::{
             BackwardCapsConstrainerBuilder, BackwardNumericConstrainerBuilder,
             ComputerBrailleConstrainer, Constrainer, Constrainers, HyphenationConstrainerBuilder,
-            NumericConstrainerBuilder, PositionConstraints,
+            NumericConstrainerBuilder, PositionConstraints, PunctuationConstrainerBuilder,
         },
         table::TableContext,
         translation::TranslationSubset,
@@ -162,6 +162,7 @@ struct PrimaryTableBuilder {
     backward_caps_constrainer: BackwardCapsConstrainerBuilder,
     backward_numeric_constrainer: BackwardNumericConstrainerBuilder,
     hyphenation_constrainer: HyphenationConstrainerBuilder,
+    punctuation_constrainer: PunctuationConstrainerBuilder,
     backward_digit_overrides: HashMap<char, ResolvedTranslation>,
     compbrl_triggers: Vec<String>,
 }
@@ -186,6 +187,7 @@ impl PrimaryTableBuilder {
             backward_caps_constrainer: BackwardCapsConstrainerBuilder::new(),
             backward_numeric_constrainer: BackwardNumericConstrainerBuilder::new(),
             hyphenation_constrainer: HyphenationConstrainerBuilder::new(),
+            punctuation_constrainer: PunctuationConstrainerBuilder::new(),
             backward_digit_overrides: HashMap::new(),
             compbrl_triggers: Vec::new(),
         }
@@ -360,6 +362,12 @@ impl PrimaryTableBuilder {
                         .then(|| self.hyphenation_constrainer.build())
                         .flatten()
                         .map(Constrainer::Hyphenation),
+                    // liblouis's `CTO_PrePunc`/`CTO_PostPunc` are forward-translation-only
+                    // opcodes (never consulted by `lou_backTranslateString.c`).
+                    (direction == Direction::Forward)
+                        .then(|| self.punctuation_constrainer.build())
+                        .flatten()
+                        .map(Constrainer::Punctuation),
                 ]
                 .into_iter()
                 .flatten()
@@ -1214,11 +1222,15 @@ impl PrimaryTable {
                             .get(&CharacterClass::Punctuation)
                             .is_some_and(|class| class.contains(&c))
                     }) {
+                        // Eligibility isn't a fixed-position lookaround (see
+                        // `PunctuationConstrainer`), so the trie itself imposes no
+                        // boundary; `constraints.prepunc_ok_at()` gates it in `trace()`.
+                        builder.punctuation_constrainer.mark_present();
                         builder.get_trie_mut(rule).insert(
                             chars,
                             &dots.to_string(),
-                            Some(Transition::Start(vec![CharacterClass::Space])),
-                            Some(Transition::End(vec![CharacterClass::Space])),
+                            None,
+                            None,
                             direction,
                             rule.precedence(),
                             vec![],
@@ -1234,11 +1246,13 @@ impl PrimaryTable {
                             .get(&CharacterClass::Punctuation)
                             .is_some_and(|class| class.contains(&c))
                     }) {
+                        // See the comment in the `Rule::Prepunc` arm above.
+                        builder.punctuation_constrainer.mark_present();
                         builder.get_trie_mut(rule).insert(
                             chars,
                             &dots.to_string(),
-                            Some(Transition::Start(vec![CharacterClass::Space])),
-                            Some(Transition::End(vec![CharacterClass::Space])),
+                            None,
+                            None,
                             direction,
                             rule.precedence(),
                             vec![],
@@ -1307,6 +1321,28 @@ impl PrimaryTable {
         builder.hyphenation_constrainer.letter_characters(
             ctx.character_classes()
                 .get(&CharacterClass::Letter)
+                .unwrap_or_default(),
+        );
+        let letter_chars = ctx
+            .character_classes()
+            .get(&CharacterClass::Letter)
+            .unwrap_or_default();
+        builder
+            .punctuation_constrainer
+            .letter_characters(letter_chars.clone());
+        builder.punctuation_constrainer.letter_or_digit_characters(
+            letter_chars
+                .union(
+                    &ctx.character_classes()
+                        .get(&CharacterClass::Digit)
+                        .unwrap_or_default(),
+                )
+                .copied()
+                .collect(),
+        );
+        builder.punctuation_constrainer.space_characters(
+            ctx.character_classes()
+                .get(&CharacterClass::Space)
                 .unwrap_or_default(),
         );
         if direction == Direction::Backward {
@@ -1496,6 +1532,17 @@ impl PrimaryTable {
             let (current, delayed) = self.partition_delayed_translations(delayed_translations);
             delayed_translations = delayed;
             candidates.extend(current);
+
+            // `prepunc`/`postpunc` need a variable-length scan the trie can't express
+            // (see `PunctuationConstrainer`), so they're inserted with no trie-level
+            // boundary and gated here instead. Rejected candidates are simply dropped,
+            // leaving the position to fall through to the plain punctuation character
+            // definition (`character_translations`), matching liblouis.
+            candidates.retain(|t| match t.origin().map(|a| a.rule) {
+                Some(Rule::Prepunc { .. }) => constraints.prepunc_ok_at(char_pos),
+                Some(Rule::Postpunc { .. }) => constraints.postpunc_ok_at(char_pos),
+                _ => true,
+            });
 
             // Backward numeric mode: prefer the digit reading of a cell shared with a
             // letter (common in six-dot literary codes). Rather than out-weighing the
@@ -1923,12 +1970,7 @@ mod tests {
         assert_eq!(table.translate("1#a"), "⠁⠈⠉");
     }
 
-    // TODO: prepunc/postpunc need liblouis's real backward/forward scan (see the
-    // boundary-check ADR) - the current Start/End(Space) approximation only accidentally
-    // works when the punctuation is next to whitespace or nothing, which is close to the
-    // opposite of what these opcodes are for. 4 of this test's 6 assertions currently fail.
     #[test]
-    #[ignore = "prepunc/postpunc scan not implemented yet - see boundary-check ADR"]
     fn prepunc_postpunc() {
         let rules = [
             parse_rule("lowercase f 3"),

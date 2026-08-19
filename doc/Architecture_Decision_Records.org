@@ -315,6 +315,16 @@ accept this rather than block the rest of the fix on it: the test is
 disabled rather than asserting the wrong behavior. The real fix,
 liblouis's actual scan, is tracked as a follow-up.
 
+*Follow-up implemented:* ~prepunc~/~postpunc~ now get liblouis's real
+scan via a dedicated ~PunctuationConstrainer~, computed once per input
+like ~HyphenationConstrainer~ — not a trie transition at all, since
+the scan is variable-length (forward/backward past further
+punctuation to a letter or digit, stopping at whitespace), which
+~Transition::Start~/~End~ structurally can't express. The trie insert
+for both opcodes now carries no boundary; eligibility
+is gated post-hoc in ~trace()~ by matching the candidate's origin rule
+against ~constraints.prepunc_ok_at()~/~postpunc_ok_at()~.
+
 ** Links
 
 - [[https://github.com/liblouis/liblouis/blob/master/liblouis/lou_translateString.c][liblouis lou_translateString.c]] — ~for_selectRule~ in full: the
@@ -329,8 +339,10 @@ liblouis's actual scan, is tracked as a follow-up.
   family are deleted as of ~96035dd~, not just superseded)
 - ~src/translator/table/primary.rs~ — every word/number opcode's
   ~insert()~ call now uses the table above directly
+- ~src/translator/position_constraints.rs~ — ~PunctuationConstrainer~,
+  implementing the follow-up scan described above
 - ~src/translator/table/primary.rs~ — ~prepunc_postpunc~ test,
-  ~#[ignore]~d rather than fixed or deleted
+  re-enabled with the follow-up fix
 - [[*ACCEPTED Handle word boundaries][ADR: Handle word boundaries]] — chose non-consuming trie
   transitions, already noting the ~before~/~after~ generalization
   this ADR proposes finishing

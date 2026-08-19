@@ -54,6 +54,20 @@ pub enum Constraint {
     /// class) that the word's hyphenation dictionary marks as a valid break point.
     /// Consulted to decide whether a `nocross` rule may cross this gap.
     HyphenationBreak,
+    /// A `prepunc` rule may fire on the punctuation character at this position, in
+    /// forward translation.
+    ///
+    /// Mirrors liblouis's `CTO_PrePunc`: set when the character isn't immediately
+    /// preceded by a letter, and a forward scan past any further punctuation finds a
+    /// letter or digit before hitting whitespace.
+    PrepuncOk,
+    /// A `postpunc` rule may fire on the punctuation character at this position, in
+    /// forward translation.
+    ///
+    /// Mirrors liblouis's `CTO_PostPunc`: set when the character isn't immediately
+    /// followed by a letter, and a backward scan past any further punctuation finds a
+    /// letter or digit before hitting whitespace.
+    PostpuncOk,
 }
 
 pub type Constraints = EnumSet<Constraint>;
@@ -100,6 +114,18 @@ impl PositionConstraints {
         self.0
             .get(pos)
             .is_some_and(|f| f.contains(Constraint::HyphenationBreak))
+    }
+
+    pub fn prepunc_ok_at(&self, pos: usize) -> bool {
+        self.0
+            .get(pos)
+            .is_some_and(|f| f.contains(Constraint::PrepuncOk))
+    }
+
+    pub fn postpunc_ok_at(&self, pos: usize) -> bool {
+        self.0
+            .get(pos)
+            .is_some_and(|f| f.contains(Constraint::PostpuncOk))
     }
 }
 
@@ -187,6 +213,61 @@ impl HyphenationConstrainer {
                 constraints[start + i].insert(Constraint::HyphenationBreak);
             }
         }
+    }
+}
+
+/// Detects, at every punctuation character position, whether a `prepunc`/`postpunc`
+/// rule may fire there, mirroring liblouis's `CTO_PrePunc`/`CTO_PostPunc` (forward
+/// translation only; back-translation never consults these opcodes).
+///
+/// Unlike every other boundary check (`begword`, `midword`, ...), this isn't a
+/// fixed-position lookaround: `prepunc` requires scanning forward past any further
+/// punctuation for a letter or digit before hitting whitespace (and the mirror image,
+/// backward, for `postpunc`), which the trie's single-neighbor
+/// `Transition::Start`/`End(Vec<CharacterClass>)` can't express. This is computed once
+/// over the whole input, like `HyphenationConstrainer`, rather than as a trie
+/// transition.
+#[derive(Debug, Clone)]
+pub struct PunctuationConstrainer {
+    letter_chars: HashSet<char>,
+    letter_or_digit_chars: HashSet<char>,
+    space_chars: HashSet<char>,
+}
+
+impl PunctuationConstrainer {
+    fn compute(&self, input: &str) -> Vec<Constraints> {
+        let chars: Vec<char> = input.chars().collect();
+        let n = chars.len();
+        let mut constraints: Vec<Constraints> = vec![Constraints::empty(); n];
+        for pos in 0..n {
+            // prepunc: not immediately preceded by a letter, then scan forward (past
+            // any further punctuation) for a letter/digit before hitting whitespace.
+            if pos == 0 || !self.letter_chars.contains(&chars[pos - 1]) {
+                for k in pos + 1..n {
+                    if self.letter_or_digit_chars.contains(&chars[k]) {
+                        constraints[pos].insert(Constraint::PrepuncOk);
+                        break;
+                    }
+                    if self.space_chars.contains(&chars[k]) {
+                        break;
+                    }
+                }
+            }
+            // postpunc: the mirror image, scanning backward from just before this
+            // position.
+            if pos == n - 1 || !self.letter_chars.contains(&chars[pos + 1]) {
+                for k in (0..pos).rev() {
+                    if self.letter_or_digit_chars.contains(&chars[k]) {
+                        constraints[pos].insert(Constraint::PostpuncOk);
+                        break;
+                    }
+                    if self.space_chars.contains(&chars[k]) {
+                        break;
+                    }
+                }
+            }
+        }
+        constraints
     }
 }
 
@@ -346,6 +427,9 @@ pub enum Constrainer {
     BackwardNumeric(BackwardNumericConstrainer),
     /// Detects hyphenation-dictionary breaks and sets [`Constraint::HyphenationBreak`].
     Hyphenation(HyphenationConstrainer),
+    /// Detects `prepunc`/`postpunc` scan eligibility and sets
+    /// [`Constraint::PrepuncOk`]/[`Constraint::PostpuncOk`].
+    Punctuation(PunctuationConstrainer),
 }
 
 impl Constrainer {
@@ -356,6 +440,7 @@ impl Constrainer {
             Constrainer::BackwardCaps(c) => c.compute(input),
             Constrainer::BackwardNumeric(c) => c.compute(input),
             Constrainer::Hyphenation(c) => c.compute(input),
+            Constrainer::Punctuation(c) => c.compute(input),
         }
     }
 }
@@ -535,6 +620,52 @@ impl HyphenationConstrainerBuilder {
             hyphenator: self.hyphenator?,
             letter_chars: self.letter_chars,
         })
+    }
+}
+
+/// A builder for [`Constrainer::Punctuation`].
+#[derive(Debug, Default)]
+pub struct PunctuationConstrainerBuilder {
+    has_prepunc_or_postpunc: bool,
+    letter_chars: HashSet<char>,
+    letter_or_digit_chars: HashSet<char>,
+    space_chars: HashSet<char>,
+}
+
+impl PunctuationConstrainerBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Marks that the table declares at least one `prepunc`/`postpunc` rule, so
+    /// `build()` produces a constrainer. Tables without either opcode skip this
+    /// pass entirely.
+    pub fn mark_present(&mut self) {
+        self.has_prepunc_or_postpunc = true;
+    }
+
+    pub fn letter_characters(&mut self, chars: HashSet<char>) {
+        self.letter_chars = chars;
+    }
+
+    pub fn letter_or_digit_characters(&mut self, chars: HashSet<char>) {
+        self.letter_or_digit_chars = chars;
+    }
+
+    pub fn space_characters(&mut self, chars: HashSet<char>) {
+        self.space_chars = chars;
+    }
+
+    pub fn build(self) -> Option<PunctuationConstrainer> {
+        if self.has_prepunc_or_postpunc {
+            Some(PunctuationConstrainer {
+                letter_chars: self.letter_chars,
+                letter_or_digit_chars: self.letter_or_digit_chars,
+                space_chars: self.space_chars,
+            })
+        } else {
+            None
+        }
     }
 }
 
