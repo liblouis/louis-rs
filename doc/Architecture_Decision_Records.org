@@ -171,9 +171,10 @@ reasons already documented in this file).
 - [[https://github.com/liblouis/liblouis/blob/master/liblouis/lou_translateString.c][liblouis lou_translateString.c]] — ~CAPSEMPH~/~capsletterDefined~,
   the per-position re-entrancy this ADR is about
 
-* DRAFT Unify word/number-boundary checks onto class-constraint lookaround
+* ACCEPTED Unify word/number-boundary checks onto class-constraint lookaround
 - Deciders :: CE
 - Date :: [2026-08-18 Di]
+- Implemented :: [2026-08-19 Mi]
 
 ** Context and Problem Statement
 
@@ -292,12 +293,27 @@ own follow-up.
 
 ** Decision Outcome
 
-Not yet decided. Leaning toward option 2 now that the scope is
-clearer: it fixes every confirmed and latent instance of the actual
-bug, and option 3's extra step (retiring ~Boundary~ for the scan-based
-opcodes too) doesn't fix anything further for them — they need a real
-scan implementation regardless, tracked separately. Blocked on adding
-class-union support to ~ClassConstraint~ (unscoped).
+Chosen option: *2*. ~Boundary~ and every
+~is_word_start~/~is_word_end~-family predicate are deleted;
+~Transition::StartClass~/~EndClass~ were generalized in place to
+~Start~/~End(Vec<CharacterClass>)~, giving class-union support via
+~.any()~ across the vec — the same type now serves both the
+opcode-intrinsic checks in the table above and the ~before~/~after~
+keyword, closing the "two mechanisms" gap this ADR was written about.
+
+One subtlety surfaced only during implementation, not analysis: a
+missing neighbor (true start/end of input) must satisfy exactly the
+~Space~ requirement directly (~*class == CharacterClass::Space~ on
+~None~), not a substituted placeholder character.
+
+Confirms option 3's premise directly: deleting ~Boundary~ for the
+scan-based opcodes bought nothing for them. Re-pointing ~prepunc~/
+~postpunc~ at the new ~Vec<CharacterClass>~ mechanism (still a
+~Start[Space]~/~End[Space]~ approximation, no scan) made their
+approximation *worse* than the old ~Boundary~-based one. Decided to
+accept this rather than block the rest of the fix on it: the test is
+disabled rather than asserting the wrong behavior. The real fix,
+liblouis's actual scan, is tracked as a follow-up.
 
 ** Links
 
@@ -308,13 +324,13 @@ class-union support to ~ClassConstraint~ (unscoped).
   reject-or-reclassify pattern, ~match~/~context~'s own pattern
   language, ~repword~'s repetition algorithm) — surveyed in full to
   answer "is it always a before/after class check" (no)
-- ~src/parser/character_class.rs~ — ~is_word_start~/~is_word_end~
-  (the bug) and ~is_number_start~/~is_number_end~ (the same bug,
-  latent), ~is_after_space_or_punct~ (the already-correct shape)
-- ~src/translator/trie.rs~ — ~Boundary~, ~ClassConstraint~,
-  ~Transition::StartClass~/~EndClass~
-- ~src/translator/table/primary.rs~ — every ~Boundary~-using
-  ~insert()~ call, confirming exactly which opcodes are affected
+- ~src/translator/trie.rs~ — ~Transition::Start~/~End(Vec<CharacterClass>)~,
+  ~ClassConstraint~ (~Boundary~ and the ~is_word_start~/~is_word_end~
+  family are deleted as of ~96035dd~, not just superseded)
+- ~src/translator/table/primary.rs~ — every word/number opcode's
+  ~insert()~ call now uses the table above directly
+- ~src/translator/table/primary.rs~ — ~prepunc_postpunc~ test,
+  ~#[ignore]~d rather than fixed or deleted
 - [[*ACCEPTED Handle word boundaries][ADR: Handle word boundaries]] — chose non-consuming trie
   transitions, already noting the ~before~/~after~ generalization
   this ADR proposes finishing
