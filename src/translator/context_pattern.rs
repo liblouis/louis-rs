@@ -209,23 +209,32 @@ impl ContextPatternsBuilder {
         }
     }
 
-    /// Create a translation based on `test`, `action`, `origin` and `swap_classes`
+    /// Create a translation based on `action`, `origin` and `swap_classes`. `lookback` is the
+    /// number of characters the test's leading `_N` rewinds over.
     fn translation(
         &self,
         action: &Action,
         origin: &AnchoredRule,
         stage: TranslationStage,
         swap_classes: &SwapClasses,
+        lookback: usize,
     ) -> Result<UnresolvedTranslation, TranslationError> {
         let targets = TranslationTargets::from_instructions(&action.actions(), swap_classes)?;
         let effects = Effects::from_instructions(&action.actions());
-        Ok(UnresolvedTranslation::new(
+        let translation = UnresolvedTranslation::new(
             &targets,
             origin.precedence(),
             stage,
             &effects,
             origin.clone(),
-        ))
+        );
+        // a `*` in the action consumes the whole match; a `%swap` also resolves from the capture
+        // but leaves the context in the input
+        Ok(if targets.contains(&TranslationTarget::Capture) {
+            translation.consuming_match(lookback)
+        } else {
+            translation
+        })
     }
 
     pub fn insert(
@@ -236,10 +245,13 @@ impl ContextPatternsBuilder {
         stage: TranslationStage,
         ctx: &TableContext,
     ) -> Result<(), TranslationError> {
-        let translation = Translation::Unresolved(
-            self.translation(action, origin, stage, ctx.swap_classes())?
-                .with_lookback(test.leading_lookback()),
-        );
+        let translation = Translation::Unresolved(self.translation(
+            action,
+            origin,
+            stage,
+            ctx.swap_classes(),
+            test.leading_lookback(),
+        )?);
         let test = test.clone().add_implicit_replace();
         // for the multipass stages where we translate from braille to braille the character classes
         // need to be the dots_classes
@@ -869,8 +881,7 @@ mod tests {
         builder
             .insert(&tests, &action, &origin, stage, &ctx)
             .unwrap();
-        // The action contains a capture (`*`), so the translation consumes the whole match and
-        // discards the context around the focus
+        // the `*` action consumes the whole match, context included
         let translation =
             ResolvedTranslation::new("⠕⠐⠽", "⠐⠥", 3, TranslationStage::Post1, origin.clone());
         let patterns = builder.build();
@@ -894,8 +905,7 @@ mod tests {
         builder
             .insert(&tests, &action, &origin, stage, &context)
             .unwrap();
-        // The action contains a capture (`*`), so the translation consumes the whole match and
-        // discards the context around the focus
+        // the `*` action consumes the whole match, context included
         let translation = ResolvedTranslation::new(
             "{{{abc}}}",
             "<abc>",

@@ -24,10 +24,16 @@ impl Test {
     /// consumed before the rule was selected; the test re-examines them, but they lie outside
     /// the matched span.
     pub fn leading_lookback(&self) -> usize {
-        match self.tests.first() {
-            Some(TestInstruction::Lookback { len }) => usize::from(*len),
-            _ => 0,
+        fn leading(tests: &[TestInstruction]) -> usize {
+            match tests.first() {
+                Some(TestInstruction::Lookback { len }) => usize::from(*len),
+                // a replace bracket at the very start (explicit, or the implicit one wrapped
+                // around a bracket-less test) still begins with the leading lookback
+                Some(TestInstruction::Replace { tests }) => leading(tests),
+                _ => 0,
+            }
         }
+        leading(&self.tests)
     }
 
     pub fn add_implicit_replace(self) -> Self {
@@ -605,6 +611,13 @@ mod tests {
 
     use super::braille::BrailleDot;
     use super::*;
+
+    #[test]
+    fn leading_lookback_survives_implicit_replace() {
+        let test = Parser::new("_2$s").tests().unwrap();
+        assert_eq!(test.leading_lookback(), 2);
+        assert_eq!(test.add_implicit_replace().leading_lookback(), 2);
+    }
 
     #[test]
     fn ascii_number() {

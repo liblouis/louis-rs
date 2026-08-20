@@ -386,6 +386,18 @@ impl ThreadList {
     }
 }
 
+/// The best match found so far during a [`CompiledRegexp::find`] run
+struct BestMatch {
+    /// The capture span, in byte offsets into the input
+    capture: (usize, usize),
+    /// The number of chars consumed by the match
+    chars: usize,
+    /// The number of bytes consumed by the match
+    bytes: usize,
+    /// The matched pattern's translation payload
+    translation: TranslationIndex,
+}
+
 impl CompiledRegexp {
     /// Follow every epsilon transition reachable from `pc` without consuming input,
     /// adding each character-consuming or `Match` instruction reached to `list`, in
@@ -487,10 +499,9 @@ impl CompiledRegexp {
         let mut next = &mut next_storage;
         let mut sp = 0;
         let mut length = 0;
-        // The capture span, consumed-char count, consumed byte length and translation of the best
-        // match found so far. A lower-priority thread reaching `Match` doesn't end the search
-        // immediately: a still-alive higher-priority thread might go on to match later
-        let mut matched: Option<((usize, usize), usize, usize, TranslationIndex)> = None;
+        // A lower-priority thread reaching `Match` doesn't end the search immediately: a
+        // still-alive higher-priority thread might go on to match later
+        let mut matched: Option<BestMatch> = None;
 
         current.start_step();
         self.add_thread(current, 0, (0, 0), sp, input.len(), at_start, env);
@@ -501,7 +512,12 @@ impl CompiledRegexp {
             for thread in &current.threads {
                 match self.instructions[thread.pc] {
                     Instruction::Match(index) => {
-                        matched = Some((thread.capture, length, sp, index));
+                        matched = Some(BestMatch {
+                            capture: thread.capture,
+                            chars: length,
+                            bytes: sp,
+                            translation: index,
+                        });
                         // every remaining thread in this step is lower priority than the one
                         // that just matched, and so could never improve on it
                         break;
@@ -603,15 +619,16 @@ impl CompiledRegexp {
             length += 1;
         }
 
-        matched.map(|((start, end), length, matched_bytes, index)| {
+        matched.map(|best| {
+            let (start, end) = best.capture;
             let capture = &input[start..end];
             // the whole span the test matched, context around the focus included
-            let matched = &input[..matched_bytes];
+            let matched = &input[..best.bytes];
             // offset is in number of chars not a byte offset
             let offset = input[..start].chars().count();
-            self.translations[index]
+            self.translations[best.translation]
                 .clone()
-                .resolve(capture, matched, length, offset)
+                .resolve(capture, matched, best.chars, offset)
         })
     }
 }
@@ -935,13 +952,16 @@ mod tests {
     #[test]
     fn capture() {
         let env = Environment::new();
-        let translation = Translation::Unresolved(UnresolvedTranslation::new(
-            &[TranslationTarget::Capture],
-            Precedence::Default,
-            TranslationStage::Main,
-            &[],
-            None,
-        ));
+        let translation = Translation::Unresolved(
+            UnresolvedTranslation::new(
+                &[TranslationTarget::Capture],
+                Precedence::Default,
+                TranslationStage::Main,
+                &[],
+                None,
+            )
+            .consuming_match(0),
+        );
         let re = Regexp::Concat(
             Box::new(Regexp::String("foo".to_string())),
             Box::new(Regexp::Concat(
@@ -956,8 +976,6 @@ mod tests {
 
         assert_eq!(re.find("foo", &env), None);
         assert_eq!(re.find("foobar", &env), None);
-        // The action contains a capture (`*`), so the translation consumes the whole match and
-        // discards the context around the focus
         assert_eq!(
             re.find("foobarfoo", &env).unwrap(),
             ResolvedTranslation::new("foobarfoo", "bar", 9, TranslationStage::Main, None)
