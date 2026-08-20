@@ -1653,21 +1653,6 @@ back every ~match~/~context~ rule check and run at every input
 position across millions of translation calls, this
 allocate-and-discard cycle dominated the profile.
 
-Commit 3d0ebac6 ("Simplify ThreadList's visited-set to a plain cleared
-Vec<bool>") replaced an earlier generation-counter ~seen: Vec<u32>~
-with a plain ~Vec<bool>~ cleared via ~fill(false)~ each step,
-reasoning that the O(1)-vs-O(n) clear was "a constant-factor saving on
-top of a per-step cost the algorithm already pays elsewhere."
-Revisiting the profile showed that reasoning undersold the trick's
-real value: the generational scheme isn't just about avoiding an O(n)
-clear per step -- it's what makes it cheap to *reuse the same
-~ThreadList~ across many ~find~ calls*, not just across steps within
-one call. A pooled plain ~Vec<bool>~ would still need an O(n)
-~fill(false)~ on every reuse to stay correct; that cost is separate
-from, and much smaller than, the allocation cost this ADR addresses
-(~2.4% ~memset~ vs. 35%+ allocator calls in the profile), but
-conflating the two delayed noticing the bigger win.
-
 A follow-up question reframed the problem: liblouis' ~match~/
 ~context~/~correct~/passN patterns aren't arbitrary regexps, they're
 drawn from a known, surveyable corpus (the liblouis tables). Compiling
@@ -1677,22 +1662,36 @@ every such pattern from six tables chosen for having the most
 instruction count and epsilon/~Split~ density gave 5,457 real data
 points:
 
-| table             |    n | len (min/mean/median/p99/max) | splits (mean/max) |
-|-------------------+------+--------------------------------+--------------------|
-| en-ueb-g2.ctb      | 2192 | 4 / 22.5 / 27 / 38 / *42*      | 3.4 / 9            |
-| vi-vn-g2.ctb       | 1170 | 4 / 10.4 / 10 / 15 / *16*      | 1.1 / 3            |
-| vi-saigon-g1.ctb   |  912 | 4 / 11.2 / 11 / 16 / *16*      | 1.4 / 3            |
-| vi-vn-g1.ctb       |  814 | 4 / 10.3 / 10 / 16 / *16*      | 1.1 / 3            |
-| fil-g2.ctb         |  242 | 4 / 31.0 / 37 / 43 / *44*      | 6.1 / 8            |
-| en-g3.ctb          |  127 | 4 / 13.1 / 17 / 17 / *17*      | 2.5 / 4            |
+| table            |    n | len (min/mean/median/p99/max) | splits (mean/max) |
+|------------------+------+-------------------------------+-------------------|
+| en-ueb-g2.ctb    | 2192 | 4 / 22.5 / 27 / 38 / *42*     | 3.4 / 9           |
+| vi-vn-g2.ctb     | 1170 | 4 / 10.4 / 10 / 15 / *16*     | 1.1 / 3           |
+| vi-saigon-g1.ctb |  912 | 4 / 11.2 / 11 / 16 / *16*     | 1.4 / 3           |
+| vi-vn-g1.ctb     |  814 | 4 / 10.3 / 10 / 16 / *16*     | 1.1 / 3           |
+| fil-g2.ctb       |  242 | 4 / 31.0 / 37 / 43 / *44*     | 6.1 / 8           |
+| en-g3.ctb        |  127 | 4 / 13.1 / 17 / 17 / *17*     | 2.5 / 4           |
 
-Not one of the 5,457 compiled programs, across six tables for very
-different languages/systems, exceeded 44 instructions. ~seen~ isn't
-sparse in the usual sense (a big index space thinly populated) -- the
-whole index space is just small. That ruled out a hash-based or
-sparse-set structure (still allocates on first insert, and pays hashing
-overhead for no benefit over plain indexing at this size) and pointed
-at a fixed-size bitmask instead.
+Not one of above programs exceeded 44 instructions, but a follow-up
+sweep of every loadable table in liblouis (397 files, 363 loaded as
+standalone tables, 31,023 compiled patterns across 233 tables)
+confirmed the general shape (mean 8.9, median 5, p99 37) while finding
+a real outlier: ~afr-za-g2.ctb~ (Afrikaans grade 2) has a pattern of
+*508* instructions, and several other tables (~hu-hu-g2.ctb~,
+~mn-MN-g2.ctb~, ~zu-za-g2.ctb~, ~xh-za-g2.ctb~, among others) exceed
+100. These are legitimate patterns, not degenerate input: large
+~match~ alternations of literal word-ending strings, e.g.
+~afr-za-g2.ctb~'s ~AAK|aak|AAL|aal|AFEL|afel|...~ (50+ alternatives),
+where each alternative costs roughly ~chars + Split + Jump~
+instructions. Across the full 31,023-pattern corpus, 65 (0.21%) exceed
+44 instructions, 34 (0.11%) exceed 64, and 18 (0.06%) exceed 128.
+
+~seen~ isn't sparse in the usual sense -- for the overwhelming
+majority of real patterns the whole index space is just small. That
+ruled out a hash-based or sparse-set structure (still allocates on
+first insert, and pays hashing overhead for no benefit over plain
+indexing at this size) and pointed at a fixed-size bitmask instead,
+with a heap fallback now sized for a real, measured minority of
+patterns that don't fit -- not just a theoretical one.
 
 ** Decision Drivers
 
@@ -1720,54 +1719,54 @@ at a fixed-size bitmask instead.
 
 ** Considered Options
 
-1. *Status quo* -- ~Vec<bool>~ ~seen~, fresh ~ThreadList::new()~
-   allocated on every ~find~ call.
-2. *Generational ~seen~ + per-thread pool* -- revert to
-   ~seen: Vec<u32>~ stamped with a per-~ThreadList~ generation counter
-   (bumped, not cleared, each step), and pool ~(current, next)~ pairs
-   in a ~thread_local!~ ~RefCell<Vec<...>>~, checked out at the start
-   of ~find~ and returned at the end.
-3. *Precompute epsilon closures at compile time* -- eliminate
-   ~add_thread~'s recursive walk by precomputing, per instruction, the
-   reachable consuming/~Match~ instructions.
-4. *Convert the NFA to a DFA* -- subset-construct the compiled program
-   into a DFA with O(1) per-byte transitions and no thread-list/
-   epsilon-closure bookkeeping at all.
-5. *Inline bitset + fixed-capacity thread buffer* -- since every
-   surveyed program fits in 64 instructions, give ~ThreadList~ a
-   ~seen~ bitset (a ~SmallVec<[u64; 1]>~-backed bitmask, 64 bits
-   inline) and a ~threads: SmallVec<[Thread; 64]>~, both stack-resident
-   with no heap allocation for any real pattern, falling back to heap
-   storage only if a pattern ever exceeds that. Requires ~current~/
-   ~next~ in ~find~ to be swapped *by reference*, not by value (see
-   Decision Outcome), so the per-step swap stays cheap regardless of
-   ~ThreadList~'s now-larger size.
+- Status quo :: ~Vec<bool>~ ~seen~, fresh ~ThreadList::new()~
+  allocated on every ~find~ call.
+- Generational ~seen~ + per-thread pool :: revert to ~seen: Vec<u32>~
+  stamped with a per-~ThreadList~ generation counter (bumped, not
+  cleared, each step), and pool ~(current, next)~ pairs in a
+  ~thread_local!~ ~RefCell<Vec<...>>~, checked out at the start of
+  ~find~ and returned at the end.
+- Precompute epsilon closures at compile time :: eliminate
+  ~add_thread~'s recursive walk by precomputing, per instruction, the
+  reachable consuming/~Match~ instructions.
+- Convert the NFA to a DFA :: subset-construct the compiled program
+  into a DFA with O(1) per-byte transitions and no thread-list/
+  epsilon-closure bookkeeping at all.
+- Inline bitset + fixed-capacity thread buffer :: since every
+  surveyed program fits in 64 instructions, give ~ThreadList~ a ~seen~
+  bitset (a ~SmallVec<[u64; 1]>~-backed bitmask, 64 bits inline) and a
+  ~threads: SmallVec<[Thread; 64]>~, both stack-resident with no heap
+  allocation for any real pattern, falling back to heap storage only
+  if a pattern ever exceeds that.
 
 ** Decision Outcome
 
 Chosen option: *Inline bitset + fixed-capacity thread buffer* (option
 5).
 
-Option 2 (generational ~seen~ + per-thread pool) was fully implemented,
-tested, and benchmarked in an earlier pass: ~find~'s own body stayed
-untouched, ~ThreadList~ gained a ~generation: u32~ field, and a
-~thread_local!~ ~RefCell<Vec<...>>~ pool replaced the two
-~ThreadList::new()~ calls -- mirroring how RE2's ~NFA~ class and Rust's
-~regex-automata~ (~Cache~/~create_cache()~) solve the identical tension
-between reusing scratch state and staying correct under concurrent use
-of one compiled program. It measured a genuine 9--14% end-to-end
-~Translator::translate~ speedup, verified correct against the full
-liblouis suite, but was reverted in favor of the simpler status quo:
-the ~thread_local!~ pool, generation counter, and wraparound-reset
-branch were judged more state than the win justified at the time.
+Option 2 (generational ~seen~ + per-thread pool) was fully
+implemented, tested, and benchmarked in an earlier pass: ~find~'s own
+body stayed untouched, ~ThreadList~ gained a ~generation: u32~ field,
+and a ~thread_local!~ ~RefCell<Vec<...>>~ pool replaced the two
+~ThreadList::new()~ calls -- mirroring how RE2's ~NFA~ class and
+Rust's ~regex-automata~ (~Cache~/~create_cache()~) solve the identical
+tension between reusing scratch state and staying correct under
+concurrent use of one compiled program. It measured a genuine 9--14%
+end-to-end ~Translator::translate~ speedup, but was reverted in favor
+of the simpler status quo: the ~thread_local!~ pool, generation
+counter, and wraparound-reset branch were judged more state than the
+win justified at the time.
 
 Surveying real liblouis patterns (see Context) reopened the question
 with a fact the earlier options didn't have: program size is not just
-"probably small," it's *empirically bounded* across a wide, deliberately
-diverse sample. That makes option 5's fixed-capacity inline storage
-sound, not a guess -- and unlike option 2, it needs no pool, no
-thread-local state, and no generation counter, since a plain "clear the
-few inline words to zero" is already O(1) at this size.
+"probably small," it's measured -- 99.89% of 31,023 real compiled
+patterns fit in 64 instructions, with a known, quantified minority
+(0.11%) that don't. That makes option 5's fixed-capacity inline
+storage a sized bet, not a guess, with a heap fallback for the
+measured minority rather than a hypothetical one -- and unlike option
+2, it needs no pool, no thread-local state, and no generation counter,
+since a plain "clear the few inline words to zero" is already O(1) at
+this size.
 
 Implementing it first hit a real regression: making ~ThreadList~ ~1.5KB
 (a ~SmallVec<[Thread; 64]>~ is largely inline capacity, 24 bytes per
@@ -1777,8 +1776,7 @@ Implementing it first hit a real regression: making ~ThreadList~ ~1.5KB
 cost of ~1.5KB dwarfed the allocation savings. The fix: keep the two
 ~ThreadList~s in fixed stack slots and make ~current~/~next~
 *references* into them, so the per-step swap exchanges two pointers,
-not ~1.5KB of storage. Confirmed via ~size_of~ before writing the fix,
-not just inferred from the benchmark regressing.
+not ~1.5KB of storage.
 
 With that fix, the benchmark showed 42--45% faster end-to-end
 ~translate~ -- three to four times option 2's win, with less code
@@ -1796,8 +1794,8 @@ outright:
   conditional, so ~add_thread~ would still need to walk those edges
   live every step -- and it's orthogonal to this fix anyway:
   precomputing reachability doesn't remove the need for *somewhere to
-  hold the current step's active thread set*, so the pool would still
-  be needed regardless.
+  hold the current step's active thread set*, so ~ThreadList~'s
+  ~threads~/~seen~ storage would still be needed regardless.
 - Option 4 (DFA) can't preserve per-thread capture positions --
   collapsing NFA states into DFA states loses exactly the
   ~(usize, usize)~ capture span every ~match~/~context~ rule relies on
@@ -1805,8 +1803,7 @@ outright:
   DFA (RE2, Rust's ~regex-automata~) do so only for a fast existence/
   boundary check, falling back to NFA simulation specifically to
   extract captures -- adopting that would mean building and
-  maintaining two execution models, a much larger investment than the
-  size of this fix warrants right now.
+  maintaining two execution models.
 
 *** Positive Consequences
 
@@ -1814,8 +1811,9 @@ outright:
   ~benches/translate.rs~ against ~en-ueb-g2.ctb~, word/sentence/
   paragraph inputs, p < 0.05) -- three to four times option 2's
   measured win.
-- No heap allocation at all in ~find~ for any pattern surveyed so far,
-  not just fewer/amortized allocations as option 2 gave.
+- No heap allocation at all in ~find~ for 99.89% of real patterns (the
+  full 397-table, 31,023-pattern sweep), not just fewer/amortized
+  allocations as option 2 gave.
 - No new persistent state: no ~thread_local!~, no pool checkout/return
   bookkeeping, no generation counter or wraparound branch -- ~seen~'s
   ~clear()~ is a plain zero-fill of one or two ~u64~s, correct
@@ -1823,21 +1821,23 @@ outright:
 - Correctness unaffected: all unit tests pass, clippy is clean on the
   new code, and the full liblouis suite (2,221,196 tests via ~check~)
   produces identical pass/fail/xfail percentages before and after.
-- Degrades gracefully rather than breaking if a future pattern exceeds
-  the inline capacity: ~SmallVec~ spills to the heap exactly as ~Vec~
-  always did, just for a pattern larger than any seen in this survey.
+- Degrades gracefully rather than breaking for the real patterns known
+  to exceed the inline capacity (34 of 31,023 in the full sweep, up to
+  508 instructions in ~afr-za-g2.ctb~): ~SmallVec~ spills to the heap
+  exactly as ~Vec~ always did, so this is a known, quantified minority
+  case handled by design, not an unproven edge case.
 
 *** Negative Consequences
 
 - Adds a new dependency (~smallvec~) and a small hand-rolled ~Bitset~
   type, versus option 1's plain ~Vec<bool>~ or the standard-library-
   only status quo.
-- The chosen capacity (64) is an empirical bound from a six-table
-  survey, not a proven worst case -- correctness doesn't depend on it
-  (the heap fallback covers that), but a table whose patterns
-  routinely exceed it would silently lose the inline-storage benefit
-  for those patterns specifically, with no visible signal that it
-  happened.
+- The chosen capacity (64) is deliberately not a hard bound -- a full
+  397-table sweep found 34 real patterns (0.11%) that exceed it, up to
+  508 instructions in ~afr-za-g2.ctb~'s large word-ending alternations.
+  Correctness doesn't depend on it (the heap fallback covers that), but
+  those patterns specifically don't get the inline-storage benefit,
+  with no visible signal when that happens.
 - ~find~'s call sites for ~add_thread~ changed from passing
   ~&mut current~/~&mut next~ (reborrowing an owned value) to passing
   ~current~/~next~ directly (already ~&mut ThreadList~) -- a small but
@@ -1896,28 +1896,25 @@ outright:
 
 *** Inline bitset + fixed-capacity thread buffer
 
-- Good, because it eliminates the allocation itself for every pattern
-  surveyed, not just the clearing cost or the frequency of allocation
-- Good, because the capacity choice is grounded in a real, diverse
-  six-table survey (5,457 compiled patterns, max 44 instructions), not
-  a guess
+- Good, because it eliminates the allocation itself for 99.89% of real
+  patterns (397-table, 31,023-pattern sweep), not just the clearing
+  cost or the frequency of allocation
+- Good, because the capacity choice is grounded in a real, diverse,
+  full-corpus survey, not a guess from a handful of tables -- and the
+  survey itself found and quantified the minority (0.11%, up to 508
+  instructions in ~afr-za-g2.ctb~) that doesn't fit
 - Good, because it needs no persistent/pooled state at all -- no
   ~thread_local!~, no generation counter, no wraparound branch
 - Good, because it degrades gracefully (heap fallback via ~SmallVec~)
-  rather than being unsound if a future pattern exceeds the surveyed
-  bound
+  for that measured minority rather than being unsound
 - Good, because it measured 3--4x option 2's win (42--45% vs. 9--14%)
 - Bad, because it adds a new dependency (~smallvec~)
-- Bad, because it very nearly shipped as a regression: the naive
-  version (swapping ~ThreadList~ by value once it got large) was
-  37--51% *slower*, only fixed by swapping references instead --
-  a subtlety worth remembering if this code is touched again
 
 ** Links
 
-- Related to :: [[*Hand-rolled regexp VM instead of the ~regex~/~regex-automata~ crates][Hand-rolled regexp VM instead of the ~regex~/~regex-automata~ crates]]
-  -- this decision operates entirely within the VM that ADR chose to
-  keep
+- Related to :: [[*Hand-rolled regexp VM instead of the ~regex~/~regex-automata~ crates][Hand-rolled regexp VM instead
+  of the ~regex~/~regex-automata~ crates]] -- this decision operates
+  entirely within the VM that ADR chose to keep
 - Related to :: 3d0ebac6b1dd1054a6d840920be22f7342dfb6a1 ("Simplify
   ThreadList's visited-set to a plain cleared Vec<bool>") -- ~seen~
   ends up neither that commit's ~Vec<bool>~ nor the generation counter
