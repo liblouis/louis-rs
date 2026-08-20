@@ -153,6 +153,8 @@ pub enum ParseError {
     DotsTupleExpected,
     #[error("Same number of replacements in swap opcode expected ({0} vs {1})")]
     SameNumberOfSwapReplacementsExpected(usize, usize),
+    #[error("{found:?} is a multi-cell dot pattern, but only single cells are allowed here")]
+    SingleCellDotsExpected { found: String },
     #[error("invalid unicode literal {found:?}")]
     InvalidUnicodeLiteral { found: Option<String> },
     #[error("invalid number")]
@@ -1571,7 +1573,14 @@ impl<'a> RuleParser<'a> {
             .next()
             .ok_or(ParseError::DotsExpected)?
             .split(',')
-            .map(|chars| BrailleChar::try_from(chars).map_err(ParseError::InvalidBraille))
+            .map(|chars| {
+                if chars.contains('-') {
+                    return Err(ParseError::SingleCellDotsExpected {
+                        found: chars.to_string(),
+                    });
+                }
+                BrailleChar::try_from(chars).map_err(ParseError::InvalidBraille)
+            })
             .collect()
     }
 
@@ -2846,6 +2855,19 @@ mod tests {
 		    BrailleChar::from(enum_set!(BrailleDot::Dot1|BrailleDot::Dot2|BrailleDot::Dot3|BrailleDot::Dot5))]),
 	    ]}),
             RuleParser::new("swapdd cancelcontraction 2a,23a,25a,256a,26a,35a,236a 1-12,12-1235,14-1235,145-1235,15-1345,24-1345,15-1235").rule()
+        );
+    }
+
+    #[test]
+    fn swapdd_rejects_multi_cell_in_search_operand() {
+        // Per the manual (doc/liblouis.texi): the search operand of `swapdd` must be
+        // single cells; multi-cell patterns there would be ambiguous. Only the
+        // replacement operand may use them.
+        assert_eq!(
+            Err(ParseError::SingleCellDotsExpected {
+                found: "156-2".to_string()
+            }),
+            RuleParser::new("swapdd Aheadbrl 156,156-2,24,124 156,156-2,24,124").rule()
         );
     }
 
