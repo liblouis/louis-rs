@@ -9,6 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Current Status**: Alpha stage
 - Forward translation: ~82% compatibility with liblouis test suite
 - Backward translation: ~71% compatibility
+- Table parsing: all top-level tables under `tables/` parse cleanly except 3
+  with table-authoring bugs already reported upstream (liblouis/liblouis#2070,
+  #2071, #2072) — not louis-rs gaps
 - Library API: Not yet stable
 
 ## Building and Testing
