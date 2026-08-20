@@ -13,6 +13,8 @@
 
 use std::collections::HashSet;
 
+use smallvec::SmallVec;
+
 use crate::translator::{
     ResolvedTranslation,
     effect::Environment,
@@ -314,27 +316,57 @@ struct Thread {
     capture: (usize, usize),
 }
 
+/// A bitset over instruction indices, used to track which `pc`s have already been added to a
+/// [`ThreadList`]'s thread set during the current step. Inline for programs up to 64
+/// instructions -- comfortably covering every real liblouis `match`/`context`/`correct`/passN
+/// pattern surveyed so far (the longest found across several tables was 44 instructions) --
+/// falling back to a heap-allocated word array only for the rare pattern that exceeds that, so
+/// correctness never depends on the inline capacity being enough.
+#[derive(Clone)]
+struct Bitset(SmallVec<[u64; 1]>);
+
+impl Bitset {
+    fn new(len: usize) -> Self {
+        Bitset(SmallVec::from_elem(0, len.div_ceil(64).max(1)))
+    }
+
+    fn get(&self, index: usize) -> bool {
+        self.0[index / 64] & (1 << (index % 64)) != 0
+    }
+
+    fn insert(&mut self, index: usize) {
+        self.0[index / 64] |= 1 << (index % 64);
+    }
+
+    fn clear(&mut self) {
+        self.0.fill(0);
+    }
+}
+
 /// The threads alive at one input position, in priority order, i.e. the preference order between
 /// alternatives that determines which one wins when both succeed (leftmost-first/Perl semantics, as
 /// opposed to POSIX leftmost-longest which would pick differently).
 struct ThreadList {
-    threads: Vec<Thread>,
+    /// Inline up to 64 concurrently-active threads -- the longest program surveyed had 27
+    /// character-consuming instructions in total, an easy bound on how many threads can be alive
+    /// at once -- spilling to the heap beyond that.
+    threads: SmallVec<[Thread; 64]>,
     /// Which `pc`s have already been added during the current step, to ensure a `pc` reachable by
     /// more than one epsilon path is only ever added once.
-    seen: Vec<bool>,
+    seen: Bitset,
 }
 
 impl ThreadList {
     fn new(program_len: usize) -> Self {
         Self {
-            threads: Vec::new(),
-            seen: vec![false; program_len],
+            threads: SmallVec::new(),
+            seen: Bitset::new(program_len),
         }
     }
 
     fn start_step(&mut self) {
         self.threads.clear();
-        self.seen.fill(false);
+        self.seen.clear();
     }
 }
 
@@ -351,10 +383,10 @@ impl CompiledRegexp {
         input_len: usize,
         env: &Environment,
     ) {
-        if list.seen[pc] {
+        if list.seen.get(pc) {
             return;
         }
-        list.seen[pc] = true;
+        list.seen.insert(pc);
         match self.instructions[pc] {
             Instruction::Jump(target) => self.add_thread(list, target, capture, sp, input_len, env),
             Instruction::Split(a, b) => {
@@ -399,8 +431,15 @@ impl CompiledRegexp {
     /// If the input matches the regular expression in the given environment return the
     /// associated translation, otherwise return None.
     pub fn find(&self, input: &str, env: &Environment) -> Option<ResolvedTranslation> {
-        let mut current = ThreadList::new(self.instructions.len());
-        let mut next = ThreadList::new(self.instructions.len());
+        // `current`/`next` stay as fixed-size stack slots (`ThreadList` inlines its thread set
+        // and seen-bitset, up to 64 instructions/threads, to avoid a heap allocation on every
+        // call) and are never moved: `current`/`next` below are references into them, so
+        // swapping which is "current" each step (`mem::swap` further down) swaps two pointers,
+        // not the ~1.5KB of inline storage itself.
+        let mut current_storage = ThreadList::new(self.instructions.len());
+        let mut next_storage = ThreadList::new(self.instructions.len());
+        let mut current = &mut current_storage;
+        let mut next = &mut next_storage;
         let mut sp = 0;
         let mut length = 0;
         // The capture span, consumed-char count and translation of the best match found so far. A
@@ -409,7 +448,7 @@ impl CompiledRegexp {
         let mut matched: Option<((usize, usize), usize, TranslationIndex)> = None;
 
         current.start_step();
-        self.add_thread(&mut current, 0, (0, 0), sp, input.len(), env);
+        self.add_thread(current, 0, (0, 0), sp, input.len(), env);
 
         while !current.threads.is_empty() {
             let next_char = input[sp..].chars().next();
@@ -425,7 +464,7 @@ impl CompiledRegexp {
                     Instruction::Char(expected) => {
                         if next_char == Some(expected) {
                             self.add_thread(
-                                &mut next,
+                                next,
                                 thread.pc + 1,
                                 thread.capture,
                                 sp + expected.len_utf8(),
@@ -439,7 +478,7 @@ impl CompiledRegexp {
                             && actual != expected
                         {
                             self.add_thread(
-                                &mut next,
+                                next,
                                 thread.pc + 1,
                                 thread.capture,
                                 sp + actual.len_utf8(),
@@ -453,7 +492,7 @@ impl CompiledRegexp {
                             && chars_match_case_insensitive(actual, expected)
                         {
                             self.add_thread(
-                                &mut next,
+                                next,
                                 thread.pc + 1,
                                 thread.capture,
                                 sp + actual.len_utf8(),
@@ -467,7 +506,7 @@ impl CompiledRegexp {
                             && self.character_classes[index].contains(&actual)
                         {
                             self.add_thread(
-                                &mut next,
+                                next,
                                 thread.pc + 1,
                                 thread.capture,
                                 sp + actual.len_utf8(),
@@ -481,7 +520,7 @@ impl CompiledRegexp {
                             && !self.character_classes[index].contains(&actual)
                         {
                             self.add_thread(
-                                &mut next,
+                                next,
                                 thread.pc + 1,
                                 thread.capture,
                                 sp + actual.len_utf8(),
@@ -493,7 +532,7 @@ impl CompiledRegexp {
                     Instruction::Any => {
                         if let Some(actual) = next_char {
                             self.add_thread(
-                                &mut next,
+                                next,
                                 thread.pc + 1,
                                 thread.capture,
                                 sp + actual.len_utf8(),
