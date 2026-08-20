@@ -1105,12 +1105,45 @@ fn unescape_unicode(chars: &mut Chars, len: u8) -> Result<char, ParseError> {
         }
     }
 
-    if let Ok(n) = u32::from_str_radix(&s, 16)
-        && let Some(c) = char::from_u32(n)
-    {
+    let Ok(value) = u32::from_str_radix(&s, 16) else {
+        return Err(ParseError::InvalidUnicodeLiteral { found: Some(s) });
+    };
+
+    if let Some(c) = char::from_u32(value) {
         return Ok(c);
     }
-    Err(ParseError::InvalidUnicodeLiteral { found: Some(s) })
+
+    // A hex literal that fits a UTF-16 code unit (`\x`, always 4 digits) can
+    // only fail to be a scalar value by being a surrogate half -- that's the
+    // one gap in `char::from_u32`'s range for u16-sized input. Anything wider
+    // (only reachable via `\y`/`\z`) is a genuine out-of-range literal.
+    let Ok(unit) = u16::try_from(value) else {
+        return Err(ParseError::InvalidUnicodeLiteral { found: Some(s) });
+    };
+
+    // liblouis tables written for 16-bit widechar builds spell a character
+    // above U+FFFF as a `\x`-escaped high/low surrogate pair. Look ahead for
+    // a second `\x` escape and hand both units to `char::decode_utf16`, which
+    // already knows the surrogate-pairing rules -- it accepts a valid pair
+    // and rejects everything else (a lone half, two highs, a high with a
+    // non-surrogate after it, ...).
+    let mut lookahead = chars.clone();
+    if len == 4 && lookahead.next() == Some('\\') && lookahead.next() == Some('x') {
+        let low: String = (0..4).map_while(|_| lookahead.next()).collect();
+        if let Ok(low) = u16::from_str_radix(&low, 16)
+            && let Some(Ok(c)) = char::decode_utf16([unit, low]).next()
+        {
+            *chars = lookahead;
+            return Ok(c);
+        }
+    }
+
+    // An unpaired surrogate half isn't a real character. A couple of tables
+    // use one as a sentinel to strip stray remnants of bad UTF-16 splitting --
+    // input a Rust `char` can never actually hold, by construction. Map it to
+    // the standard "invalid code unit" placeholder instead of failing the
+    // whole table over a rule that can never match anything.
+    Ok('\u{FFFD}')
 }
 
 pub fn unescape(s: &str, context: EscapingContext) -> Result<String, ParseError> {
@@ -2552,6 +2585,27 @@ mod tests {
     }
 
     #[test]
+    fn unicode_surrogate_pairs() {
+        // A plain BMP escape is unaffected.
+        assert_eq!(
+            Ok('A'.to_string()),
+            unescape("\\x0041", EscapingContext::Default)
+        );
+        // A high/low surrogate pair combines into the astral character it encodes.
+        assert_eq!(
+            Ok("🌑".to_string()),
+            unescape("\\xD83C\\xDF11", EscapingContext::Default)
+        );
+        // An unpaired surrogate half can't be a real character; some tables use one
+        // to strip stray remnants of bad UTF-16 splitting, so it maps to the
+        // standard placeholder rather than failing the whole table.
+        assert_eq!(
+            Ok('\u{FFFD}'.to_string()),
+            unescape("\\xD83D", EscapingContext::Default)
+        );
+    }
+
+    #[test]
     fn nocontractsign_and_nonumsign_honor_direction() {
         assert_eq!(
             enum_set!(Direction::Forward),
@@ -2569,7 +2623,10 @@ mod tests {
         );
         assert_eq!(
             enum_set!(Direction::Forward | Direction::Backward),
-            RuleParser::new("nonumsign 156").rule().unwrap().directions()
+            RuleParser::new("nonumsign 156")
+                .rule()
+                .unwrap()
+                .directions()
         );
     }
 
