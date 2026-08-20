@@ -26,20 +26,24 @@
   languages (see [[https://github.com/mozilla/cbindgen][cbindgen]] or [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 
 * Known gaps
-- [ ] A ~*~ action combined with a lookback that is not at the very
-  start of the test consumes the re-examined characters: only a
-  *leading* ~_N~ is excluded from the consumed span
-  (~Test::leading_lookback~, honored in
-  ~UnresolvedTranslation::resolve~). A trailing or mid-test ~_N~
-  compiles its re-examined checks in place (~Regexp::Empty~ for the
-  rewind itself), so with a ~*~ the matched span overshoots and the
-  rewound characters get consumed. Untested combination; fixing it
-  needs span accounting in the pattern layer (e.g. on
-  ~AnchoredContextRegexp~) instead of a leading-only count on the
-  translation. Related: for a bracket-less test with a leading ~_N~,
-  the implicit replace bracket wraps the lookback too, so ~*~ copies
-  the rewound characters into the output — worth checking against
-  liblouis.
+- [ ] A ~_N~ rewind in the *middle* of a multipass test (forward
+  checks on both sides, e.g. ~$a_1$b[...]~) is compiled in place, so
+  the checks after it examine the characters *following* the cursor
+  instead of re-examining the rewound-over ones. Rewinds at the very
+  start or end of a test are handled exactly
+  (~CompiledRegexp::with_lookback~ excludes them from the matched
+  span); no shipped table interleaves rewinds with forward checks.
+- [ ] th-g1.uti fails to parse and masks the entire th.yaml suite:
+  ~swapdd Aheadbrl 156,156-2,24,124 156,156-2,24,124~ (line 156) is
+  rejected with ~InvalidBraille('-')~ — multi-cell dot patterns
+  (~156-2~) inside a swapdd dot-pattern list are not supported.
+- [ ] Backward-translation candidate selection breaks weight ties
+  nondeterministically between runs: with hi.tbl, ~⠓⠌~ flips between
+  devanagari.cti's ~after ConsonantLetter always \x0948 34~ and
+  en-in-g1.ctb's ~endnum st 34~ (है vs हst) across invocations of the
+  same binary — likely hash-map iteration order feeding
+  ~max_by_key~. Makes yaml suite percentages wobble (e.g.
+  hi_harness.yaml ±0.4%).
 - [ ] Literal hyphen character breaks per-segment contraction in compounds
   - e.g. en-ueb.yaml: "do-it-yourself" -> expected "d-x-yrf", actual
     "do-x-y|rself" ("do" and "yourself" fail to contract on their own
