@@ -26,6 +26,20 @@
   languages (see [[https://github.com/mozilla/cbindgen][cbindgen]] or [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 
 * Known gaps
+- [ ] A ~*~ action combined with a lookback that is not at the very
+  start of the test consumes the re-examined characters: only a
+  *leading* ~_N~ is excluded from the consumed span
+  (~Test::leading_lookback~, honored in
+  ~UnresolvedTranslation::resolve~). A trailing or mid-test ~_N~
+  compiles its re-examined checks in place (~Regexp::Empty~ for the
+  rewind itself), so with a ~*~ the matched span overshoots and the
+  rewound characters get consumed. Untested combination; fixing it
+  needs span accounting in the pattern layer (e.g. on
+  ~AnchoredContextRegexp~) instead of a leading-only count on the
+  translation. Related: for a bracket-less test with a leading ~_N~,
+  the implicit replace bracket wraps the lookback too, so ~*~ copies
+  the rewound characters into the output — worth checking against
+  liblouis.
 - [ ] Literal hyphen character breaks per-segment contraction in compounds
   - e.g. en-ueb.yaml: "do-it-yourself" -> expected "d-x-yrf", actual
     "do-x-y|rself" ("do" and "yourself" fail to contract on their own

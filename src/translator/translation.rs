@@ -83,6 +83,9 @@ impl std::fmt::Display for TranslationTargets {
 }
 
 pub trait Resolve {
+    /// Resolve against the span the pattern matched: `capture` is the bracketed focus, `matched`
+    /// the whole matched span. Already-resolved translations ignore both and only take on
+    /// `weight` and `offset`.
     fn resolve(
         self,
         capture: &str,
@@ -99,13 +102,12 @@ pub struct UnresolvedTranslation {
     stage: TranslationStage,
     effects: Vec<Effect>,
     origin: Option<AnchoredRule>,
-    /// Whether the action contains a `*` ([`TranslationTarget::Capture`]). Per liblouis, `*`
-    /// copies the captured focus and discards everything else that was matched, so such a
-    /// translation consumes the whole matched test, not only the focus.
-    replaces: bool,
-    /// The number of characters a leading `_N` in the test rewinds over. The test re-examines
-    /// them, but they lie before the matched span, so `replaces` must not consume them.
-    lookback: usize,
+    /// `Some` when the translation consumes the whole matched test rather than only the captured
+    /// focus (a `*` in the action; without one the context around the focus stays in the input
+    /// and is scanned again). The value is the number of characters a leading `_N` in the test
+    /// rewinds over: the test re-examines them, but they lie before the matched span and are not
+    /// consumed.
+    replaces: Option<usize>,
 }
 
 impl UnresolvedTranslation {
@@ -122,14 +124,17 @@ impl UnresolvedTranslation {
             stage,
             effects: effects.to_vec(),
             origin: origin.into(),
-            replaces: output.contains(&TranslationTarget::Capture),
-            lookback: 0,
+            replaces: None,
         }
     }
 
-    /// Set the number of characters a leading `_N` in the test rewinds over.
-    pub fn with_lookback(self, lookback: usize) -> Self {
-        Self { lookback, ..self }
+    /// Make the translation consume the whole matched test instead of only the captured focus,
+    /// sparing the first `lookback` characters a leading `_N` in the test rewinds over.
+    pub fn consuming_match(self, lookback: usize) -> Self {
+        Self {
+            replaces: Some(lookback),
+            ..self
+        }
     }
 }
 
@@ -148,16 +153,12 @@ impl Resolve for UnresolvedTranslation {
             .map(|t| t.resolve(capture))
             .map(|t| t.to_string())
             .collect();
-        // With a `*` in the action the whole match is consumed and any context around the focus
-        // is discarded; without it only the focus is consumed and trailing context is scanned
-        // again. Characters a leading `_N` rewinds over precede the match and stay untouched
-        // either way.
-        let (input, offset) = if self.replaces {
+        let (input, offset) = if let Some(lookback) = self.replaces {
             let start = matched
                 .char_indices()
-                .nth(self.lookback)
+                .nth(lookback)
                 .map_or(matched.len(), |(i, _)| i);
-            (&matched[start..], self.lookback)
+            (&matched[start..], lookback)
         } else {
             (capture, offset)
         };
