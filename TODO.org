@@ -1,92 +1,13 @@
-* Todo [17/24]
+* Todo [0/7]
 - [ ] Move the display tables into the Pipeline
+  - currently only used by the YAML test harness; normal translation
+    (~Pipeline~) has no way to specify a display table
 - [ ] Implement the ~syllable~ opcode with boundary checking
-- [X] implement "libhyphen"
-  - implemented natively in ~src/hyphenation.rs~, parsing liblouis's own
-    ~.dic~ hyphenation-pattern format directly (no external crate, no
-    build-time conversion step); verified byte-identical to the old
-    ~hyphenation~-crate-based behavior across liblouis's full yaml test
-    suite (278k test cases across the en-g3 and da-dk-g26 dictionaries)
-- [X] guard against "()+" regexp?
-  - [X] a body that is *unconditionally* zero-width (e.g. ~Regexp::Empty~)
-    is guarded: ~Regexp::always_zero_width()~ caps
-    ~ZeroOrMore~/~OneOrMore~/~RepeatAtLeast~ at one attempt instead of
-    an infinite self-referencing jump
-  - [X] a body that is only *conditionally* zero-width (e.g.
-    ~Either(CharacterClass, EndAnchor)~) was still a real gap under the
-    old recursive-backtracking matcher, since ~always_zero_width()~
-    doesn't classify it as always zero-width and it kept its normal
-    unbounded loop. Replacing that matcher with a Pike VM
-    (~CompiledRegexp::find~ in regexp.rs) closed this for free: the
-    VM dedupes instruction pointers already visited at the current
-    input position, so looping back to the same ~Split~ without
-    consuming a character is a no-op regardless of *why* the body is
-    zero-width this time around
-- [X] Indication [3/3]
-  - Indication is pre-computed before translation via ~Indicators::precompute()~,
-    which produces an immutable ~PrecomputedIndications~ value. Both built-in
-    indication and user-supplied typeforms (~TextAttribute~) populate the same
-    ~IndicationEvents~ array; the translation loop consults it by position index.
-  - [X] Numeric indication
-  - [X] Caps indication
-  - [X] Emphasis indication
-- [X] Typeforms
 - [ ] Cursor handling
-- [X] Hyphenation
-  - previously delegated to the [[https://docs.rs/hyphenation/latest/hyphenation/][hyphenation crate]]; now implemented
-    natively (see "implement libhyphen" above and ~src/hyphenation.rs~)
-  - [X] test it -- unit-tested and verified against liblouis's full yaml
-    test suite
-  - the dictionary-loading/lookup mechanism itself works; the remaining
-    nocross/compound-word contraction gaps are tracked separately under
-    "Known gaps" (the two hyphen-related entries)
-- [X] Add an API so that the functionality can be used as a library
-  - end expose it as a C ABI so that it can be used from other
-    languages (see also [[https://github.com/mozilla/cbindgen][cbindgen]] or even better [[https://github.com/rust-diplomat/diplomat][Diplomat]])
-- [ ] Display tables
-  - When testing the YAML files the display tables are used.
-  - However normal translation has currently no way to specify a
-    display table
 - [ ] The boundary functions (~word_start~, etc) only work in forward
-  translation
-  - likely the same root cause behind the backward-direction gaps
-    tracked under "Known gaps" below: begcaps/endcaps/begcapsphrase
-    (confirmed via code search — ~uppercase.rs~ has no
-    backward-direction logic at all, not even a partial
-    implementation) and possibly the backward word/group-sign
-    corruption seen in ~sw-ke-dictionary.yaml~
-- [X] implement regexp negation
-- [X] Parse with context
-  - currently tables are parsed line by line. Opcodes have no idea
-    whether a character or a class has been defined before
-  - Probably need to pass some context to the rule parser where
-    character definitions and class names are kept
-  - this is solved with a two-pass compilation now. The first pass
-    collects all relevant information and the second pass consequently
-    uses that.
-- [X] Support for nocross
-- [X] Add support for virtual dots
-  - Virtual dots are supported and are converted to Unicode Supplementary Private Use Area-A
-- [X] The correct, multipass and match opcodes [3/3]
-  - [X] Match opcode
-    - A basic regexp engine has been implemented and aside from
-      negation the match opcode basically works
-  - [X] Correct opcode
-  - [X] Multipass opcode
-- [X] Currently the matching of input text against the rules is case
-  sensitive.
-  - [X] Make it case insensitive.
-  - [X] Now everything is case insensitive, even character
-    definitions. This is probably not what we want. We might have to
-    move the character definitions out of the trie into a separate
-    structure.
-- [X] Word boundaries so we could support beg- and endword.
-  - the [[https://docs.rs/unicode-segmentation/latest/unicode_segmentation/][unicode_segmentation]] crate would probably help. It has
-    functions like [[https://docs.rs/unicode-segmentation/latest/unicode_segmentation/trait.UnicodeSegmentation.html#tymethod.split_word_bound_indices][split_word_bound_indices]], that give you word bounds
-    based on the Unicode standard.
-- [X] Handle implicit braille definitions, i.e. '='
-- [X] Table resolution based on metadata
-- [X] Handle undefined characters similarly to liblouis
+  translation — confirmed ~uppercase.rs~ has no backward-direction
+  logic at all; likely the same root cause behind the backward-caps
+  gaps under "Known gaps" below
 - [ ] Normalize input text to a canonical Unicode form
   - NFC normalization was tried (input at the start of the pipeline,
     plus rule patterns) but reverted: it fixed tables that define
@@ -97,156 +18,57 @@
     alternative — it decomposes all input, so combining marks stay
     explicit and precomposed rules still match via longer trie paths.
   - See ADR in [[file:doc/Architecture_Decision_Records.org][Architecture Decision Records]]
-- [X] Instead of hand-rolling an finite state machine to implement
-  regular expressions we should use [[https://docs.rs/regex-automata/latest/regex_automata/][regex_automata]].
-  - no, for now keep the hand-rolled regexp engine
-  - as we need to support effects and negation
-  - see ADR in [[file:doc/Architecture_Decision_Records.org][Architecture Decision Records]] for the fuller reasoning
 - [ ] performance
   - put translations into offset buckets
   - measure performance
   - reduce the regexp opcode operand to only 32 bit
+- [ ] Expose the library via a C ABI so it can be used from other
+  languages (see [[https://github.com/mozilla/cbindgen][cbindgen]] or [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 
 * Known gaps
 - [ ] Literal hyphen character breaks per-segment contraction in compounds
-  - concrete repro: en-ueb.yaml compounds split across a hyphen don't
-    get correct per-segment contraction, e.g. "do-it-yourself" ->
-    expected "d-x-yrf" but actual "do-x-y|rself" ("do" and "yourself"
-    fail to contract on their own side of the hyphen); same for
-    "out-and-out" -> expected "|-&-|" actual "|t-&-|t"
-  - likely cause: ~src/translator/table.rs~'s ~Rule::Hyphen~ handling
-    files the literal hyphen character under generic
-    ~CharacterClass::Punctuation~ (see the ~FIXME: In what character
-    class is the hyphen (if any)?~ comment there) rather than whatever
+  - e.g. en-ueb.yaml: "do-it-yourself" -> expected "d-x-yrf", actual
+    "do-x-y|rself" ("do" and "yourself" fail to contract on their own
+    side of the hyphen); same for "out-and-out"
+  - cause: ~Rule::Hyphen~ (~src/translator/table.rs~) files the hyphen
+    under generic ~CharacterClass::Punctuation~ instead of whatever
     classification word-boundary detection needs to treat each side as
-    its own word for contraction purposes. Unrelated to
-    ~src/hyphenation.rs~/dictionary-based hyphenation -- liblouis's own
-    ~syllableBreak()~ already stops at non-letter characters like ~-~
-    when finding the enclosing word, so no hyphenation-dictionary lookup
-    is even involved in this repro
-- [ ] nocross only checks "can this matched text hyphenate at all", not
-  "does *this* candidate's span cross a break"
-  - liblouis's real nocross-crossing check (~syllableBreak()~ in
-    ~lou_translateString.c~) is positional: it computes every
-    hyphenation break across the whole enclosing word (bounded by
-    non-letter characters), then rejects a ~nocross~ rule only if a
-    break falls strictly inside *that rule's* matched span
-  - our ~word_hyphenates()~/~HyphenationTable::can_hyphenate()~
-    (~src/translator/table/primary.rs~) is a coarser stand-in: it asks
-    whether the matched candidate substring itself has any break
-    anywhere, treating it as an isolated word rather than a span inside
-    a larger one. This predates the native hyphenation rewrite (the old
-    ~hyphenation~-crate-based ~opportunities().is_empty()~ check was
-    exactly as coarse) and isn't caused by it -- fixing it properly
-    would mean giving ~HyphenationTable~ a position-aware query again
-    (it currently only returns a bool, by design, since nothing today
-    needs positions) plus computing the correct enclosing-word bounds
-    before calling it, which ~nocross_candidates()~ doesn't do either
+    its own word. Unrelated to ~src/hyphenation.rs~/dictionary-based
+    hyphenation.
+- [ ] ~nocross~ only checks whether the matched candidate substring can
+  hyphenate anywhere, not whether a break falls inside *that*
+  candidate's span within the enclosing word (liblouis's real,
+  positional check, ~syllableBreak()~). Fixing this needs a
+  position-aware ~HyphenationTable~ query plus correct
+  enclosing-word-bounds computation in ~nocross_candidates()~
+  (~src/translator/table/primary.rs~).
 - [-] indication + backtranslation
-  - [X] capsletter, begcapsword/endcapsword, numsign/nonumsign
   - [ ] begcaps/endcaps/begcapsphrase/endcapsphrase (passage-level caps)
-    - confirmed via code search: this isn't partially done, there is
-      currently no backward-direction logic at all in
-      ~uppercase.rs~ (forward tiers were implemented 2026-07-01, see
-      ~emphasis.yaml~/~capitalization.yaml~ gains, but backward
-      recognition of the same markers was never added)
+    — no backward-direction logic at all in ~uppercase.rs~
   - [ ] emphasis (begemph/endemph etc.) — needs a way to return
     typeform metadata from backward translation, not just text
-- [ ] capsletter/uppercase-mode indication needs liblouis's
-  begin/end/word/symbol model, not a flat "fire once per position" one
-  - found while investigating a regression in de-g0-detailed.utb
-    (German): a zero-width ~context~ marker used to signal an
-    isolated single-letter capital (e.g. input "A") needs *two*
-    capsletter cells flanking the marker to satisfy the table's own
-    pass2 collapse rule (~@46-ad-46 -> @45~), while the same
-    construct mid-word (e.g. "kW") needs only *one*, in the *opposite*
-    order (~@ad-46~, not ~@46-ad~) — confirmed against a real liblouis
-    3.36.0 build
-  - root cause (confirmed by reading ~lou_translateString.c~):
-    ~capsletter~ compiles to ~CTO_ModeLetter~ for the built-in
-    ~CTC_UpperCase~ mode — it is not a standalone indicator like
-    ~letsign~/~numsign~, it goes through the same multi-pass
-    emphasis/mode framework as ~begcapsword~/~begcaps~/custom emphasis
-    classes: per-position ~begin~/~end~/~word~/~symbol~ flags are
-    resolved globally before translation
-    (~resolveEmphasisBeginEnd~/~resolveEmphasisWords~/~resolveEmphasisAllSymbols~/etc.),
-    then ~insertEmphasesAt()~ unconditionally calls *both*
-    ~insertEmphasisBegin()~ and ~insertEmphasisSymbol()~ for mode
-    classes at the same position — a design that already anticipates
-    more than one indicator emission per character, unlike our single
-    flat ~indications~ precomputed table (~Indicators::precompute()~)
-  - ~uppercase.rs~ (capsletter/begcapsword/begcaps/begcapsphrase tiers)
-    and ~emphasis.rs~ (emphletter/begemphword/begemphphrase tiers)
-    independently reimplement the same escalating letter/word/phrase
-    tier model liblouis unifies via ~emphRules~/~insertEmphasesAt()~
-    for both mode classes and custom emphasis classes — neither
-    currently implements the begin+symbol dual-insertion above (each
-    picks one tier per run, not both). Fixing this properly probably
-    means unifying the two modules into one shared model first, then
-    implementing the begin/symbol distinction once there, benefiting
-    both capsletter and custom emphasis classes (which could plausibly
-    hit the same liblouis quirk via begemph-style context interactions)
-    rather than the flat "does this position need a sign" bit both
-    modules use today; that flat model stays correct for
-    ~letsign~/~numsign~, which liblouis treats as simple, single-flag,
-    directly-inserted indicators outside the mode/emphasis framework
-- [X] indication
-- [X] computer braille
+- [ ] Isolated single-letter capitalization (capsletter vs.
+  begcapsword tier) — see the ADR of the same name for the full
+  analysis. liblouis's begin/end/word/symbol emphasis model allows two
+  indicator emissions at one position; our flat per-position
+  ~Indicators::precompute()~ model doesn't. Properly fixing this likely
+  means unifying ~uppercase.rs~ and ~emphasis.rs~ into one shared tier
+  model first.
 - [ ] inpos + outpos mapping
-- [X] typeform (emphasis input)
-- [X] regexp infinite loop — see the "guard against ()+ regexp?" entry
-  in the Todo section above: resolved for both unconditionally and
-  conditionally zero-width loop bodies once the matcher became a
-  Pike VM
-- [X] ~Regexp::Any~ negation (~!.~ in a ~match~/~context~ pattern).
-- [-] ~Attribute::Boundary~/~ByOrder~/~Any~ are silently treated as
-  no-ops in both match_pattern.rs and context_pattern.rs instead of
-  being matched
-  - [X] ~Attribute::Boundary~ in match_pattern.rs (the ~^~ attribute
-    inside a ~match~ opcode's ~%[...]~ set) is now enforced — see the
-    word/group-sign entry below, this was the single highest-impact
-    fix found so far
-  - [ ] ~Attribute::ByOrder~/~Any~ in match_pattern.rs, and all three
-    (~Boundary~/~ByOrder~/~Any~) in context_pattern.rs (i.e. the same
-    attribute used inside a ~context~/~correct~/passN rule's ~$...~
-    attribute set, as opposed to the whole-test ~`~/~~~ anchors,
-    which are a separate, already-fixed mechanism) are still no-ops
-- [-] Word/group-sign ("lower"/part-word sign) contraction not applied
-  when the word carries a suffix, apostrophe, or is part of a longer
-  compound, even though the same sign fires correctly when the word
-  stands alone
-  - root cause found and fixed: nearly all forward-direction UEB
-    word/group-signs ("would", "little", "it", "was", ...) are defined
-    only via ~match~ rules gated on the ~^~ boundary attribute (see
-    above), so none of them fired at all, for any input shape,
-    lowercase or not — not a trie precedence/longest-match issue as
-    first suspected
-  - confirmed fixed for lowercase input: "would", "little", "it",
-    "was", "also" etc. now all contract correctly forward
-  - [X] capitalized input ("Would"/"Little"/"Also") now also
-    contracts correctly, verified against a real liblouis build — a
-    ~match~ rule's literal ~chars~ field is found case-insensitively
-    in liblouis (~validMatch~), only ~pre~/~post~ stay case-sensitive.
-    Implemented via ~Regexp::CaseInsensitiveString~, reusing
-    ~trie::TrieNode::char_transition~'s existing convention
-  - [ ] NEW, unrelated gap found while digging further: double-letter
-    contractions ("bb"/"cc"/etc, ~match %a bb %a 23~) fail for any
-    standalone word regardless of case ("abbas" alone fails, "the
-    abbas" works) — a ~BoundaryMode::AssumeAtStart~ bug in
-    match_pattern.rs. The direct fix regresses the suite overall
-    (94.9%→94.4%) by exposing a bigger, pre-existing architectural
-    gap between our weight-based match-rule candidate selection and
-    liblouis's table-definition-order first-match-wins. Reverted
-    rather than shipped — see the ADR "Match-rule candidate
-    selection: weight vs. table-definition order" for the full
-    analysis and options
-    - one concrete instance of that gap ("abandoning" picking the
-      "in" wordsign instead of "ing") has a verified table-level fix
-      now (~en-ueb-g2.ctb~'s "in" rule given a new numbered class
-      excluding a following ~g~/~G~), sitting uncommitted in the
-      local liblouis checkout — see the ADR for the diff and
-      verification. Doesn't resolve the general engine-side question,
-      just removes this one case as a live example of it
+- [-] ~Attribute::Boundary~/~ByOrder~/~Any~ (the attributes inside a
+  rule's ~%[...]~/~$...~ set) are mostly no-ops
+  - ~Attribute::Boundary~ in match_pattern.rs is now enforced (fixed
+    the word/group-sign gap below)
+  - [ ] ~ByOrder~/~Any~ in match_pattern.rs, and all three in
+    context_pattern.rs, remain no-ops
+- [-] Word/group-sign ("lower"/part-word sign) contraction — mostly
+  fixed: root cause was ~match~ rules gated on the ~^~ boundary
+  attribute never firing, now fixed for both lowercase and capitalized
+  input. Remaining gap: double-letter contractions
+  (~match %a bb %a 23~) fail for standalone words due to a
+  ~BoundaryMode::AssumeAtStart~ bug whose direct fix regresses the
+  suite by exposing a bigger architectural gap — see the ADR "Match-rule
+  candidate selection: weight vs. table-definition order".
 - [ ] Backward translation of those same word/group signs sometimes
   corrupts unrelated surrounding text instead of just failing to
   contract, e.g. sw-ke-dictionary.yaml backward lookups splicing in
@@ -265,3 +87,7 @@
 - [ ] Malayalam conjunct/reph rule: a specific virama/conjunct
   sequence consistently produces ⠗ instead of the expected ⠻
   (ml.yaml)
+- [ ] ~compbrlAtCursor~/~compbrlLeftCursor~ translation modes not
+  implemented — mode flags in ~TranslationOptions~ meant to expand the
+  current word into computer braille without ~begcomp~/~endcomp~
+  indicators

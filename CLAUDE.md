@@ -212,7 +212,7 @@ Tests use YAML files from the liblouis project. Current gaps:
 - Emphasis indication (partial support)
 - Compound-word contraction across a nocross hyphen (see `TODO.org`'s "Known gaps")
 - Some backward translation rules
-- Computer braille (incomplete)
+- Computer braille cursor modes (`compbrlAtCursor`/`compbrlLeftCursor` not implemented)
 - Input/output position mapping (typeforms and cursors)
 
 See `TODO.org` for detailed tracking.
@@ -229,8 +229,7 @@ See `TODO.org` for detailed tracking.
 - Emphasis indication not fully implemented
 - nocross-driven hyphenation dictionary lookup works natively (`src/hyphenation.rs`), but compound-word contraction across a hyphen still has a known gap
 - Some backward translation modes missing
-- Computer braille incomplete
-- Regexp infinite loop potential (needs guarding against recursive patterns)
+- Computer braille is implemented as a full pipeline feature; only `compbrlAtCursor`/`compbrlLeftCursor` modes are missing
 
 ## Relevant Files for Common Tasks
 
