@@ -182,6 +182,18 @@ mod tests {
     }
 
     #[test]
+    fn multipass_star_moves_the_dagesh() {
+        // Regression test for https://github.com/liblouis/louis-rs/issues/21:
+        // the swap idiom from the Hebrew tables. `*` discards everything that
+        // was matched outside the focus, so the dagesh must not survive in
+        // place after the action has re-emitted it.
+        let table =
+            "letter \u{5d3} 145\nsign \u{5bc} 5\nnoback correct [$l]\"\u{5bc}\" \"\u{5bc}\"*\n";
+        let translator = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(translator.translate("\u{5d3}\u{5bc}").unwrap(), "⠐⠙");
+    }
+
+    #[test]
     fn output_positions() {
         assert_eq!(
             Translator::compute_output_positions(&[translation("abc", "⠁⠃⠇")]),

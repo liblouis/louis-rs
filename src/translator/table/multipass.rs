@@ -250,6 +250,149 @@ mod tests {
     }
 
     #[test]
+    fn star_consumes_trailing_context() {
+        // The swap idiom: move the context character before the focus. Per
+        // liblouis, `*` in the action discards everything else that was
+        // matched, so the trailing context must not be emitted again.
+        let rules = [parse_rule("correct [\"a\"]\"b\" \"b\"*")];
+        let ctx = TableContext::default();
+        let transform =
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Pre, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("ab"), "ba");
+        assert_eq!(transform.translate("aa"), "aa");
+        assert_eq!(transform.translate("abab"), "baba");
+    }
+
+    #[test]
+    fn star_consumes_leading_context() {
+        let rules = [parse_rule("correct \"a\"[\"b\"] *\"c\"")];
+        let ctx = TableContext::default();
+        let transform =
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Pre, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("ab"), "bc");
+        assert_eq!(transform.translate("b"), "b");
+    }
+
+    #[test]
+    fn without_star_only_the_focus_is_replaced() {
+        // Without `*` the action replaces the focus and the context stays in
+        // the stream, matching the manual's description of the replacement.
+        let rules = [parse_rule("correct [\"a\"]\"b\" \"x\"")];
+        let ctx = TableContext::default();
+        let transform =
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Pre, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("ab"), "xb");
+    }
+
+    #[test]
+    fn pass2_star_moves_cell_to_the_end() {
+        // The idiom that walks a cell over the rest of the word, as in the
+        // etnahta rule of the Hebrew tables.
+        let rules = [parse_rule("pass2 @23[@1-1] *@23")];
+        let ctx = TableContext::default();
+        let transform =
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Post1, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("⠆⠁⠁"), "⠁⠁⠆");
+    }
+
+    #[test]
+    fn star_does_not_consume_lookback_context() {
+        // Modeled on es-g2.ctb's capital rules (`noback pass2 _$s[%kwx] @5*`):
+        // the space is examined through the `_` rewind, so it lies outside the
+        // matched span and must survive the replacement.
+        use crate::parser::{CharacterClass, CharacterClasses};
+        use crate::translator::swap::SwapClasses;
+        let rules = [parse_rule("pass2 _$s[@13] @5*")];
+        let ctx = TableContext::new(
+            CharacterClasses::default(),
+            CharacterClasses::new(&[(CharacterClass::Space, &['⠀'])]),
+            SwapClasses::default(),
+        );
+        let transform =
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Post1, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("⠀⠅"), "⠀⠐⠅");
+    }
+
+    #[test]
+    fn star_does_not_consume_trailing_lookback() {
+        // Modeled on th-g2.ctb's contractions (`noback context [%c]"..."!%ToneAndVowels_ @4*`):
+        // the trailing check peeks at the next character and `_` rewinds over it, so it lies
+        // outside the matched span and must survive the replacement.
+        let rules = [parse_rule("correct [\"a\"]!\"x\"_ \"y\"*")];
+        let ctx = TableContext::default();
+        let transform =
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Pre, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("ab"), "yab");
+    }
+
+    #[test]
+    fn bracketless_leading_lookback_is_not_replaced() {
+        // Modeled on de-g0-core.uti (`noback pass2 _$l@456b @6-456`): without brackets the
+        // replaced span starts at the position the rule fired at, so the character the leading
+        // `_` rewinds over stays in the stream.
+        use crate::parser::{CharacterClass, CharacterClasses};
+        use crate::translator::swap::SwapClasses;
+        let rules = [parse_rule("correct _$s\"a\" \"x\"")];
+        let ctx = TableContext::new(
+            CharacterClasses::new(&[(CharacterClass::Space, &[' '])]),
+            CharacterClasses::default(),
+            SwapClasses::default(),
+        );
+        let transform =
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Pre, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate(" a"), " x");
+    }
+
+    #[test]
+    fn bracketless_trailing_lookback_survives() {
+        // Modeled on th-g2.ctb (`noback context "..."!%ToneAndVowels_ @4-234-1235-256`): the
+        // peeked-at character after the bracket-less test stays in the stream.
+        let rules = [parse_rule("correct \"a\"!\"x\"_ \"y\"")];
+        let ctx = TableContext::default();
+        let transform =
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Pre, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("ab"), "yb");
+    }
+
+    #[test]
+    fn star_does_not_copy_bracketless_leading_lookback() {
+        // Without brackets `*` copies the span from the position the rule fired at, so the
+        // character a leading `_` rewinds over is neither copied into the output nor consumed.
+        use crate::parser::{CharacterClass, CharacterClasses};
+        use crate::translator::swap::SwapClasses;
+        let rules = [parse_rule("correct _$s\"a\" \"y\"*")];
+        let ctx = TableContext::new(
+            CharacterClasses::new(&[(CharacterClass::Space, &[' '])]),
+            CharacterClasses::default(),
+            SwapClasses::default(),
+        );
+        let transform =
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Pre, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate(" a"), " ya");
+    }
+
+    #[test]
+    fn over_rewound_test_never_matches() {
+        // liblouis fails the test when a `_N` rewinds past the start of the input, so a rewind
+        // larger than what was matched can never fire.
+        let rules = [parse_rule("correct [\"a\"]_5 \"x\"")];
+        let ctx = TableContext::default();
+        let transform =
+            MultipassTable::compile(&rules, Direction::Forward, TranslationStage::Pre, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("a"), "a");
+    }
+
+    #[test]
     fn effects() {
         let rules = [
             // when encountering @123 set var 1 to 1

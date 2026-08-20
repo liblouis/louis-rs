@@ -18,7 +18,7 @@ use smallvec::SmallVec;
 use crate::translator::{
     ResolvedTranslation,
     effect::Environment,
-    translation::{Resolve, Translation},
+    translation::{MatchedSpans, Resolve, Translation},
 };
 
 /// Whether `actual` matches `expected` case-insensitively, lowercasing only `actual`.
@@ -134,6 +134,7 @@ impl Regexp {
             instructions,
             character_classes,
             translations,
+            lookback: (0, 0),
         }
     }
 
@@ -305,6 +306,10 @@ pub struct CompiledRegexp {
     /// Each match contains a [`Translation`] as a payload. Again, these are
     /// stored separately from the instructions to improve cache locality
     translations: Vec<Translation>,
+    /// The number of characters at the (start, end) of the matched span that a `_N` in the test
+    /// rewinds over. The compiled pattern checks them in place, but they lie outside the span
+    /// liblouis matches, so [`CompiledRegexp::find`] excludes them from the reported spans.
+    lookback: (usize, usize),
 }
 
 /// A single candidate execution path through the RegExp compiled program at the current
@@ -368,6 +373,18 @@ impl ThreadList {
         self.threads.clear();
         self.seen.clear();
     }
+}
+
+/// The best match found so far during a [`CompiledRegexp::find`] run
+struct BestMatch {
+    /// The capture span, in byte offsets into the input
+    capture: (usize, usize),
+    /// The number of chars consumed by the match
+    chars: usize,
+    /// The number of bytes consumed by the match
+    bytes: usize,
+    /// The matched pattern's translation payload
+    translation: TranslationIndex,
 }
 
 impl CompiledRegexp {
@@ -442,10 +459,9 @@ impl CompiledRegexp {
         let mut next = &mut next_storage;
         let mut sp = 0;
         let mut length = 0;
-        // The capture span, consumed-char count and translation of the best match found so far. A
-        // lower-priority thread reaching `Match` doesn't end the search immediately: a still-alive
-        // higher-priority thread might go on to match later
-        let mut matched: Option<((usize, usize), usize, TranslationIndex)> = None;
+        // A lower-priority thread reaching `Match` doesn't end the search immediately: a
+        // still-alive higher-priority thread might go on to match later
+        let mut matched: Option<BestMatch> = None;
 
         current.start_step();
         self.add_thread(current, 0, (0, 0), sp, input.len(), env);
@@ -456,7 +472,12 @@ impl CompiledRegexp {
             for thread in &current.threads {
                 match self.instructions[thread.pc] {
                     Instruction::Match(index) => {
-                        matched = Some((thread.capture, length, index));
+                        matched = Some(BestMatch {
+                            capture: thread.capture,
+                            chars: length,
+                            bytes: sp,
+                            translation: index,
+                        });
                         // every remaining thread in this step is lower priority than the one
                         // that just matched, and so could never improve on it
                         break;
@@ -552,15 +573,62 @@ impl CompiledRegexp {
             length += 1;
         }
 
-        matched.map(|((start, end), length, index)| {
-            let capture = &input[start..end];
-            // offset is in number of chars not a byte offset
-            let offset = input[..start].chars().count();
-            self.translations[index]
-                .clone()
-                .resolve(capture, length, offset)
+        matched.and_then(|best| {
+            let (leading, trailing) = self.lookback;
+            // the whole span the pattern matched, context around the focus included
+            let full = &input[..best.bytes];
+            let matched = if (leading, trailing) == (0, 0) {
+                full
+            } else {
+                // a `_N` that rewinds over more than the pattern matched fails the test in
+                // liblouis, and a rule whose whole match is rewound over consumes nothing and
+                // would loop forever
+                if leading + trailing >= best.chars {
+                    return None;
+                }
+                &full[char_boundary(full, leading)..char_boundary(full, best.chars - trailing)]
+            };
+            let (start, end) = best.capture;
+            let (focus, focus_offset) = if (start, end) == (0, best.bytes) {
+                // a bracket-less test captures the whole pattern, but liblouis starts its focus
+                // at the position the rule fired at, i.e. after the leading rewind
+                (matched, leading)
+            } else {
+                // offset is in number of chars not a byte offset
+                let offset = input[..start].chars().count();
+                // liblouis rejects a match whose replace bracket opens inside the rewound region
+                if offset < leading {
+                    return None;
+                }
+                (&input[start..end], offset)
+            };
+            let spans = MatchedSpans {
+                focus,
+                focus_offset,
+                matched,
+                matched_offset: leading,
+            };
+            Some(
+                self.translations[best.translation]
+                    .clone()
+                    .resolve(&spans, best.chars),
+            )
         })
     }
+
+    /// Exclude the characters `_N`s in the test rewind over from the reported spans: `leading`
+    /// of them at the start of the match and `trailing` at its end.
+    pub fn with_lookback(self, leading: usize, trailing: usize) -> Self {
+        Self {
+            lookback: (leading, trailing),
+            ..self
+        }
+    }
+}
+
+/// The byte offset of the `n`th char of `s`, or `s.len()` when `s` has fewer chars
+fn char_boundary(s: &str, n: usize) -> usize {
+    s.char_indices().nth(n).map_or(s.len(), |(i, _)| i)
 }
 
 #[cfg(test)]
@@ -882,13 +950,16 @@ mod tests {
     #[test]
     fn capture() {
         let env = Environment::new();
-        let translation = Translation::Unresolved(UnresolvedTranslation::new(
-            &[TranslationTarget::Capture],
-            Precedence::Default,
-            TranslationStage::Main,
-            &[],
-            None,
-        ));
+        let translation = Translation::Unresolved(
+            UnresolvedTranslation::new(
+                &[TranslationTarget::Capture],
+                Precedence::Default,
+                TranslationStage::Main,
+                &[],
+                None,
+            )
+            .consuming_match(),
+        );
         let re = Regexp::Concat(
             Box::new(Regexp::String("foo".to_string())),
             Box::new(Regexp::Concat(
@@ -905,21 +976,15 @@ mod tests {
         assert_eq!(re.find("foobar", &env), None);
         assert_eq!(
             re.find("foobarfoo", &env).unwrap(),
-            ResolvedTranslation::new("bar", "bar", 3, TranslationStage::Main, None)
-                .with_offset(3)
-                .with_weight(9)
+            ResolvedTranslation::new("foobarfoo", "bar", 9, TranslationStage::Main, None)
         );
         assert_eq!(
             re.find("fooxarfoo", &env).unwrap(),
-            ResolvedTranslation::new("xar", "xar", 3, TranslationStage::Main, None)
-                .with_offset(3)
-                .with_weight(9)
+            ResolvedTranslation::new("fooxarfoo", "xar", 9, TranslationStage::Main, None)
         );
         assert_eq!(
             re.find("foobarfoobar", &env).unwrap(),
-            ResolvedTranslation::new("bar", "bar", 3, TranslationStage::Main, None)
-                .with_offset(3)
-                .with_weight(9)
+            ResolvedTranslation::new("foobarfoo", "bar", 9, TranslationStage::Main, None)
         );
         assert_eq!(re.find("aaaaaa", &env), None);
         assert_eq!(re.find("bbb", &env), None);
