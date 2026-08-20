@@ -18,7 +18,7 @@ use smallvec::SmallVec;
 use crate::translator::{
     ResolvedTranslation,
     effect::Environment,
-    translation::{Resolve, Translation},
+    translation::{MatchedSpans, Resolve, Translation},
 };
 
 /// Whether `actual` matches `expected` case-insensitively, lowercasing only `actual`.
@@ -143,6 +143,7 @@ impl Regexp {
             instructions,
             character_classes,
             translations,
+            lookback: (0, 0),
         }
     }
 
@@ -321,6 +322,10 @@ pub struct CompiledRegexp {
     /// Each match contains a [`Translation`] as a payload. Again, these are
     /// stored separately from the instructions to improve cache locality
     translations: Vec<Translation>,
+    /// The number of characters at the (start, end) of the matched span that a `_N` in the test
+    /// rewinds over. The compiled pattern checks them in place, but they lie outside the span
+    /// liblouis matches, so [`CompiledRegexp::find`] excludes them from the reported spans.
+    lookback: (usize, usize),
 }
 
 /// A single candidate execution path through the RegExp compiled program at the current
@@ -619,18 +624,62 @@ impl CompiledRegexp {
             length += 1;
         }
 
-        matched.map(|best| {
+        matched.and_then(|best| {
+            let (leading, trailing) = self.lookback;
+            // the whole span the pattern matched, context around the focus included
+            let full = &input[..best.bytes];
+            let matched = if (leading, trailing) == (0, 0) {
+                full
+            } else {
+                // a `_N` that rewinds over more than the pattern matched fails the test in
+                // liblouis, and a rule whose whole match is rewound over consumes nothing and
+                // would loop forever
+                if leading + trailing >= best.chars {
+                    return None;
+                }
+                &full[char_boundary(full, leading)..char_boundary(full, best.chars - trailing)]
+            };
             let (start, end) = best.capture;
-            let capture = &input[start..end];
-            // the whole span the test matched, context around the focus included
-            let matched = &input[..best.bytes];
-            // offset is in number of chars not a byte offset
-            let offset = input[..start].chars().count();
-            self.translations[best.translation]
-                .clone()
-                .resolve(capture, matched, best.chars, offset)
+            let (focus, focus_offset) = if (start, end) == (0, best.bytes) {
+                // a bracket-less test captures the whole pattern, but liblouis starts its focus
+                // at the position the rule fired at, i.e. after the leading rewind
+                (matched, leading)
+            } else {
+                // offset is in number of chars not a byte offset
+                let offset = input[..start].chars().count();
+                // liblouis rejects a match whose replace bracket opens inside the rewound region
+                if offset < leading {
+                    return None;
+                }
+                (&input[start..end], offset)
+            };
+            let spans = MatchedSpans {
+                focus,
+                focus_offset,
+                matched,
+                matched_offset: leading,
+            };
+            Some(
+                self.translations[best.translation]
+                    .clone()
+                    .resolve(&spans, best.chars),
+            )
         })
     }
+
+    /// Exclude the characters `_N`s in the test rewind over from the reported spans: `leading`
+    /// of them at the start of the match and `trailing` at its end.
+    pub fn with_lookback(self, leading: usize, trailing: usize) -> Self {
+        Self {
+            lookback: (leading, trailing),
+            ..self
+        }
+    }
+}
+
+/// The byte offset of the `n`th char of `s`, or `s.len()` when `s` has fewer chars
+fn char_boundary(s: &str, n: usize) -> usize {
+    s.char_indices().nth(n).map_or(s.len(), |(i, _)| i)
 }
 
 #[cfg(test)]
@@ -960,7 +1009,7 @@ mod tests {
                 &[],
                 None,
             )
-            .consuming_match(0),
+            .consuming_match(),
         );
         let re = Regexp::Concat(
             Box::new(Regexp::String("foo".to_string())),

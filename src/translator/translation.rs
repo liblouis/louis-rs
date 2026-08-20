@@ -82,17 +82,22 @@ impl std::fmt::Display for TranslationTargets {
     }
 }
 
+/// The spans of the input that a pattern matched, mirroring how liblouis reports a pass-rule
+/// match: `focus` is the replacement bracket's span and `matched` the whole matched span with
+/// the characters that `_N`s rewind over excluded at either end. The offsets are the number of
+/// characters between the start of the searched input and each span.
+#[derive(Debug)]
+pub struct MatchedSpans<'a> {
+    pub focus: &'a str,
+    pub focus_offset: usize,
+    pub matched: &'a str,
+    pub matched_offset: usize,
+}
+
 pub trait Resolve {
-    /// Resolve against the span the pattern matched: `capture` is the bracketed focus, `matched`
-    /// the whole matched span. Already-resolved translations ignore both and only take on
-    /// `weight` and `offset`.
-    fn resolve(
-        self,
-        capture: &str,
-        matched: &str,
-        weight: usize,
-        offset: usize,
-    ) -> ResolvedTranslation;
+    /// Resolve against the spans the pattern matched. Already-resolved translations ignore the
+    /// spans and only take on `weight` and the focus offset.
+    fn resolve(self, spans: &MatchedSpans, weight: usize) -> ResolvedTranslation;
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -102,12 +107,10 @@ pub struct UnresolvedTranslation {
     stage: TranslationStage,
     effects: Vec<Effect>,
     origin: Option<AnchoredRule>,
-    /// `Some` when the translation consumes the whole matched test rather than only the captured
-    /// focus (a `*` in the action; without one the context around the focus stays in the input
-    /// and is scanned again). The value is the number of characters a leading `_N` in the test
-    /// rewinds over: the test re-examines them, but they lie before the matched span and are not
-    /// consumed.
-    replaces: Option<usize>,
+    /// Whether the translation consumes the whole matched span rather than only the focus (a
+    /// `*` in the action; without one the context around the focus stays in the input and is
+    /// scanned again)
+    replaces: bool,
 }
 
 impl UnresolvedTranslation {
@@ -124,43 +127,32 @@ impl UnresolvedTranslation {
             stage,
             effects: effects.to_vec(),
             origin: origin.into(),
-            replaces: None,
+            replaces: false,
         }
     }
 
-    /// Make the translation consume the whole matched test instead of only the captured focus,
-    /// sparing the first `lookback` characters a leading `_N` in the test rewinds over.
-    pub fn consuming_match(self, lookback: usize) -> Self {
+    /// Make the translation consume the whole matched span instead of only the focus.
+    pub fn consuming_match(self) -> Self {
         Self {
-            replaces: Some(lookback),
+            replaces: true,
             ..self
         }
     }
 }
 
 impl Resolve for UnresolvedTranslation {
-    fn resolve(
-        self,
-        capture: &str,
-        matched: &str,
-        weight: usize,
-        offset: usize,
-    ) -> ResolvedTranslation {
+    fn resolve(self, spans: &MatchedSpans, weight: usize) -> ResolvedTranslation {
         let resolved: String = self
             .output
             .iter()
             .cloned()
-            .map(|t| t.resolve(capture))
+            .map(|t| t.resolve(spans.focus))
             .map(|t| t.to_string())
             .collect();
-        let (input, offset) = if let Some(lookback) = self.replaces {
-            let start = matched
-                .char_indices()
-                .nth(lookback)
-                .map_or(matched.len(), |(i, _)| i);
-            (&matched[start..], lookback)
+        let (input, offset) = if self.replaces {
+            (spans.matched, spans.matched_offset)
         } else {
-            (capture, offset)
+            (spans.focus, spans.focus_offset)
         };
         let length = input.chars().count();
         ResolvedTranslation {
@@ -190,20 +182,12 @@ impl Default for Translation {
 }
 
 impl Resolve for Translation {
-    fn resolve(
-        self,
-        capture: &str,
-        matched: &str,
-        weight: usize,
-        offset: usize,
-    ) -> ResolvedTranslation {
+    fn resolve(self, spans: &MatchedSpans, weight: usize) -> ResolvedTranslation {
         match self {
-            Translation::Resolved(translation) => {
-                translation.with_weight(weight).with_offset(offset)
-            }
-            Translation::Unresolved(unresolved) => {
-                unresolved.resolve(capture, matched, weight, offset)
-            }
+            Translation::Resolved(translation) => translation
+                .with_weight(weight)
+                .with_offset(spans.focus_offset),
+            Translation::Unresolved(unresolved) => unresolved.resolve(spans, weight),
         }
     }
 }
@@ -400,6 +384,16 @@ mod tests {
         assert_eq!(resolved, TranslationTarget::Literal("ABC".to_string()));
     }
 
+    /// Spans for a match without context or lookback: the focus is the whole match
+    fn spans(focus: &str) -> MatchedSpans<'_> {
+        MatchedSpans {
+            focus,
+            focus_offset: 0,
+            matched: focus,
+            matched_offset: 0,
+        }
+    }
+
     #[test]
     fn translation_capture_empty() {
         let translation = UnresolvedTranslation::new(
@@ -409,7 +403,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("", "", 5, 0);
+        let result = translation.resolve(&spans(""), 5);
 
         assert_eq!(result.input(), "");
         assert_eq!(result.output(), "");
@@ -424,7 +418,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("captured", "captured", 8, 0);
+        let result = translation.resolve(&spans("captured"), 8);
 
         assert_eq!(result.input(), "captured");
         assert_eq!(result.output(), "captured");
@@ -443,7 +437,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("MIDDLE", "MIDDLE", 8, 0);
+        let result = translation.resolve(&spans("MIDDLE"), 8);
 
         assert_eq!(result.input(), "MIDDLE");
         assert_eq!(result.output(), "<MIDDLE>");
@@ -464,7 +458,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("xyz", "xyz", 8, 0);
+        let result = translation.resolve(&spans("xyz"), 8);
 
         assert_eq!(result.input(), "xyz");
         assert_eq!(result.output(), "<XYz>");
@@ -483,7 +477,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("café🚀🚀", "café🚀🚀", 6, 0);
+        let result = translation.resolve(&spans("café🚀🚀"), 6);
 
         assert_eq!(result.input(), "café🚀🚀");
         assert_eq!(result.length(), 6);

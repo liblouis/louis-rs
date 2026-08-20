@@ -20,20 +20,42 @@ impl Test {
         &self.tests
     }
 
-    /// The number of characters a leading `_N` rewinds over. Those characters were already
-    /// consumed before the rule was selected; the test re-examines them, but they lie outside
-    /// the matched span.
+    /// The number of characters the `_N`s at the very start of the test rewind over. Those
+    /// characters were already consumed before the rule was selected; the test re-examines
+    /// them, but they lie before the matched span.
     pub fn leading_lookback(&self) -> usize {
         fn leading(tests: &[TestInstruction]) -> usize {
             match tests.first() {
-                Some(TestInstruction::Lookback { len }) => usize::from(*len),
                 // a replace bracket at the very start (explicit, or the implicit one wrapped
                 // around a bracket-less test) still begins with the leading lookback
                 Some(TestInstruction::Replace { tests }) => leading(tests),
-                _ => 0,
+                _ => Test::lookback_sum(tests.iter()),
             }
         }
         leading(&self.tests)
+    }
+
+    /// The number of characters the `_N`s at the very end of the test rewind over. The test
+    /// peeks at them, but they lie after the matched span.
+    pub fn trailing_lookback(&self) -> usize {
+        fn trailing(tests: &[TestInstruction]) -> usize {
+            match tests.last() {
+                Some(TestInstruction::Replace { tests }) => trailing(tests),
+                _ => Test::lookback_sum(tests.iter().rev()),
+            }
+        }
+        trailing(&self.tests)
+    }
+
+    /// Sum the `len`s of the [`TestInstruction::Lookback`]s at the start of `tests`; liblouis
+    /// tables write a two-character rewind as `__`
+    fn lookback_sum<'a>(tests: impl Iterator<Item = &'a TestInstruction>) -> usize {
+        tests
+            .map_while(|t| match t {
+                TestInstruction::Lookback { len } => Some(usize::from(*len)),
+                _ => None,
+            })
+            .sum()
     }
 
     pub fn add_implicit_replace(self) -> Self {
@@ -617,6 +639,22 @@ mod tests {
         let test = Parser::new("_2$s").tests().unwrap();
         assert_eq!(test.leading_lookback(), 2);
         assert_eq!(test.add_implicit_replace().leading_lookback(), 2);
+    }
+
+    #[test]
+    fn trailing_lookback_survives_implicit_replace() {
+        let test = Parser::new("\"a\"_2").tests().unwrap();
+        assert_eq!(test.trailing_lookback(), 2);
+        assert_eq!(test.add_implicit_replace().trailing_lookback(), 2);
+    }
+
+    #[test]
+    fn consecutive_lookbacks_sum() {
+        // bg.utb writes a two-character rewind as `__`
+        let test = Parser::new("__$s").tests().unwrap();
+        assert_eq!(test.leading_lookback(), 2);
+        let test = Parser::new("\"a\"__").tests().unwrap();
+        assert_eq!(test.trailing_lookback(), 2);
     }
 
     #[test]
