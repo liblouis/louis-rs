@@ -583,7 +583,7 @@ impl PrimaryTable {
                             .numsign(&dots.to_string());
                     }
                 }
-                Rule::Nonumsign { dots } => {
+                Rule::Nonumsign { dots, .. } => {
                     builder.numeric_indicator.nonumsign(&dots.to_string(), rule);
                     if direction == Direction::Backward
                         && PrimaryTableBuilder::backward_indicator_dots_available(
@@ -775,7 +775,7 @@ impl PrimaryTable {
                     builder.lettersign_indicator.contraction(chars, rule);
                     builder.nocontract_indicator.contraction(chars, rule);
                 }
-                Rule::Nocontractsign { dots } => {
+                Rule::Nocontractsign { dots, .. } => {
                     builder
                         .nocontract_indicator
                         .nocontractsign(&dots.to_string(), rule);

@@ -469,12 +469,14 @@ pub enum Rule {
     },
     Nocontractsign {
         dots: BrailleChars,
+        constraints: Constraints,
     },
     Numsign {
         dots: BrailleChars,
     },
     Nonumsign {
         dots: BrailleChars,
+        constraints: Constraints,
     },
     Numericnocontchars {
         chars: String,
@@ -848,8 +850,9 @@ impl std::fmt::Display for Rule {
             }
             Rule::Letsign { dots } => write!(f, "letsign {}", dots),
             Rule::Noletsign { chars } => write!(f, "noletsign {}", chars),
+            Rule::Nocontractsign { dots, .. } => write!(f, "nocontractsign {}", dots),
             Rule::Numsign { dots } => write!(f, "numsign {}", dots),
-            Rule::Nonumsign { dots } => write!(f, "nonumsign {}", dots),
+            Rule::Nonumsign { dots, .. } => write!(f, "nonumsign {}", dots),
             Rule::Compbrl { chars, .. } => write!(f, "compbrl {}", chars),
             Rule::Comp6 { chars, dots } => write!(f, "comp6 {} {}", chars, dots),
             Rule::Always { chars, dots, .. } => write!(f, "always {} {}", chars, dots),
@@ -964,7 +967,9 @@ impl HasDirection for Rule {
             | Rule::Pass3 { constraints, .. }
             | Rule::Pass4 { constraints, .. }
             | Rule::Correct { constraints, .. }
-            | Rule::Match { constraints, .. } => {
+            | Rule::Match { constraints, .. }
+            | Rule::Nocontractsign { constraints, .. }
+            | Rule::Nonumsign { constraints, .. } => {
                 if constraints.contains(Constraint::Nofor) {
                     enum_set!(Direction::Backward)
                 } else if constraints.contains(Constraint::Noback) {
@@ -1812,9 +1817,10 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Nocontractsign => {
-                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Nocontractsign {
                     dots: self.explicit_dots()?,
+                    constraints,
                 }
             }
             Opcode::Numsign => {
@@ -1824,9 +1830,10 @@ impl<'a> RuleParser<'a> {
                 }
             }
             Opcode::Nonumsign => {
-                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Nonumsign {
                     dots: self.explicit_dots()?,
+                    constraints,
                 }
             }
             Opcode::Numericnocontchars => {
@@ -2542,6 +2549,28 @@ mod tests {
         assert!(RuleParser::new("nofor nocross").nofor());
         assert!(!RuleParser::new("nocross nofor").nofor());
         assert!(!RuleParser::new("").nofor());
+    }
+
+    #[test]
+    fn nocontractsign_and_nonumsign_honor_direction() {
+        assert_eq!(
+            enum_set!(Direction::Forward),
+            RuleParser::new("noback nonumsign 156")
+                .rule()
+                .unwrap()
+                .directions()
+        );
+        assert_eq!(
+            enum_set!(Direction::Backward),
+            RuleParser::new("nofor nocontractsign 56")
+                .rule()
+                .unwrap()
+                .directions()
+        );
+        assert_eq!(
+            enum_set!(Direction::Forward | Direction::Backward),
+            RuleParser::new("nonumsign 156").rule().unwrap().directions()
+        );
     }
 
     #[test]
