@@ -7,6 +7,294 @@
 
 #+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
 
+# New entries go at the top of this file; existing entries are not
+# reordered when they're revised.
+
+* ACCEPTED Give ~CompiledRegexp::find~ an inline bitset and fixed-capacity thread buffer, swapped by reference
+- Deciders :: CE
+- Date :: [2026-08-20 Do]
+
+** Context and Problem Statement
+
+Profiling a full liblouis-test-suite run showed around 41% of total
+self-time going to the memory allocator, traced to
+~CompiledRegexp::find~: every call allocates two fresh ~ThreadList~s
+(the Pike-VM "current"/"next" thread sets), each carrying a ~seen:
+Vec<bool>~ sized to the compiled program's instruction count, to dedup
+epsilon-closure visits within ~add_thread~. Since ~find~/~is_match~
+back every ~match~/~context~ rule check and run at every input
+position across millions of translation calls, this
+allocate-and-discard cycle dominated the profile.
+
+A follow-up question reframed the problem: liblouis' ~match~/
+~context~/~correct~/passN patterns aren't arbitrary regexps, they're
+drawn from a known, surveyable corpus (the liblouis tables). Compiling
+every such pattern from six tables chosen for having the most
+~match~/~context~ rules (~en-ueb-g2.ctb~, three Vietnamese tables,
+~fil-g2.ctb~, ~en-g3.ctb~) and measuring ~CompiledRegexp~'s
+instruction count and epsilon/~Split~ density gave 5,457 real data
+points:
+
+| table            |    n | len (min/mean/median/p99/max) | splits (mean/max) |
+|------------------+------+-------------------------------+-------------------|
+| en-ueb-g2.ctb    | 2192 | 4 / 22.5 / 27 / 38 / *42*     | 3.4 / 9           |
+| vi-vn-g2.ctb     | 1170 | 4 / 10.4 / 10 / 15 / *16*     | 1.1 / 3           |
+| vi-saigon-g1.ctb |  912 | 4 / 11.2 / 11 / 16 / *16*     | 1.4 / 3           |
+| vi-vn-g1.ctb     |  814 | 4 / 10.3 / 10 / 16 / *16*     | 1.1 / 3           |
+| fil-g2.ctb       |  242 | 4 / 31.0 / 37 / 43 / *44*     | 6.1 / 8           |
+| en-g3.ctb        |  127 | 4 / 13.1 / 17 / 17 / *17*     | 2.5 / 4           |
+
+Not one of above programs exceeded 44 instructions, but a follow-up
+sweep of every loadable table in liblouis (397 files, 363 loaded as
+standalone tables, 31,023 compiled patterns across 233 tables)
+confirmed the general shape (mean 8.9, median 5, p99 37) while finding
+a real outlier: ~afr-za-g2.ctb~ (Afrikaans grade 2) has a pattern of
+*508* instructions, and several other tables (~hu-hu-g2.ctb~,
+~mn-MN-g2.ctb~, ~zu-za-g2.ctb~, ~xh-za-g2.ctb~, among others) exceed
+100. These are legitimate patterns, not degenerate input: large
+~match~ alternations of literal word-ending strings, e.g.
+~afr-za-g2.ctb~'s ~AAK|aak|AAL|aal|AFEL|afel|...~ (50+ alternatives),
+where each alternative costs roughly ~chars + Split + Jump~
+instructions. Across the full 31,023-pattern corpus, 65 (0.21%) exceed
+44 instructions, 34 (0.11%) exceed 64, and 18 (0.06%) exceed 128.
+
+~seen~ isn't sparse in the usual sense -- for the overwhelming
+majority of real patterns the whole index space is just small. That
+ruled out a hash-based or sparse-set structure (still allocates on
+first insert, and pays hashing overhead for no benefit over plain
+indexing at this size) and pointed at a fixed-size bitmask instead,
+with a heap fallback now sized for a real, measured minority of
+patterns that don't fit -- not just a theoretical one.
+
+** Decision Drivers
+
+- ~find~/~is_match~ are called an enormous number of times during a
+  single translation run (millions, per the profile) -- any per-call
+  fixed cost dominates.
+- The same compiled ~CompiledRegexp~ can be matched concurrently
+  against different input from multiple ~rayon~ worker threads, so any
+  reused scratch state must not require synchronization/locking, and
+  must stay correct under concurrent, independent use.
+- Capture positions (~CaptureStart~/~CaptureEnd~) and runtime-
+  conditional epsilon edges (~VariableEqual~/~NotVariableEqual~ on
+  ~Environment~, ~AssertEnd~/~AssertMoreInput~ on input position) are
+  inherently per-call, per-position data -- whatever the fix, it can't
+  assume the epsilon-closure computation itself can be hoisted to
+  compile time.
+- Minimize code complexity/invasiveness given this is a hot-path fix,
+  not a rewrite: ~find~'s own control flow (the ~while~ loop,
+  ~add_thread~ recursion, ~mem::swap~) should stay unchanged.
+- Whatever bound on program size/thread count a fix relies on, it must
+  be a safety margin, not an assumption baked in as a hard limit --
+  some future table's pattern exceeding what's been surveyed so far
+  should degrade gracefully (fall back to heap storage), not panic or
+  silently misbehave.
+
+** Considered Options
+
+- Status quo :: ~Vec<bool>~ ~seen~, fresh ~ThreadList::new()~
+  allocated on every ~find~ call.
+- Generational ~seen~ + per-thread pool :: revert to ~seen: Vec<u32>~
+  stamped with a per-~ThreadList~ generation counter (bumped, not
+  cleared, each step), and pool ~(current, next)~ pairs in a
+  ~thread_local!~ ~RefCell<Vec<...>>~, checked out at the start of
+  ~find~ and returned at the end.
+- Precompute epsilon closures at compile time :: eliminate
+  ~add_thread~'s recursive walk by precomputing, per instruction, the
+  reachable consuming/~Match~ instructions.
+- Convert the NFA to a DFA :: subset-construct the compiled program
+  into a DFA with O(1) per-byte transitions and no thread-list/
+  epsilon-closure bookkeeping at all.
+- Inline bitset + fixed-capacity thread buffer :: since every
+  surveyed program fits in 64 instructions, give ~ThreadList~ a ~seen~
+  bitset (a ~SmallVec<[u64; 1]>~-backed bitmask, 64 bits inline) and a
+  ~threads: SmallVec<[Thread; 64]>~, both stack-resident with no heap
+  allocation for any real pattern, falling back to heap storage only
+  if a pattern ever exceeds that.
+
+** Decision Outcome
+
+Chosen option: *Inline bitset + fixed-capacity thread buffer* (option
+5).
+
+Option 2 (generational ~seen~ + per-thread pool) was fully
+implemented, tested, and benchmarked in an earlier pass: ~find~'s own
+body stayed untouched, ~ThreadList~ gained a ~generation: u32~ field,
+and a ~thread_local!~ ~RefCell<Vec<...>>~ pool replaced the two
+~ThreadList::new()~ calls -- mirroring how RE2's ~NFA~ class and
+Rust's ~regex-automata~ (~Cache~/~create_cache()~) solve the identical
+tension between reusing scratch state and staying correct under
+concurrent use of one compiled program. It measured a genuine 9--14%
+end-to-end ~Translator::translate~ speedup, but was reverted in favor
+of the simpler status quo: the ~thread_local!~ pool, generation
+counter, and wraparound-reset branch were judged more state than the
+win justified at the time.
+
+Surveying real liblouis patterns (see Context) reopened the question
+with a fact the earlier options didn't have: program size is not just
+"probably small," it's measured -- 99.89% of 31,023 real compiled
+patterns fit in 64 instructions, with a known, quantified minority
+(0.11%) that don't. That makes option 5's fixed-capacity inline
+storage a sized bet, not a guess, with a heap fallback for the
+measured minority rather than a hypothetical one -- and unlike option
+2, it needs no pool, no thread-local state, and no generation counter,
+since a plain "clear the few inline words to zero" is already O(1) at
+this size.
+
+Implementing it first hit a real regression: making ~ThreadList~ ~1.5KB
+(a ~SmallVec<[Thread; 64]>~ is largely inline capacity, 24 bytes per
+~Thread~ x 64) while still swapping it *by value* every input character
+(~std::mem::swap(&mut current, &mut next)~, once per step, not once per
+~find~ call) made ~translate~ 37--51% *slower* -- the per-step swap
+cost of ~1.5KB dwarfed the allocation savings. The fix: keep the two
+~ThreadList~s in fixed stack slots and make ~current~/~next~
+*references* into them, so the per-step swap exchanges two pointers,
+not ~1.5KB of storage.
+
+With that fix, the benchmark showed 42--45% faster end-to-end
+~translate~ -- three to four times option 2's win, with less code
+complexity, not more. Verified correct against all unit tests and the
+full 2,221,196-test liblouis suite (identical pass/fail/xfail
+percentages).
+
+Options 3 and 4 were both discussed and set aside, not rejected
+outright:
+
+- Option 3 (precomputed closures) only partially applies: ~Jump~/
+  ~Split~ chains are static and could be precomputed, but
+  ~VariableEqual~/~NotVariableEqual~ (gated on ~Environment~) and
+  ~AssertEnd~/~AssertMoreInput~ (gated on input position) are runtime-
+  conditional, so ~add_thread~ would still need to walk those edges
+  live every step -- and it's orthogonal to this fix anyway:
+  precomputing reachability doesn't remove the need for *somewhere to
+  hold the current step's active thread set*, so ~ThreadList~'s
+  ~threads~/~seen~ storage would still be needed regardless.
+- Option 4 (DFA) can't preserve per-thread capture positions --
+  collapsing NFA states into DFA states loses exactly the
+  ~(usize, usize)~ capture span every ~match~/~context~ rule relies on
+  to build its ~ResolvedTranslation~. Production engines that use a
+  DFA (RE2, Rust's ~regex-automata~) do so only for a fast existence/
+  boundary check, falling back to NFA simulation specifically to
+  extract captures -- adopting that would mean building and
+  maintaining two execution models.
+
+*** Positive Consequences
+
+- 42--45% faster end-to-end ~Translator::translate~ (measured via
+  ~benches/translate.rs~ against ~en-ueb-g2.ctb~, word/sentence/
+  paragraph inputs, p < 0.05) -- three to four times option 2's
+  measured win.
+- No heap allocation at all in ~find~ for 99.89% of real patterns (the
+  full 397-table, 31,023-pattern sweep), not just fewer/amortized
+  allocations as option 2 gave.
+- No new persistent state: no ~thread_local!~, no pool checkout/return
+  bookkeeping, no generation counter or wraparound branch -- ~seen~'s
+  ~clear()~ is a plain zero-fill of one or two ~u64~s, correct
+  unconditionally.
+- Correctness unaffected: all unit tests pass, clippy is clean on the
+  new code, and the full liblouis suite (2,221,196 tests via ~check~)
+  produces identical pass/fail/xfail percentages before and after.
+- Degrades gracefully rather than breaking for the real patterns known
+  to exceed the inline capacity (34 of 31,023 in the full sweep, up to
+  508 instructions in ~afr-za-g2.ctb~): ~SmallVec~ spills to the heap
+  exactly as ~Vec~ always did, so this is a known, quantified minority
+  case handled by design, not an unproven edge case.
+
+*** Negative Consequences
+
+- Adds a new dependency (~smallvec~) and a small hand-rolled ~Bitset~
+  type, versus option 1's plain ~Vec<bool>~ or the standard-library-
+  only status quo.
+- The chosen capacity (64) is deliberately not a hard bound -- a full
+  397-table sweep found 34 real patterns (0.11%) that exceed it, up to
+  508 instructions in ~afr-za-g2.ctb~'s large word-ending alternations.
+  Correctness doesn't depend on it (the heap fallback covers that), but
+  those patterns specifically don't get the inline-storage benefit,
+  with no visible signal when that happens.
+- ~find~'s call sites for ~add_thread~ changed from passing
+  ~&mut current~/~&mut next~ (reborrowing an owned value) to passing
+  ~current~/~next~ directly (already ~&mut ThreadList~) -- a small but
+  real increase in how much a reader needs to track reference vs.
+  value semantics in this function, compared to option 1.
+
+** Pros and Cons of the Options
+
+*** Status quo
+
+- Good, because it's the simplest possible code -- no pool, no
+  generation counter, no wraparound edge case, no new dependency
+- Bad, because it's what the profile identified as ~41% of total
+  self-time in a full test-suite run, leaving a measured 42--45%
+  ~translate~ speedup (option 5) unclaimed
+
+*** Generational ~seen~ + per-thread pool
+
+- Good, because it directly targets the allocation cost the profile
+  measured, not just the clearing cost
+- Good, because it requires no changes to ~find~'s matching logic, and
+  mirrors how RE2/~regex-automata~ solve the same problem
+- Good, because it was actually built and measured: a genuine 9--14%
+  ~translate~ speedup, with correctness verified against the full
+  liblouis suite
+- Bad, because it reintroduces the ~u32~ wraparound question 3d0ebac6
+  explicitly wanted to avoid (mitigated: reset-on-wraparound branch,
+  practically unreachable)
+- Bad, because a per-thread pool that only ever grows (never shrinks)
+  means a program that used one large pattern once and then only small
+  ones keeps that oversized ~ThreadList~ allocation alive for the
+  process's lifetime
+
+*** Precompute epsilon closures
+
+- Good, because it would reduce ~add_thread~'s own recursive-call
+  overhead, a real (if smaller) line item in the profile
+- Bad, because runtime-conditional edges (~VariableEqual~/~AssertEnd~/
+  etc.) can only be partially precomputed -- the live walk, and
+  therefore the per-step thread list and its dedup, can't be
+  eliminated
+- Bad, because it's a materially larger, more invasive change for a
+  benefit that hasn't been profiled/quantified yet
+
+*** Convert NFA to DFA
+
+- Good, because DFA execution has no per-step thread-list/epsilon-
+  closure bookkeeping at all -- O(1) per byte
+- Bad, because it can't represent per-thread capture positions without
+  a second, NFA-based execution path for captures (as RE2/
+  ~regex-automata~ do) -- effectively building and maintaining two
+  engines
+- Bad, because our patterns are short and locally-anchored, not the
+  long free-text scans DFA engines are built to accelerate, so the win
+  is unclear relative to the cost
+
+*** Inline bitset + fixed-capacity thread buffer
+
+- Good, because it eliminates the allocation itself for 99.89% of real
+  patterns (397-table, 31,023-pattern sweep), not just the clearing
+  cost or the frequency of allocation
+- Good, because the capacity choice is grounded in a real, diverse,
+  full-corpus survey, not a guess from a handful of tables -- and the
+  survey itself found and quantified the minority (0.11%, up to 508
+  instructions in ~afr-za-g2.ctb~) that doesn't fit
+- Good, because it needs no persistent/pooled state at all -- no
+  ~thread_local!~, no generation counter, no wraparound branch
+- Good, because it degrades gracefully (heap fallback via ~SmallVec~)
+  for that measured minority rather than being unsound
+- Good, because it measured 3--4x option 2's win (42--45% vs. 9--14%)
+- Bad, because it adds a new dependency (~smallvec~)
+
+** Links
+
+- Related to :: [[*Hand-rolled regexp VM instead of the ~regex~/~regex-automata~ crates][Hand-rolled regexp VM instead
+  of the ~regex~/~regex-automata~ crates]] -- this decision operates
+  entirely within the VM that ADR chose to keep
+- Related to :: 3d0ebac6b1dd1054a6d840920be22f7342dfb6a1 ("Simplify
+  ThreadList's visited-set to a plain cleared Vec<bool>") -- ~seen~
+  ends up neither that commit's ~Vec<bool>~ nor the generation counter
+  it replaced, but a fixed-size bitset; the O(1)-clear property that
+  commit gave up is regained as a side effect of the bitset being
+  small, not by reintroducing generations
+
 * DRAFT Isolated single-letter capitalization: capsletter vs. begcapsword tier selection
 - Deciders :: CE
 - Date :: [2026-08-18 Di]
@@ -428,19 +716,32 @@ variant had none and was silently broken for NFD input.
 
 ** Decision Outcome
 
-Currently implemented: option 1 (NFC) — provisionally, pending
-investigation of option 2 (NFD).
+Not currently implemented. Option 1 (NFC) was tried first —
+provisionally, pending investigation of option 2 (NFD) — but was fully
+reverted shortly after (commits e2a216c, then 1680744 dropping the now
+unused ~unicode-normalization~ dependency): it broke every table that
+defines rules for standalone combining characters (IPA, Hebrew,
+Yiddish, Greek), and normalizing rule patterns without also
+normalizing input (or vice versa) would have broken trie matching
+outright, so both had to go together. louis-rs is currently back to
+option 3 — liblouis's own status quo of no normalization at either
+input or rule-pattern level — with option 2 (NFD) still open and
+unimplemented.
 
-Both input (~pipeline.rs~) and multi-character rule patterns (~trie.rs~)
-are normalized to NFC. Translation rules that define standalone combining
-characters break silently under NFC; a compile-time warning should be
-added when a rule pattern changes form after normalization (marked TODO
-in ~trie.rs~).
+Unlike option 3's downside (table authors must write explicit
+~correct~ rules to bridge NFD input, verbose but always possible — see
+Portuguese's 63 rules), NFC's downside was not something a table could
+work around: a rule for a standalone combining mark has no precomposed
+form to fall back to for arbitrary base characters, so those tables
+were left with no fix available from the table side. That asymmetry,
+not the raw pass-rate table below, is why NFC was reverted rather than
+kept despite its net-positive weighted test count.
 
-We specifically use NFC (not NFKC). NFKC performs additional
+We had specifically used NFC (not NFKC). NFKC performs additional
 compatibility decompositions (e.g. ligature ~ĳ~ → ~ij~) that change
 character counts more aggressively and are outside the scope of what
-table authors expect.
+table authors expect. This is still the right choice /if/ NFC or NFD
+is revisited.
 
 Liblouis chose option 3 for two reasons: the original author wanted
 liblouis to be self-contained with no external dependencies, using gnulib
@@ -451,12 +752,15 @@ and louis-rs does not currently implement position mapping.
 
 ** Positive Consequences
 
+None currently realized — NFC was reverted (see Decision Outcome). Kept
+here as the case for revisiting NFC/NFD:
+
 - Users can supply text in any Unicode normalization form
 - Table authors write rules in a single canonical form
 - Normalization ~correct~ rules in tables become unnecessary
 - The ~#-unicode-form:nfc~ metadata hint becomes unnecessary
 
-** Negative Consequences (current NFC implementation)
+** Negative Consequences (of the reverted NFC implementation)
 
 - Translation rules that explicitly target isolated combining diacritics
   will never fire. NFC canonical ordering reorders sequences of combining
@@ -516,6 +820,10 @@ and louis-rs does not currently implement position mapping.
 - [[https://github.com/liblouis/liblouis/issues/98][liblouis issue #98: glyph vs diaeresis]]
 - [[https://github.com/nvaccess/nvda/pull/16521][nvaccess/nvda#16521: normalization mapping in NVDA]]
 - [[https://unicode.org/reports/tr15/][Unicode Standard Annex #15: Unicode Normalization Forms]]
+- Commit e2a216c — reverted NFC normalization from ~pipeline.rs~ and
+  ~trie.rs~
+- Commit 1680744 — dropped the then-unused ~unicode-normalization~
+  dependency
 
 * DRAFT Match-rule candidate selection: weight vs. table-definition order
 - Deciders :: CE
@@ -1065,9 +1373,9 @@ collide on in the first place.
 - ~src/translator/regexp.rs~ — the VM-based engine that replaced the
   graph model this ADR was written against
 
-* DRAFT Hyphenation
+* ACCEPTED Hyphenation
 - Deciders :: CE
-- Date :: [2024-12-20 Fr]
+- Date :: [2026-08-20 Do]
 
 ** Context and Problem Statement
 
@@ -1142,48 +1450,74 @@ dictionaries. Maybe we'll have to rip out the relevant parsing code
 from ~hyphenation_commons~ and then provide the hyphenator with a
 deserialized version of that.
 
+*** Update: the crate route was abandoned
+
+The enum-baking problem above never got resolved cleanly, and it kept
+being the wrong shape for our use case: liblouis dictionaries are
+identified by table path like every other liblouis table, not by a
+closed set of languages known at the crate's own build time. Since all
+we actually needed from the ~hyphenation~ crate was its Knuth-Liang
+pattern-matching algorithm — not its bundled TeX/OpenOffice pattern
+corpus, and not its print-text case-folding — that algorithm was
+reimplemented natively in ~src/hyphenation.rs~, parsing liblouis's own
+~.dic~ pattern-file format directly. There is no external crate and no
+build-time bincode conversion step; a hyphenation table loads and is
+identified exactly like any other liblouis table.
+
 ** Decision Drivers
 
 ** Considered Options
 
 ** Decision Outcome
 
-Chosen option: the ~hyphenation~ crate, with custom-built dictionaries
-for the languages liblouis ships hyphenation patterns for. The crate
-is wired into table loading (~IncludeHyphenation~) and used to filter
-~nocross~ candidates: a candidate contraction is only offered if the
-hyphenator does *not* find a break point inside it.
+Chosen option: a native Knuth-Liang implementation in
+~src/hyphenation.rs~, wired into table loading (~IncludeHyphenation~)
+and used to filter ~nocross~ candidates: a candidate contraction is
+only offered if the hyphenator does *not* find a break point inside
+it.
 
-This is integration, not verified correctness. There has been no
-confirmation that the resulting behaviour actually matches liblouis's
-own hyphenation-based ~nocross~ handling — it has not been tested
-against the liblouis test suite for this specifically, and it is
-tracked in ~TODO.org~ ("Hyphenation ... this doesn't seem to work" /
-"test it") and listed under Known Gaps ("hyphen (nocross)") as still
-open. The status stays DRAFT rather than ACCEPTED until that
-verification happens.
+Correctness is verified, not just integrated: the native
+implementation was checked byte-identical to the old
+~hyphenation~-crate-based behaviour across liblouis's full YAML test
+suite (278k test cases across the en-g3 and da-dk-g26 dictionaries),
+and the previously-~#[ignore]~d ~nocross~ unit test in
+~primary.rs~ now passes.
 
 ** Positive Consequences
 
-- Avoids re-implementing a hyphenation pattern matcher from scratch;
-  reuses well-established TeX/OpenOffice pattern dictionaries.
+- No external dependency, no build-time bincode conversion step, and
+  no crate-side enum of supported languages to patch and rebuild
+  out-of-band — a hyphenation dictionary is just another liblouis
+  table, identified by path.
+- Verified byte-identical to the crate-based behaviour it replaced
+  across liblouis's full YAML test suite, so the switch carried no
+  regression risk.
 
 ** Negative Consequences
 
-- The dictionary-loading path is fragile: the crate bakes the set of
-  supported languages into an enum at its own build time, so using a
-  liblouis dictionary for a language the crate doesn't already know
-  about required patching the crate's language table and rebuilding
-  it out-of-band — a maintenance burden for adding more languages.
-- Correctness relative to liblouis's ~nocross~ semantics is unverified.
+- We now own the pattern-matching algorithm ourselves instead of
+  depending on a maintained crate, though it verified out at parity
+  with the crate's implementation and is small in scope.
+- ~nocross~'s use of hyphenation is still a coarser check than
+  liblouis's: it asks whether the matched candidate substring has any
+  break anywhere, rather than liblouis's positional check of whether a
+  break falls inside *that candidate's span* within the enclosing
+  word. This predates the native rewrite (the old
+  ~hyphenation~-crate-based check was exactly as coarse) and isn't
+  caused by it; tracked separately in ~TODO.org~ under "Known gaps".
 
 ** Pros and Cons of the Options
 
 ** Links
 
-- ~TODO.org~ — "Hyphenation" and "Known gaps: hyphen (nocross)" entries
+- ~TODO.org~ — "implement \"libhyphen\"", "Hyphenation", and "Known
+  gaps" (the two hyphen-related entries)
+- ~src/hyphenation.rs~ — ~HyphenationTable~, native pattern parser and
+  matcher
 - ~src/translator/table/primary.rs~ — ~IncludeHyphenation~,
   ~word_hyphenates~, ~nocross_candidates~
+- Commit ed55f45 — fixed and un-ignored the ~nocross~ unit test (bad
+  test fixture, not an algorithm bug)
 
 * ACCEPTED Handle word boundaries
 - Deciders :: CE
@@ -1432,6 +1766,23 @@ idea was later reused for the liblouis ~before~/~after~
 class-constraint keywords, which are a lookbehind/lookahead against a
 character class rather than a fixed boundary condition.
 
+*Update (2026-08-19):* the concrete ~Boundary~ enum described above
+did not survive. It checked the wrong pair of characters — the
+matched rule's own edge character in addition to the true neighbor —
+which was harmless for letter-based rules (the gate always passed)
+but wrong for punctuation. ~Boundary~ and the whole
+~is_word_start~/~is_word_end~ family of predicates were deleted in
+commit 96035dd; the non-consuming-transition *idea* survived and was
+generalized instead into ~Transition::Start~/~End(Vec<CharacterClass>)~,
+a direct lookbehind/lookahead against the real neighbor that now
+serves both the opcode-intrinsic boundary checks and the
+~before~/~after~ keyword through one mechanism. Separately,
+~prepunc~/~postpunc~ turned out not to fit a trie transition at all —
+liblouis implements them via a variable-length outward scan, not a
+single-neighbor class check — and were moved to a dedicated
+~PunctuationConstrainer~ checked post-hoc in ~trace()~, outside the
+trie entirely. See the linked follow-up ADR for the full analysis.
+
 ** Positive Consequences
 
 - One trie handles both boundary-constrained and unconstrained rules;
@@ -1470,6 +1821,11 @@ character class rather than a fixed boundary condition.
 - Bad :: Processing during translation
 
 ** Links
+
+- [[*ACCEPTED Unify word/number-boundary checks onto class-constraint lookaround][ADR: Unify word/number-boundary checks onto class-constraint lookaround]] —
+  superseded ~Boundary~'s concrete implementation (deleted in
+  96035dd) while keeping this ADR's non-consuming-transition idea;
+  also moved ~prepunc~/~postpunc~ off the trie entirely
 
 * ACCEPTED Hand-rolled regexp VM instead of the ~regex~/~regex-automata~ crates
 - Deciders :: CE
@@ -1636,291 +1992,6 @@ still have been necessary regardless of the matching backend.
   concrete experience with a shared-automaton approach running into
   the same "independent per-rule precedence" problem from a different
   angle
-
-* ACCEPTED Give ~CompiledRegexp::find~ an inline bitset and fixed-capacity thread buffer, swapped by reference
-- Deciders :: CE
-- Date :: [2026-08-20 Do]
-
-** Context and Problem Statement
-
-Profiling a full liblouis-test-suite run showed around 41% of total
-self-time going to the memory allocator, traced to
-~CompiledRegexp::find~: every call allocates two fresh ~ThreadList~s
-(the Pike-VM "current"/"next" thread sets), each carrying a ~seen:
-Vec<bool>~ sized to the compiled program's instruction count, to dedup
-epsilon-closure visits within ~add_thread~. Since ~find~/~is_match~
-back every ~match~/~context~ rule check and run at every input
-position across millions of translation calls, this
-allocate-and-discard cycle dominated the profile.
-
-A follow-up question reframed the problem: liblouis' ~match~/
-~context~/~correct~/passN patterns aren't arbitrary regexps, they're
-drawn from a known, surveyable corpus (the liblouis tables). Compiling
-every such pattern from six tables chosen for having the most
-~match~/~context~ rules (~en-ueb-g2.ctb~, three Vietnamese tables,
-~fil-g2.ctb~, ~en-g3.ctb~) and measuring ~CompiledRegexp~'s
-instruction count and epsilon/~Split~ density gave 5,457 real data
-points:
-
-| table            |    n | len (min/mean/median/p99/max) | splits (mean/max) |
-|------------------+------+-------------------------------+-------------------|
-| en-ueb-g2.ctb    | 2192 | 4 / 22.5 / 27 / 38 / *42*     | 3.4 / 9           |
-| vi-vn-g2.ctb     | 1170 | 4 / 10.4 / 10 / 15 / *16*     | 1.1 / 3           |
-| vi-saigon-g1.ctb |  912 | 4 / 11.2 / 11 / 16 / *16*     | 1.4 / 3           |
-| vi-vn-g1.ctb     |  814 | 4 / 10.3 / 10 / 16 / *16*     | 1.1 / 3           |
-| fil-g2.ctb       |  242 | 4 / 31.0 / 37 / 43 / *44*     | 6.1 / 8           |
-| en-g3.ctb        |  127 | 4 / 13.1 / 17 / 17 / *17*     | 2.5 / 4           |
-
-Not one of above programs exceeded 44 instructions, but a follow-up
-sweep of every loadable table in liblouis (397 files, 363 loaded as
-standalone tables, 31,023 compiled patterns across 233 tables)
-confirmed the general shape (mean 8.9, median 5, p99 37) while finding
-a real outlier: ~afr-za-g2.ctb~ (Afrikaans grade 2) has a pattern of
-*508* instructions, and several other tables (~hu-hu-g2.ctb~,
-~mn-MN-g2.ctb~, ~zu-za-g2.ctb~, ~xh-za-g2.ctb~, among others) exceed
-100. These are legitimate patterns, not degenerate input: large
-~match~ alternations of literal word-ending strings, e.g.
-~afr-za-g2.ctb~'s ~AAK|aak|AAL|aal|AFEL|afel|...~ (50+ alternatives),
-where each alternative costs roughly ~chars + Split + Jump~
-instructions. Across the full 31,023-pattern corpus, 65 (0.21%) exceed
-44 instructions, 34 (0.11%) exceed 64, and 18 (0.06%) exceed 128.
-
-~seen~ isn't sparse in the usual sense -- for the overwhelming
-majority of real patterns the whole index space is just small. That
-ruled out a hash-based or sparse-set structure (still allocates on
-first insert, and pays hashing overhead for no benefit over plain
-indexing at this size) and pointed at a fixed-size bitmask instead,
-with a heap fallback now sized for a real, measured minority of
-patterns that don't fit -- not just a theoretical one.
-
-** Decision Drivers
-
-- ~find~/~is_match~ are called an enormous number of times during a
-  single translation run (millions, per the profile) -- any per-call
-  fixed cost dominates.
-- The same compiled ~CompiledRegexp~ can be matched concurrently
-  against different input from multiple ~rayon~ worker threads, so any
-  reused scratch state must not require synchronization/locking, and
-  must stay correct under concurrent, independent use.
-- Capture positions (~CaptureStart~/~CaptureEnd~) and runtime-
-  conditional epsilon edges (~VariableEqual~/~NotVariableEqual~ on
-  ~Environment~, ~AssertEnd~/~AssertMoreInput~ on input position) are
-  inherently per-call, per-position data -- whatever the fix, it can't
-  assume the epsilon-closure computation itself can be hoisted to
-  compile time.
-- Minimize code complexity/invasiveness given this is a hot-path fix,
-  not a rewrite: ~find~'s own control flow (the ~while~ loop,
-  ~add_thread~ recursion, ~mem::swap~) should stay unchanged.
-- Whatever bound on program size/thread count a fix relies on, it must
-  be a safety margin, not an assumption baked in as a hard limit --
-  some future table's pattern exceeding what's been surveyed so far
-  should degrade gracefully (fall back to heap storage), not panic or
-  silently misbehave.
-
-** Considered Options
-
-- Status quo :: ~Vec<bool>~ ~seen~, fresh ~ThreadList::new()~
-  allocated on every ~find~ call.
-- Generational ~seen~ + per-thread pool :: revert to ~seen: Vec<u32>~
-  stamped with a per-~ThreadList~ generation counter (bumped, not
-  cleared, each step), and pool ~(current, next)~ pairs in a
-  ~thread_local!~ ~RefCell<Vec<...>>~, checked out at the start of
-  ~find~ and returned at the end.
-- Precompute epsilon closures at compile time :: eliminate
-  ~add_thread~'s recursive walk by precomputing, per instruction, the
-  reachable consuming/~Match~ instructions.
-- Convert the NFA to a DFA :: subset-construct the compiled program
-  into a DFA with O(1) per-byte transitions and no thread-list/
-  epsilon-closure bookkeeping at all.
-- Inline bitset + fixed-capacity thread buffer :: since every
-  surveyed program fits in 64 instructions, give ~ThreadList~ a ~seen~
-  bitset (a ~SmallVec<[u64; 1]>~-backed bitmask, 64 bits inline) and a
-  ~threads: SmallVec<[Thread; 64]>~, both stack-resident with no heap
-  allocation for any real pattern, falling back to heap storage only
-  if a pattern ever exceeds that.
-
-** Decision Outcome
-
-Chosen option: *Inline bitset + fixed-capacity thread buffer* (option
-5).
-
-Option 2 (generational ~seen~ + per-thread pool) was fully
-implemented, tested, and benchmarked in an earlier pass: ~find~'s own
-body stayed untouched, ~ThreadList~ gained a ~generation: u32~ field,
-and a ~thread_local!~ ~RefCell<Vec<...>>~ pool replaced the two
-~ThreadList::new()~ calls -- mirroring how RE2's ~NFA~ class and
-Rust's ~regex-automata~ (~Cache~/~create_cache()~) solve the identical
-tension between reusing scratch state and staying correct under
-concurrent use of one compiled program. It measured a genuine 9--14%
-end-to-end ~Translator::translate~ speedup, but was reverted in favor
-of the simpler status quo: the ~thread_local!~ pool, generation
-counter, and wraparound-reset branch were judged more state than the
-win justified at the time.
-
-Surveying real liblouis patterns (see Context) reopened the question
-with a fact the earlier options didn't have: program size is not just
-"probably small," it's measured -- 99.89% of 31,023 real compiled
-patterns fit in 64 instructions, with a known, quantified minority
-(0.11%) that don't. That makes option 5's fixed-capacity inline
-storage a sized bet, not a guess, with a heap fallback for the
-measured minority rather than a hypothetical one -- and unlike option
-2, it needs no pool, no thread-local state, and no generation counter,
-since a plain "clear the few inline words to zero" is already O(1) at
-this size.
-
-Implementing it first hit a real regression: making ~ThreadList~ ~1.5KB
-(a ~SmallVec<[Thread; 64]>~ is largely inline capacity, 24 bytes per
-~Thread~ x 64) while still swapping it *by value* every input character
-(~std::mem::swap(&mut current, &mut next)~, once per step, not once per
-~find~ call) made ~translate~ 37--51% *slower* -- the per-step swap
-cost of ~1.5KB dwarfed the allocation savings. The fix: keep the two
-~ThreadList~s in fixed stack slots and make ~current~/~next~
-*references* into them, so the per-step swap exchanges two pointers,
-not ~1.5KB of storage.
-
-With that fix, the benchmark showed 42--45% faster end-to-end
-~translate~ -- three to four times option 2's win, with less code
-complexity, not more. Verified correct against all unit tests and the
-full 2,221,196-test liblouis suite (identical pass/fail/xfail
-percentages).
-
-Options 3 and 4 were both discussed and set aside, not rejected
-outright:
-
-- Option 3 (precomputed closures) only partially applies: ~Jump~/
-  ~Split~ chains are static and could be precomputed, but
-  ~VariableEqual~/~NotVariableEqual~ (gated on ~Environment~) and
-  ~AssertEnd~/~AssertMoreInput~ (gated on input position) are runtime-
-  conditional, so ~add_thread~ would still need to walk those edges
-  live every step -- and it's orthogonal to this fix anyway:
-  precomputing reachability doesn't remove the need for *somewhere to
-  hold the current step's active thread set*, so ~ThreadList~'s
-  ~threads~/~seen~ storage would still be needed regardless.
-- Option 4 (DFA) can't preserve per-thread capture positions --
-  collapsing NFA states into DFA states loses exactly the
-  ~(usize, usize)~ capture span every ~match~/~context~ rule relies on
-  to build its ~ResolvedTranslation~. Production engines that use a
-  DFA (RE2, Rust's ~regex-automata~) do so only for a fast existence/
-  boundary check, falling back to NFA simulation specifically to
-  extract captures -- adopting that would mean building and
-  maintaining two execution models.
-
-*** Positive Consequences
-
-- 42--45% faster end-to-end ~Translator::translate~ (measured via
-  ~benches/translate.rs~ against ~en-ueb-g2.ctb~, word/sentence/
-  paragraph inputs, p < 0.05) -- three to four times option 2's
-  measured win.
-- No heap allocation at all in ~find~ for 99.89% of real patterns (the
-  full 397-table, 31,023-pattern sweep), not just fewer/amortized
-  allocations as option 2 gave.
-- No new persistent state: no ~thread_local!~, no pool checkout/return
-  bookkeeping, no generation counter or wraparound branch -- ~seen~'s
-  ~clear()~ is a plain zero-fill of one or two ~u64~s, correct
-  unconditionally.
-- Correctness unaffected: all unit tests pass, clippy is clean on the
-  new code, and the full liblouis suite (2,221,196 tests via ~check~)
-  produces identical pass/fail/xfail percentages before and after.
-- Degrades gracefully rather than breaking for the real patterns known
-  to exceed the inline capacity (34 of 31,023 in the full sweep, up to
-  508 instructions in ~afr-za-g2.ctb~): ~SmallVec~ spills to the heap
-  exactly as ~Vec~ always did, so this is a known, quantified minority
-  case handled by design, not an unproven edge case.
-
-*** Negative Consequences
-
-- Adds a new dependency (~smallvec~) and a small hand-rolled ~Bitset~
-  type, versus option 1's plain ~Vec<bool>~ or the standard-library-
-  only status quo.
-- The chosen capacity (64) is deliberately not a hard bound -- a full
-  397-table sweep found 34 real patterns (0.11%) that exceed it, up to
-  508 instructions in ~afr-za-g2.ctb~'s large word-ending alternations.
-  Correctness doesn't depend on it (the heap fallback covers that), but
-  those patterns specifically don't get the inline-storage benefit,
-  with no visible signal when that happens.
-- ~find~'s call sites for ~add_thread~ changed from passing
-  ~&mut current~/~&mut next~ (reborrowing an owned value) to passing
-  ~current~/~next~ directly (already ~&mut ThreadList~) -- a small but
-  real increase in how much a reader needs to track reference vs.
-  value semantics in this function, compared to option 1.
-
-** Pros and Cons of the Options
-
-*** Status quo
-
-- Good, because it's the simplest possible code -- no pool, no
-  generation counter, no wraparound edge case, no new dependency
-- Bad, because it's what the profile identified as ~41% of total
-  self-time in a full test-suite run, leaving a measured 42--45%
-  ~translate~ speedup (option 5) unclaimed
-
-*** Generational ~seen~ + per-thread pool
-
-- Good, because it directly targets the allocation cost the profile
-  measured, not just the clearing cost
-- Good, because it requires no changes to ~find~'s matching logic, and
-  mirrors how RE2/~regex-automata~ solve the same problem
-- Good, because it was actually built and measured: a genuine 9--14%
-  ~translate~ speedup, with correctness verified against the full
-  liblouis suite
-- Bad, because it reintroduces the ~u32~ wraparound question 3d0ebac6
-  explicitly wanted to avoid (mitigated: reset-on-wraparound branch,
-  practically unreachable)
-- Bad, because a per-thread pool that only ever grows (never shrinks)
-  means a program that used one large pattern once and then only small
-  ones keeps that oversized ~ThreadList~ allocation alive for the
-  process's lifetime
-
-*** Precompute epsilon closures
-
-- Good, because it would reduce ~add_thread~'s own recursive-call
-  overhead, a real (if smaller) line item in the profile
-- Bad, because runtime-conditional edges (~VariableEqual~/~AssertEnd~/
-  etc.) can only be partially precomputed -- the live walk, and
-  therefore the per-step thread list and its dedup, can't be
-  eliminated
-- Bad, because it's a materially larger, more invasive change for a
-  benefit that hasn't been profiled/quantified yet
-
-*** Convert NFA to DFA
-
-- Good, because DFA execution has no per-step thread-list/epsilon-
-  closure bookkeeping at all -- O(1) per byte
-- Bad, because it can't represent per-thread capture positions without
-  a second, NFA-based execution path for captures (as RE2/
-  ~regex-automata~ do) -- effectively building and maintaining two
-  engines
-- Bad, because our patterns are short and locally-anchored, not the
-  long free-text scans DFA engines are built to accelerate, so the win
-  is unclear relative to the cost
-
-*** Inline bitset + fixed-capacity thread buffer
-
-- Good, because it eliminates the allocation itself for 99.89% of real
-  patterns (397-table, 31,023-pattern sweep), not just the clearing
-  cost or the frequency of allocation
-- Good, because the capacity choice is grounded in a real, diverse,
-  full-corpus survey, not a guess from a handful of tables -- and the
-  survey itself found and quantified the minority (0.11%, up to 508
-  instructions in ~afr-za-g2.ctb~) that doesn't fit
-- Good, because it needs no persistent/pooled state at all -- no
-  ~thread_local!~, no generation counter, no wraparound branch
-- Good, because it degrades gracefully (heap fallback via ~SmallVec~)
-  for that measured minority rather than being unsound
-- Good, because it measured 3--4x option 2's win (42--45% vs. 9--14%)
-- Bad, because it adds a new dependency (~smallvec~)
-
-** Links
-
-- Related to :: [[*Hand-rolled regexp VM instead of the ~regex~/~regex-automata~ crates][Hand-rolled regexp VM instead
-  of the ~regex~/~regex-automata~ crates]] -- this decision operates
-  entirely within the VM that ADR chose to keep
-- Related to :: 3d0ebac6b1dd1054a6d840920be22f7342dfb6a1 ("Simplify
-  ThreadList's visited-set to a plain cleared Vec<bool>") -- ~seen~
-  ends up neither that commit's ~Vec<bool>~ nor the generation counter
-  it replaced, but a fixed-size bitset; the O(1)-clear property that
-  commit gave up is regained as a side effect of the bitset being
-  small, not by reintroducing generations
 
 * COMMENT [short title of solved problem and solution]                     :Template:
 # - Status :: [proposed | rejected | accepted | deprecated | ... |
