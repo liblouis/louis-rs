@@ -22,7 +22,7 @@ pub use attribute::Attribute;
 pub use braille::BrailleChars;
 pub use braille::fallback;
 pub use character_class::{CharacterClass, CharacterClasses};
-pub use match_rule::{Pattern, PatternParser, Patterns};
+pub use match_rule::{Pattern, PatternParser, Patterns, Side};
 pub use multipass::action::ActionInstruction;
 pub use multipass::test::{Quantifier, TestInstruction};
 pub use multipass::{Action, Test};
@@ -1611,9 +1611,12 @@ impl<'a> RuleParser<'a> {
             .next()
             .ok_or(ParseError::MatchPreExpected)
             .map(|s| {
-                match_rule::PatternParser::new(&unescape(s, EscapingContext::MatchPattern)?)
-                    .pattern()
-                    .map_err(ParseError::InvalidMatchPattern)
+                match_rule::PatternParser::new(
+                    &unescape(s, EscapingContext::MatchPattern)?,
+                    Side::Pre,
+                )
+                .pattern()
+                .map_err(ParseError::InvalidMatchPattern)
             })?
     }
 
@@ -1622,9 +1625,12 @@ impl<'a> RuleParser<'a> {
             .next()
             .ok_or(ParseError::MatchPostExpected)
             .map(|s| {
-                match_rule::PatternParser::new(&unescape(s, EscapingContext::MatchPattern)?)
-                    .pattern()
-                    .map_err(ParseError::InvalidMatchPattern)
+                match_rule::PatternParser::new(
+                    &unescape(s, EscapingContext::MatchPattern)?,
+                    Side::Post,
+                )
+                .pattern()
+                .map_err(ParseError::InvalidMatchPattern)
             })?
     }
 

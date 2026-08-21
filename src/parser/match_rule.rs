@@ -23,11 +23,18 @@ pub enum ParseError {
     TrailingInput(char),
 }
 
+/// Which side of a `match` rule (`pre` or `post`) a pattern was parsed for.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Side {
+    Pre,
+    Post,
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Pattern {
     Empty,
     Characters(String),
-    Boundary,
+    Boundary(Side),
     Any,
     Set(HashSet<char>),
     Attributes(HashSet<Attribute>),
@@ -69,7 +76,10 @@ impl std::fmt::Display for Pattern {
         match self {
             Pattern::Empty => write!(f, "-"),
             Pattern::Characters(s) => write!(f, "{}", s),
-            Pattern::Boundary => todo!(),
+            // `^`/`$` are documented as interchangeable (see `Side`), so which one we print
+            // back doesn't change the meaning -- pick the conventional spelling for each side.
+            Pattern::Boundary(Side::Pre) => write!(f, "^"),
+            Pattern::Boundary(Side::Post) => write!(f, "$"),
             Pattern::Any => write!(f, "."),
             Pattern::Set(chars) => {
                 write!(f, "[")?;
@@ -97,6 +107,7 @@ impl std::fmt::Display for Pattern {
 
 pub struct PatternParser<'a> {
     chars: Peekable<Chars<'a>>,
+    side: Side,
 }
 
 fn char_is_special(c: char) -> bool {
@@ -104,9 +115,10 @@ fn char_is_special(c: char) -> bool {
 }
 
 impl<'a> PatternParser<'a> {
-    pub fn new(source: &'a str) -> Self {
+    pub fn new(source: &'a str, side: Side) -> Self {
         Self {
             chars: source.chars().peekable(),
+            side,
         }
     }
 
@@ -191,21 +203,37 @@ impl<'a> PatternParser<'a> {
 
     fn attributes(&mut self) -> Result<Pattern, ParseError> {
         self.consume('%')?;
-        if self.chars.peek() == Some(&'[') {
+        let mut attrs = if self.chars.peek() == Some(&'[') {
             self.consume('[')?;
-            let mut attrs: HashSet<Attribute> = HashSet::new();
+            let mut attrs = HashSet::new();
             while self.chars.peek() != Some(&']') {
                 attrs.insert(self.attribute()?);
             }
             self.consume(']')?;
             if attrs.is_empty() {
-                Err(ParseError::InvalidAttribute(None))
+                return Err(ParseError::InvalidAttribute(None));
+            }
+            attrs
+        } else {
+            HashSet::from([self.attribute()?])
+        };
+        // `^` inside a `%[...]` set means the same boundary as standalone `^`/`$` (see `Side`),
+        // but it's expressed via the shared `Attribute` type rather than `Pattern` itself, since
+        // `Attribute` is also used by the unrelated multipass `Test` grammar. Pull it out here
+        // and re-express it as an ordinary `Pattern::Boundary`, so nothing downstream ever sees
+        // `Attribute::Boundary` inside a `Pattern::Attributes` set.
+        if attrs.remove(&Attribute::Boundary) {
+            let boundary = Pattern::Boundary(self.side);
+            if attrs.is_empty() {
+                Ok(boundary)
             } else {
-                Ok(Pattern::Attributes(attrs))
+                Ok(Pattern::Either(
+                    Patterns(vec![Pattern::Attributes(attrs)]),
+                    Patterns(vec![boundary]),
+                ))
             }
         } else {
-            let attr = self.attribute()?;
-            Ok(Pattern::Attributes(HashSet::from([attr])))
+            Ok(Pattern::Attributes(attrs))
         }
     }
 
@@ -236,12 +264,12 @@ impl<'a> PatternParser<'a> {
 
     fn start_boundary(&mut self) -> Result<Pattern, ParseError> {
         self.consume('^')?;
-        Ok(Pattern::Boundary)
+        Ok(Pattern::Boundary(self.side))
     }
 
     fn end_boundary(&mut self) -> Result<Pattern, ParseError> {
         self.consume('$')?;
-        Ok(Pattern::Boundary)
+        Ok(Pattern::Boundary(self.side))
     }
 
     fn inner_pattern(&mut self) -> Result<Pattern, ParseError> {
@@ -323,7 +351,7 @@ mod tests {
     #[test]
     fn attribute() {
         assert_eq!(
-            PatternParser::new("%[al.]").attributes(),
+            PatternParser::new("%[al.]", Side::Pre).attributes(),
             Ok(Pattern::Attributes(HashSet::from([
                 Attribute::Class(CharacterClass::Letter),
                 Attribute::Class(CharacterClass::Lowercase),
@@ -331,25 +359,25 @@ mod tests {
             ])))
         );
         assert_eq!(
-            PatternParser::new("%[a]").attributes(),
+            PatternParser::new("%[a]", Side::Pre).attributes(),
             Ok(Pattern::Attributes(HashSet::from([Attribute::Class(
                 CharacterClass::Letter
             ),])))
         );
         assert_eq!(
-            PatternParser::new("%[]").attributes(),
+            PatternParser::new("%[]", Side::Pre).attributes(),
             Err(ParseError::InvalidAttribute(None))
         );
         assert_eq!(
-            PatternParser::new("%[a.").attributes(),
+            PatternParser::new("%[a.", Side::Pre).attributes(),
             Err(ParseError::InvalidAttribute(None))
         );
         assert_eq!(
-            PatternParser::new("%[[]").attributes(),
+            PatternParser::new("%[[]", Side::Pre).attributes(),
             Err(ParseError::InvalidAttribute(Some('[')))
         );
         assert_eq!(
-            PatternParser::new("%a").attributes(),
+            PatternParser::new("%a", Side::Pre).attributes(),
             Ok(Pattern::Attributes(HashSet::from([Attribute::Class(
                 CharacterClass::Letter
             ),])))
@@ -357,9 +385,43 @@ mod tests {
     }
 
     #[test]
+    fn boundary() {
+        assert_eq!(
+            PatternParser::new("^", Side::Pre).pattern(),
+            Ok(Patterns(vec![Pattern::Boundary(Side::Pre)]))
+        );
+        assert_eq!(
+            PatternParser::new("$", Side::Post).pattern(),
+            Ok(Patterns(vec![Pattern::Boundary(Side::Post)]))
+        );
+        // `^`/`$` are interchangeable (see `Side`) -- which side resolves the meaning, not
+        // which of the two was actually written.
+        assert_eq!(
+            PatternParser::new("$", Side::Pre).pattern(),
+            Ok(Patterns(vec![Pattern::Boundary(Side::Pre)]))
+        );
+        // `%[^]` alone collapses straight to a plain boundary, not a pointless `Either` with an
+        // empty character class.
+        assert_eq!(
+            PatternParser::new("%[^]", Side::Post).attributes(),
+            Ok(Pattern::Boundary(Side::Post))
+        );
+        // `%[u^]` mixes a real attribute with the boundary marker.
+        assert_eq!(
+            PatternParser::new("%[u^]", Side::Pre).attributes(),
+            Ok(Pattern::Either(
+                Patterns(vec![Pattern::Attributes(HashSet::from([
+                    Attribute::Class(CharacterClass::Uppercase)
+                ]))]),
+                Patterns(vec![Pattern::Boundary(Side::Pre)]),
+            ))
+        );
+    }
+
+    #[test]
     fn characters() {
         assert_eq!(
-            PatternParser::new("abc").characters(),
+            PatternParser::new("abc", Side::Pre).characters(),
             Ok(Pattern::Characters("abc".into()))
         );
     }
@@ -367,11 +429,11 @@ mod tests {
     #[test]
     fn set() {
         assert_eq!(
-            PatternParser::new("[abc]").set(),
+            PatternParser::new("[abc]", Side::Pre).set(),
             Ok(Pattern::Set(HashSet::from(['a', 'b', 'c'])))
         );
         assert_eq!(
-            PatternParser::new("[abc").set(),
+            PatternParser::new("[abc", Side::Pre).set(),
             Err(ParseError::CharExpected {
                 expected: ']',
                 found: None
@@ -382,11 +444,11 @@ mod tests {
     #[test]
     fn set_with_escape() {
         assert_eq!(
-            PatternParser::new(r"[abc\]]").set(),
+            PatternParser::new(r"[abc\]]", Side::Pre).set(),
             Ok(Pattern::Set(HashSet::from(['a', 'b', 'c', ']'])))
         );
         assert_eq!(
-            PatternParser::new(r"[)}\]]").set(),
+            PatternParser::new(r"[)}\]]", Side::Pre).set(),
             Ok(Pattern::Set(HashSet::from([')', '}', ']'])))
         );
     }
@@ -395,7 +457,7 @@ mod tests {
     #[should_panic(expected = "InvalidEscape")]
     fn set_with_invalid_escape() {
         assert_eq!(
-            PatternParser::new(r"[\a]]").set(),
+            PatternParser::new(r"[\a]]", Side::Pre).set(),
             Ok(Pattern::Set(HashSet::from(['a'])))
         );
     }
@@ -403,15 +465,15 @@ mod tests {
     #[test]
     fn negate() {
         assert_eq!(
-            PatternParser::new("!a").pattern_with_quantifier(),
+            PatternParser::new("!a", Side::Pre).pattern_with_quantifier(),
             Ok(Pattern::Negate(Box::new(Pattern::Characters("a".into()))))
         );
         assert_eq!(
-            PatternParser::new("!!a").pattern_with_quantifier(),
+            PatternParser::new("!!a", Side::Pre).pattern_with_quantifier(),
             Err(ParseError::DoubleNegation)
         );
         assert_eq!(
-            PatternParser::new("!!a+").pattern_with_quantifier(),
+            PatternParser::new("!!a+", Side::Pre).pattern_with_quantifier(),
             Err(ParseError::DoubleNegation)
         );
     }
@@ -419,19 +481,19 @@ mod tests {
     #[test]
     fn group() {
         assert_eq!(
-            PatternParser::new("(abc)").group(),
+            PatternParser::new("(abc)", Side::Pre).group(),
             Ok(Pattern::Group(Patterns(vec![Pattern::Characters(
                 "abc".into()
             )])))
         );
         assert_eq!(
-            PatternParser::new("([abc])").group(),
+            PatternParser::new("([abc])", Side::Pre).group(),
             Ok(Pattern::Group(Patterns(vec![Pattern::Set(HashSet::from(
                 ['a', 'b', 'c']
             ))])))
         );
         assert_eq!(
-            PatternParser::new("()").group(),
+            PatternParser::new("()", Side::Pre).group(),
             Err(ParseError::EmptyGroup)
         );
     }
@@ -439,14 +501,14 @@ mod tests {
     #[test]
     fn either() {
         assert_eq!(
-            PatternParser::new("a|b").either(),
+            PatternParser::new("a|b", Side::Pre).either(),
             Ok(Patterns(vec![Pattern::Either(
                 Patterns(vec![Pattern::Characters("a".into())]),
                 Patterns(vec![Pattern::Characters("b".into())])
             )]))
         );
         assert_eq!(
-            PatternParser::new("a|b|c").either(),
+            PatternParser::new("a|b|c", Side::Pre).either(),
             Ok(Patterns(vec![Pattern::Either(
                 Patterns(vec![Pattern::Either(
                     Patterns(vec![Pattern::Characters("a".into())]),
@@ -456,7 +518,7 @@ mod tests {
             )]))
         );
         assert_eq!(
-            PatternParser::new("a+|[bc]?").either(),
+            PatternParser::new("a+|[bc]?", Side::Pre).either(),
             Ok(Patterns(vec![Pattern::Either(
                 Patterns(vec![Pattern::OneOrMore(Box::new(Pattern::Characters(
                     "a".into()
@@ -467,7 +529,7 @@ mod tests {
             )]))
         );
         assert_eq!(
-            PatternParser::new("(a|b)").either(),
+            PatternParser::new("(a|b)", Side::Pre).either(),
             Ok(Patterns(vec![Pattern::Group(Patterns(vec![
                 Pattern::Either(
                     Patterns(vec![Pattern::Characters("a".into())]),
@@ -476,23 +538,25 @@ mod tests {
             ]))]))
         );
         assert_eq!(
-            PatternParser::new("|a").either(),
+            PatternParser::new("|a", Side::Pre).either(),
             Err(ParseError::MissingPatternBeforeEither)
         );
         assert_eq!(
-            PatternParser::new("a|").either(),
+            PatternParser::new("a|", Side::Pre).either(),
             Err(ParseError::EmptyPattern)
         );
         assert_eq!(
-            PatternParser::new("e%[^_.]|end").either(),
+            PatternParser::new("e%[^_.]|end", Side::Pre).either(),
             Ok(Patterns(vec![Pattern::Either(
                 Patterns(vec![
                     Pattern::Characters("e".into()),
-                    Pattern::Attributes(HashSet::from([
-                        Attribute::Boundary,
-                        Attribute::Class(CharacterClass::Space),
-                        Attribute::Class(CharacterClass::Punctuation),
-                    ]))
+                    Pattern::Either(
+                        Patterns(vec![Pattern::Attributes(HashSet::from([
+                            Attribute::Class(CharacterClass::Space),
+                            Attribute::Class(CharacterClass::Punctuation),
+                        ]))]),
+                        Patterns(vec![Pattern::Boundary(Side::Pre)]),
+                    )
                 ]),
                 Patterns(vec![Pattern::Characters("end".into())])
             )]))
@@ -502,45 +566,45 @@ mod tests {
     #[test]
     fn pattern() {
         assert_eq!(
-            PatternParser::new("(abc)").pattern(),
+            PatternParser::new("(abc)", Side::Pre).pattern(),
             Ok(Patterns(vec![Pattern::Group(Patterns(vec![
                 Pattern::Characters("abc".into())
             ]))]))
         );
         assert_eq!(
-            PatternParser::new("(abc)?").pattern(),
+            PatternParser::new("(abc)?", Side::Pre).pattern(),
             Ok(Patterns(vec![Pattern::Optional(Box::new(Pattern::Group(
                 Patterns(vec![Pattern::Characters("abc".into())])
             )))]))
         );
         assert_eq!(
-            PatternParser::new("(abc)+").pattern(),
+            PatternParser::new("(abc)+", Side::Pre).pattern(),
             Ok(Patterns(vec![Pattern::OneOrMore(Box::new(
                 Pattern::Group(Patterns(vec![Pattern::Characters("abc".into())]))
             ))]))
         );
         assert_eq!(
-            PatternParser::new("(abc)*").pattern(),
+            PatternParser::new("(abc)*", Side::Pre).pattern(),
             Ok(Patterns(vec![Pattern::ZeroOrMore(Box::new(
                 Pattern::Group(Patterns(vec![Pattern::Characters("abc".into())]))
             ))]))
         );
         assert_eq!(
-            PatternParser::new("a**").pattern(),
+            PatternParser::new("a**", Side::Pre).pattern(),
             Err(ParseError::MissingPatternBeforeQuantifier('*'))
         );
         assert_eq!(
-            PatternParser::new("-").pattern(),
+            PatternParser::new("-", Side::Pre).pattern(),
             Ok(Patterns(vec![Pattern::Empty]))
         );
         // Regression test: a stray ')' with no enclosing group used to be silently accepted,
         // producing an empty Patterns instead of an error.
         assert_eq!(
-            PatternParser::new(")").pattern(),
+            PatternParser::new(")", Side::Pre).pattern(),
             Err(ParseError::TrailingInput(')'))
         );
         assert_eq!(
-            PatternParser::new("a)").pattern(),
+            PatternParser::new("a)", Side::Pre).pattern(),
             Err(ParseError::TrailingInput(')'))
         );
     }

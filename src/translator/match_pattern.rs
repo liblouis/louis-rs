@@ -2,88 +2,51 @@
 
 use std::collections::HashSet;
 
-use crate::parser::{AnchoredRule, Attribute, CharacterClasses, Pattern, Patterns};
+use crate::parser::{AnchoredRule, Attribute, CharacterClasses, Pattern, Patterns, Side};
 
 use crate::translator::effect::Environment;
 use crate::translator::regexp::{CompiledRegexp, Regexp};
 use crate::translator::translation::Translation;
 use crate::translator::{ResolvedTranslation, TranslationStage};
 
-/// How the `^`/`$` boundary marker (standalone [`Pattern::Boundary`] or the `^` attribute inside
-/// a `%[...]` set) should be compiled.
-///
-/// liblouis' matcher is bidirectional: `pre` scans backward from the cursor over
-/// already-translated text, `post` scans forward over the upcoming text. A boundary check
-/// succeeds when there is no more input left *in whichever direction is currently scanning*.
-/// Our regexp engine only scans forward, which is not a problem for `post` — the text handed to
-/// it always already extends to the true end of the whole input, so "no more input" can be
-/// checked from inside the regexp itself ([`Regexp::EndAnchor`]). For `pre`, "no more input"
-/// means "the whole match begins at the true start of the original input", which the regexp
-/// can't determine from its own position — the caller has to know this externally. Since it
-/// can't vary per-position within one compiled regexp, we instead compile `pre` twice, once
-/// assuming it does and once assuming it doesn't, and the caller picks the right one per call
-/// (see [`MatchPatterns::find`]).
-#[derive(Clone, Copy)]
-enum BoundaryMode {
-    /// Compiling `post`: checked dynamically via [`Regexp::EndAnchor`].
-    Dynamic,
-    /// Compiling `pre` for the variant queried when the caller confirms we are at the true
-    /// start of the whole original input, so there is definitely no preceding character: a
-    /// boundary check always succeeds (zero-width), and any check that requires a real
-    /// preceding character always fails.
-    AssumeAtStart,
-    /// Compiling `pre` for the variant queried otherwise. Matches the previous behavior: the
-    /// boundary marker contributes nothing on its own (we can't tell from inside the regexp
-    /// whether we're at the true start), other attributes in the same set are unaffected.
-    Otherwise,
-}
-
 impl Regexp {
-    fn from_pattern(item: &Pattern, ctx: &CharacterClasses, boundary: BoundaryMode) -> Self {
+    fn from_pattern(item: &Pattern, ctx: &CharacterClasses) -> Self {
         match item {
             Pattern::Empty => Regexp::Empty,
-            // `Characters`/`Set`/`Any` (below) don't consult `boundary`, unlike `Boundary`/
-            // `Attributes`: under `AssumeAtStart` they should, per liblouis, unconditionally fail
-            // (there's provably no preceding character to check them against), but no shipped
-            // liblouis table combines a literal/set/any `pre` element with a boundary check, so
-            // this is left as a known, currently-dormant gap rather than generalized.
             Pattern::Characters(s) => Regexp::String(s.to_string()),
-            Pattern::Boundary => match boundary {
-                BoundaryMode::Dynamic => Regexp::EndAnchor,
-                BoundaryMode::AssumeAtStart => Regexp::Empty,
-                BoundaryMode::Otherwise => Regexp::Never,
-            },
+            Pattern::Boundary(Side::Pre) => Regexp::StartAnchor,
+            Pattern::Boundary(Side::Post) => Regexp::EndAnchor,
             Pattern::Any => Regexp::Any,
             Pattern::Set(hash_set) => Regexp::CharacterClass(hash_set.clone()),
-            Pattern::Attributes(hash_set) => Regexp::from_attributes(hash_set, ctx, boundary),
+            Pattern::Attributes(hash_set) => Regexp::from_attributes(hash_set, ctx),
             Pattern::Group(patterns) => {
-                Regexp::Group(Box::new(Regexp::from_patterns(patterns, ctx, boundary)))
+                Regexp::Group(Box::new(Regexp::from_patterns(patterns, ctx)))
             }
-            Pattern::Negate(pattern) => Regexp::from_pattern(pattern, ctx, boundary).negate(),
+            Pattern::Negate(pattern) => Regexp::from_pattern(pattern, ctx).negate(),
             Pattern::Optional(pattern) => {
-                Regexp::Optional(Box::new(Regexp::from_pattern(pattern, ctx, boundary)))
+                Regexp::Optional(Box::new(Regexp::from_pattern(pattern, ctx)))
             }
             Pattern::ZeroOrMore(pattern) => {
-                Regexp::ZeroOrMore(Box::new(Regexp::from_pattern(pattern, ctx, boundary)))
+                Regexp::ZeroOrMore(Box::new(Regexp::from_pattern(pattern, ctx)))
             }
             Pattern::OneOrMore(pattern) => {
-                Regexp::OneOrMore(Box::new(Regexp::from_pattern(pattern, ctx, boundary)))
+                Regexp::OneOrMore(Box::new(Regexp::from_pattern(pattern, ctx)))
             }
             Pattern::Either(left, right) => Regexp::Either(
-                Box::new(Regexp::from_patterns(left, ctx, boundary)),
-                Box::new(Regexp::from_patterns(right, ctx, boundary)),
+                Box::new(Regexp::from_patterns(left, ctx)),
+                Box::new(Regexp::from_patterns(right, ctx)),
             ),
         }
     }
 
-    fn from_patterns(patterns: &Patterns, ctx: &CharacterClasses, boundary: BoundaryMode) -> Self {
+    fn from_patterns(patterns: &Patterns, ctx: &CharacterClasses) -> Self {
         match patterns.len() {
             0 => todo!(),
-            1 => Regexp::from_pattern(&patterns[0], ctx, boundary),
+            1 => Regexp::from_pattern(&patterns[0], ctx),
             _ => {
-                let mut regexp = Regexp::from_pattern(&patterns[0], ctx, boundary);
+                let mut regexp = Regexp::from_pattern(&patterns[0], ctx);
                 for pattern in patterns.iter().skip(1) {
-                    let other = Regexp::from_pattern(pattern, ctx, boundary);
+                    let other = Regexp::from_pattern(pattern, ctx);
                     regexp = Regexp::Concat(Box::new(regexp), Box::new(other));
                 }
                 regexp
@@ -91,13 +54,8 @@ impl Regexp {
         }
     }
 
-    fn from_attributes(
-        attributes: &HashSet<Attribute>,
-        ctx: &CharacterClasses,
-        boundary: BoundaryMode,
-    ) -> Self {
+    fn from_attributes(attributes: &HashSet<Attribute>, ctx: &CharacterClasses) -> Self {
         let mut characters = HashSet::new();
-        let mut has_boundary = false;
         for attr in attributes {
             match attr {
                 Attribute::Class(class) => {
@@ -105,30 +63,21 @@ impl Regexp {
                         characters.extend(chars);
                     }
                 }
-                Attribute::Boundary => has_boundary = true,
+                // the parser (`match_rule.rs::attributes`) already pulls `Boundary` out of the
+                // set and re-expresses it as a sibling `Pattern::Boundary`, so it never survives
+                // into a `Pattern::Attributes` set
+                Attribute::Boundary => unreachable!(),
                 // attributes that match a character class by order of definition luckily do not
                 // exist in match regular expressions
                 Attribute::ByOrder(_) => unreachable!(),
                 Attribute::Any => (), // TODO
             }
         }
-        match (boundary, has_boundary) {
-            (BoundaryMode::Dynamic, true) => Regexp::Either(
-                Box::new(Regexp::CharacterClass(characters)),
-                Box::new(Regexp::EndAnchor),
-            ),
-            (BoundaryMode::AssumeAtStart, true) => Regexp::Empty,
-            (BoundaryMode::AssumeAtStart, false) => Regexp::Never,
-            (BoundaryMode::Dynamic, false) | (BoundaryMode::Otherwise, _) => {
-                Regexp::CharacterClass(characters)
-            }
-        }
+        Regexp::CharacterClass(characters)
     }
 
     /// Combine the pre and post patterns with the match characters into one big Regexp by joining
-    /// them with concat. `pre_boundary` selects which of the two `pre` variants to compile (see
-    /// [`BoundaryMode`]); `post` always uses [`BoundaryMode::Dynamic`] since its boundary checks
-    /// don't need a variant.
+    /// them with concat.
     ///
     /// `chars` is matched case-insensitively ([`Regexp::CaseInsensitiveString`]), unlike `pre`/
     /// `post`, which stay case-sensitive. This matches liblouis: a `match` rule's literal
@@ -141,35 +90,22 @@ impl Regexp {
         chars: String,
         post: &Patterns,
         ctx: &CharacterClasses,
-        pre_boundary: BoundaryMode,
     ) -> Self {
         Regexp::Concat(
             Box::new(Regexp::Concat(
-                Box::new(Regexp::from_patterns(pre, ctx, pre_boundary)),
+                Box::new(Regexp::from_patterns(pre, ctx)),
                 Box::new(Regexp::Capture(Box::new(Regexp::CaseInsensitiveString(
                     chars,
                 )))),
             )),
-            Box::new(Regexp::from_patterns(post, ctx, BoundaryMode::Dynamic)),
+            Box::new(Regexp::from_patterns(post, ctx)),
         )
     }
 }
 
-/// A match rule compiled twice: once assuming `pre` is being matched at the true start of the
-/// whole original input, once assuming it isn't. See [`BoundaryMode`] for why.
-///
-/// This looks like it duplicates `context_pattern.rs`'s `AnchoredContextRegexp` (also
-/// start-anchor-dependent), but that one only needs a bool gate on a single compiled regexp,
-/// not two full variants — see the comment on that struct for why the two can't be unified.
-#[derive(Debug)]
-struct AnchoredMatchRegexp {
-    at_start: CompiledRegexp,
-    otherwise: CompiledRegexp,
-}
-
 #[derive(Debug)]
 pub struct MatchPatternsBuilder {
-    regexps: Vec<AnchoredMatchRegexp>,
+    regexps: Vec<CompiledRegexp>,
 }
 
 impl MatchPatternsBuilder {
@@ -195,21 +131,9 @@ impl MatchPatternsBuilder {
             TranslationStage::Main,
             origin.clone(),
         ));
-        let at_start = Regexp::from_match_rule(
-            pre,
-            chars.to_string(),
-            post,
-            ctx,
-            BoundaryMode::AssumeAtStart,
-        )
-        .compile_with_payload(translation.clone());
-        let otherwise =
-            Regexp::from_match_rule(pre, chars.to_string(), post, ctx, BoundaryMode::Otherwise)
-                .compile_with_payload(translation);
-        self.regexps.push(AnchoredMatchRegexp {
-            at_start,
-            otherwise,
-        });
+        let regexp = Regexp::from_match_rule(pre, chars.to_string(), post, ctx)
+            .compile_with_payload(translation);
+        self.regexps.push(regexp);
     }
 
     pub fn build(self) -> MatchPatterns {
@@ -221,20 +145,16 @@ impl MatchPatternsBuilder {
 
 #[derive(Debug)]
 pub struct MatchPatterns {
-    regexps: Vec<AnchoredMatchRegexp>,
+    regexps: Vec<CompiledRegexp>,
 }
 
 impl MatchPatterns {
     /// `at_start` tells whether `input` begins at position 0 of the whole string being
-    /// translated — needed to pick the right compiled variant for `pre`'s boundary checks (see
-    /// [`BoundaryMode`]).
+    /// translated — needed to honor `pre`'s [`Pattern::Boundary`] checks.
     pub fn find(&self, input: &str, at_start: bool) -> Vec<ResolvedTranslation> {
         self.regexps
             .iter()
-            .flat_map(|r| {
-                let re = if at_start { &r.at_start } else { &r.otherwise };
-                re.find(input, &Environment::new())
-            })
+            .flat_map(|r| r.find_anchored(input, &Environment::new(), at_start))
             .collect()
     }
 }
@@ -255,10 +175,10 @@ mod tests {
     #[test]
     fn find_pattern() {
         let env = Environment::new();
-        let patterns = PatternParser::new("abc").pattern().unwrap();
+        let patterns = PatternParser::new("abc", Side::Post).pattern().unwrap();
         let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
-        let re = Regexp::from_patterns(&patterns, &ctx, BoundaryMode::Dynamic).compile();
+        let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
             re.find("abc", &env).unwrap(),
             ResolvedTranslation::new("", "", 3, stage, None)
@@ -269,10 +189,10 @@ mod tests {
     #[test]
     fn find_either() {
         let env = Environment::new();
-        let patterns = PatternParser::new("a|b").pattern().unwrap();
+        let patterns = PatternParser::new("a|b", Side::Post).pattern().unwrap();
         let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
-        let re = Regexp::from_patterns(&patterns, &ctx, BoundaryMode::Dynamic).compile();
+        let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
             re.find("a", &env).unwrap(),
             ResolvedTranslation::new("", "", 1, stage, None)
@@ -288,13 +208,13 @@ mod tests {
     #[test]
     fn find_attribute_digit() {
         let env = Environment::new();
-        let patterns = PatternParser::new("%[#]").pattern().unwrap();
+        let patterns = PatternParser::new("%[#]", Side::Post).pattern().unwrap();
         let stage = TranslationStage::Main;
         let mut ctx = CharacterClasses::default();
         for digit in ['1', '2', '3'] {
             ctx.insert(CharacterClass::Digit, digit);
         }
-        let re = Regexp::from_patterns(&patterns, &ctx, BoundaryMode::Dynamic).compile();
+        let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
             re.find("1", &env).unwrap(),
             ResolvedTranslation::new("", "", 1, stage, None)
@@ -313,13 +233,13 @@ mod tests {
     #[test]
     fn find_attribute_uppercase() {
         let env = Environment::new();
-        let patterns = PatternParser::new("%[u]").pattern().unwrap();
+        let patterns = PatternParser::new("%[u]", Side::Post).pattern().unwrap();
         let stage = TranslationStage::Main;
         let mut ctx = CharacterClasses::default();
         for c in ['A', 'B', 'C'] {
             ctx.insert(CharacterClass::Uppercase, c);
         }
-        let re = Regexp::from_patterns(&patterns, &ctx, BoundaryMode::Dynamic).compile();
+        let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
             re.find("A", &env).unwrap(),
             ResolvedTranslation::new("", "", 1, stage, None)
@@ -338,7 +258,7 @@ mod tests {
     #[test]
     fn find_attribute_uppercase_punctuation_or_sign() {
         let env = Environment::new();
-        let patterns = PatternParser::new("%[.$u]").pattern().unwrap();
+        let patterns = PatternParser::new("%[.$u]", Side::Post).pattern().unwrap();
         let stage = TranslationStage::Main;
         let mut ctx = CharacterClasses::default();
         for c in ['A', 'B', 'C'] {
@@ -350,7 +270,7 @@ mod tests {
         for c in ['%', '&', '/'] {
             ctx.insert(CharacterClass::Sign, c);
         }
-        let re = Regexp::from_patterns(&patterns, &ctx, BoundaryMode::Dynamic).compile();
+        let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
             re.find("%", &env).unwrap(),
             ResolvedTranslation::new("", "", 1, stage, None)
@@ -369,10 +289,10 @@ mod tests {
     #[test]
     fn find_character_class() {
         let env = Environment::new();
-        let patterns = PatternParser::new("[abc]").pattern().unwrap();
+        let patterns = PatternParser::new("[abc]", Side::Post).pattern().unwrap();
         let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
-        let re = Regexp::from_patterns(&patterns, &ctx, BoundaryMode::Dynamic).compile();
+        let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
             re.find("a", &env).unwrap(),
             ResolvedTranslation::new("", "", 1, stage, None)
@@ -391,10 +311,10 @@ mod tests {
     #[test]
     fn find_character_class_one_or_more() {
         let env = Environment::new();
-        let patterns = PatternParser::new("[abc]+").pattern().unwrap();
+        let patterns = PatternParser::new("[abc]+", Side::Post).pattern().unwrap();
         let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
-        let re = Regexp::from_patterns(&patterns, &ctx, BoundaryMode::Dynamic).compile();
+        let re = Regexp::from_patterns(&patterns, &ctx).compile();
         assert_eq!(
             re.find("a", &env).unwrap(),
             ResolvedTranslation::new("", "", 1, stage, None)
@@ -412,8 +332,8 @@ mod tests {
 
     #[test]
     fn find_match() {
-        let pre = PatternParser::new("[abc]+").pattern().unwrap();
-        let post = PatternParser::new("[123]+").pattern().unwrap();
+        let pre = PatternParser::new("[abc]+", Side::Pre).pattern().unwrap();
+        let post = PatternParser::new("[123]+", Side::Post).pattern().unwrap();
         let ctx = CharacterClasses::default();
         let rule = fake_rule();
         let mut builder = MatchPatternsBuilder::new();
@@ -434,8 +354,10 @@ mod tests {
 
     #[test]
     fn find_multiple_match() {
-        let pre = PatternParser::new("[abc]+").pattern().unwrap();
-        let post = PatternParser::new("[1234567890]").pattern().unwrap();
+        let pre = PatternParser::new("[abc]+", Side::Pre).pattern().unwrap();
+        let post = PatternParser::new("[1234567890]", Side::Post)
+            .pattern()
+            .unwrap();
         let ctx = CharacterClasses::default();
         let rule = fake_rule();
         let mut builder = MatchPatternsBuilder::new();
@@ -453,5 +375,46 @@ mod tests {
         ];
         assert_eq!(matcher.find("aaabar333", true), translation);
         assert_ne!(matcher.find("aaabaz333", true), translation);
+    }
+
+    #[test]
+    fn find_match_with_pre_boundary() {
+        let pre = PatternParser::new("^", Side::Pre).pattern().unwrap();
+        let post = PatternParser::new(".", Side::Post).pattern().unwrap();
+        let ctx = CharacterClasses::default();
+        let rule = fake_rule();
+        let mut builder = MatchPatternsBuilder::new();
+        builder.insert(&pre, "a", &post, "X", &rule, &ctx);
+        let matcher = builder.build();
+        let translation = ResolvedTranslation::new("a", "X", 2, TranslationStage::Main, rule);
+        // "a" is preceded by nothing only when it truly begins the whole input
+        assert_eq!(matcher.find("ab", true), vec![translation]);
+        assert!(matcher.find("ab", false).is_empty());
+    }
+
+    #[test]
+    fn find_match_with_pre_attribute_boundary() {
+        // `%[u^]` in `pre`: an uppercase letter immediately before `chars`, or (via `^`) nothing
+        // at all if `chars` itself is at the true beginning of input.
+        let pre = PatternParser::new("%[u^]", Side::Pre).pattern().unwrap();
+        let post = PatternParser::new(".", Side::Post).pattern().unwrap();
+        let mut ctx = CharacterClasses::default();
+        for c in ['A', 'B', 'C'] {
+            ctx.insert(CharacterClass::Uppercase, c);
+        }
+        let rule = fake_rule();
+        let mut builder = MatchPatternsBuilder::new();
+        builder.insert(&pre, "x", &post, "X", &rule, &ctx);
+        let matcher = builder.build();
+        // character-class branch: preceded by an uppercase letter, mid-string
+        let translation =
+            ResolvedTranslation::new("x", "X", 3, TranslationStage::Main, rule.clone())
+                .with_offset(1);
+        assert_eq!(matcher.find("Axy", false), vec![translation]);
+        // boundary branch: no preceding letter needed, at the true start of input
+        let translation = ResolvedTranslation::new("x", "X", 2, TranslationStage::Main, rule);
+        assert_eq!(matcher.find("xy_", true), vec![translation]);
+        // neither branch applies: not at the true start, and not preceded by an uppercase letter
+        assert!(matcher.find("xy_", false).is_empty());
     }
 }
