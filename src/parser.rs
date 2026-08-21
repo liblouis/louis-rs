@@ -2808,11 +2808,7 @@ mod tests {
     fn correct() {
         assert_eq!(
             Ok(Rule::Correct {
-                test: Test::new(
-                    false,
-                    false,
-                    vec![TestInstruction::String { s: "a".into() }]
-                ),
+                test: Test::new(vec![TestInstruction::String { s: "a".into() }]),
                 action: Action::new(vec![ActionInstruction::String { s: "b".into() }]),
                 constraints: constraint_set!(Constraint::Noback)
             }),

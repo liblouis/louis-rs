@@ -17,12 +17,7 @@ use crate::translator::{ResolvedTranslation, TranslationError, TranslationStage}
 
 impl Regexp {
     fn from_test(test: &Test, ctx: &CharacterClasses) -> Self {
-        let ast = Regexp::from_instructions(test.tests(), ctx);
-        if test.at_end() {
-            Regexp::Concat(Box::new(ast), Box::new(Regexp::EndAnchor))
-        } else {
-            ast
-        }
+        Regexp::from_instructions(test.tests(), ctx)
     }
 
     fn from_instructions(instructions: &[TestInstruction], ctx: &CharacterClasses) -> Self {
@@ -76,6 +71,8 @@ impl Regexp {
             TestInstruction::Replace { tests } => {
                 Regexp::Capture(Box::new(Regexp::from_instructions(tests, ctx)))
             }
+            TestInstruction::AtBeginning => Regexp::StartAnchor,
+            TestInstruction::AtEnd => Regexp::EndAnchor,
         }
     }
 
@@ -198,29 +195,9 @@ impl Effects {
     }
 }
 
-/// A compiled context regexp paired with whether it is anchored to the beginning of the whole
-/// input (liblouis' `` ` `` test anchor). Unlike the end anchor (`~`), the beginning anchor
-/// cannot be expressed inside the regexp itself: the regexp only ever sees the remaining suffix
-/// of the input, so it has no way to tell whether that suffix starts at position 0 of the
-/// original string. Callers of [`ContextPatterns::find`] must supply that externally.
-///
-/// This is deliberately a simpler shape than `match_pattern.rs`'s `AnchoredMatchRegexp` (one
-/// regexp gated by a bool, not two full compiled variants): `` ` ``/`~` are test-level anchors
-/// that appear at most once, at the very start/end of the whole test, so "does this rule apply
-/// at all" is a single yes/no question — skipping the whole compiled regexp is enough. `match`'s
-/// `^` is an *attribute*, usable anywhere a character-class attribute is, including mixed with
-/// other attributes in the same set (`%[_~^]`) — the difference isn't "does the rule apply" but
-/// "what does this one sub-expression mean here", which has to be baked into the compiled
-/// instructions themselves, hence two full variants there instead of a gate on one.
-#[derive(Debug)]
-struct AnchoredContextRegexp {
-    requires_start: bool,
-    regexp: CompiledRegexp,
-}
-
 #[derive(Debug)]
 pub struct ContextPatternsBuilder {
-    regexps: Vec<AnchoredContextRegexp>,
+    regexps: Vec<CompiledRegexp>,
 }
 
 impl ContextPatternsBuilder {
@@ -269,10 +246,7 @@ impl ContextPatternsBuilder {
             }
         };
         let regexp = Regexp::from_test(&test, character_classes).compile_with_payload(translation);
-        self.regexps.push(AnchoredContextRegexp {
-            requires_start: test.at_beginning(),
-            regexp,
-        });
+        self.regexps.push(regexp);
         Ok(())
     }
 
@@ -285,17 +259,17 @@ impl ContextPatternsBuilder {
 
 #[derive(Debug)]
 pub struct ContextPatterns {
-    regexps: Vec<AnchoredContextRegexp>,
+    regexps: Vec<CompiledRegexp>,
 }
 
 impl ContextPatterns {
     /// `at_start` tells whether `input` begins at position 0 of the whole string being
-    /// translated — needed to honor liblouis' `` ` `` ("beginning of input") test anchor.
+    /// translated — needed to honor liblouis' `` ` `` ("beginning of input") test anchor,
+    /// which can appear anywhere in a compiled pattern (see [`Regexp::StartAnchor`]).
     pub fn find(&self, input: &str, env: &Environment, at_start: bool) -> Vec<ResolvedTranslation> {
         self.regexps
             .iter()
-            .filter(|r| at_start || !r.requires_start)
-            .flat_map(|r| r.regexp.find(input, env))
+            .flat_map(|r| r.find_anchored(input, env, at_start))
             .collect()
     }
 }
@@ -742,6 +716,48 @@ mod tests {
         assert_eq!(patterns.find("a", &env, true), [translation]);
         // does not match when there is trailing input after "a"
         assert!(patterns.find("ab", &env, true).is_empty());
+    }
+
+    #[test]
+    fn context_at_beginning_anchor_after_other_test() {
+        // liblouis/liblouis#2071: `quotation-marks.uti:26` places `` ` `` after `#1=0` rather
+        // than first. The manual says it must be first, but the compiler doesn't enforce that,
+        // and both `` ` `` and `#1=0` are zero-width test-phase conditions, so this must behave
+        // identically to `context_at_beginning_anchor` above.
+        let mut env = Environment::new();
+        env.apply(&Effect::new(1, 0));
+        let tests = test::Parser::new(r#"#1=0`"a""#).tests().unwrap();
+        let action = action::Parser::new(r#""X""#).actions().unwrap();
+        let origin = origin(r#"context #1=0`"a" "X""#);
+        let stage = TranslationStage::Main;
+        let mut builder = ContextPatternsBuilder::new();
+        builder
+            .insert(&tests, &action, &origin, stage, &TableContext::default())
+            .unwrap();
+        let translation =
+            ResolvedTranslation::new("a", "X", 1, TranslationStage::Main, origin.clone());
+        let patterns = builder.build();
+        assert_eq!(patterns.find("a", &env, true), [translation]);
+        assert!(patterns.find("a", &env, false).is_empty());
+    }
+
+    #[test]
+    fn context_negated_beginning_and_end_anchor() {
+        let env = Environment::new();
+        let tests = test::Parser::new(r#"!`"a""#).tests().unwrap();
+        let action = action::Parser::new(r#""X""#).actions().unwrap();
+        let origin = origin(r#"context !`"a" "X""#);
+        let stage = TranslationStage::Main;
+        let mut builder = ContextPatternsBuilder::new();
+        builder
+            .insert(&tests, &action, &origin, stage, &TableContext::default())
+            .unwrap();
+        let translation =
+            ResolvedTranslation::new("a", "X", 1, TranslationStage::Main, origin.clone());
+        let patterns = builder.build();
+        // "not at the beginning" -- opposite of `context_at_beginning_anchor`
+        assert!(patterns.find("a", &env, true).is_empty());
+        assert_eq!(patterns.find("a", &env, false), [translation]);
     }
 
     #[test]

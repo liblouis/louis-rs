@@ -8,32 +8,16 @@ use super::braille::{self, BrailleChars, is_braille_dot};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Test {
-    at_beginning: bool,
-    at_end: bool,
     tests: Vec<TestInstruction>,
 }
 
 impl Test {
-    pub fn new(at_beginning: bool, at_end: bool, tests: Vec<TestInstruction>) -> Self {
-        Self {
-            at_beginning,
-            at_end,
-            tests,
-        }
+    pub fn new(tests: Vec<TestInstruction>) -> Self {
+        Self { tests }
     }
 
     pub fn tests(&self) -> &Vec<TestInstruction> {
         &self.tests
-    }
-
-    /// Whether this test is anchored to the beginning of the whole input (`` ` ``).
-    pub fn at_beginning(&self) -> bool {
-        self.at_beginning
-    }
-
-    /// Whether this test is anchored to the end of the whole input (`~`).
-    pub fn at_end(&self) -> bool {
-        self.at_end
     }
 
     pub fn add_implicit_replace(self) -> Self {
@@ -44,7 +28,6 @@ impl Test {
         {
             Self {
                 tests: vec![TestInstruction::Replace { tests: self.tests }],
-                ..self
             }
         } else {
             self
@@ -54,13 +37,9 @@ impl Test {
 
 impl IsLiteral for Test {
     fn is_literal(&self) -> bool {
-        if self.at_beginning || self.at_end {
-            false
-        } else {
-            self.tests
-                .iter()
-                .all(|instruction| instruction.is_literal())
-        }
+        self.tests
+            .iter()
+            .all(|instruction| instruction.is_literal())
     }
 }
 
@@ -127,6 +106,12 @@ pub enum TestInstruction {
     Replace {
         tests: Vec<TestInstruction>,
     },
+    /// `` ` `` (accent mark): true only when the match has consumed no input yet and the whole
+    /// test is being evaluated at the true beginning of the original string being translated.
+    AtBeginning,
+    /// `~` (tilde): true only when there is no more input left, i.e. the match has reached the
+    /// true end of the original string being translated.
+    AtEnd,
 }
 
 impl IsLiteral for TestInstruction {
@@ -157,10 +142,8 @@ fn is_attribute(c: &char) -> bool {
     )
 }
 
-// Must not include `~`: that keeps the end anchor out of reach of `negate()`, which relies on
-// never seeing (and negating) a `Regexp::EndAnchor`.
 fn is_test(c: &char) -> bool {
-    matches!(c, '_' | '%' | '@' | '"' | '$' | '[' | '#' | '!')
+    matches!(c, '_' | '%' | '@' | '"' | '$' | '[' | '#' | '!' | '`' | '~')
 }
 
 fn is_class_digit(c: &char) -> bool {
@@ -439,6 +422,16 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn at_beginning(&mut self) -> Result<TestInstruction, ParseError> {
+        self.consume('`')?;
+        Ok(TestInstruction::AtBeginning)
+    }
+
+    fn at_end(&mut self) -> Result<TestInstruction, ParseError> {
+        self.consume('~')?;
+        Ok(TestInstruction::AtEnd)
+    }
+
     fn test(&mut self) -> Result<TestInstruction, ParseError> {
         match self.chars.peek() {
             Some('_') => Ok(self.lookback()?),
@@ -449,6 +442,8 @@ impl<'a> Parser<'a> {
             Some('[') => Ok(self.replacement()?),
             Some('#') => Ok(self.variable()?),
             Some('!') => Ok(self.negate()?),
+            Some('`') => Ok(self.at_beginning()?),
+            Some('~') => Ok(self.at_end()?),
             Some(c) => Err(ParseError::InvalidTest { found: Some(*c) }),
             _ => Err(ParseError::InvalidTest { found: None }),
         }
@@ -464,20 +459,14 @@ impl<'a> Parser<'a> {
 
     /// Parse the test operand.
     pub fn tests(&mut self) -> Result<Test, ParseError> {
-        let at_beginning = self.chars.next_if_eq(&'`').is_some();
         let tests = self.many_tests()?;
-        let at_end = self.chars.next_if_eq(&'~').is_some();
         if tests.is_empty() {
             Err(ParseError::EmptyTest)
         } else if let Some(c) = self.chars.next() {
             // we haven't consumed all the input. There are some invalid chars
             Err(ParseError::InvalidTest { found: Some(c) })
         } else {
-            Ok(Test {
-                at_beginning,
-                at_end,
-                tests,
-            })
+            Ok(Test { tests })
         }
     }
 }
@@ -488,18 +477,9 @@ mod display {
 
     impl std::fmt::Display for Test {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            if self.at_beginning {
-                write!(f, "`")?;
-            }
-
             for instruction in &self.tests {
                 write!(f, "{}", instruction)?;
             }
-
-            if self.at_end {
-                write!(f, "~")?;
-            }
-
             Ok(())
         }
     }
@@ -600,6 +580,8 @@ mod display {
                     }
                     write!(f, "]")
                 }
+                TestInstruction::AtBeginning => write!(f, "`"),
+                TestInstruction::AtEnd => write!(f, "~"),
             }
         }
     }
@@ -945,8 +927,6 @@ mod tests {
         assert_eq!(
             Parser::new("$d[\"hello\"]%digitletter").tests(),
             Ok(Test {
-                at_beginning: false,
-                at_end: false,
                 tests: vec![
                     TestInstruction::Attributes {
                         attrs: HashSet::from([Attribute::Class(CharacterClass::Digit)]),
@@ -969,6 +949,63 @@ mod tests {
         assert_eq!(
             Parser::new("@123#1=0&too much input").tests(),
             Err(ParseError::InvalidTest { found: Some('&') }),
+        );
+    }
+
+    #[test]
+    fn at_beginning_and_at_end() {
+        assert_eq!(
+            Parser::new("`\"a\"").tests(),
+            Ok(Test {
+                tests: vec![
+                    TestInstruction::AtBeginning,
+                    TestInstruction::String { s: "a".into() }
+                ]
+            })
+        );
+        assert_eq!(
+            Parser::new("\"a\"~").tests(),
+            Ok(Test {
+                tests: vec![
+                    TestInstruction::String { s: "a".into() },
+                    TestInstruction::AtEnd
+                ]
+            })
+        );
+        // liblouis/liblouis#2071: `quotation-marks.uti:26` places `` ` `` after `#1=0` rather
+        // than first -- the manual says it must be first, but the compiler doesn't enforce
+        // that, and this should still parse.
+        assert_eq!(
+            Parser::new("#1=0`[\"'\"]").tests(),
+            Ok(Test {
+                tests: vec![
+                    TestInstruction::Variable {
+                        var: 1,
+                        op: Operator::Eq,
+                        operand: 0
+                    },
+                    TestInstruction::AtBeginning,
+                    TestInstruction::Replace {
+                        tests: vec![TestInstruction::String { s: "'".into() }]
+                    }
+                ]
+            })
+        );
+        assert_eq!(
+            Parser::new("!`").tests(),
+            Ok(Test {
+                tests: vec![TestInstruction::Negate {
+                    test: Box::new(TestInstruction::AtBeginning)
+                }]
+            })
+        );
+        assert_eq!(
+            Parser::new("!~").tests(),
+            Ok(Test {
+                tests: vec![TestInstruction::Negate {
+                    test: Box::new(TestInstruction::AtEnd)
+                }]
+            })
         );
     }
 }

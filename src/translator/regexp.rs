@@ -68,6 +68,13 @@ pub enum Regexp {
     /// Zero-width assertion that matches only when there is still input left. The negation of
     /// [`EndAnchor`](Regexp::EndAnchor).
     NotEndAnchor,
+    /// Zero-width assertion that matches only when the match has consumed no input yet
+    /// *and* the caller confirms this whole call started at the true beginning of the
+    /// original string being translated.
+    StartAnchor,
+    /// Zero-width assertion that matches unless the match is at the true beginning of the
+    /// original string. The negation of [`StartAnchor`](Regexp::StartAnchor).
+    NotStartAnchor,
     /// Never matches, regardless of input. The negation of [`Empty`](Regexp::Empty).
     Never,
 }
@@ -120,6 +127,8 @@ impl Regexp {
             Regexp::Never => Regexp::Empty,
             Regexp::EndAnchor => Regexp::NotEndAnchor,
             Regexp::NotEndAnchor => Regexp::EndAnchor,
+            Regexp::StartAnchor => Regexp::NotStartAnchor,
+            Regexp::NotStartAnchor => Regexp::StartAnchor,
         }
     }
 
@@ -246,6 +255,8 @@ impl Regexp {
             Regexp::Empty => (),
             Regexp::EndAnchor => instructions.push(Instruction::AssertEnd),
             Regexp::NotEndAnchor => instructions.push(Instruction::AssertMoreInput),
+            Regexp::StartAnchor => instructions.push(Instruction::AssertStart),
+            Regexp::NotStartAnchor => instructions.push(Instruction::AssertNotStart),
             Regexp::Never => instructions.push(Instruction::Fail),
         }
     }
@@ -290,6 +301,11 @@ pub enum Instruction {
     AssertEnd,
     /// Zero-width assertion: succeeds only if there is still input left
     AssertMoreInput,
+    /// Zero-width assertion: succeeds only if no input has been consumed yet and the
+    /// whole call started at the true beginning of the original string being translated
+    AssertStart,
+    /// Zero-width assertion: succeeds unless at the true beginning of the original string
+    AssertNotStart,
     /// Never matches, regardless of input
     Fail,
 }
@@ -381,6 +397,7 @@ impl CompiledRegexp {
         capture: (usize, usize),
         sp: usize,
         input_len: usize,
+        at_start: bool,
         env: &Environment,
     ) {
         if list.seen.get(pc) {
@@ -388,33 +405,47 @@ impl CompiledRegexp {
         }
         list.seen.insert(pc);
         match self.instructions[pc] {
-            Instruction::Jump(target) => self.add_thread(list, target, capture, sp, input_len, env),
-            Instruction::Split(a, b) => {
-                self.add_thread(list, a, capture, sp, input_len, env);
-                self.add_thread(list, b, capture, sp, input_len, env);
+            Instruction::Jump(target) => {
+                self.add_thread(list, target, capture, sp, input_len, at_start, env)
             }
-            Instruction::CaptureStart => self.add_thread(list, pc + 1, (sp, 0), sp, input_len, env),
+            Instruction::Split(a, b) => {
+                self.add_thread(list, a, capture, sp, input_len, at_start, env);
+                self.add_thread(list, b, capture, sp, input_len, at_start, env);
+            }
+            Instruction::CaptureStart => {
+                self.add_thread(list, pc + 1, (sp, 0), sp, input_len, at_start, env)
+            }
             Instruction::CaptureEnd => {
-                self.add_thread(list, pc + 1, (capture.0, sp), sp, input_len, env)
+                self.add_thread(list, pc + 1, (capture.0, sp), sp, input_len, at_start, env)
             }
             Instruction::VariableEqual(var, expected) => {
                 if env.get(var) == Some(&expected) {
-                    self.add_thread(list, pc + 1, capture, sp, input_len, env);
+                    self.add_thread(list, pc + 1, capture, sp, input_len, at_start, env);
                 }
             }
             Instruction::NotVariableEqual(var, expected) => {
                 if env.get(var).is_some_and(|&actual| actual != expected) {
-                    self.add_thread(list, pc + 1, capture, sp, input_len, env);
+                    self.add_thread(list, pc + 1, capture, sp, input_len, at_start, env);
                 }
             }
             Instruction::AssertEnd => {
                 if sp == input_len {
-                    self.add_thread(list, pc + 1, capture, sp, input_len, env);
+                    self.add_thread(list, pc + 1, capture, sp, input_len, at_start, env);
                 }
             }
             Instruction::AssertMoreInput => {
                 if sp != input_len {
-                    self.add_thread(list, pc + 1, capture, sp, input_len, env);
+                    self.add_thread(list, pc + 1, capture, sp, input_len, at_start, env);
+                }
+            }
+            Instruction::AssertStart => {
+                if at_start && sp == 0 {
+                    self.add_thread(list, pc + 1, capture, sp, input_len, at_start, env);
+                }
+            }
+            Instruction::AssertNotStart => {
+                if !(at_start && sp == 0) {
+                    self.add_thread(list, pc + 1, capture, sp, input_len, at_start, env);
                 }
             }
             Instruction::Fail => (),
@@ -428,9 +459,23 @@ impl CompiledRegexp {
         self.find(input, env).is_some()
     }
 
-    /// If the input matches the regular expression in the given environment return the
-    /// associated translation, otherwise return None.
+    /// If the input matches the regular expression in the given environment return the associated
+    /// translation, otherwise return None.
+    ///
+    /// Use [`find_anchored`](CompiledRegexp::find_anchored) to find matches where the input is at
+    /// the true beginning of the original string (see [`Regexp::StartAnchor`]).
     pub fn find(&self, input: &str, env: &Environment) -> Option<ResolvedTranslation> {
+        self.find_anchored(input, env, false)
+    }
+
+    /// Like [`find`](CompiledRegexp::find), but `at_start` tells the VM whether this call's `input`
+    /// begins at the true beginning of the original string being translated.
+    pub fn find_anchored(
+        &self,
+        input: &str,
+        env: &Environment,
+        at_start: bool,
+    ) -> Option<ResolvedTranslation> {
         // `current`/`next` stay as fixed-size stack slots (`ThreadList` inlines its thread set
         // and seen-bitset, up to 64 instructions/threads, to avoid a heap allocation on every
         // call) and are never moved: `current`/`next` below are references into them, so
@@ -448,7 +493,7 @@ impl CompiledRegexp {
         let mut matched: Option<((usize, usize), usize, TranslationIndex)> = None;
 
         current.start_step();
-        self.add_thread(current, 0, (0, 0), sp, input.len(), env);
+        self.add_thread(current, 0, (0, 0), sp, input.len(), at_start, env);
 
         while !current.threads.is_empty() {
             let next_char = input[sp..].chars().next();
@@ -469,6 +514,7 @@ impl CompiledRegexp {
                                 thread.capture,
                                 sp + expected.len_utf8(),
                                 input.len(),
+                                at_start,
                                 env,
                             );
                         }
@@ -483,6 +529,7 @@ impl CompiledRegexp {
                                 thread.capture,
                                 sp + actual.len_utf8(),
                                 input.len(),
+                                at_start,
                                 env,
                             );
                         }
@@ -497,6 +544,7 @@ impl CompiledRegexp {
                                 thread.capture,
                                 sp + actual.len_utf8(),
                                 input.len(),
+                                at_start,
                                 env,
                             );
                         }
@@ -511,6 +559,7 @@ impl CompiledRegexp {
                                 thread.capture,
                                 sp + actual.len_utf8(),
                                 input.len(),
+                                at_start,
                                 env,
                             );
                         }
@@ -525,6 +574,7 @@ impl CompiledRegexp {
                                 thread.capture,
                                 sp + actual.len_utf8(),
                                 input.len(),
+                                at_start,
                                 env,
                             );
                         }
@@ -537,6 +587,7 @@ impl CompiledRegexp {
                                 thread.capture,
                                 sp + actual.len_utf8(),
                                 input.len(),
+                                at_start,
                                 env,
                             );
                         }
