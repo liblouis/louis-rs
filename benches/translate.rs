@@ -29,7 +29,11 @@ fn translate_benchmark(c: &mut Criterion) {
     );
 
     let mut group = c.benchmark_group("translate/en-ueb-g2");
-    for (name, input) in [("word", WORD), ("sentence", SENTENCE), ("paragraph", PARAGRAPH)] {
+    for (name, input) in [
+        ("word", WORD),
+        ("sentence", SENTENCE),
+        ("paragraph", PARAGRAPH),
+    ] {
         group.throughput(criterion::Throughput::Bytes(input.len() as u64));
         group.bench_function(name, |b| {
             b.iter(|| translator.translate(black_box(input)).unwrap())
