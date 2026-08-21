@@ -38,6 +38,12 @@ pub enum Pattern {
     Any,
     Set(HashSet<char>),
     Attributes(HashSet<Attribute>),
+    /// A `%[...]` attribute set that also contains the boundary marker (`^`), e.g. `%[u^]`: one
+    /// of the given attributes, or the boundary named by `Side` -- kept as its own variant
+    /// (rather than desugared into a generic [`Pattern::Either`] of [`Pattern::Attributes`] and
+    /// [`Pattern::Boundary`]) so parsing just records what was written; deciding that this means
+    /// "OR the two" is a compilation choice, made in `match_pattern.rs`, not a parsing one.
+    AttributesOrBoundary(HashSet<Attribute>, Side),
     Group(Patterns),
     Negate(Box<Pattern>),
     Optional(Box<Pattern>),
@@ -94,6 +100,12 @@ impl std::fmt::Display for Pattern {
                     write!(f, "{}", attr)?;
                 }
                 Ok(())
+            }
+            Pattern::AttributesOrBoundary(attributes, side) => {
+                for attr in attributes {
+                    write!(f, "{}", attr)?;
+                }
+                write!(f, "{}", Pattern::Boundary(*side))
             }
             Pattern::Group(patterns) => write!(f, "({})", patterns),
             Pattern::Negate(pattern) => write!(f, "!{}", pattern),
@@ -219,18 +231,16 @@ impl<'a> PatternParser<'a> {
         };
         // `^` inside a `%[...]` set means the same boundary as standalone `^`/`$` (see `Side`),
         // but it's expressed via the shared `Attribute` type rather than `Pattern` itself, since
-        // `Attribute` is also used by the unrelated multipass `Test` grammar. Pull it out here
-        // and re-express it as an ordinary `Pattern::Boundary`, so nothing downstream ever sees
-        // `Attribute::Boundary` inside a `Pattern::Attributes` set.
+        // `Attribute` is also used by the unrelated multipass `Test` grammar. Pull it out here so
+        // nothing downstream ever sees `Attribute::Boundary` inside a `Pattern::Attributes` set
+        // -- but only decide *that* much here; whether "attribute or boundary" means `Either` is
+        // a compilation choice, not a parsing one, so leave that to `Pattern::AttributesOrBoundary`
+        // (or, with no attributes left, straight to `Pattern::Boundary`).
         if attrs.remove(&Attribute::Boundary) {
-            let boundary = Pattern::Boundary(self.side);
             if attrs.is_empty() {
-                Ok(boundary)
+                Ok(Pattern::Boundary(self.side))
             } else {
-                Ok(Pattern::Either(
-                    Patterns(vec![Pattern::Attributes(attrs)]),
-                    Patterns(vec![boundary]),
-                ))
+                Ok(Pattern::AttributesOrBoundary(attrs, self.side))
             }
         } else {
             Ok(Pattern::Attributes(attrs))
@@ -409,11 +419,9 @@ mod tests {
         // `%[u^]` mixes a real attribute with the boundary marker.
         assert_eq!(
             PatternParser::new("%[u^]", Side::Pre).attributes(),
-            Ok(Pattern::Either(
-                Patterns(vec![Pattern::Attributes(HashSet::from([
-                    Attribute::Class(CharacterClass::Uppercase)
-                ]))]),
-                Patterns(vec![Pattern::Boundary(Side::Pre)]),
+            Ok(Pattern::AttributesOrBoundary(
+                HashSet::from([Attribute::Class(CharacterClass::Uppercase)]),
+                Side::Pre,
             ))
         );
     }
@@ -550,12 +558,12 @@ mod tests {
             Ok(Patterns(vec![Pattern::Either(
                 Patterns(vec![
                     Pattern::Characters("e".into()),
-                    Pattern::Either(
-                        Patterns(vec![Pattern::Attributes(HashSet::from([
+                    Pattern::AttributesOrBoundary(
+                        HashSet::from([
                             Attribute::Class(CharacterClass::Space),
                             Attribute::Class(CharacterClass::Punctuation),
-                        ]))]),
-                        Patterns(vec![Pattern::Boundary(Side::Pre)]),
+                        ]),
+                        Side::Pre,
                     )
                 ]),
                 Patterns(vec![Pattern::Characters("end".into())])

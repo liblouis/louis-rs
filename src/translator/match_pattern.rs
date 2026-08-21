@@ -9,16 +9,31 @@ use crate::translator::regexp::{CompiledRegexp, Regexp};
 use crate::translator::translation::Translation;
 use crate::translator::{ResolvedTranslation, TranslationStage};
 
+/// The zero-width anchor liblouis' `^`/`$` boundary marker means on this side of a `match` rule
+/// -- see [`Pattern::Boundary`].
+fn boundary_anchor(side: Side) -> Regexp {
+    match side {
+        Side::Pre => Regexp::StartAnchor,
+        Side::Post => Regexp::EndAnchor,
+    }
+}
+
 impl Regexp {
     fn from_pattern(item: &Pattern, ctx: &CharacterClasses) -> Self {
         match item {
             Pattern::Empty => Regexp::Empty,
             Pattern::Characters(s) => Regexp::String(s.to_string()),
-            Pattern::Boundary(Side::Pre) => Regexp::StartAnchor,
-            Pattern::Boundary(Side::Post) => Regexp::EndAnchor,
+            Pattern::Boundary(side) => boundary_anchor(*side),
             Pattern::Any => Regexp::Any,
             Pattern::Set(hash_set) => Regexp::CharacterClass(hash_set.clone()),
             Pattern::Attributes(hash_set) => Regexp::from_attributes(hash_set, ctx),
+            // `%[u^]`-style: one of the attributes, or the boundary -- see
+            // `Pattern::AttributesOrBoundary` for why this decision belongs here, not in the
+            // parser.
+            Pattern::AttributesOrBoundary(hash_set, side) => Regexp::Either(
+                Box::new(Regexp::from_attributes(hash_set, ctx)),
+                Box::new(boundary_anchor(*side)),
+            ),
             Pattern::Group(patterns) => {
                 Regexp::Group(Box::new(Regexp::from_patterns(patterns, ctx)))
             }
