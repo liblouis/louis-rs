@@ -4,6 +4,7 @@ use std::{collections::HashMap, io};
 
 pub use options::{TranslationMode, TranslationModes, TranslationOptions};
 pub use pipeline::TranslationPipeline;
+pub use positions::PositionMap;
 pub use translation::{ResolvedTranslation, TranslationStage};
 pub use trie::ClassConstraint;
 
@@ -18,6 +19,7 @@ mod indication;
 mod match_pattern;
 mod options;
 mod pipeline;
+mod positions;
 mod position_constraints;
 mod regexp;
 mod swap;
