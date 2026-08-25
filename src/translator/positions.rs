@@ -92,10 +92,6 @@ impl PositionMap {
         &self.input_positions
     }
 
-    pub fn output_len(&self) -> usize {
-        self.output_len
-    }
-
     /// The output position of a cursor at input position `cursor`. A cursor past the end of the
     /// input ends up past the end of the output.
     pub fn cursor(&self, cursor: usize) -> usize {
@@ -143,24 +139,15 @@ mod tests {
         );
         assert_eq!(compute_output_positions(&[translation("a", "⠁⠃⠇")]), [0]);
         assert_eq!(
-            compute_output_positions(&[
-                translation("abc", "⠁⠃⠇"),
-                translation("abc", "⠁⠃⠇")
-            ]),
+            compute_output_positions(&[translation("abc", "⠁⠃⠇"), translation("abc", "⠁⠃⠇")]),
             [0, 1, 2, 3, 4, 5]
         );
         assert_eq!(
-            compute_output_positions(&[
-                translation("foo", "⠁"),
-                translation("abc", "⠁⠃⠇")
-            ]),
+            compute_output_positions(&[translation("foo", "⠁"), translation("abc", "⠁⠃⠇")]),
             [0, 0, 0, 1, 2, 3]
         );
         assert_eq!(
-            compute_output_positions(&[
-                translation("a", "⠁⠃⠇"),
-                translation("abc", "⠁⠃⠇")
-            ]),
+            compute_output_positions(&[translation("a", "⠁⠃⠇"), translation("abc", "⠁⠃⠇")]),
             [0, 3, 4, 5]
         );
     }
@@ -172,33 +159,21 @@ mod tests {
             [0, 1, 2]
         );
         assert_eq!(compute_input_positions(&[translation("foo", "⠁")]), [0]);
-        assert_eq!(
-            compute_input_positions(&[translation("foo", "⠁⠃")]),
-            [0, 1]
-        );
+        assert_eq!(compute_input_positions(&[translation("foo", "⠁⠃")]), [0, 1]);
         assert_eq!(
             compute_input_positions(&[translation("a", "⠁⠃⠇")]),
             [0, 0, 0]
         );
         assert_eq!(
-            compute_input_positions(&[
-                translation("abc", "⠁⠃⠇"),
-                translation("abc", "⠁⠃⠇")
-            ]),
+            compute_input_positions(&[translation("abc", "⠁⠃⠇"), translation("abc", "⠁⠃⠇")]),
             [0, 1, 2, 3, 4, 5]
         );
         assert_eq!(
-            compute_input_positions(&[
-                translation("foo", "⠁"),
-                translation("abc", "⠁⠃⠇")
-            ]),
+            compute_input_positions(&[translation("foo", "⠁"), translation("abc", "⠁⠃⠇")]),
             [0, 3, 4, 5]
         );
         assert_eq!(
-            compute_input_positions(&[
-                translation("a", "⠁⠃⠇"),
-                translation("abc", "⠁⠃⠇")
-            ]),
+            compute_input_positions(&[translation("a", "⠁⠃⠇"), translation("abc", "⠁⠃⠇")]),
             [0, 0, 0, 1, 2, 3]
         );
     }
@@ -215,7 +190,6 @@ mod tests {
         let map = PositionMap::from_trace(2, &[stage(&[("a", "⠁"), ("b", "⠃")])]);
         assert_eq!(map.output_positions(), [0, 1]);
         assert_eq!(map.input_positions(), [0, 1]);
-        assert_eq!(map.output_len(), 2);
         assert_eq!(map.cursor(0), 0);
         assert_eq!(map.cursor(1), 1);
     }
@@ -271,8 +245,8 @@ mod tests {
         let map = PositionMap::from_trace(1, &[stage(&[("f", "")])]);
         assert_eq!(map.output_positions(), [0]);
         assert_eq!(map.input_positions(), []);
-        assert_eq!(map.output_len(), 0);
         assert_eq!(map.cursor(0), 0);
+        assert_eq!(map.cursor(1), 0);
     }
 
     #[test]
@@ -288,7 +262,7 @@ mod tests {
         let map = PositionMap::from_trace(2, &[]);
         assert_eq!(map.output_positions(), [0, 1]);
         assert_eq!(map.input_positions(), [0, 1]);
-        assert_eq!(map.output_len(), 2);
+        assert_eq!(map.cursor(2), 2);
     }
 
     #[test]

@@ -2,8 +2,7 @@ use crate::{
     Direction,
     parser::{AnchoredRule, HasDirection, Rule},
     translator::{
-        PositionMap, ResolvedTranslation, TranslationError, TranslationOptions,
-        TranslationStage,
+        PositionMap, ResolvedTranslation, TranslationError, TranslationOptions, TranslationStage,
         table::{TableContext, multipass::MultipassTable, primary::PrimaryTable},
     },
 };
