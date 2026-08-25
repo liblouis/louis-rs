@@ -2,7 +2,8 @@ use crate::{
     Direction,
     parser::{AnchoredRule, HasDirection, Rule},
     translator::{
-        ResolvedTranslation, TranslationError, TranslationOptions, TranslationStage,
+        PositionMap, ResolvedTranslation, TranslationError, TranslationOptions,
+        TranslationStage,
         table::{TableContext, multipass::MultipassTable, primary::PrimaryTable},
     },
 };
@@ -147,6 +148,21 @@ impl TranslationPipeline {
         }
         result
     }
+
+    /// Translate `input` and map its positions to the positions of the output
+    pub fn translate_with_positions(
+        &self,
+        input: &str,
+        options: &TranslationOptions,
+    ) -> (String, PositionMap) {
+        let stages = self.trace_with_options(input, options);
+        let output = stages.last().map_or_else(
+            || input.to_string(),
+            |steps| steps.iter().map(|t| t.output()).collect(),
+        );
+        let positions = PositionMap::from_trace(input.chars().count(), &stages);
+        (output, positions)
+    }
 }
 
 #[cfg(test)]
@@ -202,6 +218,43 @@ mod tests {
         let pipeline = TranslationPipeline::compile(&rules, Direction::Forward).unwrap();
         assert_eq!(pipeline.translate("o"), "⠕");
         assert_eq!(pipeline.translate("oύ"), "⠕⠐⠥⠽");
+    }
+
+    #[test]
+    fn translate_with_positions_matches_translate() {
+        let rules = [
+            parse_rule("always foo 123"),
+            parse_rule("always bar 456"),
+            parse_rule("noback correct \"baz\" \"bar\""),
+            parse_rule("noback pass2 @456 @1"),
+            parse_rule("space \\s 0"),
+        ];
+        let pipeline = TranslationPipeline::compile(&rules, Direction::Forward).unwrap();
+        let options = TranslationOptions::default();
+        for input in ["foobaz", "foobar", "  ", "🐂", ""] {
+            assert_eq!(
+                pipeline.translate_with_positions(input, &options).0,
+                pipeline.translate_with_options(input, &options)
+            );
+        }
+    }
+
+    #[test]
+    fn translate_with_positions_composes_stages() {
+        let rules = [
+            parse_rule("always foo 123"),
+            parse_rule("always bar 456"),
+            parse_rule("noback correct \"baz\" \"bar\""),
+            parse_rule("space \\s 0"),
+        ];
+        let pipeline = TranslationPipeline::compile(&rules, Direction::Forward).unwrap();
+        let (output, positions) =
+            pipeline.translate_with_positions("foobaz", &TranslationOptions::default());
+        assert_eq!(output, "⠇⠸");
+        assert_eq!(positions.output_positions(), [0, 0, 0, 1, 1, 1]);
+        assert_eq!(positions.input_positions(), [0, 3]);
+        assert_eq!(positions.cursor(4), 1);
+        assert_eq!(positions.cursor(6), 2);
     }
 
     #[test]
