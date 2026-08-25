@@ -84,6 +84,17 @@
   pseudo-digits (e.g. Rwandan-style date/verse references in
   rw-rw-g1.yaml) incorrectly receive a capital sign even though
   they're inside number context
+- [ ] ~endmodeword~/~endmode~ (~src/translator/indication/mode.rs~) never
+  fire when a mode run is immediately followed by a character that is
+  the ~base~ of one of the mode's own characters (e.g. ~"1a"~ under
+  ~base digit 1 a~, per liblouis's ~tests/yaml/numericmode.yaml~) —
+  liblouis's ~resetsEmphMode~ treats such a character as not resetting
+  the mode via its ~base~/linked-character chain, which
+  ~CharacterClasses~ doesn't currently expose to indication modules.
+  Same underlying class of bug as the numeric-mode/capital-sign
+  interaction above, just for the generic mode family instead of
+  numsign/capsletter. See the module doc in ~mode.rs~ for the full
+  analysis.
 - [ ] Malayalam conjunct/reph rule: a specific virama/conjunct
   sequence consistently produces ⠗ instead of the expected ⠻
   (ml.yaml)

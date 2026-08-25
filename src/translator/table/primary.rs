@@ -19,8 +19,8 @@ use crate::{
         context_pattern::{ContextPatterns, ContextPatternsBuilder},
         effect::Environment,
         indication::{
-            Indicator, Indicators, computer_braille, emphasis, lettersign, nocontract, numeric,
-            uppercase,
+            Indicator, Indicators, computer_braille, emphasis, lettersign, mode, nocontract,
+            numeric, uppercase,
         },
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
         position_constraints::{
@@ -154,6 +154,7 @@ struct PrimaryTableBuilder {
     context_patterns: ContextPatternsBuilder,
     numeric_indicator: numeric::IndicatorBuilder,
     uppercase_indicator: uppercase::IndicatorBuilder,
+    mode_indicator: mode::IndicatorBuilder,
     lettersign_indicator: lettersign::IndicatorBuilder,
     nocontract_indicator: nocontract::IndicatorBuilder,
     emphasis_indicator: emphasis::IndicatorBuilder,
@@ -183,6 +184,7 @@ impl PrimaryTableBuilder {
             context_patterns: ContextPatternsBuilder::new(),
             numeric_indicator: numeric::IndicatorBuilder::new(),
             uppercase_indicator: uppercase::IndicatorBuilder::new(),
+            mode_indicator: mode::IndicatorBuilder::new(),
             lettersign_indicator: lettersign::IndicatorBuilder::new(),
             nocontract_indicator: nocontract::IndicatorBuilder::new(),
             emphasis_indicator: emphasis::IndicatorBuilder::new(),
@@ -326,6 +328,7 @@ impl PrimaryTableBuilder {
             self.uppercase_indicator
                 .build(ctx)
                 .map(Indicator::Uppercase),
+            self.mode_indicator.build(ctx).map(Indicator::Mode),
             self.nocontract_indicator
                 .build(ctx)
                 .map(Indicator::NoContract),
@@ -678,6 +681,48 @@ impl PrimaryTable {
                 }
                 Rule::Lencapsphrase { number } => {
                     builder.uppercase_indicator.lencapsphrase(*number as usize);
+                }
+                Rule::Modeletter { name, dots, .. } => {
+                    builder
+                        .mode_indicator
+                        .modeletter(name, &dots.to_string(), rule);
+                }
+                Rule::Begmodeword { name, dots, .. } => {
+                    builder
+                        .mode_indicator
+                        .begmodeword(name, &dots.to_string(), rule);
+                }
+                Rule::Endmodeword { name, dots, .. } => {
+                    builder
+                        .mode_indicator
+                        .endmodeword(name, &dots.to_string(), rule);
+                }
+                Rule::Begmode { name, dots } => {
+                    builder
+                        .mode_indicator
+                        .begmode(name, &dots.to_string(), rule);
+                }
+                Rule::Endmode { name, dots } => {
+                    builder
+                        .mode_indicator
+                        .endmode(name, &dots.to_string(), rule);
+                }
+                Rule::Begmodephrase { name, dots } => {
+                    builder
+                        .mode_indicator
+                        .begmodephrase(name, &dots.to_string(), rule);
+                }
+                Rule::Endmodephrase {
+                    name,
+                    dots,
+                    position,
+                } => {
+                    builder
+                        .mode_indicator
+                        .endmodephrase(name, &dots.to_string(), position, rule);
+                }
+                Rule::Lenmodephrase { name, number } => {
+                    builder.mode_indicator.lenmodephrase(name, *number as usize);
                 }
                 Rule::Emphclass { name } => {
                     builder.emphasis_indicator.emphclass(name);

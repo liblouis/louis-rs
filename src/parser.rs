@@ -221,9 +221,12 @@ pub enum Opcode {
     Modeletter,
     Capsletter,
     Begmodeword,
+    Endmodeword,
     Begcapsword,
     Endcapsword,
     Capsmodechars,
+    Begmode,
+    Endmode,
     Begcaps,
     Endcaps,
     Begcapsphrase,
@@ -430,6 +433,11 @@ pub enum Rule {
         dots: BrailleChars,
         constraints: Constraints,
     },
+    Endmodeword {
+        name: String,
+        dots: BrailleChars,
+        constraints: Constraints,
+    },
     Begcapsword {
         dots: BrailleChars,
         constraints: Constraints,
@@ -440,6 +448,14 @@ pub enum Rule {
     },
     Capsmodechars {
         chars: String,
+    },
+    Begmode {
+        name: String,
+        dots: BrailleChars,
+    },
+    Endmode {
+        name: String,
+        dots: BrailleChars,
     },
     Begcaps {
         dots: BrailleChars,
@@ -876,11 +892,23 @@ impl std::fmt::Display for Rule {
                 write!(f, "midnum {} {}", chars, dots)
             }
             Rule::Endnum { chars, dots, .. } => write!(f, "endnum {} {}", chars, dots),
+            Rule::Modeletter { name, dots, .. } => write!(f, "modeletter {} {}", name, dots),
             Rule::Capsletter { dots, .. } => write!(f, "capsletter {}", dots),
+            Rule::Begmodeword { name, dots, .. } => write!(f, "begmodeword {} {}", name, dots),
+            Rule::Endmodeword { name, dots, .. } => write!(f, "endmodeword {} {}", name, dots),
             Rule::Begcapsword { dots, .. } => write!(f, "begcapsword {}", dots),
             Rule::Endcapsword { dots, .. } => write!(f, "endcapsword {}", dots),
+            Rule::Begmode { name, dots } => write!(f, "begmode {} {}", name, dots),
+            Rule::Endmode { name, dots } => write!(f, "endmode {} {}", name, dots),
             Rule::Begcaps { dots } => write!(f, "begcaps {}", dots),
             Rule::Endcaps { dots } => write!(f, "endcaps {}", dots),
+            Rule::Begmodephrase { name, dots } => write!(f, "begmodephrase {} {}", name, dots),
+            Rule::Endmodephrase { name, dots, .. } => {
+                write!(f, "endmodephrase {} {}", name, dots)
+            }
+            Rule::Lenmodephrase { name, number } => {
+                write!(f, "lenmodephrase {} {}", name, number)
+            }
             Rule::Correct { test, action, .. } => write!(f, "correct {} {}", test, action),
             Rule::Sufword { chars, dots, .. } => write!(f, "sufword {} {}", chars, dots),
             Rule::Prfword { chars, dots, .. } => write!(f, "prfword {} {}", chars, dots),
@@ -938,6 +966,7 @@ impl HasDirection for Rule {
             | Rule::Modeletter { constraints, .. }
             | Rule::Capsletter { constraints, .. }
             | Rule::Begmodeword { constraints, .. }
+            | Rule::Endmodeword { constraints, .. }
             | Rule::Begcapsword { constraints, .. }
             | Rule::Endcapsword { constraints, .. }
             | Rule::Begemph { constraints, .. }
@@ -1324,9 +1353,12 @@ impl<'a> RuleParser<'a> {
                 "modeletter" => Ok(Opcode::Modeletter),
                 "capsletter" => Ok(Opcode::Capsletter),
                 "begmodeword" => Ok(Opcode::Begmodeword),
+                "endmodeword" => Ok(Opcode::Endmodeword),
                 "begcapsword" => Ok(Opcode::Begcapsword),
                 "endcapsword" => Ok(Opcode::Endcapsword),
                 "capsmodechars" => Ok(Opcode::Capsmodechars),
+                "begmode" => Ok(Opcode::Begmode),
+                "endmode" => Ok(Opcode::Endmode),
                 "begcaps" => Ok(Opcode::Begcaps),
                 "endcaps" => Ok(Opcode::Endcaps),
                 "begcapsphrase" => Ok(Opcode::Begcapsphrase),
@@ -1789,6 +1821,14 @@ impl<'a> RuleParser<'a> {
                     constraints,
                 }
             }
+            Opcode::Endmodeword => {
+                fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
+                Rule::Endmodeword {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                    constraints,
+                }
+            }
             Opcode::Begcapsword => {
                 fail_if_invalid_constraints(ANY_DIRECTION, constraints, opcode)?;
                 Rule::Begcapsword {
@@ -1807,6 +1847,20 @@ impl<'a> RuleParser<'a> {
                 fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Capsmodechars {
                     chars: self.chars()?,
+                }
+            }
+            Opcode::Begmode => {
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
+                Rule::Begmode {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
+                }
+            }
+            Opcode::Endmode => {
+                fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
+                Rule::Endmode {
+                    name: self.name()?,
+                    dots: self.explicit_dots()?,
                 }
             }
             Opcode::Begcaps => {

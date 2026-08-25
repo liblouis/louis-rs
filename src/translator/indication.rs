@@ -15,6 +15,7 @@
 //! * [`emphasis::Indicator`]: detects emphasis runs and emits letter/word/phrase indicators
 //! * [`numeric::Indicator`]: detects digit sequences and emits number-sign indicators
 //! * [`uppercase::Indicator`]: detects uppercase runs and emits capitalisation indicators
+//! * [`mode::Indicator`]: detects character class runs and emits capitalisation indicators
 //! * [`lettersign::Indicator`]: detects contractions that require a letter sign
 //! * [`nocontract::Indicator`]: detects contractions that require a no-contract sign
 
@@ -24,6 +25,7 @@ use crate::translator::ResolvedTranslation;
 pub mod computer_braille;
 pub mod emphasis;
 pub mod lettersign;
+pub mod mode;
 pub mod nocontract;
 pub mod numeric;
 pub mod uppercase;
@@ -63,6 +65,7 @@ pub enum Indicator {
     ComputerBraille(computer_braille::Indicator),
     Emphasis(emphasis::Indicator),
     LetterSign(lettersign::Indicator),
+    Mode(mode::Indicator),
     NoContract(nocontract::Indicator),
     Numeric(numeric::Indicator),
     Uppercase(uppercase::Indicator),
@@ -99,6 +102,7 @@ impl Indicators {
                 Indicator::Emphasis(i) => i.precompute(input, spans),
                 Indicator::Numeric(i) => i.precompute(input),
                 Indicator::Uppercase(i) => i.precompute(input),
+                Indicator::Mode(i) => i.precompute(input),
                 Indicator::LetterSign(i) => i.precompute(input),
                 Indicator::NoContract(i) => i.precompute(input),
             };
