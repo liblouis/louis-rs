@@ -10,7 +10,7 @@ use crate::emphasis::EmphasisSpan;
 use crate::parser::Direction;
 use crate::test::{
     CursorPosition, Directions, Display, ExpectedFailure, Table, TableQuery, Test, TestError,
-    TestMatrix, TestMode, TestResult,
+    TestMatrix, TestMode, TestOutcome,
 };
 use crate::translator::{TranslationMode, TranslationModes};
 
@@ -466,7 +466,7 @@ impl YAMLParser<'_> {
         }
     }
 
-    pub fn yaml(&mut self) -> Result<Vec<TestResult>, ParseError> {
+    pub fn yaml(&mut self) -> Result<Vec<TestOutcome>, ParseError> {
         let mut results = Vec::new();
         let mut current_display_table = None;
         let mut current_tables = Vec::new();
@@ -528,13 +528,11 @@ mod tests {
     use std::io::Write;
 
     use super::*;
+    use crate::test::PositionDiff;
 
-    fn run(name: &str, yaml: &str) -> Result<Vec<TestResult>, ParseError> {
-        let path = std::env::temp_dir().join(format!(
-            "louis-rs-{}-{}.yaml",
-            std::process::id(),
-            name
-        ));
+    fn run(name: &str, yaml: &str) -> Result<Vec<TestOutcome>, ParseError> {
+        let path =
+            std::env::temp_dir().join(format!("louis-rs-{}-{}.yaml", std::process::id(), name));
         File::create(&path)
             .unwrap()
             .write_all(yaml.as_bytes())
@@ -549,5 +547,72 @@ mod tests {
         let yaml = "table: |\n  space \\s 0\n  letter a 1\ntests:\n  - - a\n    - ⠁\n    - inputPos: [-1]\n      outputPos: [-1]\n";
         let results = run("negative_positions", yaml).unwrap();
         assert_eq!(results.len(), 1);
+    }
+
+    const AB_TABLE: &str = "table: |\n  letter a 1\n  letter b 12\n";
+
+    #[test]
+    fn matching_positions_are_not_reported() {
+        let yaml = format!(
+            "{AB_TABLE}tests:\n  - - ab\n    - ⠁⠃\n    - inputPos: [0, 1]\n      outputPos: [0, 1]\n      cursorPos: [1, 1]\n"
+        );
+        let results = run("matching_positions", &yaml).unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(results[0].translation.is_success());
+        assert_eq!(results[0].positions, None);
+    }
+
+    #[test]
+    fn mismatching_positions_are_reported_separately() {
+        let yaml = format!(
+            "{AB_TABLE}tests:\n  - - ab\n    - ⠁⠃\n    - inputPos: [1, 1]\n      outputPos: [0, 0]\n      cursorPos: [1, 0]\n"
+        );
+        let results = run("mismatching_positions", &yaml).unwrap();
+        assert!(results[0].translation.is_success());
+        let mismatch = results[0].positions.as_ref().unwrap();
+        assert_eq!(mismatch.input, "ab");
+        assert_eq!(mismatch.direction, Direction::Forward);
+        assert_eq!(
+            mismatch.diffs,
+            [
+                PositionDiff::InputPos {
+                    expected: vec![1, 1],
+                    actual: vec![0, 1]
+                },
+                PositionDiff::OutputPos {
+                    expected: vec![0, 0],
+                    actual: vec![0, 1]
+                },
+                PositionDiff::Cursor {
+                    expected: 0,
+                    actual: 1
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn single_cursor_position_is_not_checked() {
+        let yaml = format!("{AB_TABLE}tests:\n  - - ab\n    - ⠁⠃\n    - cursorPos: 1\n");
+        let results = run("single_cursor", &yaml).unwrap();
+        assert!(results[0].translation.is_success());
+        assert_eq!(results[0].positions, None);
+    }
+
+    #[test]
+    fn positions_are_not_checked_when_the_translation_fails() {
+        let yaml = format!("{AB_TABLE}tests:\n  - - ab\n    - ⠁⠁\n    - inputPos: [5, 5]\n");
+        let results = run("failed_translation", &yaml).unwrap();
+        assert!(results[0].translation.is_failure());
+        assert_eq!(results[0].positions, None);
+    }
+
+    #[test]
+    fn both_directions_swap_the_expected_positions() {
+        let yaml = "table: |\n  letter a 1\n  letter b 12\n  always ab 123\nflags: {testmode: bothDirections}\ntests:\n  - - ab\n    - ⠇\n    - inputPos: [0]\n      outputPos: [0, 0]\n";
+        let results = run("both_directions", yaml).unwrap();
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|r| r.translation.is_success()));
+        assert!(results.iter().all(|r| r.positions.is_none()));
     }
 }

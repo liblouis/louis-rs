@@ -10,7 +10,9 @@ use search_path::SearchPath;
 use crate::{
     emphasis::EmphasisSpan,
     parser::{self, Direction, TableError},
-    translator::{self, DisplayTable, TranslationModes, TranslationOptions, TranslationPipeline},
+    translator::{
+        self, DisplayTable, PositionMap, TranslationModes, TranslationOptions, TranslationPipeline,
+    },
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -73,6 +75,45 @@ impl TestResult {
     pub fn is_unexpected_success(&self) -> bool {
         matches!(self, TestResult::UnexpectedSuccess { .. })
     }
+}
+
+/// The outcome of one test in one direction: how the translated text compared, and how the
+/// positions compared when the test specifies them and the text matched.
+#[derive(PartialEq, Debug)]
+pub struct TestOutcome {
+    pub translation: TestResult,
+    pub positions: Option<PositionMismatch>,
+}
+
+#[derive(PartialEq, Debug)]
+pub struct PositionMismatch {
+    pub input: String,
+    pub direction: Direction,
+    pub diffs: Vec<PositionDiff>,
+}
+
+#[derive(PartialEq, Debug)]
+pub enum PositionDiff {
+    InputPos {
+        expected: Vec<i32>,
+        actual: Vec<usize>,
+    },
+    OutputPos {
+        expected: Vec<i32>,
+        actual: Vec<usize>,
+    },
+    Cursor {
+        expected: u16,
+        actual: usize,
+    },
+}
+
+fn positions_match(expected: &[i32], actual: &[usize]) -> bool {
+    expected.len() == actual.len()
+        && expected
+            .iter()
+            .zip(actual)
+            .all(|(&expected, &actual)| usize::try_from(expected).ok() == Some(actual))
 }
 
 /// A group of [`Tests`](Test) that share the same braille table(s), display table and test mode.
@@ -147,7 +188,7 @@ impl<'a> TestMatrix<'a> {
         Ok(TranslationPipeline::compile(&rules, direction)?)
     }
 
-    pub fn check(&self) -> Result<Vec<TestResult>, TestError> {
+    pub fn check(&self) -> Result<Vec<TestOutcome>, TestError> {
         let mut results = Vec::new();
         match self.mode {
             TestMode::Forward => {
@@ -286,25 +327,31 @@ impl Test {
         table: &TranslationPipeline,
         display_table: &DisplayTable,
         direction: Direction,
-    ) -> TestResult {
-        let options = TranslationOptions::default()
+    ) -> TestOutcome {
+        let mut options = TranslationOptions::default()
             .with_mode(self.modes.clone())
             .with_emphasis(self.emphasis.clone());
-        let translated = match direction {
+        if let Some(CursorPosition::Single(cursor) | CursorPosition::Tuple(cursor, _)) =
+            self.cursor_pos
+        {
+            options = options.with_cursor_pos(usize::from(cursor));
+        }
+        let (translated, positions) = match direction {
             // For forward translation we first translate the input and then apply the display table
             // on the result
             Direction::Forward => {
-                let translated = table.translate_with_options(&self.input, &options);
-                display_table.translate(&translated)
+                let (translated, positions) = table.translate_with_positions(&self.input, &options);
+                (display_table.translate(&translated), positions)
             }
             // For backward translation we first apply the display table on the input and then
             // translate the result
             Direction::Backward => {
                 let displayed = display_table.translate(&self.input);
-                table.translate_with_options(&displayed, &options)
+                table.translate_with_positions(&displayed, &options)
             }
         };
-        if translated == self.expected {
+        let matched = translated == self.expected;
+        let translation = if matched {
             if !self.xfail.is_failure(direction) {
                 TestResult::Success
             } else {
@@ -327,6 +374,54 @@ impl Test {
                 actual: translated,
                 direction,
             }
+        };
+        let positions = if matched {
+            self.position_mismatch(&positions, direction)
+        } else {
+            None
+        };
+        TestOutcome {
+            translation,
+            positions,
+        }
+    }
+
+    fn position_mismatch(
+        &self,
+        positions: &PositionMap,
+        direction: Direction,
+    ) -> Option<PositionMismatch> {
+        let mut diffs = Vec::new();
+        if !self.input_pos.is_empty()
+            && !positions_match(&self.input_pos, positions.input_positions())
+        {
+            diffs.push(PositionDiff::InputPos {
+                expected: self.input_pos.clone(),
+                actual: positions.input_positions().to_vec(),
+            });
+        }
+        if !self.output_pos.is_empty()
+            && !positions_match(&self.output_pos, positions.output_positions())
+        {
+            diffs.push(PositionDiff::OutputPos {
+                expected: self.output_pos.clone(),
+                actual: positions.output_positions().to_vec(),
+            });
+        }
+        if let Some(CursorPosition::Tuple(cursor, expected)) = self.cursor_pos {
+            let actual = positions.cursor(usize::from(cursor));
+            if actual != usize::from(expected) {
+                diffs.push(PositionDiff::Cursor { expected, actual });
+            }
+        }
+        if diffs.is_empty() {
+            None
+        } else {
+            Some(PositionMismatch {
+                input: self.input.clone(),
+                direction,
+                diffs,
+            })
         }
     }
 
@@ -386,7 +481,54 @@ impl Test {
         Test {
             input: self.expected,
             expected: self.input,
+            input_pos: self.output_pos,
+            output_pos: self.input_pos,
+            cursor_pos: None,
             ..self
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_with_positions(
+        input_pos: Vec<i32>,
+        output_pos: Vec<i32>,
+        cursor_pos: Option<CursorPosition>,
+    ) -> Test {
+        Test::new(
+            "ab".to_string(),
+            "⠁⠃".to_string(),
+            ExpectedFailure::Simple(false),
+            vec![],
+            vec![],
+            input_pos,
+            output_pos,
+            cursor_pos,
+            TranslationModes::empty(),
+            None,
+            None,
+        )
+    }
+
+    #[test]
+    fn reverse_swaps_the_positions_and_drops_the_cursor() {
+        let reversed =
+            test_with_positions(vec![1], vec![2, 3], Some(CursorPosition::Single(0))).reverse();
+        assert_eq!(reversed.input, "⠁⠃");
+        assert_eq!(reversed.expected, "ab");
+        assert_eq!(reversed.input_pos, [2, 3]);
+        assert_eq!(reversed.output_pos, [1]);
+        assert!(reversed.cursor_pos.is_none());
+    }
+
+    #[test]
+    fn positions_match_requires_equal_non_negative_values() {
+        assert!(positions_match(&[0, 1], &[0, 1]));
+        assert!(!positions_match(&[0, 1], &[0]));
+        assert!(!positions_match(&[-1], &[0]));
+        assert!(!positions_match(&[0, 2], &[0, 1]));
     }
 }
