@@ -10,6 +10,53 @@
 # New entries go at the top of this file; existing entries are not
 # reordered when they're revised.
 
+* ACCEPTED Opcodes deliberately not implemented: ~uplow~, ~locale~, ~backmatch~, ~compdots~, ~nobreak~, ~macro~
+- Deciders :: CE
+- Date :: [2026-08-25 Di]
+
+** Context and Problem Statement
+
+A gap audit (diffing liblouis's ~opcodeNames~ table against every
+opcode string louis-rs's parser recognises) turned up 6 opcodes with
+no parser support:
+
+- ~uplow~ :: is deprecated upstream.
+- ~backmatch~ :: not documented anywhere in liblouis's own manual.
+- ~compdots~ :: liblouis's manual says ~FIXME: the compdots opcode
+  should be documented~.
+- ~nobreak~ :: an undocumented character-class opcode. No usage
+  example anywhere to infer intended semantics.
+- ~macro~ :: a macro-definition mechanism for expanding a
+  table-defined name into other opcodes.
+
+None of the six appear in any table under ~tables/~, nor in any test
+under ~tests/~. There is no known liblouis table, current or
+historical, that exercises any of them.
+
+** Decision Drivers
+
+- Two of the six are deprecated by liblouis itself -- implementing
+  them would mean maintaining compatibility with something upstream
+  has already abandoned.
+- Three of the six are undocumented even in liblouis's own manual --
+  implementing them correctly would mean reverse-engineering exact
+  semantics from C source with no table or test to validate against,
+  a poor cost/confidence tradeoff for opcodes nothing uses.
+- Zero real-world tables (liblouis's own corpus, the closest available
+  proxy for "real-world") exercise any of the six.
+
+** Decision Outcome
+
+Do not implement ~uplow~, ~locale~, ~backmatch~, ~compdots~,
+~nobreak~, or ~macro~.
+
+** Links
+
+- liblouis's opcode name table: ~compileTranslationTable.c~,
+  ~opcodeNames[CTO_None]~
+- liblouis's opcode reference: ~doc/liblouis.texi~, "Braille Indicator
+  Opcodes" and surrounding sections
+
 * ACCEPTED Give ~CompiledRegexp::find~ an inline bitset and fixed-capacity thread buffer, swapped by reference
 - Deciders :: CE
 - Date :: [2026-08-20 Do]
