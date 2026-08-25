@@ -278,11 +278,17 @@ impl YAMLParser<'_> {
         Ok(value)
     }
 
-    fn pos_values(&mut self) -> Result<Vec<u16>, ParseError> {
+    fn i32_value(&mut self) -> Result<i32, ParseError> {
+        let value = self.scalar()?;
+        let value = value.parse::<i32>()?;
+        Ok(value)
+    }
+
+    fn pos_values(&mut self) -> Result<Vec<i32>, ParseError> {
         let mut values = Vec::new();
         self.sequence_start()?;
         while let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
-            let value = self.u16_value()?;
+            let value = self.i32_value()?;
             values.push(value);
         }
         self.sequence_end()?;
@@ -350,8 +356,8 @@ impl YAMLParser<'_> {
         let mut xfail = ExpectedFailure::Simple(false);
         let mut emphasis: Vec<EmphasisSpan> = Vec::new();
         let mut expected_emphasis: Vec<EmphasisSpan> = Vec::new();
-        let mut input_pos: Vec<u16> = Vec::new();
-        let mut output_pos: Vec<u16> = Vec::new();
+        let mut input_pos: Vec<i32> = Vec::new();
+        let mut output_pos: Vec<i32> = Vec::new();
         let mut cursor_pos = None;
         let mut modes = TranslationModes::empty();
         let mut max_output_length = None;
@@ -514,5 +520,34 @@ impl YAMLParser<'_> {
         self.document_end()?;
         self.stream_end()?;
         Ok(results)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+
+    use super::*;
+
+    fn run(name: &str, yaml: &str) -> Result<Vec<TestResult>, ParseError> {
+        let path = std::env::temp_dir().join(format!(
+            "louis-rs-{}-{}.yaml",
+            std::process::id(),
+            name
+        ));
+        File::create(&path)
+            .unwrap()
+            .write_all(yaml.as_bytes())
+            .unwrap();
+        let results = YAMLParser::new(File::open(&path).unwrap())?.yaml();
+        let _ = std::fs::remove_file(&path);
+        results
+    }
+
+    #[test]
+    fn negative_positions_are_accepted() {
+        let yaml = "table: |\n  space \\s 0\n  letter a 1\ntests:\n  - - a\n    - ⠁\n    - inputPos: [-1]\n      outputPos: [-1]\n";
+        let results = run("negative_positions", yaml).unwrap();
+        assert_eq!(results.len(), 1);
     }
 }
