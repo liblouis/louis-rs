@@ -37,6 +37,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   each word individually; hyphenated segments of one word don't count toward the
   threshold, and `begcapsphrase` is preferred over `begcaps` when both are
   defined.
+- `Translator::translate_with_options` now fills `TranslationResult`'s
+  `output_positions` (input char → output cell), `input_positions` (output cell
+  → input char) and, when `TranslationOptions::with_cursor_pos` is given, the
+  translated `cursor_pos`. Positions are composed over all pipeline stages
+  (`correct`, main, `pass2`–`pass4`) in both directions.
+- The `check` subcommand now verifies the `inputPos`, `outputPos` and
+  `cursorPos` expectations of YAML tests. Mismatches are reported in a separate
+  "Position Mismatches" column and don't count as translation failures.
 
 ### Fixed
 - Fixed three issues found by Shielder/OSTIF's security audit: a crafted table
@@ -47,6 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   double-negated `match`/`context`/`pass2`-`pass4` pattern (e.g. `!!a`) panicked
   at table-compile time instead of being rejected as a parse error (finding
   6.3).
+- YAML `inputPos`/`outputPos` lists may now contain negative values; previously
+  the whole test file failed to load. liblouis writes `-1` for an input position
+  with no output position to point at, which we express as position 0, so the
+  value is normalized when the test file is read.
 - A `nocross` rule is now only rejected when it would cross a hyphenation break
   of the *whole word* it's part of (mirroring liblouis's `syllableBreak`). This
   check is now also forward translation only, matching liblouis

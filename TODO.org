@@ -54,7 +54,7 @@
   ~Indicators::precompute()~ model doesn't. Properly fixing this likely
   means unifying ~uppercase.rs~ and ~emphasis.rs~ into one shared tier
   model first.
-- [ ] inpos + outpos mapping
+- [X] inpos + outpos mapping
 - [-] ~Attribute::Boundary~/~ByOrder~/~Any~ (the attributes inside a
   rule's ~%[...]~/~$...~ set) are mostly no-ops
   - ~Attribute::Boundary~ in match_pattern.rs is now enforced (fixed
