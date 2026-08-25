@@ -10,6 +10,35 @@
 # New entries go at the top of this file; existing entries are not
 # reordered when they're revised.
 
+* ACCEPTED Don't infer ~DisplayTable~ entries from a table's own character definitions
+- Deciders :: CE
+- Date :: [2026-08-25 Di]
+
+** Context and Problem Statement
+
+~DisplayTable::compile~ (~src/translator.rs~) only populates its map
+from explicit ~display~ rules. Many liblouis YAML tests (e.g.
+~numericmode.yaml~, ~nonumsign.yaml~) instead rely on liblouis's real
+behavior: when no separate display table is given, it defaults to
+compiling one from the *same* table file
+(~lou_translateString.c:1199~), which incidentally lets that file's
+own ~letter~/~digit~/~base~ definitions double as display entries.
+
+** Decision Outcome
+
+Don't add that fallback. The user relayed that Bert Frees (liblouis
+co-maintainer) considers display tables coupling to translation
+tables a design wart, not something worth replicating. ~DisplayTable~
+is also currently only used by the YAML test harness, not real
+translation output.
+
+Consequence: YAML tests relying on the implicit same-file fallback
+keep failing under ~check~ even when translation itself is correct
+(at least ~nonumsign.yaml~/~numericmode.yaml~, possibly more of the
+~41~ liblouis YAML files declaring ~display~). Treated as a known
+test-harness limitation, not a ~TODO.org~ item, since fixing it the
+obvious way is what this ADR declines to do.
+
 * ACCEPTED Opcodes deliberately not implemented: ~uplow~, ~locale~, ~backmatch~, ~compdots~, ~nobreak~, ~macro~
 - Deciders :: CE
 - Date :: [2026-08-25 Di]
