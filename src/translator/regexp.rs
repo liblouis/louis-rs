@@ -332,12 +332,10 @@ struct Thread {
     capture: (usize, usize),
 }
 
-/// A bitset over instruction indices, used to track which `pc`s have already been added to a
-/// [`ThreadList`]'s thread set during the current step. Inline for programs up to 64
-/// instructions -- comfortably covering every real liblouis `match`/`context`/`correct`/passN
-/// pattern surveyed so far (the longest found across several tables was 44 instructions) --
-/// falling back to a heap-allocated word array only for the rare pattern that exceeds that, so
-/// correctness never depends on the inline capacity being enough.
+/// A bitset over instruction indices, used to track which `pc`s have already been added
+/// to a [`ThreadList`]'s thread set during the current step. Inline for programs up to 64
+/// instructions; falling back to a heap-allocated word array only for the rare pattern
+/// that exceeds that.
 #[derive(Clone)]
 struct Bitset(SmallVec<[u64; 1]>);
 
@@ -362,6 +360,8 @@ impl Bitset {
 /// The threads alive at one input position, in priority order, i.e. the preference order between
 /// alternatives that determines which one wins when both succeed (leftmost-first/Perl semantics, as
 /// opposed to POSIX leftmost-longest which would pick differently).
+///
+/// See the section "Pike's Implementation" at <https://swtch.com/~rsc/regexp/regexp2.html>
 struct ThreadList {
     /// Inline up to 64 concurrently-active threads -- the longest program surveyed had 27
     /// character-consuming instructions in total, an easy bound on how many threads can be alive
