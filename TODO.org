@@ -95,6 +95,21 @@
   interaction above, just for the generic mode family instead of
   numsign/capsletter. See the module doc in ~mode.rs~ for the full
   analysis.
+- [ ] ~digit~'s own ~numericmodechars~/~midendnumericmodechars~
+  transparency isn't wired into ~mode_indicator~ (~src/translator/indication/mode.rs~)
+  — only ~numeric_indicator~'s numsign/nonumsign use them. Only matters
+  for a table combining ~begmode~/~begmodephrase~ (which have a visible
+  close) with ~digit~ and a ~-~/~.~-joined run; ~begmodeword~'s close is
+  invisible either way so it's unaffected. No table exercises this today.
+- [ ] ~emit_group~'s passage-grouping (~src/translator/indication/mode.rs~)
+  bridges across a non-boundary gap for a self-bounded class like
+  ~digit~, e.g. ~"123a456"~ under ~begmode digit~: a plain letter isn't
+  ~is_letter~ when ~letter_chars == active_chars~, so it's treated like
+  the "hyphen doesn't split a word" case uppercase.rs deliberately
+  allows — but for ~digit~ there's no letter/hyphen distinction, so a
+  genuine mode-resetting character gets silently bridged instead of
+  closing the run. No table exercises ~begmode~/~begmodephrase~ with
+  ~digit~ today.
 - [ ] Malayalam conjunct/reph rule: a specific virama/conjunct
   sequence consistently produces ⠗ instead of the expected ⠻
   (ml.yaml)

@@ -12,16 +12,18 @@
 //! parallel with rule selection.
 //!
 //! The indicator types are:
+//! * [`computer_braille::Indicator`]: wraps computer-braille spans with begcomp/endcomp
 //! * [`emphasis::Indicator`]: detects emphasis runs and emits letter/word/phrase indicators
 //! * [`numeric::Indicator`]: detects digit sequences and emits number-sign indicators
 //! * [`uppercase::Indicator`]: detects uppercase runs and emits capitalisation indicators
-//! * [`mode::Indicator`]: detects character class runs and emits capitalisation indicators
+//! * [`mode::Indicator`]: detects character class runs and emits mode indicators
 //! * [`lettersign::Indicator`]: detects contractions that require a letter sign
 //! * [`nocontract::Indicator`]: detects contractions that require a no-contract sign
 
 use crate::emphasis::EmphasisSpan;
 use crate::translator::ResolvedTranslation;
 
+mod class_indicator;
 pub mod computer_braille;
 pub mod emphasis;
 pub mod lettersign;
