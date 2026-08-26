@@ -39,6 +39,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   defined.
 
 ### Fixed
+- Fixed three issues found by Shielder/OSTIF's security audit: a crafted table
+  with a circular or overly deep `include` chain could overflow the stack
+  (finding 6.1); a pattern with nested quantifiers (e.g. `(a+)+b`) could make
+  the `match`/`context` regexp engine take exponential time on a non-matching
+  input, now replaced with a linear-time Pike VM (finding 6.2); and a
+  double-negated `match`/`context`/`pass2`-`pass4` pattern (e.g. `!!a`) panicked
+  at table-compile time instead of being rejected as a parse error (finding
+  6.3).
 - A `nocross` rule is now only rejected when it would cross a hyphenation break
   of the *whole word* it's part of (mirroring liblouis's `syllableBreak`). This
   check is now also forward translation only, matching liblouis
