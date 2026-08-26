@@ -165,7 +165,7 @@ fn parse_hyphenmin(
         })
 }
 
-/// ".ab3a" -> ("aba", [0,0,3,0]) -- letters plus one score per gap
+/// ".ab3a" -> ("aba", `[0,0,3,0]`) -- letters plus one score per gap
 /// (len(letters) + 1 of them). Fails if no digit was found, since such a
 /// pattern could never produce a break anywhere.
 fn parse_pattern(pattern: &str, lineno: usize) -> Result<(String, Vec<u8>), ParseError> {

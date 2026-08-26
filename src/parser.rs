@@ -109,11 +109,11 @@ impl std::fmt::Display for Constraints {
 /// A set of [`Constraints`](Constraint) that contains both directions
 const ANY_DIRECTION: Constraints = constraint_set!(Constraint::Nofor | Constraint::Noback);
 
-/// A direction for a [`Rule`].
+/// A direction for a `Rule`.
 ///
 /// Rules always have at least one direction. They are used for
 /// forward translation, for backward translation or for both
-/// directions. The concept of direction is related to [`Constraint`].
+/// directions. The concept of direction is related to `Constraint`.
 #[derive(EnumSetType, Debug, Default, clap::ValueEnum)]
 pub enum Direction {
     #[default]

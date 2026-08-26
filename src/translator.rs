@@ -75,7 +75,7 @@ impl CharacterDefinition {
     /// Convert braille dots to Unicode characters.
     ///
     /// Convert given braille `dots` to Unicode characters. If the dots are
-    /// [explicit](Braille::Explicit) then simply delegate to the [`dots_to_unicode`] function.
+    /// [explicit](Braille::Explicit) then simply delegate to `dots.to_string()`.
     /// Otherwise, if the dots are [implicit](Braille::Implicit) convert the given `chars` to
     /// braille with the given `character_definitions` and using the [`Self::resolve_implicit_dots`]
     /// function.

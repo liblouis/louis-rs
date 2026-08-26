@@ -48,8 +48,8 @@ pub enum Regexp {
     /// Convenience that is unrolled into a sequence of [`NotChar`](Instruction#variant.NotChar)
     NotString(String),
     /// Like [`String`](Regexp::String), but each character is compared case-insensitively —
-    /// mirroring [`trie::TrieNode::char_transition`](crate::translator::trie::TrieNode), which
-    /// lowercases the *input* character before comparing against the (by table-author
+    /// mirroring `TrieNode::char_transition`, which lowercases the *input* character before
+    /// comparing against the (by table-author
     /// convention, already lowercase) stored one, rather than folding both sides. liblouis' own
     /// `match` opcode does the same for its literal `chars` field: it's found via the same
     /// case-insensitive `validMatch`/`toLowercase` used for every other opcode, and only the
@@ -326,7 +326,7 @@ pub struct CompiledRegexp {
 /// A single candidate execution path through the RegExp compiled program at the current
 /// input position, carrying the capture span in progress along that path.
 ///
-/// See the section "Pike's Implementation" at https://swtch.com/~rsc/regexp/regexp2.html
+/// See the section "Pike's Implementation" at <https://swtch.com/~rsc/regexp/regexp2.html>
 struct Thread {
     pc: InstructionIndex,
     capture: (usize, usize),
