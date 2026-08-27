@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git Commit Messages
+
+Use the Linux kernel's coding-assistants trailer format (https://docs.kernel.org/process/coding-assistants.html): `Assisted-by: Claude:<model>`, not `Co-authored-by:`. `<model>` is the model actually running the session.
+
 ## Project Overview
 
 **louis-rs** is a Rust reimplementation of [liblouis](https://liblouis.io/), a braille translator and back-translator. It is **not** a direct port of the C code but a complete rewrite using different data structures and algorithms while maintaining compatibility with liblouis tables and tests.
