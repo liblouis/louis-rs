@@ -5,13 +5,23 @@ use crate::translator::ResolvedTranslation;
 pub(crate) fn compute_output_positions(translations: &[ResolvedTranslation]) -> Vec<usize> {
     let mut output_positions: Vec<usize> = Vec::new();
     let mut output_offset: usize = 0;
+    // An inserted, indicator-only unit (empty input) has no input char of its own to record a
+    // position for. liblouis attributes its output to the next real input char instead of
+    // skipping past it, so remember where such a run started until that char shows up.
+    let mut pending_insertion_start: Option<usize> = None;
 
     for translation in translations {
         let input_len = translation.input().chars().count();
         let output_len = translation.output().chars().count();
 
-        for i in 0..input_len {
-            output_positions.push(output_offset + i.min(output_len.saturating_sub(1)));
+        if input_len == 0 {
+            pending_insertion_start.get_or_insert(output_offset);
+        } else {
+            let first = pending_insertion_start.take().unwrap_or(output_offset);
+            output_positions.push(first);
+            for i in 1..input_len {
+                output_positions.push(output_offset + i.min(output_len.saturating_sub(1)));
+            }
         }
         output_offset += output_len;
     }
@@ -211,9 +221,9 @@ mod tests {
     #[test]
     fn map_leading_indicator() {
         let map = PositionMap::from_trace(1, &[stage(&[("", "⠠"), ("h", "⠓")])]);
-        assert_eq!(map.output_positions(), [1]);
+        assert_eq!(map.output_positions(), [0]);
         assert_eq!(map.input_positions(), [0, 0]);
-        assert_eq!(map.cursor(0), 1);
+        assert_eq!(map.cursor(0), 0);
     }
 
     #[test]
@@ -313,6 +323,21 @@ mod tests {
         );
         assert_eq!(map.input_positions(), [0, 4, 5, 5, 6, 8]);
         assert_eq!(map.output_positions(), [0, 0, 0, 0, 1, 2, 4, 4, 5]);
+    }
+
+    #[test]
+    fn map_insertion_prepends_to_the_next_char_across_stages() {
+        // "f,oobar" -> correct-stage inserts "-" before the first "o" -> "f,-oobar" ->
+        // main-stage translation. liblouis attributes the inserted "-" cell to the "o"
+        // that triggered the insertion rather than to the "," before it.
+        let map = PositionMap::from_trace(
+            4,
+            &[
+                stage(&[("f", "f"), (",", ","), ("", "-"), ("o", "o"), ("o", "o")]),
+                stage(&[("f", "⠋"), (",", "⠠"), ("-", "⠤"), ("o", "⠕"), ("o", "⠕")]),
+            ],
+        );
+        assert_eq!(map.output_positions(), [0, 1, 2, 4]);
     }
 
     #[test]

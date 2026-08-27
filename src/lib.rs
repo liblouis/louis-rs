@@ -156,9 +156,9 @@ mod tests {
             .translate_with_options("a 42", TranslationOptions::default().with_cursor_pos(2))
             .unwrap();
         assert_eq!(result.output, "⠁⠀⠼⠙⠃");
-        assert_eq!(result.output_positions, Some(vec![0, 1, 3, 4]));
+        assert_eq!(result.output_positions, Some(vec![0, 1, 2, 4]));
         assert_eq!(result.input_positions, Some(vec![0, 1, 2, 2, 3]));
-        assert_eq!(result.cursor_pos, Some(3));
+        assert_eq!(result.cursor_pos, Some(2));
     }
 
     #[test]
@@ -190,9 +190,9 @@ mod tests {
             .translate_with_options("Hi", TranslationOptions::default().with_cursor_pos(0))
             .unwrap();
         assert_eq!(result.output, "⠠⠓⠊");
-        assert_eq!(result.output_positions, Some(vec![1, 2]));
+        assert_eq!(result.output_positions, Some(vec![0, 2]));
         assert_eq!(result.input_positions, Some(vec![0, 0, 1]));
-        assert_eq!(result.cursor_pos, Some(1));
+        assert_eq!(result.cursor_pos, Some(0));
 
         let backward = Translator::from_table_source(table, Direction::Backward).unwrap();
         let result = backward
@@ -211,7 +211,7 @@ mod tests {
             .translate_with_options("f,oobar", TranslationOptions::default())
             .unwrap();
         assert_eq!(result.output, "⠋⠠⠤⠕⠕⠃⠁⠗");
-        assert_eq!(result.output_positions, Some(vec![0, 1, 3, 4, 5, 6, 7]));
+        assert_eq!(result.output_positions, Some(vec![0, 1, 2, 4, 5, 6, 7]));
         assert_eq!(result.input_positions, Some(vec![0, 1, 2, 2, 3, 4, 5, 6]));
     }
 
