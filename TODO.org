@@ -58,15 +58,17 @@
   - [X] An inserted indicator's (or ~correct~-insertion's) output cell is
     attributed to the character it precedes, as liblouis does
     (~compute_output_positions~, ~src/translator/positions.rs~)
-  - [ ] The ~,.~ *deletion* variants of ~inpos_outpos.yaml~ still
-    mismatch: liblouis has the deleted character share the *preceding*
-    character's output position, we attribute it to the following one.
-    Not just the mirror image of the insertion fix — the deletion also
-    goes through a later ~context~/pass rule that changes the downstream
-    translation shape, so the convention in
-    ~map_deletion_in_the_middle~ doesn't transfer directly.
+  - [X] A character the translation consumes without producing anything
+    now gets the neighbour liblouis gives it, which differs by
+    direction: forward the *preceding* cell ("append to previous"),
+    backward the character that *follows* ("prepend to next"). liblouis
+    keeps one mapping between the braille and the text and only fills
+    its gaps on the text side, which is the pipeline's input forward but
+    its output backward, so the two position algorithms swap roles
+    (~src/translator/positions.rs~).
   - [ ] One ~cursorPos~ mismatch in ~fr-bfu-g2_harness.yaml~, off by one
-    on a math-expression/number-sign case
+    on a math-expression/number-sign case — the last position mismatch
+    left in the suite
   - [ ] liblouis' undocumented ~-1~ "no output position" value is
     normalized to 0 when reading YAML (~pos_value~, ~src/yaml.rs~).
     That's a guess at intent, pending [[https://github.com/liblouis/liblouis/issues/2080][liblouis#2080]]: if upstream makes
@@ -135,3 +137,11 @@
   implemented — mode flags in ~TranslationOptions~ meant to expand the
   current word into computer braille without ~begcomp~/~endcomp~
   indicators
+- [ ] The YAML suite is not deterministic: repeated ~check~ runs of the
+  same binary report different results for ~fr-bfu-g2.yaml~ (94.5–95.0%)
+  and ~pa.yaml~ (87.1–87.3%). Not caused by the position work — plain
+  ~main~ varies the same way. Worth chasing before trusting the suite to
+  catch small regressions, since a few tests flipping is exactly the
+  size of a real regression. Both files have several ~table:~ blocks and
+  the runner is parallel (~rayon~), so shared state or iteration order
+  in table compilation is the first place to look.
