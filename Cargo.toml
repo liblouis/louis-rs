@@ -40,3 +40,7 @@ backwards_compatibility = []
 [[bench]]
 name = "translate"
 harness = false
+
+[[bench]]
+name = "parse_and_compile"
+harness = false
