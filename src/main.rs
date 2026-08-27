@@ -306,7 +306,7 @@ impl YAMLTestResult {
 
 /// Parses and runs a single YAML test file, returning either the test
 /// results or a ready-to-print error message.
-fn check_yaml_file(path: &Path) -> Result<Vec<test::TestOutcome>, String> {
+fn check_yaml_file(path: &Path) -> Result<Vec<test::TestResult>, String> {
     let file =
         File::open(path).map_err(|e| format!("Could not open yaml file {:?} ({})", path, e))?;
     let mut parser = YAMLParser::new(file)
@@ -328,25 +328,22 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool) {
         match outcome {
             Ok(test_results) => {
                 let tests = test_results.len();
-                let successes = test_results
-                    .iter()
-                    .filter(|r| r.translation.is_success())
-                    .count();
+                let successes = test_results.iter().filter(|r| r.is_success()).count();
                 let failures = test_results
                     .iter()
-                    .filter(|r| r.translation.is_failure())
+                    .filter(|r| r.is_translation_failure())
                     .count();
                 let expected_failures = test_results
                     .iter()
-                    .filter(|r| r.translation.is_expected_failure())
+                    .filter(|r| r.is_expected_failure())
                     .count();
                 let unexpected_successes = test_results
                     .iter()
-                    .filter(|r| r.translation.is_unexpected_success())
+                    .filter(|r| r.is_unexpected_success())
                     .count();
                 let position_mismatches = test_results
                     .iter()
-                    .filter(|r| r.positions.is_some())
+                    .filter(|r| r.is_position_failure())
                     .count();
                 total.update(
                     tests,
@@ -369,11 +366,8 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool) {
                 });
                 if !summary {
                     for res in &test_results {
-                        if !res.translation.is_success() {
-                            println!("{:?}", res.translation);
-                        }
-                        if let Some(mismatch) = &res.positions {
-                            println!("{:?}", mismatch);
+                        if !res.is_success() {
+                            println!("{:?}", res);
                         }
                     }
                 }

@@ -41,15 +41,24 @@ pub enum TestMode {
     HyphenateBraille,
 }
 
+/// A translation that failed either because the translated text itself didn't match (`Translation`)
+/// or, when the text matched, because the position mapping didn't (`Position`). Position is only
+/// ever checked once the translation itself succeeds, so the two reasons are mutually exclusive.
 #[derive(PartialEq, Debug)]
-pub enum TestResult {
-    Success,
-    Failure {
+pub enum FailureReason {
+    Translation {
         input: String,
         expected: String,
         actual: String,
         direction: Direction,
     },
+    Position(PositionMismatch),
+}
+
+#[derive(PartialEq, Debug)]
+pub enum TestResult {
+    Success,
+    Failure(FailureReason),
     ExpectedFailure {
         input: String,
         expected: String,
@@ -66,8 +75,11 @@ impl TestResult {
     pub fn is_success(&self) -> bool {
         matches!(self, TestResult::Success)
     }
-    pub fn is_failure(&self) -> bool {
-        matches!(self, TestResult::Failure { .. })
+    pub fn is_translation_failure(&self) -> bool {
+        matches!(self, TestResult::Failure(FailureReason::Translation { .. }))
+    }
+    pub fn is_position_failure(&self) -> bool {
+        matches!(self, TestResult::Failure(FailureReason::Position(_)))
     }
     pub fn is_expected_failure(&self) -> bool {
         matches!(self, TestResult::ExpectedFailure { .. })
@@ -77,19 +89,23 @@ impl TestResult {
     }
 }
 
-/// The outcome of one test in one direction: how the translated text compared, and how the
-/// positions compared when the test specifies them and the text matched.
-#[derive(PartialEq, Debug)]
-pub struct TestOutcome {
-    pub translation: TestResult,
-    pub positions: Option<PositionMismatch>,
-}
-
 #[derive(PartialEq, Debug)]
 pub struct PositionMismatch {
-    pub input: String,
-    pub direction: Direction,
-    pub diffs: Vec<PositionDiff>,
+    input: String,
+    direction: Direction,
+    diffs: Vec<PositionDiff>,
+}
+
+impl PositionMismatch {
+    pub fn input(&self) -> &str {
+        &self.input
+    }
+    pub fn direction(&self) -> Direction {
+        self.direction
+    }
+    pub fn diffs(&self) -> &[PositionDiff] {
+        &self.diffs
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -188,7 +204,7 @@ impl<'a> TestMatrix<'a> {
         Ok(TranslationPipeline::compile(&rules, direction)?)
     }
 
-    pub fn check(&self) -> Result<Vec<TestOutcome>, TestError> {
+    pub fn check(&self) -> Result<Vec<TestResult>, TestError> {
         let mut results = Vec::new();
         match self.mode {
             TestMode::Forward => {
@@ -327,7 +343,7 @@ impl Test {
         table: &TranslationPipeline,
         display_table: &DisplayTable,
         direction: Direction,
-    ) -> TestOutcome {
+    ) -> TestResult {
         let mut options = TranslationOptions::default()
             .with_mode(self.modes.clone())
             .with_emphasis(self.emphasis.clone());
@@ -351,13 +367,16 @@ impl Test {
             }
         };
         let matched = translated == self.expected;
-        let translation = if matched {
-            if !self.xfail.is_failure(direction) {
-                TestResult::Success
-            } else {
+        if matched {
+            if self.xfail.is_failure(direction) {
                 TestResult::UnexpectedSuccess {
                     input: self.input.to_string(),
                     direction,
+                }
+            } else {
+                match self.position_mismatch(&positions, direction) {
+                    None => TestResult::Success,
+                    Some(mismatch) => TestResult::Failure(FailureReason::Position(mismatch)),
                 }
             }
         } else if self.xfail.is_failure(direction) {
@@ -368,21 +387,12 @@ impl Test {
                 direction,
             }
         } else {
-            TestResult::Failure {
+            TestResult::Failure(FailureReason::Translation {
                 input: self.input.to_string(),
                 expected: self.expected.to_string(),
                 actual: translated,
                 direction,
-            }
-        };
-        let positions = if matched {
-            self.position_mismatch(&positions, direction)
-        } else {
-            None
-        };
-        TestOutcome {
-            translation,
-            positions,
+            })
         }
     }
 
