@@ -54,7 +54,25 @@
   ~Indicators::precompute()~ model doesn't. Properly fixing this likely
   means unifying ~uppercase.rs~ and ~emphasis.rs~ into one shared tier
   model first.
-- [ ] inpos + outpos mapping
+- [-] inpos + outpos mapping
+  - [X] An inserted indicator's (or ~correct~-insertion's) output cell is
+    attributed to the character it precedes, as liblouis does
+    (~compute_output_positions~, ~src/translator/positions.rs~)
+  - [ ] The ~,.~ *deletion* variants of ~inpos_outpos.yaml~ still
+    mismatch: liblouis has the deleted character share the *preceding*
+    character's output position, we attribute it to the following one.
+    Not just the mirror image of the insertion fix — the deletion also
+    goes through a later ~context~/pass rule that changes the downstream
+    translation shape, so the convention in
+    ~map_deletion_in_the_middle~ doesn't transfer directly.
+  - [ ] One ~cursorPos~ mismatch in ~fr-bfu-g2_harness.yaml~, off by one
+    on a math-expression/number-sign case
+  - [ ] liblouis' undocumented ~-1~ "no output position" value is
+    normalized to 0 when reading YAML (~pos_value~, ~src/yaml.rs~).
+    That's a guess at intent, pending [[https://github.com/liblouis/liblouis/issues/2080][liblouis#2080]]: if upstream makes
+    the sentinel unreachable the normalization becomes dead code, if
+    they document it as contract we may instead have to match ~-1~
+    semantics for the total-deletion case.
 - [-] ~Attribute::Boundary~/~ByOrder~/~Any~ (the attributes inside a
   rule's ~%[...]~/~$...~ set) are mostly no-ops
   - ~Attribute::Boundary~ in match_pattern.rs is now enforced (fixed

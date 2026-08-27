@@ -37,8 +37,6 @@ pub use parser::Direction;
 use translator::TranslationPipeline;
 pub use translator::{TranslationMode, TranslationModes, TranslationOptions};
 
-use crate::translator::ResolvedTranslation;
-
 #[derive(thiserror::Error, Debug)]
 pub enum TranslationError {
     #[error(transparent)]
@@ -98,42 +96,9 @@ impl Translator {
         Ok(Self(TranslationPipeline::compile(&rules, direction)?))
     }
 
-    fn compute_output_positions(translations: &[ResolvedTranslation]) -> Vec<usize> {
-        let mut output_positions: Vec<usize> = Vec::new();
-        let mut output_offset: usize = 0;
-
-        for translation in translations {
-            let input_len = translation.input().chars().count();
-            let output_len = translation.output().chars().count();
-
-            for i in 0..input_len {
-                output_positions.push(output_offset + i.min(output_len.saturating_sub(1)));
-            }
-            output_offset += output_len;
-        }
-        output_positions
-    }
-
-    fn compute_input_positions(translations: &[ResolvedTranslation]) -> Vec<usize> {
-        let mut input_positions: Vec<usize> = Vec::new();
-        let mut input_offset: usize = 0;
-
-        for translation in translations {
-            let input_len = translation.input().chars().count();
-            let output_len = translation.output().chars().count();
-
-            for i in 0..output_len {
-                input_positions.push(input_offset + i.min(input_len.saturating_sub(1)));
-            }
-            input_offset += input_len;
-        }
-        input_positions
-    }
-
     /// Simple translation - just input text to braille
     pub fn translate(&self, input: &str) -> Result<String, TranslationError> {
-        self.translate_with_options(input, TranslationOptions::default())
-            .map(|result| result.output)
+        Ok(self.0.translate(input))
     }
 
     /// Full-featured translation with all options
@@ -142,8 +107,14 @@ impl Translator {
         input: &str,
         options: TranslationOptions,
     ) -> Result<TranslationResult, TranslationError> {
+        let (output, positions) = self.0.translate_with_positions(input, &options);
+        let cursor_pos = options.cursor_pos().map(|cursor| positions.cursor(cursor));
+        let (output_positions, input_positions) = positions.into_parts();
         Ok(TranslationResult {
-            output: self.0.translate_with_options(input, &options),
+            output,
+            output_positions: Some(output_positions),
+            input_positions: Some(input_positions),
+            cursor_pos,
             ..Default::default()
         })
     }
@@ -151,13 +122,7 @@ impl Translator {
 
 #[cfg(test)]
 mod tests {
-    use crate::translator::TranslationStage;
-
     use super::*;
-
-    fn translation(input: &str, output: &str) -> ResolvedTranslation {
-        ResolvedTranslation::new(input, output, 0, TranslationStage::Main, None)
-    }
 
     #[test]
     fn translator_from_table_source() {
@@ -181,85 +146,84 @@ mod tests {
         }
     }
 
+    const NUMBER_TABLE: &str =
+        "space \\s 0\nletter a 1\nlitdigit 4 145\nlitdigit 2 12\nnumsign 3456\n";
+
     #[test]
-    fn output_positions() {
-        assert_eq!(
-            Translator::compute_output_positions(&[translation("abc", "⠁⠃⠇")]),
-            [0, 1, 2]
-        );
-        assert_eq!(
-            Translator::compute_output_positions(&[translation("foo", "⠁")]),
-            [0, 0, 0]
-        );
-        assert_eq!(
-            Translator::compute_output_positions(&[translation("foo", "⠁⠃")]),
-            [0, 1, 1]
-        );
-        assert_eq!(
-            Translator::compute_output_positions(&[translation("a", "⠁⠃⠇")]),
-            [0]
-        );
-        assert_eq!(
-            Translator::compute_output_positions(&[
-                translation("abc", "⠁⠃⠇"),
-                translation("abc", "⠁⠃⠇")
-            ]),
-            [0, 1, 2, 3, 4, 5]
-        );
-        assert_eq!(
-            Translator::compute_output_positions(&[
-                translation("foo", "⠁"),
-                translation("abc", "⠁⠃⠇")
-            ]),
-            [0, 0, 0, 1, 2, 3]
-        );
-        assert_eq!(
-            Translator::compute_output_positions(&[
-                translation("a", "⠁⠃⠇"),
-                translation("abc", "⠁⠃⠇")
-            ]),
-            [0, 3, 4, 5]
-        );
+    fn positions_with_number_sign() {
+        let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
+        let result = translator
+            .translate_with_options("a 42", TranslationOptions::default().with_cursor_pos(2))
+            .unwrap();
+        assert_eq!(result.output, "⠁⠀⠼⠙⠃");
+        assert_eq!(result.output_positions, Some(vec![0, 1, 2, 4]));
+        assert_eq!(result.input_positions, Some(vec![0, 1, 2, 2, 3]));
+        assert_eq!(result.cursor_pos, Some(2));
     }
 
     #[test]
-    fn input_positions() {
-        assert_eq!(
-            Translator::compute_input_positions(&[translation("abc", "⠁⠃⠇")]),
-            [0, 1, 2]
-        );
-        assert_eq!(
-            Translator::compute_input_positions(&[translation("foo", "⠁")]),
-            [0]
-        );
-        assert_eq!(
-            Translator::compute_input_positions(&[translation("foo", "⠁⠃")]),
-            [0, 1]
-        );
-        assert_eq!(
-            Translator::compute_input_positions(&[translation("a", "⠁⠃⠇")]),
-            [0, 0, 0]
-        );
-        assert_eq!(
-            Translator::compute_input_positions(&[
-                translation("abc", "⠁⠃⠇"),
-                translation("abc", "⠁⠃⠇")
-            ]),
-            [0, 1, 2, 3, 4, 5]
-        );
-        assert_eq!(
-            Translator::compute_input_positions(&[
-                translation("foo", "⠁"),
-                translation("abc", "⠁⠃⠇")
-            ]),
-            [0, 3, 4, 5]
-        );
-        assert_eq!(
-            Translator::compute_input_positions(&[
-                translation("a", "⠁⠃⠇"),
-                translation("abc", "⠁⠃⠇")
-            ]),
-            [0, 0, 0, 1, 2, 3]
-        );
+    fn cursor_past_the_end_maps_to_the_output_length() {
+        let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
+        let result = translator
+            .translate_with_options("a 42", TranslationOptions::default().with_cursor_pos(4))
+            .unwrap();
+        assert_eq!(result.cursor_pos, Some(5));
+    }
+
+    #[test]
+    fn positions_without_cursor() {
+        let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
+        let result = translator
+            .translate_with_options("a 42", TranslationOptions::default())
+            .unwrap();
+        assert_eq!(result.output, translator.translate("a 42").unwrap());
+        assert_eq!(result.cursor_pos, None);
+        assert!(result.output_positions.is_some());
+        assert!(result.input_positions.is_some());
+    }
+
+    #[test]
+    fn positions_with_capital_sign() {
+        let table = "lowercase h 125\nlowercase i 24\nbase uppercase H h\ncapsletter 6\n";
+        let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
+        let result = forward
+            .translate_with_options("Hi", TranslationOptions::default().with_cursor_pos(0))
+            .unwrap();
+        assert_eq!(result.output, "⠠⠓⠊");
+        assert_eq!(result.output_positions, Some(vec![0, 2]));
+        assert_eq!(result.input_positions, Some(vec![0, 0, 1]));
+        assert_eq!(result.cursor_pos, Some(0));
+
+        let backward = Translator::from_table_source(table, Direction::Backward).unwrap();
+        let result = backward
+            .translate_with_options("⠠⠓⠊", TranslationOptions::default())
+            .unwrap();
+        assert_eq!(result.output, "Hi");
+        assert_eq!(result.output_positions, Some(vec![0, 0, 1]));
+        assert_eq!(result.input_positions, Some(vec![1, 2]));
+    }
+
+    #[test]
+    fn positions_with_correction_insertion() {
+        let table = "letter f 124\nletter o 135\nletter b 12\nletter a 1\nletter r 1235\npunctuation , 6\npunctuation - 36\nnoback correct \"f,\"[]\"o\" \"-\"\n";
+        let translator = Translator::from_table_source(table, Direction::Forward).unwrap();
+        let result = translator
+            .translate_with_options("f,oobar", TranslationOptions::default())
+            .unwrap();
+        assert_eq!(result.output, "⠋⠠⠤⠕⠕⠃⠁⠗");
+        assert_eq!(result.output_positions, Some(vec![0, 1, 2, 4, 5, 6, 7]));
+        assert_eq!(result.input_positions, Some(vec![0, 1, 2, 2, 3, 4, 5, 6]));
+    }
+
+    #[test]
+    fn positions_with_pass2_deletion() {
+        let table = "letter f 124\nletter o 135\nletter x 1346\nnoback pass2 @1346 ?\n";
+        let translator = Translator::from_table_source(table, Direction::Forward).unwrap();
+        let result = translator
+            .translate_with_options("xfoo", TranslationOptions::default())
+            .unwrap();
+        assert_eq!(result.output, "⠋⠕⠕");
+        assert_eq!(result.output_positions, Some(vec![0, 0, 1, 2]));
+        assert_eq!(result.input_positions, Some(vec![1, 2, 3]));
     }
 }

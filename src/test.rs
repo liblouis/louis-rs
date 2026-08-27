@@ -10,7 +10,9 @@ use search_path::SearchPath;
 use crate::{
     emphasis::EmphasisSpan,
     parser::{self, Direction, TableError},
-    translator::{self, DisplayTable, TranslationModes, TranslationOptions, TranslationPipeline},
+    translator::{
+        self, DisplayTable, PositionMap, TranslationModes, TranslationOptions, TranslationPipeline,
+    },
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -39,15 +41,24 @@ pub enum TestMode {
     HyphenateBraille,
 }
 
+/// A translation that failed either because the translated text itself didn't match (`Translation`)
+/// or, when the text matched, because the position mapping didn't (`Position`). Position is only
+/// ever checked once the translation itself succeeds, so the two reasons are mutually exclusive.
 #[derive(PartialEq, Debug)]
-pub enum TestResult {
-    Success,
-    Failure {
+pub enum FailureReason {
+    Translation {
         input: String,
         expected: String,
         actual: String,
         direction: Direction,
     },
+    Position(PositionMismatch),
+}
+
+#[derive(PartialEq, Debug)]
+pub enum TestResult {
+    Success,
+    Failure(FailureReason),
     ExpectedFailure {
         input: String,
         expected: String,
@@ -64,8 +75,11 @@ impl TestResult {
     pub fn is_success(&self) -> bool {
         matches!(self, TestResult::Success)
     }
-    pub fn is_failure(&self) -> bool {
-        matches!(self, TestResult::Failure { .. })
+    pub fn is_translation_failure(&self) -> bool {
+        matches!(self, TestResult::Failure(FailureReason::Translation { .. }))
+    }
+    pub fn is_position_failure(&self) -> bool {
+        matches!(self, TestResult::Failure(FailureReason::Position(_)))
     }
     pub fn is_expected_failure(&self) -> bool {
         matches!(self, TestResult::ExpectedFailure { .. })
@@ -73,6 +87,41 @@ impl TestResult {
     pub fn is_unexpected_success(&self) -> bool {
         matches!(self, TestResult::UnexpectedSuccess { .. })
     }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct PositionMismatch {
+    input: String,
+    direction: Direction,
+    diffs: Vec<PositionDiff>,
+}
+
+impl PositionMismatch {
+    pub fn input(&self) -> &str {
+        &self.input
+    }
+    pub fn direction(&self) -> Direction {
+        self.direction
+    }
+    pub fn diffs(&self) -> &[PositionDiff] {
+        &self.diffs
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub enum PositionDiff {
+    InputPos {
+        expected: Vec<usize>,
+        actual: Vec<usize>,
+    },
+    OutputPos {
+        expected: Vec<usize>,
+        actual: Vec<usize>,
+    },
+    Cursor {
+        expected: usize,
+        actual: usize,
+    },
 }
 
 /// A group of [`Tests`](Test) that share the same braille table(s), display table and test mode.
@@ -238,8 +287,8 @@ pub type TableQuery = HashMap<String, String>;
 
 #[derive(Debug, Clone)]
 pub enum CursorPosition {
-    Single(u16),
-    Tuple(u16, u16),
+    Single(usize),
+    Tuple(usize, usize),
 }
 
 pub type Directions = EnumSet<Direction>;
@@ -272,12 +321,12 @@ pub struct Test {
     xfail: ExpectedFailure,
     emphasis: Vec<EmphasisSpan>,
     expected_emphasis: Vec<EmphasisSpan>,
-    input_pos: Vec<u16>,
-    output_pos: Vec<u16>,
+    input_pos: Vec<usize>,
+    output_pos: Vec<usize>,
     cursor_pos: Option<CursorPosition>,
     modes: TranslationModes,
-    max_output_length: Option<u16>,
-    real_input_length: Option<u16>,
+    max_output_length: Option<usize>,
+    real_input_length: Option<usize>,
 }
 
 impl Test {
@@ -287,30 +336,39 @@ impl Test {
         display_table: &DisplayTable,
         direction: Direction,
     ) -> TestResult {
-        let options = TranslationOptions::default()
+        let mut options = TranslationOptions::default()
             .with_mode(self.modes.clone())
             .with_emphasis(self.emphasis.clone());
-        let translated = match direction {
+        if let Some(CursorPosition::Single(cursor) | CursorPosition::Tuple(cursor, _)) =
+            self.cursor_pos
+        {
+            options = options.with_cursor_pos(cursor);
+        }
+        let (translated, positions) = match direction {
             // For forward translation we first translate the input and then apply the display table
             // on the result
             Direction::Forward => {
-                let translated = table.translate_with_options(&self.input, &options);
-                display_table.translate(&translated)
+                let (translated, positions) = table.translate_with_positions(&self.input, &options);
+                (display_table.translate(&translated), positions)
             }
             // For backward translation we first apply the display table on the input and then
             // translate the result
             Direction::Backward => {
                 let displayed = display_table.translate(&self.input);
-                table.translate_with_options(&displayed, &options)
+                table.translate_with_positions(&displayed, &options)
             }
         };
-        if translated == self.expected {
-            if !self.xfail.is_failure(direction) {
-                TestResult::Success
-            } else {
+        let matched = translated == self.expected;
+        if matched {
+            if self.xfail.is_failure(direction) {
                 TestResult::UnexpectedSuccess {
                     input: self.input.to_string(),
                     direction,
+                }
+            } else {
+                match self.position_mismatch(&positions, direction) {
+                    None => TestResult::Success,
+                    Some(mismatch) => TestResult::Failure(FailureReason::Position(mismatch)),
                 }
             }
         } else if self.xfail.is_failure(direction) {
@@ -321,12 +379,47 @@ impl Test {
                 direction,
             }
         } else {
-            TestResult::Failure {
+            TestResult::Failure(FailureReason::Translation {
                 input: self.input.to_string(),
                 expected: self.expected.to_string(),
                 actual: translated,
                 direction,
+            })
+        }
+    }
+
+    fn position_mismatch(
+        &self,
+        positions: &PositionMap,
+        direction: Direction,
+    ) -> Option<PositionMismatch> {
+        let mut diffs = Vec::new();
+        if !self.input_pos.is_empty() && self.input_pos != positions.input_positions() {
+            diffs.push(PositionDiff::InputPos {
+                expected: self.input_pos.clone(),
+                actual: positions.input_positions().to_vec(),
+            });
+        }
+        if !self.output_pos.is_empty() && self.output_pos != positions.output_positions() {
+            diffs.push(PositionDiff::OutputPos {
+                expected: self.output_pos.clone(),
+                actual: positions.output_positions().to_vec(),
+            });
+        }
+        if let Some(CursorPosition::Tuple(cursor, expected)) = self.cursor_pos {
+            let actual = positions.cursor(cursor);
+            if actual != expected {
+                diffs.push(PositionDiff::Cursor { expected, actual });
             }
+        }
+        if diffs.is_empty() {
+            None
+        } else {
+            Some(PositionMismatch {
+                input: self.input.clone(),
+                direction,
+                diffs,
+            })
         }
     }
 
@@ -336,12 +429,12 @@ impl Test {
         xfail: ExpectedFailure,
         emphasis: Vec<EmphasisSpan>,
         expected_emphasis: Vec<EmphasisSpan>,
-        input_pos: Vec<u16>,
-        output_pos: Vec<u16>,
+        input_pos: Vec<usize>,
+        output_pos: Vec<usize>,
         cursor_pos: Option<CursorPosition>,
         modes: TranslationModes,
-        max_output_length: Option<u16>,
-        real_input_length: Option<u16>,
+        max_output_length: Option<usize>,
+        real_input_length: Option<usize>,
     ) -> Self {
         Test {
             input,
@@ -386,7 +479,46 @@ impl Test {
         Test {
             input: self.expected,
             expected: self.input,
+            input_pos: self.output_pos,
+            output_pos: self.input_pos,
+            cursor_pos: None,
             ..self
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_with_positions(
+        input_pos: Vec<usize>,
+        output_pos: Vec<usize>,
+        cursor_pos: Option<CursorPosition>,
+    ) -> Test {
+        Test::new(
+            "ab".to_string(),
+            "⠁⠃".to_string(),
+            ExpectedFailure::Simple(false),
+            vec![],
+            vec![],
+            input_pos,
+            output_pos,
+            cursor_pos,
+            TranslationModes::empty(),
+            None,
+            None,
+        )
+    }
+
+    #[test]
+    fn reverse_swaps_the_positions_and_drops_the_cursor() {
+        let reversed =
+            test_with_positions(vec![1], vec![2, 3], Some(CursorPosition::Single(0))).reverse();
+        assert_eq!(reversed.input, "⠁⠃");
+        assert_eq!(reversed.expected, "ab");
+        assert_eq!(reversed.input_pos, [2, 3]);
+        assert_eq!(reversed.output_pos, [1]);
+        assert!(reversed.cursor_pos.is_none());
     }
 }

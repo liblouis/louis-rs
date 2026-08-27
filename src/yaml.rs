@@ -272,17 +272,33 @@ impl YAMLParser<'_> {
         Ok(spans)
     }
 
-    fn u16_value(&mut self) -> Result<u16, ParseError> {
+    fn usize_value(&mut self) -> Result<usize, ParseError> {
         let value = self.scalar()?;
-        let value = value.parse::<u16>()?;
+        let value = value.parse::<usize>()?;
         Ok(value)
     }
 
-    fn pos_values(&mut self) -> Result<Vec<u16>, ParseError> {
+    /// A single `inputPos`/`outputPos` value.
+    ///
+    /// liblouis leaves these at the `-1` it pre-fills its position arrays with when the
+    /// translation output is empty, i.e. when an input char has no output position to point at
+    /// (see `outputPos[k] = -1` in liblouis' `lou_translateString.c`). That only ever happens
+    /// for the whole array at once, and we express the same thing as position 0, so normalize
+    /// the sentinel away here instead of carrying it into the comparison.
+    fn pos_value(&mut self) -> Result<usize, ParseError> {
+        let value = self.scalar()?;
+        match value.parse::<usize>() {
+            Ok(position) => Ok(position),
+            Err(_) if value.parse::<i64>().is_ok_and(i64::is_negative) => Ok(0),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn pos_values(&mut self) -> Result<Vec<usize>, ParseError> {
         let mut values = Vec::new();
         self.sequence_start()?;
         while let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
-            let value = self.u16_value()?;
+            let value = self.pos_value()?;
             values.push(value);
         }
         self.sequence_end()?;
@@ -293,11 +309,11 @@ impl YAMLParser<'_> {
         let pos = match self.events.peek() {
             Some(Ok(Event::SequenceStart { .. })) => {
                 self.sequence_start()?;
-                let p = CursorPosition::Tuple(self.u16_value()?, self.u16_value()?);
+                let p = CursorPosition::Tuple(self.usize_value()?, self.usize_value()?);
                 self.sequence_end()?;
                 p
             }
-            _ => CursorPosition::Single(self.u16_value()?),
+            _ => CursorPosition::Single(self.usize_value()?),
         };
         Ok(pos)
     }
@@ -350,8 +366,8 @@ impl YAMLParser<'_> {
         let mut xfail = ExpectedFailure::Simple(false);
         let mut emphasis: Vec<EmphasisSpan> = Vec::new();
         let mut expected_emphasis: Vec<EmphasisSpan> = Vec::new();
-        let mut input_pos: Vec<u16> = Vec::new();
-        let mut output_pos: Vec<u16> = Vec::new();
+        let mut input_pos: Vec<usize> = Vec::new();
+        let mut output_pos: Vec<usize> = Vec::new();
         let mut cursor_pos = None;
         let mut modes = TranslationModes::empty();
         let mut max_output_length = None;
@@ -384,11 +400,11 @@ impl YAMLParser<'_> {
                         modes = self.translation_modes()?;
                     }
                     "maxOutputLength" => {
-                        let length = self.u16_value()?;
+                        let length = self.usize_value()?;
                         max_output_length = Some(length);
                     }
                     "realInputLength" => {
-                        let length = self.u16_value()?;
+                        let length = self.usize_value()?;
                         real_input_length = Some(length);
                     }
                     _ => {
@@ -514,5 +530,101 @@ impl YAMLParser<'_> {
         self.document_end()?;
         self.stream_end()?;
         Ok(results)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+
+    use super::*;
+    use crate::test::{FailureReason, PositionDiff};
+
+    fn run(name: &str, yaml: &str) -> Result<Vec<TestResult>, ParseError> {
+        let path =
+            std::env::temp_dir().join(format!("louis-rs-{}-{}.yaml", std::process::id(), name));
+        File::create(&path)
+            .unwrap()
+            .write_all(yaml.as_bytes())
+            .unwrap();
+        let results = YAMLParser::new(File::open(&path).unwrap())?.yaml();
+        let _ = std::fs::remove_file(&path);
+        results
+    }
+
+    /// liblouis leaves its position array at the `-1` it was pre-filled with when the output is
+    /// empty, i.e. when there is no output position to point at. We express that as position 0,
+    /// so such an expectation has to match rather than be reported as a mismatch.
+    #[test]
+    fn the_no_output_position_sentinel_matches_an_empty_output() {
+        let yaml = "table: |\n  letter f 124\n  noback correct [\"f\"] ?\ntests:\n  - - f\n    - \"\"\n    - inputPos: []\n      outputPos: [-1]\n";
+        let results = run("empty_output_sentinel", yaml).unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(results[0].is_success());
+    }
+
+    const AB_TABLE: &str = "table: |\n  letter a 1\n  letter b 12\n";
+
+    #[test]
+    fn matching_positions_are_not_reported() {
+        let yaml = format!(
+            "{AB_TABLE}tests:\n  - - ab\n    - ⠁⠃\n    - inputPos: [0, 1]\n      outputPos: [0, 1]\n      cursorPos: [1, 1]\n"
+        );
+        let results = run("matching_positions", &yaml).unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(results[0].is_success());
+    }
+
+    #[test]
+    fn mismatching_positions_are_reported_separately() {
+        let yaml = format!(
+            "{AB_TABLE}tests:\n  - - ab\n    - ⠁⠃\n    - inputPos: [1, 1]\n      outputPos: [0, 0]\n      cursorPos: [1, 0]\n"
+        );
+        let results = run("mismatching_positions", &yaml).unwrap();
+        assert!(results[0].is_position_failure());
+        let TestResult::Failure(FailureReason::Position(mismatch)) = &results[0] else {
+            panic!("expected a position failure");
+        };
+        assert_eq!(mismatch.input(), "ab");
+        assert_eq!(mismatch.direction(), Direction::Forward);
+        assert_eq!(
+            mismatch.diffs(),
+            &[
+                PositionDiff::InputPos {
+                    expected: vec![1, 1],
+                    actual: vec![0, 1]
+                },
+                PositionDiff::OutputPos {
+                    expected: vec![0, 0],
+                    actual: vec![0, 1]
+                },
+                PositionDiff::Cursor {
+                    expected: 0,
+                    actual: 1
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn single_cursor_position_is_not_checked() {
+        let yaml = format!("{AB_TABLE}tests:\n  - - ab\n    - ⠁⠃\n    - cursorPos: 1\n");
+        let results = run("single_cursor", &yaml).unwrap();
+        assert!(results[0].is_success());
+    }
+
+    #[test]
+    fn positions_are_not_checked_when_the_translation_fails() {
+        let yaml = format!("{AB_TABLE}tests:\n  - - ab\n    - ⠁⠁\n    - inputPos: [5, 5]\n");
+        let results = run("failed_translation", &yaml).unwrap();
+        assert!(results[0].is_translation_failure());
+    }
+
+    #[test]
+    fn both_directions_swap_the_expected_positions() {
+        let yaml = "table: |\n  letter a 1\n  letter b 12\n  always ab 123\nflags: {testmode: bothDirections}\ntests:\n  - - ab\n    - ⠇\n    - inputPos: [0]\n      outputPos: [0, 0]\n";
+        let results = run("both_directions", yaml).unwrap();
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|r| r.is_success()));
     }
 }

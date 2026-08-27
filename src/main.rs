@@ -265,6 +265,8 @@ struct YAMLTestResult {
         display_with("Self::display_unexpected", self)
     )]
     unexpected_successes: usize,
+    #[tabled(rename = "Position\nMismatches")]
+    position_mismatches: usize,
 }
 
 fn percent(n: usize, total: usize) -> f64 {
@@ -291,12 +293,14 @@ impl YAMLTestResult {
         failures: usize,
         expected_failures: usize,
         unexpected_successes: usize,
+        position_mismatches: usize,
     ) {
         self.tests += tests;
         self.successes += successes;
         self.failures += failures;
         self.expected_failures += expected_failures;
         self.unexpected_successes += unexpected_successes;
+        self.position_mismatches += position_mismatches;
     }
 }
 
@@ -325,7 +329,10 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool) {
             Ok(test_results) => {
                 let tests = test_results.len();
                 let successes = test_results.iter().filter(|r| r.is_success()).count();
-                let failures = test_results.iter().filter(|r| r.is_failure()).count();
+                let failures = test_results
+                    .iter()
+                    .filter(|r| r.is_translation_failure())
+                    .count();
                 let expected_failures = test_results
                     .iter()
                     .filter(|r| r.is_expected_failure())
@@ -334,12 +341,17 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool) {
                     .iter()
                     .filter(|r| r.is_unexpected_success())
                     .count();
+                let position_mismatches = test_results
+                    .iter()
+                    .filter(|r| r.is_position_failure())
+                    .count();
                 total.update(
                     tests,
                     successes,
                     failures,
                     expected_failures,
                     unexpected_successes,
+                    position_mismatches,
                 );
                 yaml_results.push(YAMLTestResult {
                     yaml_file: path
@@ -350,10 +362,13 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool) {
                     failures,
                     expected_failures,
                     unexpected_successes,
+                    position_mismatches,
                 });
                 if !summary {
-                    for res in test_results.iter().filter(|r| !r.is_success()) {
-                        println!("{:?}", res);
+                    for res in &test_results {
+                        if !res.is_success() {
+                            println!("{:?}", res);
+                        }
                     }
                 }
             }

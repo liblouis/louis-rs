@@ -216,7 +216,7 @@ Tests use YAML files from the liblouis project. Current gaps:
 - Compound-word contraction across a nocross hyphen (see `TODO.org`'s "Known gaps")
 - Some backward translation rules
 - Computer braille cursor modes (`compbrlAtCursor`/`compbrlLeftCursor` not implemented)
-- Input/output position mapping (typeforms and cursors)
+- Typeform output (`TranslationResult::emphasis` is never populated)
 
 See `TODO.org` for detailed tracking.
 
