@@ -55,17 +55,6 @@
   means unifying ~uppercase.rs~ and ~emphasis.rs~ into one shared tier
   model first.
 - [-] inpos + outpos mapping
-  - [X] An inserted indicator's (or ~correct~-insertion's) output cell is
-    attributed to the character it precedes, as liblouis does
-    (~compute_output_positions~, ~src/translator/positions.rs~)
-  - [X] A character the translation consumes without producing anything
-    now gets the neighbour liblouis gives it, which differs by
-    direction: forward the *preceding* cell ("append to previous"),
-    backward the character that *follows* ("prepend to next"). liblouis
-    keeps one mapping between the braille and the text and only fills
-    its gaps on the text side, which is the pipeline's input forward but
-    its output backward, so the two position algorithms swap roles
-    (~src/translator/positions.rs~).
   - [ ] One ~cursorPos~ mismatch in ~fr-bfu-g2_harness.yaml~, off by one
     on a math-expression/number-sign case — the last position mismatch
     left in the suite
