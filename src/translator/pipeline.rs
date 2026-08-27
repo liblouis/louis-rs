@@ -43,6 +43,7 @@ impl Transformation {
 #[derive(Debug)]
 pub struct TranslationPipeline {
     steps: Vec<Transformation>,
+    direction: Direction,
 }
 
 impl TranslationPipeline {
@@ -106,9 +107,10 @@ impl TranslationPipeline {
             steps.push(Transformation::Post(transform));
         }
         match direction {
-            Direction::Forward => Ok(Self { steps }),
+            Direction::Forward => Ok(Self { steps, direction }),
             Direction::Backward => Ok(Self {
                 steps: steps.into_iter().rev().collect(),
+                direction,
             }),
         }
     }
@@ -159,7 +161,7 @@ impl TranslationPipeline {
             || input.to_string(),
             |steps| steps.iter().map(|t| t.output()).collect(),
         );
-        let positions = PositionMap::from_trace(input.chars().count(), &stages);
+        let positions = PositionMap::from_trace(input.chars().count(), &stages, self.direction);
         (output, positions)
     }
 }

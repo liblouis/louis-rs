@@ -200,7 +200,9 @@ mod tests {
             .unwrap();
         assert_eq!(result.output, "Hi");
         assert_eq!(result.output_positions, Some(vec![0, 0, 1]));
-        assert_eq!(result.input_positions, Some(vec![1, 2]));
+        // backward, a consumed cell is claimed by the character that follows it, so the "H"
+        // covers the capital sign as well ("prepend to next", as liblouis calls it)
+        assert_eq!(result.input_positions, Some(vec![0, 2]));
     }
 
     #[test]
