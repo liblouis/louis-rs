@@ -1,7 +1,7 @@
 //! A parser for [liblouis](https://liblouis.io) braille tables
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     ffi::OsStr,
     fs::read_to_string,
     io,
@@ -2452,6 +2452,10 @@ pub enum TableError {
     CircularInclude(Vec<PathBuf>),
     #[error("table inclusion chain exceeds the maximum depth of {0}")]
     IncludeTooDeep(usize),
+    #[error("endmodephrase {0:?} may only be defined as before or after, not both")]
+    ConflictingEndmodephrasePosition(String),
+    #[error("endcapsphrase may only be defined as before or after, not both")]
+    ConflictingEndcapsphrasePosition,
 }
 
 /// Maximum length of an `include` chain, guarding against stack overflow from a very deep
@@ -2609,6 +2613,37 @@ fn expand_include(
     }
 }
 
+/// Some rules contradict with each other. Check that not both are defined within the same
+/// table.
+fn check_conflicting_rules(rules: &[AnchoredRule]) -> Result<(), Vec<TableError>> {
+    let mut endmodephrase: HashMap<&str, &Position> = HashMap::new();
+    let mut endcapsphrase: Option<&Position> = None;
+
+    for rule in rules {
+        match &rule.rule {
+            // make sure all endmodephrase for the same class define the same position
+            Rule::Endmodephrase { name, position, .. } => {
+                let seen = endmodephrase.entry(name).or_insert(position);
+                if *seen != position {
+                    return Err(vec![TableError::ConflictingEndmodephrasePosition(
+                        name.clone(),
+                    )]);
+                }
+            }
+            // make sure all endcapsphrase define the same position
+            Rule::Endcapsphrase { position, .. } => {
+                let seen = endcapsphrase.get_or_insert(position);
+                if *seen != position {
+                    return Err(vec![TableError::ConflictingEndcapsphrasePosition]);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+
 /// See [`table_expanded_with`] for what `chain` tracks. Callers expanding a rule set that isn't
 /// itself nested inside another include expansion (e.g. an inline/in-memory table) should pass
 /// `&[]`.
@@ -2624,6 +2659,7 @@ pub fn expand_includes(
     let rules: Vec<_> = rules.into_iter().flat_map(Result::unwrap).collect();
     let errors: Vec<_> = errors.into_iter().flat_map(Result::unwrap_err).collect();
     if errors.is_empty() {
+        check_conflicting_rules(&rules)?;
         Ok(rules)
     } else {
         Err(errors)
@@ -3016,5 +3052,55 @@ mod tests {
         std::fs::write(dir.join("top.utb"), "include left.utb\ninclude right.utb\n").unwrap();
         let result = table_expanded_with(Path::new("top.utb"), &search_path, &[]);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn table_expanded_rejects_endmodephrase_conflicting_across_includes() {
+        // Neither included table conflicts with itself; the conflict only exists once both
+        // are merged into one table, which is exactly the case a per-direction compile-time
+        // check would miss if this table were never compiled backward.
+        let (dir, search_path) = include_test_dir("endmodephrase-conflict");
+        std::fs::write(dir.join("before.utb"), "endmodephrase foo before 2\n").unwrap();
+        std::fs::write(dir.join("after.utb"), "endmodephrase foo after 2\n").unwrap();
+        std::fs::write(
+            dir.join("top.utb"),
+            "include before.utb\ninclude after.utb\n",
+        )
+        .unwrap();
+        let result = table_expanded_with(Path::new("top.utb"), &search_path, &[]);
+        assert!(matches!(
+            result,
+            Err(errors) if matches!(
+                errors.as_slice(),
+                [TableError::ConflictingEndmodephrasePosition(name)] if name == "foo"
+            )
+        ));
+    }
+
+    #[test]
+    fn table_expanded_allows_endmodephrase_repeated_same_position() {
+        let (dir, search_path) = include_test_dir("endmodephrase-repeat");
+        std::fs::write(dir.join("a.utb"), "endmodephrase foo before 2\n").unwrap();
+        std::fs::write(dir.join("b.utb"), "endmodephrase foo before 2\n").unwrap();
+        std::fs::write(dir.join("top.utb"), "include a.utb\ninclude b.utb\n").unwrap();
+        let result = table_expanded_with(Path::new("top.utb"), &search_path, &[]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn table_expanded_rejects_endcapsphrase_conflicting_across_includes() {
+        let (dir, search_path) = include_test_dir("endcapsphrase-conflict");
+        std::fs::write(dir.join("before.utb"), "endcapsphrase before 2\n").unwrap();
+        std::fs::write(dir.join("after.utb"), "endcapsphrase after 2\n").unwrap();
+        std::fs::write(
+            dir.join("top.utb"),
+            "include before.utb\ninclude after.utb\n",
+        )
+        .unwrap();
+        let result = table_expanded_with(Path::new("top.utb"), &search_path, &[]);
+        assert!(matches!(
+            result,
+            Err(errors) if matches!(errors.as_slice(), [TableError::ConflictingEndcapsphrasePosition])
+        ));
     }
 }

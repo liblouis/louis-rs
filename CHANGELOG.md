@@ -45,6 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The `check` subcommand now verifies the `inputPos`, `outputPos` and
   `cursorPos` expectations of YAML tests. Mismatches are reported in a separate
   "Position Mismatches" column and don't count as translation failures.
+- A table (including whatever it pulls in via `include`) mixing `before` and
+  `after` for the same `endmodephrase` class, or for `endcapsphrase`, is now
+  rejected as a table error instead of silently keeping only the last one seen.
 
 ### Fixed
 - Fixed three issues found by Shielder/OSTIF's security audit: a crafted table
