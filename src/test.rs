@@ -111,25 +111,17 @@ impl PositionMismatch {
 #[derive(PartialEq, Debug)]
 pub enum PositionDiff {
     InputPos {
-        expected: Vec<i32>,
+        expected: Vec<usize>,
         actual: Vec<usize>,
     },
     OutputPos {
-        expected: Vec<i32>,
+        expected: Vec<usize>,
         actual: Vec<usize>,
     },
     Cursor {
-        expected: u16,
+        expected: usize,
         actual: usize,
     },
-}
-
-fn positions_match(expected: &[i32], actual: &[usize]) -> bool {
-    expected.len() == actual.len()
-        && expected
-            .iter()
-            .zip(actual)
-            .all(|(&expected, &actual)| usize::try_from(expected).ok() == Some(actual))
 }
 
 /// A group of [`Tests`](Test) that share the same braille table(s), display table and test mode.
@@ -295,8 +287,8 @@ pub type TableQuery = HashMap<String, String>;
 
 #[derive(Debug, Clone)]
 pub enum CursorPosition {
-    Single(u16),
-    Tuple(u16, u16),
+    Single(usize),
+    Tuple(usize, usize),
 }
 
 pub type Directions = EnumSet<Direction>;
@@ -329,12 +321,12 @@ pub struct Test {
     xfail: ExpectedFailure,
     emphasis: Vec<EmphasisSpan>,
     expected_emphasis: Vec<EmphasisSpan>,
-    input_pos: Vec<i32>,
-    output_pos: Vec<i32>,
+    input_pos: Vec<usize>,
+    output_pos: Vec<usize>,
     cursor_pos: Option<CursorPosition>,
     modes: TranslationModes,
-    max_output_length: Option<u16>,
-    real_input_length: Option<u16>,
+    max_output_length: Option<usize>,
+    real_input_length: Option<usize>,
 }
 
 impl Test {
@@ -350,7 +342,7 @@ impl Test {
         if let Some(CursorPosition::Single(cursor) | CursorPosition::Tuple(cursor, _)) =
             self.cursor_pos
         {
-            options = options.with_cursor_pos(usize::from(cursor));
+            options = options.with_cursor_pos(cursor);
         }
         let (translated, positions) = match direction {
             // For forward translation we first translate the input and then apply the display table
@@ -402,25 +394,21 @@ impl Test {
         direction: Direction,
     ) -> Option<PositionMismatch> {
         let mut diffs = Vec::new();
-        if !self.input_pos.is_empty()
-            && !positions_match(&self.input_pos, positions.input_positions())
-        {
+        if !self.input_pos.is_empty() && self.input_pos != positions.input_positions() {
             diffs.push(PositionDiff::InputPos {
                 expected: self.input_pos.clone(),
                 actual: positions.input_positions().to_vec(),
             });
         }
-        if !self.output_pos.is_empty()
-            && !positions_match(&self.output_pos, positions.output_positions())
-        {
+        if !self.output_pos.is_empty() && self.output_pos != positions.output_positions() {
             diffs.push(PositionDiff::OutputPos {
                 expected: self.output_pos.clone(),
                 actual: positions.output_positions().to_vec(),
             });
         }
         if let Some(CursorPosition::Tuple(cursor, expected)) = self.cursor_pos {
-            let actual = positions.cursor(usize::from(cursor));
-            if actual != usize::from(expected) {
+            let actual = positions.cursor(cursor);
+            if actual != expected {
                 diffs.push(PositionDiff::Cursor { expected, actual });
             }
         }
@@ -441,12 +429,12 @@ impl Test {
         xfail: ExpectedFailure,
         emphasis: Vec<EmphasisSpan>,
         expected_emphasis: Vec<EmphasisSpan>,
-        input_pos: Vec<i32>,
-        output_pos: Vec<i32>,
+        input_pos: Vec<usize>,
+        output_pos: Vec<usize>,
         cursor_pos: Option<CursorPosition>,
         modes: TranslationModes,
-        max_output_length: Option<u16>,
-        real_input_length: Option<u16>,
+        max_output_length: Option<usize>,
+        real_input_length: Option<usize>,
     ) -> Self {
         Test {
             input,
@@ -504,8 +492,8 @@ mod tests {
     use super::*;
 
     fn test_with_positions(
-        input_pos: Vec<i32>,
-        output_pos: Vec<i32>,
+        input_pos: Vec<usize>,
+        output_pos: Vec<usize>,
         cursor_pos: Option<CursorPosition>,
     ) -> Test {
         Test::new(
@@ -532,13 +520,5 @@ mod tests {
         assert_eq!(reversed.input_pos, [2, 3]);
         assert_eq!(reversed.output_pos, [1]);
         assert!(reversed.cursor_pos.is_none());
-    }
-
-    #[test]
-    fn positions_match_requires_equal_non_negative_values() {
-        assert!(positions_match(&[0, 1], &[0, 1]));
-        assert!(!positions_match(&[0, 1], &[0]));
-        assert!(!positions_match(&[-1], &[0]));
-        assert!(!positions_match(&[0, 2], &[0, 1]));
     }
 }

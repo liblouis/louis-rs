@@ -272,23 +272,33 @@ impl YAMLParser<'_> {
         Ok(spans)
     }
 
-    fn u16_value(&mut self) -> Result<u16, ParseError> {
+    fn usize_value(&mut self) -> Result<usize, ParseError> {
         let value = self.scalar()?;
-        let value = value.parse::<u16>()?;
+        let value = value.parse::<usize>()?;
         Ok(value)
     }
 
-    fn i32_value(&mut self) -> Result<i32, ParseError> {
+    /// A single `inputPos`/`outputPos` value.
+    ///
+    /// liblouis leaves these at the `-1` it pre-fills its position arrays with when the
+    /// translation output is empty, i.e. when an input char has no output position to point at
+    /// (see `outputPos[k] = -1` in liblouis' `lou_translateString.c`). That only ever happens
+    /// for the whole array at once, and we express the same thing as position 0, so normalize
+    /// the sentinel away here instead of carrying it into the comparison.
+    fn pos_value(&mut self) -> Result<usize, ParseError> {
         let value = self.scalar()?;
-        let value = value.parse::<i32>()?;
-        Ok(value)
+        match value.parse::<usize>() {
+            Ok(position) => Ok(position),
+            Err(_) if value.parse::<i64>().is_ok_and(i64::is_negative) => Ok(0),
+            Err(e) => Err(e.into()),
+        }
     }
 
-    fn pos_values(&mut self) -> Result<Vec<i32>, ParseError> {
+    fn pos_values(&mut self) -> Result<Vec<usize>, ParseError> {
         let mut values = Vec::new();
         self.sequence_start()?;
         while let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
-            let value = self.i32_value()?;
+            let value = self.pos_value()?;
             values.push(value);
         }
         self.sequence_end()?;
@@ -299,11 +309,11 @@ impl YAMLParser<'_> {
         let pos = match self.events.peek() {
             Some(Ok(Event::SequenceStart { .. })) => {
                 self.sequence_start()?;
-                let p = CursorPosition::Tuple(self.u16_value()?, self.u16_value()?);
+                let p = CursorPosition::Tuple(self.usize_value()?, self.usize_value()?);
                 self.sequence_end()?;
                 p
             }
-            _ => CursorPosition::Single(self.u16_value()?),
+            _ => CursorPosition::Single(self.usize_value()?),
         };
         Ok(pos)
     }
@@ -356,8 +366,8 @@ impl YAMLParser<'_> {
         let mut xfail = ExpectedFailure::Simple(false);
         let mut emphasis: Vec<EmphasisSpan> = Vec::new();
         let mut expected_emphasis: Vec<EmphasisSpan> = Vec::new();
-        let mut input_pos: Vec<i32> = Vec::new();
-        let mut output_pos: Vec<i32> = Vec::new();
+        let mut input_pos: Vec<usize> = Vec::new();
+        let mut output_pos: Vec<usize> = Vec::new();
         let mut cursor_pos = None;
         let mut modes = TranslationModes::empty();
         let mut max_output_length = None;
@@ -390,11 +400,11 @@ impl YAMLParser<'_> {
                         modes = self.translation_modes()?;
                     }
                     "maxOutputLength" => {
-                        let length = self.u16_value()?;
+                        let length = self.usize_value()?;
                         max_output_length = Some(length);
                     }
                     "realInputLength" => {
-                        let length = self.u16_value()?;
+                        let length = self.usize_value()?;
                         real_input_length = Some(length);
                     }
                     _ => {
@@ -542,11 +552,15 @@ mod tests {
         results
     }
 
+    /// liblouis leaves its position array at the `-1` it was pre-filled with when the output is
+    /// empty, i.e. when there is no output position to point at. We express that as position 0,
+    /// so such an expectation has to match rather than be reported as a mismatch.
     #[test]
-    fn negative_positions_are_accepted() {
-        let yaml = "table: |\n  space \\s 0\n  letter a 1\ntests:\n  - - a\n    - ⠁\n    - inputPos: [-1]\n      outputPos: [-1]\n";
-        let results = run("negative_positions", yaml).unwrap();
+    fn the_no_output_position_sentinel_matches_an_empty_output() {
+        let yaml = "table: |\n  letter f 124\n  noback correct [\"f\"] ?\ntests:\n  - - f\n    - \"\"\n    - inputPos: []\n      outputPos: [-1]\n";
+        let results = run("empty_output_sentinel", yaml).unwrap();
         assert_eq!(results.len(), 1);
+        assert!(results[0].is_success());
     }
 
     const AB_TABLE: &str = "table: |\n  letter a 1\n  letter b 12\n";
