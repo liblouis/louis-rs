@@ -4,12 +4,15 @@ use std::env;
 use std::ffi::OsStr;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 /// Locates the file for a table name.
 ///
 /// `table` is the name given to the translator or written on an `include`
-/// line, usually a bare file name. `base` is the path of the including table
-/// when resolving an `include`, `None` for top-level tables.
+/// line: usually a bare file name, but an absolute path is handed over
+/// unchanged as well, and the resolver decides whether to accept it. `base`
+/// is the path of the including table when resolving an `include`, `None`
+/// for top-level tables.
 pub trait TableResolver: Send + Sync + fmt::Debug {
     fn resolve(&self, table: &Path, base: Option<&Path>) -> Option<PathBuf>;
 }
@@ -63,18 +66,14 @@ impl TableResolver for SearchDirs {
             return table.is_file().then(|| table.to_path_buf());
         }
         base.and_then(Path::parent)
+            .into_iter()
+            .chain(self.dirs.iter().map(PathBuf::as_path))
             .map(|dir| dir.join(table))
-            .filter(|path| path.is_file())
-            .or_else(|| {
-                self.dirs
-                    .iter()
-                    .map(|dir| dir.join(table))
-                    .find(|path| path.is_file())
-            })
+            .find(|path| path.is_file())
     }
 }
 
-impl<T: TableResolver + ?Sized> TableResolver for std::sync::Arc<T> {
+impl<T: TableResolver + ?Sized> TableResolver for Arc<T> {
     fn resolve(&self, table: &Path, base: Option<&Path>) -> Option<PathBuf> {
         (**self).resolve(table, base)
     }
@@ -83,14 +82,12 @@ impl<T: TableResolver + ?Sized> TableResolver for std::sync::Arc<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::ffi::OsStr;
     use std::fs;
-    use std::path::{Path, PathBuf};
 
     /// Fresh scratch directory per test, so tests never share state or touch
     /// `LOUIS_TABLE_PATH`.
     fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("louis-rs-resolver-test-{name}"));
+        let dir = env::temp_dir().join(format!("louis-rs-resolver-test-{name}"));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -184,7 +181,7 @@ mod tests {
 
     #[test]
     fn env_entries_split_on_platform_separator_dropping_empty_ones() {
-        let value = std::env::join_paths(["a", "", "b"]).unwrap();
+        let value = env::join_paths(["a", "", "b"]).unwrap();
         assert_eq!(
             dirs_from_env_value(Some(&value)),
             vec![PathBuf::from("a"), PathBuf::from("b")]

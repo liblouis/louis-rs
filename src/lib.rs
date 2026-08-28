@@ -118,15 +118,14 @@ impl Translator {
         direction: Direction,
         options: TranslatorOptions,
     ) -> Result<Self, TranslationError> {
+        let resolver = options
+            .resolver
+            .unwrap_or_else(|| Arc::new(SearchDirs::from_env()));
         let mut all_rules = Vec::new();
 
         for table_path in tables {
-            let path = table_path.as_ref();
-            let rules = match options.resolver() {
-                Some(resolver) => parser::table_expanded_with(path, resolver),
-                None => parser::table_expanded(path),
-            }
-            .map_err(TranslationError::ParseFailed)?;
+            let rules = parser::table_expanded_with(table_path.as_ref(), &*resolver)
+                .map_err(TranslationError::ParseFailed)?;
             all_rules.extend(rules);
         }
 
@@ -178,6 +177,15 @@ impl Translator {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Fresh scratch directory per test, so tests never share state or touch
+    /// `LOUIS_TABLE_PATH`.
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("louis-rs-translator-test-{name}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
 
     #[test]
     fn translator_from_table_source() {
@@ -286,9 +294,7 @@ mod tests {
 
     #[test]
     fn new_with_options_uses_given_search_dirs() {
-        let dir = std::env::temp_dir().join("louis-rs-translator-test-search-dirs");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = scratch("search-dirs");
         std::fs::write(dir.join("ab.utb"), "space \\s 0\nletter a 1\nletter b 12\n").unwrap();
         let options = TranslatorOptions::default().with_resolver(SearchDirs::new([dir]));
         let forward =
@@ -301,9 +307,7 @@ mod tests {
 
     #[test]
     fn new_with_options_accepts_shared_resolver() {
-        let dir = std::env::temp_dir().join("louis-rs-translator-test-shared-resolver");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = scratch("shared-resolver");
         std::fs::write(dir.join("a.utb"), "letter a 1\n").unwrap();
         let shared = Arc::new(SearchDirs::new([dir]));
         let options = TranslatorOptions::default().with_resolver(Arc::clone(&shared));
@@ -314,9 +318,7 @@ mod tests {
 
     #[test]
     fn new_resolves_an_absolute_path_without_options() {
-        let dir = std::env::temp_dir().join("louis-rs-translator-test-absolute");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = scratch("absolute");
         let table = dir.join("a.utb");
         std::fs::write(&table, "letter a 1\n").unwrap();
         let translator = Translator::new(&[table], Direction::Forward).unwrap();

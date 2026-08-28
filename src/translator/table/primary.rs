@@ -1758,7 +1758,7 @@ mod tests {
 
     /// A [`SearchDirs`] rooted at the crate directory, for tests that `include` one of the
     /// fixtures under `dictionaries/`.
-    fn fixture_search_path() -> SearchDirs {
+    fn fixture_dirs() -> SearchDirs {
         SearchDirs::new([env!("CARGO_MANIFEST_DIR")])
     }
 
@@ -2236,7 +2236,7 @@ mod tests {
             parse_rule("nocross always fff 456"),
             parse_rule("space \\s 0"),
         ];
-        let rules = expand_includes(rules, &fixture_search_path(), &[]).unwrap();
+        let rules = expand_includes(rules, &fixture_dirs(), &[]).unwrap();
         let context = TableContext::compile(&rules).unwrap();
         let table =
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
@@ -2256,7 +2256,7 @@ mod tests {
             parse_rule("nocross always fff 456"),
             parse_rule("space \\s 0"),
         ];
-        let rules = expand_includes(rules, &fixture_search_path(), &[]).unwrap();
+        let rules = expand_includes(rules, &fixture_dirs(), &[]).unwrap();
         let context = TableContext::compile(&rules).unwrap();
         let table =
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
@@ -2278,7 +2278,7 @@ mod tests {
             parse_rule("nocross always er 6"),
             parse_rule("nocross partword re 56"),
         ];
-        let rules = expand_includes(rules, &fixture_search_path(), &[]).unwrap();
+        let rules = expand_includes(rules, &fixture_dirs(), &[]).unwrap();
         let context = TableContext::compile(&rules).unwrap();
         let table =
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)

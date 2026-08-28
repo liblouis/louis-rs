@@ -14,7 +14,7 @@ use std::{
 use enumset::enum_set;
 use enumset::{EnumSet, EnumSetType};
 
-use crate::resolver::{SearchDirs, TableResolver};
+use crate::resolver::TableResolver;
 
 use crate::hyphenation::{self, HyphenationTable};
 use crate::parser::braille::BrailleChar;
@@ -2565,10 +2565,6 @@ pub fn table_file(path: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     table(&text, Some(path.into()))
 }
 
-pub fn table_expanded(file: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
-    table_expanded_with(file, &SearchDirs::from_env())
-}
-
 /// Load `file` and everything it includes, locating every table through `resolver`.
 pub fn table_expanded_with(
     file: &Path,
@@ -2623,12 +2619,13 @@ fn expand_include(
     match rule.rule {
         Rule::Include { ref file } => {
             let path = Path::new(file);
+            let base = rule.path.as_deref();
             if path.extension().and_then(OsStr::to_str) == Some("dic") {
                 // Hyphenation dictionaries are liblouis's own pattern-dictionary
                 // format (see the `hyphenation` module), not a translation table --
                 // parse them with their own parser and embed the result.
                 let resolved = resolver
-                    .resolve(path, rule.path.as_deref())
+                    .resolve(path, base)
                     .ok_or(vec![TableError::HyphenationTableNotFound(path.into())])?;
                 let source = read_to_string(&resolved).map_err(|error| {
                     vec![TableError::HyphenationTableNotReadable {
@@ -2648,7 +2645,7 @@ fn expand_include(
                     rule.line,
                 )]);
             }
-            load_table(path, rule.path.as_deref(), resolver, chain)
+            load_table(path, base, resolver, chain)
         }
         _ => Ok(vec![rule]),
     }
@@ -2712,6 +2709,7 @@ mod tests {
     use crate::parser::braille::{BrailleChar, BrailleDot};
 
     use super::*;
+    use crate::resolver::SearchDirs;
     use enumset::enum_set;
     use std::sync::Mutex;
 
@@ -3034,15 +3032,15 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("louis-rs-include-test-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let search_path = SearchDirs::new([dir.clone()]);
-        (dir, search_path)
+        let resolver = SearchDirs::new([dir.clone()]);
+        (dir, resolver)
     }
 
     #[test]
     fn table_expanded_rejects_self_include() {
-        let (dir, search_path) = include_test_dir("self");
+        let (dir, resolver) = include_test_dir("self");
         std::fs::write(dir.join("a.utb"), "include a.utb\n").unwrap();
-        let result = table_expanded_with(Path::new("a.utb"), &search_path);
+        let result = table_expanded_with(Path::new("a.utb"), &resolver);
         assert!(matches!(
             result,
             Err(errors) if matches!(errors.as_slice(), [TableError::CircularInclude(_)])
@@ -3051,10 +3049,10 @@ mod tests {
 
     #[test]
     fn table_expanded_rejects_indirect_cycle() {
-        let (dir, search_path) = include_test_dir("indirect-cycle");
+        let (dir, resolver) = include_test_dir("indirect-cycle");
         std::fs::write(dir.join("a.utb"), "include b.utb\n").unwrap();
         std::fs::write(dir.join("b.utb"), "include a.utb\n").unwrap();
-        let result = table_expanded_with(Path::new("a.utb"), &search_path);
+        let result = table_expanded_with(Path::new("a.utb"), &resolver);
         assert!(matches!(
             result,
             Err(errors) if matches!(errors.as_slice(), [TableError::CircularInclude(_)])
@@ -3063,7 +3061,7 @@ mod tests {
 
     #[test]
     fn table_expanded_rejects_deep_include_chain() {
-        let (dir, search_path) = include_test_dir("deep-chain");
+        let (dir, resolver) = include_test_dir("deep-chain");
         std::fs::write(dir.join("chain0.utb"), "space \\s 0\n").unwrap();
         for i in 1..=MAX_INCLUDE_DEPTH {
             std::fs::write(
@@ -3074,7 +3072,7 @@ mod tests {
         }
         let result = table_expanded_with(
             Path::new(&format!("chain{MAX_INCLUDE_DEPTH}.utb")),
-            &search_path,
+            &resolver,
         );
         assert!(matches!(
             result,
@@ -3086,12 +3084,12 @@ mod tests {
     fn table_expanded_allows_diamond_include() {
         // The same table included from two different branches (a shared base table, common in
         // liblouis) is not a cycle and must succeed.
-        let (dir, search_path) = include_test_dir("diamond");
+        let (dir, resolver) = include_test_dir("diamond");
         std::fs::write(dir.join("base.utb"), "space \\s 0\n").unwrap();
         std::fs::write(dir.join("left.utb"), "include base.utb\n").unwrap();
         std::fs::write(dir.join("right.utb"), "include base.utb\n").unwrap();
         std::fs::write(dir.join("top.utb"), "include left.utb\ninclude right.utb\n").unwrap();
-        let result = table_expanded_with(Path::new("top.utb"), &search_path);
+        let result = table_expanded_with(Path::new("top.utb"), &resolver);
         assert!(result.is_ok());
     }
 
@@ -3100,7 +3098,7 @@ mod tests {
         // Neither included table conflicts with itself; the conflict only exists once both
         // are merged into one table, which is exactly the case a per-direction compile-time
         // check would miss if this table were never compiled backward.
-        let (dir, search_path) = include_test_dir("endmodephrase-conflict");
+        let (dir, resolver) = include_test_dir("endmodephrase-conflict");
         std::fs::write(dir.join("before.utb"), "endmodephrase foo before 2\n").unwrap();
         std::fs::write(dir.join("after.utb"), "endmodephrase foo after 2\n").unwrap();
         std::fs::write(
@@ -3108,7 +3106,7 @@ mod tests {
             "include before.utb\ninclude after.utb\n",
         )
         .unwrap();
-        let result = table_expanded_with(Path::new("top.utb"), &search_path);
+        let result = table_expanded_with(Path::new("top.utb"), &resolver);
         assert!(matches!(
             result,
             Err(errors) if matches!(
@@ -3120,17 +3118,17 @@ mod tests {
 
     #[test]
     fn table_expanded_allows_endmodephrase_repeated_same_position() {
-        let (dir, search_path) = include_test_dir("endmodephrase-repeat");
+        let (dir, resolver) = include_test_dir("endmodephrase-repeat");
         std::fs::write(dir.join("a.utb"), "endmodephrase foo before 2\n").unwrap();
         std::fs::write(dir.join("b.utb"), "endmodephrase foo before 2\n").unwrap();
         std::fs::write(dir.join("top.utb"), "include a.utb\ninclude b.utb\n").unwrap();
-        let result = table_expanded_with(Path::new("top.utb"), &search_path);
+        let result = table_expanded_with(Path::new("top.utb"), &resolver);
         assert!(result.is_ok());
     }
 
     #[test]
     fn table_expanded_rejects_endcapsphrase_conflicting_across_includes() {
-        let (dir, search_path) = include_test_dir("endcapsphrase-conflict");
+        let (dir, resolver) = include_test_dir("endcapsphrase-conflict");
         std::fs::write(dir.join("before.utb"), "endcapsphrase before 2\n").unwrap();
         std::fs::write(dir.join("after.utb"), "endcapsphrase after 2\n").unwrap();
         std::fs::write(
@@ -3138,7 +3136,7 @@ mod tests {
             "include before.utb\ninclude after.utb\n",
         )
         .unwrap();
-        let result = table_expanded_with(Path::new("top.utb"), &search_path);
+        let result = table_expanded_with(Path::new("top.utb"), &resolver);
         assert!(matches!(
             result,
             Err(errors) if matches!(errors.as_slice(), [TableError::ConflictingEndcapsphrasePosition])
@@ -3153,7 +3151,7 @@ mod tests {
         seen: Mutex<Vec<(PathBuf, Option<PathBuf>)>>,
     }
 
-    impl crate::resolver::TableResolver for MapResolver {
+    impl TableResolver for MapResolver {
         fn resolve(&self, table: &Path, base: Option<&Path>) -> Option<PathBuf> {
             self.seen
                 .lock()
@@ -3188,11 +3186,11 @@ mod tests {
     #[test]
     fn include_resolves_relative_to_including_table() {
         let (dir, _) = include_test_dir("relative-include");
-        let (elsewhere, search_path) = include_test_dir("relative-include-elsewhere");
+        let (elsewhere, resolver) = include_test_dir("relative-include-elsewhere");
         std::fs::write(dir.join("top.utb"), "include sub.utb\n").unwrap();
         std::fs::write(dir.join("sub.utb"), "letter a 1\n").unwrap();
         assert!(elsewhere.read_dir().unwrap().next().is_none());
-        let rules = table_expanded_with(&dir.join("top.utb"), &search_path).unwrap();
+        let rules = table_expanded_with(&dir.join("top.utb"), &resolver).unwrap();
         assert!(
             matches!(
                 rules.as_slice(),
@@ -3233,10 +3231,10 @@ mod tests {
     #[test]
     fn hyphenation_dictionary_resolves_relative_to_including_table() {
         let (dir, _) = include_test_dir("relative-dic");
-        let (_, search_path) = include_test_dir("relative-dic-elsewhere");
+        let (_, resolver) = include_test_dir("relative-dic-elsewhere");
         std::fs::write(dir.join("top.utb"), "include hyph.dic\n").unwrap();
         std::fs::write(dir.join("hyph.dic"), "UTF-8\n").unwrap();
-        let rules = table_expanded_with(&dir.join("top.utb"), &search_path).unwrap();
+        let rules = table_expanded_with(&dir.join("top.utb"), &resolver).unwrap();
         assert!(
             matches!(
                 rules.as_slice(),

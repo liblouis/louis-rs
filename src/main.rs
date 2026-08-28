@@ -15,6 +15,7 @@ use parser::TableError;
 
 use crate::parser::AnchoredRule;
 use crate::parser::Direction;
+use crate::resolver::SearchDirs;
 use crate::translator::ResolvedTranslation;
 use crate::translator::TranslationPipeline;
 use crate::translator::TranslationStage;
@@ -117,8 +118,12 @@ fn print_errors(errors: Vec<TableError>) {
     }
 }
 
+fn table_expanded(file: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
+    parser::table_expanded_with(file, &SearchDirs::from_env())
+}
+
 fn parse(file: &Path) {
-    match parser::table_expanded(file) {
+    match table_expanded(file) {
         Ok(rules) => {
             for rule in rules {
                 println!("{:?}", rule);
@@ -185,7 +190,7 @@ fn print_trace(all_translations: &Vec<Vec<ResolvedTranslation>>, style: &TraceSt
 }
 
 fn trace(table: &Path, direction: Direction, input: &str, style: &TraceStyle) {
-    let rules = parser::table_expanded(table);
+    let rules = table_expanded(table);
     match rules {
         Ok(rules) => {
             match TranslationPipeline::compile(&rules, direction) {
@@ -203,7 +208,7 @@ fn trace(table: &Path, direction: Direction, input: &str, style: &TraceStyle) {
 }
 
 fn translate(table: &Path, direction: Direction, input: &str) {
-    let rules = parser::table_expanded(table);
+    let rules = table_expanded(table);
     match rules {
         Ok(rules) => {
             match TranslationPipeline::compile(&rules, direction) {
@@ -409,7 +414,7 @@ fn main() {
                 translate(&table, direction, &input);
             }
             None => {
-                let rules = parser::table_expanded(&table);
+                let rules = table_expanded(&table);
                 match rules {
                     Ok(rules) => match TranslationPipeline::compile(&rules, direction) {
                         Ok(table) => repl(Box::new(move |input| {
@@ -433,7 +438,7 @@ fn main() {
                 trace(&table, direction, &input, &style);
             }
             None => {
-                let rules = parser::table_expanded(&table);
+                let rules = table_expanded(&table);
                 match rules {
                     Ok(rules) => match TranslationPipeline::compile(&rules, direction) {
                         Ok(table) => repl(Box::new(move |input| {

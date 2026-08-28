@@ -155,7 +155,7 @@ impl<'a> TestMatrix<'a> {
     fn display_table(&self, direction: Direction) -> Result<DisplayTable, TestError> {
         let resolver = SearchDirs::from_env();
         let display_rules = match self.display {
-            Some(Display::Simple(path)) => parser::table_expanded(path.as_path())?,
+            Some(Display::Simple(path)) => parser::table_expanded_with(path.as_path(), &resolver)?,
             Some(Display::Inline(text)) => {
                 let rules = parser::table(text, None)?;
                 parser::expand_includes(rules, &resolver, &[])?
@@ -163,7 +163,7 @@ impl<'a> TestMatrix<'a> {
             Some(Display::List(paths)) => {
                 let mut rules = Vec::new();
                 for path in paths {
-                    rules.extend(parser::table_expanded(path)?);
+                    rules.extend(parser::table_expanded_with(path, &resolver)?);
                 }
                 rules
             }
@@ -179,11 +179,11 @@ impl<'a> TestMatrix<'a> {
     ) -> Result<TranslationPipeline, TestError> {
         let resolver = SearchDirs::from_env();
         let rules = match table {
-            Table::Simple(path) => parser::table_expanded(path.as_path())?,
+            Table::Simple(path) => parser::table_expanded_with(path.as_path(), &resolver)?,
             Table::List(paths) => {
                 let mut rules = Vec::new();
                 for path in paths {
-                    rules.extend(parser::table_expanded(path)?);
+                    rules.extend(parser::table_expanded_with(path, &resolver)?);
                 }
                 rules
             }

@@ -10,14 +10,11 @@ fn translator() -> &'static Translator {
     static TRANSLATOR: OnceLock<Translator> = OnceLock::new();
 
     TRANSLATOR.get_or_init(|| {
-        let path = tables_dir().join("fuzz_maximal.ctb");
+        let path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("data/translate_tables/fuzz_maximal.ctb");
         Translator::new(&[path], Direction::Forward)
             .unwrap_or_else(|error| panic!("failed to load fuzz_maximal.ctb: {error}"))
     })
-}
-
-fn tables_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("data/translate_tables")
 }
 
 fuzz_target!(|text: &str| {
