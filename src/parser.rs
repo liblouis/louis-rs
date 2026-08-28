@@ -2648,7 +2648,7 @@ fn expand_include(
                     rule.line,
                 )]);
             }
-            load_table(path, None, resolver, chain)
+            load_table(path, rule.path.as_deref(), resolver, chain)
         }
         _ => Ok(vec![rule]),
     }
@@ -2713,6 +2713,7 @@ mod tests {
 
     use super::*;
     use enumset::enum_set;
+    use std::sync::Mutex;
 
     #[test]
     fn nocross() {
@@ -3144,13 +3145,21 @@ mod tests {
         ));
     }
 
-    /// Maps aliases to files, standing in for a host-supplied resolver.
-    #[derive(Debug)]
-    struct MapResolver(HashMap<PathBuf, PathBuf>);
+    /// Maps aliases to files, standing in for a host-supplied resolver, and records every
+    /// lookup it is asked for.
+    #[derive(Debug, Default)]
+    struct MapResolver {
+        files: HashMap<PathBuf, PathBuf>,
+        seen: Mutex<Vec<(PathBuf, Option<PathBuf>)>>,
+    }
 
     impl crate::resolver::TableResolver for MapResolver {
-        fn resolve(&self, table: &Path, _base: Option<&Path>) -> Option<PathBuf> {
-            self.0.get(table).cloned()
+        fn resolve(&self, table: &Path, base: Option<&Path>) -> Option<PathBuf> {
+            self.seen
+                .lock()
+                .unwrap()
+                .push((table.to_path_buf(), base.map(Path::to_path_buf)));
+            self.files.get(table).cloned()
         }
     }
 
@@ -3159,7 +3168,10 @@ mod tests {
         let (dir, _) = include_test_dir("custom-resolver");
         let real = dir.join("real.utb");
         std::fs::write(&real, "letter a 1\n").unwrap();
-        let resolver = MapResolver(HashMap::from([(PathBuf::from("alias.utb"), real)]));
+        let resolver = MapResolver {
+            files: HashMap::from([(PathBuf::from("alias.utb"), real)]),
+            ..Default::default()
+        };
         let rules = table_expanded_with(Path::new("alias.utb"), &resolver).unwrap();
         assert!(
             matches!(
@@ -3170,6 +3182,51 @@ mod tests {
                 }]
             ),
             "{rules:?}"
+        );
+    }
+
+    #[test]
+    fn include_resolves_relative_to_including_table() {
+        let (dir, _) = include_test_dir("relative-include");
+        let (elsewhere, search_path) = include_test_dir("relative-include-elsewhere");
+        std::fs::write(dir.join("top.utb"), "include sub.utb\n").unwrap();
+        std::fs::write(dir.join("sub.utb"), "letter a 1\n").unwrap();
+        assert!(elsewhere.read_dir().unwrap().next().is_none());
+        let rules = table_expanded_with(&dir.join("top.utb"), &search_path).unwrap();
+        assert!(
+            matches!(
+                rules.as_slice(),
+                [AnchoredRule {
+                    rule: Rule::Letter { character: 'a', .. },
+                    ..
+                }]
+            ),
+            "{rules:?}"
+        );
+    }
+
+    #[test]
+    fn custom_resolver_sees_including_table_as_base() {
+        let (dir, _) = include_test_dir("custom-resolver-base");
+        let top = dir.join("top.utb");
+        let sub = dir.join("sub.utb");
+        std::fs::write(&top, "include sub-alias.utb\n").unwrap();
+        std::fs::write(&sub, "letter a 1\n").unwrap();
+        let resolver = MapResolver {
+            files: HashMap::from([
+                (PathBuf::from("top-alias.utb"), top.clone()),
+                (PathBuf::from("sub-alias.utb"), sub),
+            ]),
+            ..Default::default()
+        };
+        table_expanded_with(Path::new("top-alias.utb"), &resolver).unwrap();
+        let seen = resolver.seen.lock().unwrap();
+        assert_eq!(
+            seen.as_slice(),
+            [
+                (PathBuf::from("top-alias.utb"), None),
+                (PathBuf::from("sub-alias.utb"), Some(top)),
+            ]
         );
     }
 }
