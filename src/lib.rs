@@ -28,6 +28,7 @@ assert_eq!(braille, "⠓⠑⠇⠇⠕⠀⠺⠕⠗⠇⠙");
 mod emphasis;
 mod hyphenation;
 mod parser;
+mod resolver;
 mod translator;
 
 use std::path::Path;

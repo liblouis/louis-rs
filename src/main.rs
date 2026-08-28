@@ -22,6 +22,7 @@ use crate::translator::TranslationStage;
 pub mod emphasis;
 mod hyphenation;
 mod metadata;
+mod resolver;
 mod test;
 mod translator;
 mod yaml;
