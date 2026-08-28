@@ -14,7 +14,7 @@ use std::{
 use enumset::enum_set;
 use enumset::{EnumSet, EnumSetType};
 
-use search_path::SearchPath;
+use crate::resolver::{SearchDirs, TableResolver};
 
 use crate::hyphenation::{self, HyphenationTable};
 use crate::parser::braille::BrailleChar;
@@ -2566,22 +2566,32 @@ pub fn table_file(path: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
 }
 
 pub fn table_expanded(file: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
-    let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
-    table_expanded_with(file, &search_path, &[])
+    table_expanded_with(file, &SearchDirs::from_env())
 }
 
+/// Load `file` and everything it includes, locating every table through `resolver`.
+pub fn table_expanded_with(
+    file: &Path,
+    resolver: &dyn TableResolver,
+) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
+    load_table(file, None, resolver, &[])
+}
+
+/// `base` is the table whose `include` line named `file`, `None` for a top-level table.
+///
 /// `chain` holds the canonicalized path of every table currently being expanded, from the root
 /// down to (but not including) `file` -- i.e. the ancestor chain, not a global "already seen"
 /// set. This lets the same table be legitimately included multiple times from different
 /// branches (a diamond dependency, common for shared base tables) while still catching a table
 /// that includes itself, directly or transitively: each recursive call extends its own copy of
 /// the chain, so a sibling include never sees paths pushed by another branch's descendants.
-fn table_expanded_with(
+fn load_table(
     file: &Path,
-    search_path: &SearchPath,
+    base: Option<&Path>,
+    resolver: &dyn TableResolver,
     chain: &[PathBuf],
 ) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
-    match search_path.find_file(file) {
+    match resolver.resolve(file, base) {
         Some(path) => {
             let canonical = path.canonicalize().map_err(|error| {
                 vec![TableError::TableNotReadable {
@@ -2599,7 +2609,7 @@ fn table_expanded_with(
             }
             let mut chain = chain.to_vec();
             chain.push(canonical);
-            table_file(path.as_path()).and_then(|rules| expand_includes(rules, search_path, &chain))
+            table_file(path.as_path()).and_then(|rules| expand_includes(rules, resolver, &chain))
         }
         None => Err(vec![TableError::TableNotFound(file.into())]),
     }
@@ -2607,7 +2617,7 @@ fn table_expanded_with(
 
 fn expand_include(
     rule: AnchoredRule,
-    search_path: &SearchPath,
+    resolver: &dyn TableResolver,
     chain: &[PathBuf],
 ) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     match rule.rule {
@@ -2617,8 +2627,8 @@ fn expand_include(
                 // Hyphenation dictionaries are liblouis's own pattern-dictionary
                 // format (see the `hyphenation` module), not a translation table --
                 // parse them with their own parser and embed the result.
-                let resolved = search_path
-                    .find_file(path)
+                let resolved = resolver
+                    .resolve(path, None)
                     .ok_or(vec![TableError::HyphenationTableNotFound(path.into())])?;
                 let source = read_to_string(&resolved).map_err(|error| {
                     vec![TableError::HyphenationTableNotReadable {
@@ -2638,7 +2648,7 @@ fn expand_include(
                     rule.line,
                 )]);
             }
-            table_expanded_with(path, search_path, chain)
+            load_table(path, None, resolver, chain)
         }
         _ => Ok(vec![rule]),
     }
@@ -2675,17 +2685,17 @@ fn check_conflicting_rules(rules: &[AnchoredRule]) -> Result<(), Vec<TableError>
     Ok(())
 }
 
-/// See [`table_expanded_with`] for what `chain` tracks. Callers expanding a rule set that isn't
+/// See [`load_table`] for what `chain` tracks. Callers expanding a rule set that isn't
 /// itself nested inside another include expansion (e.g. an inline/in-memory table) should pass
 /// `&[]`.
 pub fn expand_includes(
     rules: Vec<AnchoredRule>,
-    search_path: &SearchPath,
+    resolver: &dyn TableResolver,
     chain: &[PathBuf],
 ) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     let (rules, errors): (Vec<_>, Vec<_>) = rules
         .into_iter()
-        .map(|r| expand_include(r, search_path, chain))
+        .map(|r| expand_include(r, resolver, chain))
         .partition(Result::is_ok);
     let rules: Vec<_> = rules.into_iter().flat_map(Result::unwrap).collect();
     let errors: Vec<_> = errors.into_iter().flat_map(Result::unwrap_err).collect();
@@ -3016,14 +3026,14 @@ mod tests {
     }
 
     /// Sets up a scratch directory (removing any leftovers from a previous run) for a
-    /// table-inclusion test and returns a [`SearchPath`] rooted at it -- built directly from the
-    /// directory rather than via [`SearchPath::new_or`], so tests don't need to touch the
+    /// table-inclusion test and returns a [`SearchDirs`] rooted at it -- built directly from the
+    /// directory rather than via [`SearchDirs::from_env`], so tests don't need to touch the
     /// process-wide `LOUIS_TABLE_PATH` env var (which would race with other tests).
-    fn include_test_dir(name: &str) -> (PathBuf, SearchPath) {
+    fn include_test_dir(name: &str) -> (PathBuf, SearchDirs) {
         let dir = std::env::temp_dir().join(format!("louis-rs-include-test-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let search_path = SearchPath::from(dir.clone());
+        let search_path = SearchDirs::new([dir.clone()]);
         (dir, search_path)
     }
 
@@ -3031,7 +3041,7 @@ mod tests {
     fn table_expanded_rejects_self_include() {
         let (dir, search_path) = include_test_dir("self");
         std::fs::write(dir.join("a.utb"), "include a.utb\n").unwrap();
-        let result = table_expanded_with(Path::new("a.utb"), &search_path, &[]);
+        let result = table_expanded_with(Path::new("a.utb"), &search_path);
         assert!(matches!(
             result,
             Err(errors) if matches!(errors.as_slice(), [TableError::CircularInclude(_)])
@@ -3043,7 +3053,7 @@ mod tests {
         let (dir, search_path) = include_test_dir("indirect-cycle");
         std::fs::write(dir.join("a.utb"), "include b.utb\n").unwrap();
         std::fs::write(dir.join("b.utb"), "include a.utb\n").unwrap();
-        let result = table_expanded_with(Path::new("a.utb"), &search_path, &[]);
+        let result = table_expanded_with(Path::new("a.utb"), &search_path);
         assert!(matches!(
             result,
             Err(errors) if matches!(errors.as_slice(), [TableError::CircularInclude(_)])
@@ -3064,7 +3074,6 @@ mod tests {
         let result = table_expanded_with(
             Path::new(&format!("chain{MAX_INCLUDE_DEPTH}.utb")),
             &search_path,
-            &[],
         );
         assert!(matches!(
             result,
@@ -3081,7 +3090,7 @@ mod tests {
         std::fs::write(dir.join("left.utb"), "include base.utb\n").unwrap();
         std::fs::write(dir.join("right.utb"), "include base.utb\n").unwrap();
         std::fs::write(dir.join("top.utb"), "include left.utb\ninclude right.utb\n").unwrap();
-        let result = table_expanded_with(Path::new("top.utb"), &search_path, &[]);
+        let result = table_expanded_with(Path::new("top.utb"), &search_path);
         assert!(result.is_ok());
     }
 
@@ -3098,7 +3107,7 @@ mod tests {
             "include before.utb\ninclude after.utb\n",
         )
         .unwrap();
-        let result = table_expanded_with(Path::new("top.utb"), &search_path, &[]);
+        let result = table_expanded_with(Path::new("top.utb"), &search_path);
         assert!(matches!(
             result,
             Err(errors) if matches!(
@@ -3114,7 +3123,7 @@ mod tests {
         std::fs::write(dir.join("a.utb"), "endmodephrase foo before 2\n").unwrap();
         std::fs::write(dir.join("b.utb"), "endmodephrase foo before 2\n").unwrap();
         std::fs::write(dir.join("top.utb"), "include a.utb\ninclude b.utb\n").unwrap();
-        let result = table_expanded_with(Path::new("top.utb"), &search_path, &[]);
+        let result = table_expanded_with(Path::new("top.utb"), &search_path);
         assert!(result.is_ok());
     }
 
@@ -3128,10 +3137,39 @@ mod tests {
             "include before.utb\ninclude after.utb\n",
         )
         .unwrap();
-        let result = table_expanded_with(Path::new("top.utb"), &search_path, &[]);
+        let result = table_expanded_with(Path::new("top.utb"), &search_path);
         assert!(matches!(
             result,
             Err(errors) if matches!(errors.as_slice(), [TableError::ConflictingEndcapsphrasePosition])
         ));
+    }
+
+    /// Maps aliases to files, standing in for a host-supplied resolver.
+    #[derive(Debug)]
+    struct MapResolver(HashMap<PathBuf, PathBuf>);
+
+    impl crate::resolver::TableResolver for MapResolver {
+        fn resolve(&self, table: &Path, _base: Option<&Path>) -> Option<PathBuf> {
+            self.0.get(table).cloned()
+        }
+    }
+
+    #[test]
+    fn custom_resolver_is_used_for_top_level_table() {
+        let (dir, _) = include_test_dir("custom-resolver");
+        let real = dir.join("real.utb");
+        std::fs::write(&real, "letter a 1\n").unwrap();
+        let resolver = MapResolver(HashMap::from([(PathBuf::from("alias.utb"), real)]));
+        let rules = table_expanded_with(Path::new("alias.utb"), &resolver).unwrap();
+        assert!(
+            matches!(
+                rules.as_slice(),
+                [AnchoredRule {
+                    rule: Rule::Letter { character: 'a', .. },
+                    ..
+                }]
+            ),
+            "{rules:?}"
+        );
     }
 }

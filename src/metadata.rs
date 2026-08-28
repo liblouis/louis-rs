@@ -10,7 +10,7 @@ pub enum MetaDataError {
     IoError(#[from] std::io::Error),
 }
 
-use search_path::SearchPath;
+use crate::resolver::SearchDirs;
 
 type Query = Vec<(String, String)>;
 
@@ -32,11 +32,11 @@ pub fn find(index: &Index, query: Query) -> HashSet<&PathBuf> {
 }
 
 pub fn index() -> Result<Index, MetaDataError> {
-    let search_path = &SearchPath::new_or("LOUIS_TABLE_PATH", ".");
+    let search_dirs = SearchDirs::from_env();
 
     let mut index: Index = HashMap::new();
 
-    for dir in search_path.iter() {
+    for dir in search_dirs.dirs() {
         for entry in fs::read_dir(dir)? {
             let path = entry?.path();
 

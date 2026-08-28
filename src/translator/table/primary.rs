@@ -1748,7 +1748,7 @@ impl PrimaryTable {
 mod tests {
     use super::*;
 
-    use search_path::SearchPath;
+    use crate::resolver::SearchDirs;
 
     use crate::parser::{RuleParser, expand_includes};
 
@@ -1756,10 +1756,10 @@ mod tests {
         RuleParser::new(source).rule().unwrap().into()
     }
 
-    /// A [`SearchPath`] rooted at the crate directory, for tests that `include` one of the
+    /// A [`SearchDirs`] rooted at the crate directory, for tests that `include` one of the
     /// fixtures under `dictionaries/`.
-    fn fixture_search_path() -> SearchPath {
-        SearchPath::from(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+    fn fixture_search_path() -> SearchDirs {
+        SearchDirs::new([env!("CARGO_MANIFEST_DIR")])
     }
 
     #[test]
