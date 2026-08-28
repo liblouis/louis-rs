@@ -2628,7 +2628,7 @@ fn expand_include(
                 // format (see the `hyphenation` module), not a translation table --
                 // parse them with their own parser and embed the result.
                 let resolved = resolver
-                    .resolve(path, None)
+                    .resolve(path, rule.path.as_deref())
                     .ok_or(vec![TableError::HyphenationTableNotFound(path.into())])?;
                 let source = read_to_string(&resolved).map_err(|error| {
                     vec![TableError::HyphenationTableNotReadable {
@@ -3227,6 +3227,25 @@ mod tests {
                 (PathBuf::from("top-alias.utb"), None),
                 (PathBuf::from("sub-alias.utb"), Some(top)),
             ]
+        );
+    }
+
+    #[test]
+    fn hyphenation_dictionary_resolves_relative_to_including_table() {
+        let (dir, _) = include_test_dir("relative-dic");
+        let (_, search_path) = include_test_dir("relative-dic-elsewhere");
+        std::fs::write(dir.join("top.utb"), "include hyph.dic\n").unwrap();
+        std::fs::write(dir.join("hyph.dic"), "UTF-8\n").unwrap();
+        let rules = table_expanded_with(&dir.join("top.utb"), &search_path).unwrap();
+        assert!(
+            matches!(
+                rules.as_slice(),
+                [AnchoredRule {
+                    rule: Rule::IncludeHyphenation { .. },
+                    ..
+                }]
+            ),
+            "{rules:?}"
         );
     }
 }
