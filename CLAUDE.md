@@ -249,6 +249,7 @@ See `TODO.org` for detailed tracking.
 | Optimize performance | `src/translator/trie.rs`, `src/translator/table/primary.rs` |
 | Handle new character class | `src/parser/character_class.rs`, `src/translator/table.rs` |
 | Change hyphenation behavior | `src/hyphenation.rs` -- parses liblouis's `.dic` hyphenation-pattern format directly, no external crate or build step |
+| Change how table files are located | `src/resolver.rs` -- `TableResolver` trait and the `SearchDirs` default; the parser's loading chain (`table_expanded_with`, `load_table`, `expand_include` in `src/parser.rs`) only sees the trait |
 
 ## Running the Full Test Suite
 

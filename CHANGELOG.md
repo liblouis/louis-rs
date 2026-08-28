@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   longer depends on the filesystem it was parsed on. Bad dictionaries are
   reported as table errors naming the file.
 - `TableError::TableNotReadable` now names the file and the I/O error.
+- `include` lines are now resolved relative to the directory of the including
+  table first, before the `LOUIS_TABLE_PATH` directories, as liblouis does.
+  This also applies to `.dic` hyphenation dictionaries.
+- The `search_path` dependency is gone; `LOUIS_TABLE_PATH` is split with
+  `std::env::split_paths`, which uses the same platform separator.
 - `TranslationOptions` fields are now private. Construct it with
   `TranslationOptions::default()` and the `with_mode`/`with_emphasis`/
   `with_cursor_pos` builder methods, and read it back with the `mode`/
@@ -30,6 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   accepted.
 
 ### Added
+- Library consumers can control how table files are located:
+  `Translator::new_with_options` takes a `TranslatorOptions` whose
+  `with_resolver` accepts any `TableResolver`. The provided `SearchDirs`
+  resolver tries an absolute path as-is, then the including table's
+  directory, then an explicit list of directories; `SearchDirs::from_env`
+  builds that list from `LOUIS_TABLE_PATH` and is what `Translator::new`
+  keeps using.
 - Implement indication handling for backward-translation of `capsletter`,
   `begcapsword`/ `endcapsword`, and `numsign`/`nonumsign`. An opcode is only
   recognized as an indicator when its dots aren't already claimed by a real
@@ -55,6 +67,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   rejected as a table error instead of silently keeping only the last one seen.
 
 ### Fixed
+- Setting `LOUIS_TABLE_PATH` to an empty string no longer makes every table
+  lookup fail; absolute paths, and includes next to the including table,
+  resolve regardless of the directory list.
 - Fixed three issues found by Shielder/OSTIF's security audit: a crafted table
   with a circular or overly deep `include` chain could overflow the stack
   (finding 6.1); a pattern with nested quantifiers (e.g. `(a+)+b`) could make

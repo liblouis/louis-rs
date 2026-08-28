@@ -74,6 +74,12 @@ impl TableResolver for SearchDirs {
     }
 }
 
+impl<T: TableResolver + ?Sized> TableResolver for std::sync::Arc<T> {
+    fn resolve(&self, table: &Path, base: Option<&Path>) -> Option<PathBuf> {
+        (**self).resolve(table, base)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

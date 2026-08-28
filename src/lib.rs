@@ -23,6 +23,23 @@ assert_eq!(braille, "⠓⠑⠇⠇⠕⠀⠺⠕⠗⠇⠙");
 # }
 ```
 
+Hosts that manage their own table directories can bypass `LOUIS_TABLE_PATH`
+by supplying a resolver:
+
+```no_run
+use louis::{Direction, SearchDirs, Translator, TranslatorOptions};
+
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+let translator = Translator::new_with_options(
+    &["en-ueb-g2.ctb"],
+    Direction::Forward,
+    TranslatorOptions::default()
+        .with_resolver(SearchDirs::new(["C:/nvda/louis/tables", "C:/addon/brailleTables"])),
+)?;
+# Ok(())
+# }
+```
+
 */
 
 mod emphasis;
@@ -32,9 +49,11 @@ mod resolver;
 mod translator;
 
 use std::path::Path;
+use std::sync::Arc;
 
 pub use emphasis::EmphasisSpan;
 pub use parser::Direction;
+pub use resolver::{SearchDirs, TableResolver};
 use translator::TranslationPipeline;
 pub use translator::{TranslationMode, TranslationModes, TranslationOptions};
 
@@ -63,16 +82,51 @@ pub struct TranslationResult {
 #[derive(Debug)]
 pub struct Translator(TranslationPipeline);
 
+/// Options for constructing a [`Translator`].
+#[derive(Debug, Clone, Default)]
+pub struct TranslatorOptions {
+    resolver: Option<Arc<dyn TableResolver>>,
+}
+
+impl TranslatorOptions {
+    /// Locate table files through `resolver` instead of the `LOUIS_TABLE_PATH`
+    /// search directories.
+    pub fn with_resolver(mut self, resolver: impl TableResolver + 'static) -> Self {
+        self.resolver = Some(Arc::new(resolver));
+        self
+    }
+
+    pub fn resolver(&self) -> Option<&dyn TableResolver> {
+        self.resolver.as_deref()
+    }
+}
+
 impl Translator {
+    /// Build a translator from table files located through `LOUIS_TABLE_PATH`
+    /// (see [`SearchDirs::from_env`]).
     pub fn new<P: AsRef<Path>>(
         tables: &[P],
         direction: Direction,
+    ) -> Result<Self, TranslationError> {
+        Self::new_with_options(tables, direction, TranslatorOptions::default())
+    }
+
+    /// Build a translator from table files, located through the resolver in
+    /// `options` when one is set and through `LOUIS_TABLE_PATH` otherwise.
+    pub fn new_with_options<P: AsRef<Path>>(
+        tables: &[P],
+        direction: Direction,
+        options: TranslatorOptions,
     ) -> Result<Self, TranslationError> {
         let mut all_rules = Vec::new();
 
         for table_path in tables {
             let path = table_path.as_ref();
-            let rules = parser::table_expanded(path).map_err(TranslationError::ParseFailed)?;
+            let rules = match options.resolver() {
+                Some(resolver) => parser::table_expanded_with(path, resolver),
+                None => parser::table_expanded(path),
+            }
+            .map_err(TranslationError::ParseFailed)?;
             all_rules.extend(rules);
         }
 
@@ -228,5 +282,44 @@ mod tests {
         assert_eq!(result.output, "⠋⠕⠕");
         assert_eq!(result.output_positions, Some(vec![0, 0, 1, 2]));
         assert_eq!(result.input_positions, Some(vec![1, 2, 3]));
+    }
+
+    #[test]
+    fn new_with_options_uses_given_search_dirs() {
+        let dir = std::env::temp_dir().join("louis-rs-translator-test-search-dirs");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("ab.utb"), "space \\s 0\nletter a 1\nletter b 12\n").unwrap();
+        let options = TranslatorOptions::default().with_resolver(SearchDirs::new([dir]));
+        let forward =
+            Translator::new_with_options(&["ab.utb"], Direction::Forward, options.clone()).unwrap();
+        assert_eq!(forward.translate("ab").unwrap(), "⠁⠃");
+        let backward =
+            Translator::new_with_options(&["ab.utb"], Direction::Backward, options).unwrap();
+        assert_eq!(backward.translate("⠁⠃").unwrap(), "ab");
+    }
+
+    #[test]
+    fn new_with_options_accepts_shared_resolver() {
+        let dir = std::env::temp_dir().join("louis-rs-translator-test-shared-resolver");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.utb"), "letter a 1\n").unwrap();
+        let shared = Arc::new(SearchDirs::new([dir]));
+        let options = TranslatorOptions::default().with_resolver(Arc::clone(&shared));
+        let translator =
+            Translator::new_with_options(&["a.utb"], Direction::Forward, options).unwrap();
+        assert_eq!(translator.translate("a").unwrap(), "⠁");
+    }
+
+    #[test]
+    fn new_resolves_an_absolute_path_without_options() {
+        let dir = std::env::temp_dir().join("louis-rs-translator-test-absolute");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let table = dir.join("a.utb");
+        std::fs::write(&table, "letter a 1\n").unwrap();
+        let translator = Translator::new(&[table], Direction::Forward).unwrap();
+        assert_eq!(translator.translate("a").unwrap(), "⠁");
     }
 }
