@@ -1,7 +1,7 @@
 #![no_main]
 
 use std::path::PathBuf;
-use std::sync::{Once, OnceLock};
+use std::sync::OnceLock;
 
 use libfuzzer_sys::fuzz_target;
 use louis::{Direction, Translator};
@@ -20,15 +20,6 @@ fn tables_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("data/translate_tables")
 }
 
-fn ensure_table_search_path() {
-    static INIT: Once = Once::new();
-
-    INIT.call_once(|| unsafe {
-        std::env::set_var("LOUIS_TABLE_PATH", tables_dir());
-    });
-}
-
 fuzz_target!(|text: &str| {
-    ensure_table_search_path();
     let _ = translator().translate(text);
 });
