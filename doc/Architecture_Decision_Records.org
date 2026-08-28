@@ -10,6 +10,82 @@
 # New entries go at the top of this file; existing entries are not
 # reordered when they're revised.
 
+* ACCEPTED A rule-level coverage tool for the YAML test suite
+- Deciders :: CE
+- Date :: [2026-08-28 Fr]
+
+** Context and Problem Statement
+
+liblouis's YAML test suite runs into the millions of test cases across
+~braille-specs/~ and ~yaml/~, ranging from single-opcode specs to
+whole-dictionary sanity checks. That raised a question: could we tell
+*which rules a table actually gets exercised by*, and use that to spot
+untested rules or trim tests that keep exercising the same rule?
+
+louis-rs turns out to already carry everything this needs, for free:
+every translation step is tagged with its originating rule
+(~ResolvedTranslation::origin() -> Option<AnchoredRule>~,
+~src/translator/translation.rs~), and that's already threaded all the
+way out through ~TranslationPipeline::trace_with_options~ (the same
+machinery the ~trace~ subcommand uses). ~AnchoredRule~ carries its
+source table file and line, which is a ready-made, stable coverage key
+with no new instrumentation required.
+
+** What was prototyped
+
+- A ~coverage~ CLI subcommand (marked experimental) that runs a YAML
+  file's tests through ~trace_with_options~ instead of comparing
+  output, collects every ~(table file, line)~ a test touches, and
+  reports the table's rules no test ever hit -- as a per-file table in
+  the same shape as ~check --summary~'s.
+- Two extensions were built and then deliberately removed again to
+  keep the merged idea simple: a redundant-test finder (lazy greedy set
+  cover over each test's rule set, with ~xfail~ tests always kept) and
+  a "thin coverage" view (rules hit by only a handful of tests). Both
+  are cheap to rebuild from this ADR if the need re-emerges -- the
+  reverse index from rule to hit-count is a few lines once per-test
+  rule sets exist.
+- Fixed a real, unrelated gap found along the way: ~Rule~'s ~Display~
+  impl (~src/parser.rs~) had a ~todo!()~ fallback covering roughly half
+  of all opcodes, which panicked the first time the coverage scan tried
+  to print a rule outside the handled set. Replaced with a ~Debug~
+  fallback so ~Display~ is total.
+
+** Decision Drivers
+
+- This is a real side quest relative to louis-rs's actual goal (a
+  compatible from-scratch braille translator), not a step toward it.
+- The infrastructure cost is genuinely near zero -- the hard part
+  (attributing output back to a source rule) already existed for
+  ~trace~, coverage just reuses it -- which is exactly why it's worth
+  writing down rather than losing, even though it's not worth pursuing
+  right now.
+- A real limitation surfaced while building it, worth recording so it
+  isn't rediscovered the hard way: coverage here is measured per
+  *table rule*, not per *engine code path*. Capitalization/lettersign
+  opcodes (~capsletter~, ~begcapsword~, ~begcaps~, ~letsign~) can each
+  be selected from several structurally different branches inside
+  ~src/translator/indication/uppercase.rs~ and ~lettersign.rs~ that all
+  clone the same rule origin -- so "rule X was hit once" does not mean
+  every scenario that can produce X was exercised. Actual branch
+  coverage of the engine itself (e.g. ~cargo llvm-cov~ over
+  ~uppercase.rs~) is a separate, complementary question this approach
+  cannot answer.
+
+** Decision Outcome
+
+Don't build this out further for now; park the prototype unmerged
+rather than either finishing it or discarding it. The code lives on
+branch ~coverage-prototype~ (not merged to ~main~) for anyone -- an
+outside contributor included -- who wants to pick it up.
+
+** Links
+
+- Prototype branch: ~coverage-prototype~
+- ~src/translator/translation.rs~ (~ResolvedTranslation::origin~),
+  ~src/translator/pipeline.rs~ (~trace_with_options~),
+  ~src/parser.rs~ (~AnchoredRule~)
+
 * ACCEPTED Don't infer ~DisplayTable~ entries from a table's own character definitions
 - Deciders :: CE
 - Date :: [2026-08-25 Di]
