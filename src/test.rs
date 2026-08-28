@@ -9,11 +9,11 @@ use search_path::SearchPath;
 
 use crate::{
     emphasis::EmphasisSpan,
-    parser::{self, Direction, TableError},
-    translator::{
-        self, DisplayTable, PositionMap, TranslationModes, TranslationOptions, TranslationPipeline,
-    },
+    parser::{self, AnchoredRule, Direction, TableError},
+    translator::{self, DisplayTable, PositionMap, TranslationModes, TranslationOptions, TranslationPipeline},
 };
+
+pub mod coverage;
 
 #[derive(thiserror::Error, Debug)]
 pub enum TestError {
@@ -172,11 +172,14 @@ impl<'a> TestMatrix<'a> {
         Ok(DisplayTable::compile(&display_rules, direction))
     }
 
+    /// Returns the raw rules making up `table` alongside the compiled pipeline --
+    /// the raw rules are otherwise discarded by compilation, but coverage analysis
+    /// needs them to know the full universe of rules a table defines.
     fn translation_table(
         &self,
         table: &Table,
         direction: Direction,
-    ) -> Result<TranslationPipeline, TestError> {
+    ) -> Result<(Vec<AnchoredRule>, TranslationPipeline), TestError> {
         let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
         let rules = match table {
             Table::Simple(path) => parser::table_expanded(path.as_path())?,
@@ -193,7 +196,8 @@ impl<'a> TestMatrix<'a> {
             }
             Table::Query(..) => return Err(TestError::NotImplemented("Table queries".to_string())),
         };
-        Ok(TranslationPipeline::compile(&rules, direction)?)
+        let pipeline = TranslationPipeline::compile(&rules, direction)?;
+        Ok((rules, pipeline))
     }
 
     pub fn check(&self) -> Result<Vec<TestResult>, TestError> {
@@ -202,7 +206,7 @@ impl<'a> TestMatrix<'a> {
             TestMode::Forward => {
                 let display_table = self.display_table(Direction::Forward)?;
                 for table in self.tables {
-                    let table = self.translation_table(table, Direction::Forward)?;
+                    let (_, table) = self.translation_table(table, Direction::Forward)?;
                     results.extend(
                         self.tests
                             .par_iter()
@@ -216,7 +220,7 @@ impl<'a> TestMatrix<'a> {
                 if option_env!("LOUIS_TEST_FORWARD_ONLY").is_none() {
                     let display_table = self.display_table(Direction::Backward)?;
                     for table in self.tables {
-                        let table = self.translation_table(table, Direction::Backward)?;
+                        let (_, table) = self.translation_table(table, Direction::Backward)?;
                         results.extend(
                             self.tests
                                 .par_iter()
@@ -229,7 +233,7 @@ impl<'a> TestMatrix<'a> {
             TestMode::BothDirections => {
                 let display_table = self.display_table(Direction::Forward)?;
                 for table in self.tables {
-                    let table = self.translation_table(table, Direction::Forward)?;
+                    let (_, table) = self.translation_table(table, Direction::Forward)?;
                     results.extend(
                         self.tests
                             .par_iter()
@@ -244,7 +248,7 @@ impl<'a> TestMatrix<'a> {
                     let reversed: Vec<Test> =
                         self.tests.iter().cloned().map(|t| t.reverse()).collect();
                     for table in self.tables {
-                        let table = self.translation_table(table, Direction::Backward)?;
+                        let (_, table) = self.translation_table(table, Direction::Backward)?;
                         results.extend(
                             reversed
                                 .par_iter()

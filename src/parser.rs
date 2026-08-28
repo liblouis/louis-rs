@@ -933,7 +933,10 @@ impl std::fmt::Display for Rule {
                 dots,
                 ..
             } => write!(f, "match {} {} {} {}", pre, chars, post, dots),
-            _ => todo!(),
+            // the remaining opcodes have no dedicated one-line rendering yet;
+            // fall back to Debug rather than leaving Display partial (Display
+            // must never panic since it's used for user-facing reporting).
+            other => write!(f, "{:?}", other),
         }
     }
 }
@@ -2473,7 +2476,7 @@ pub struct AnchoredRule {
 impl std::fmt::Display for AnchoredRule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(path) = &self.path {
-            write!(f, "{:?}:{} ", path.as_os_str(), self.line)?;
+            write!(f, "{}:{} ", path.display(), self.line)?;
         }
         write!(f, "{}", self.rule)
     }
@@ -2483,7 +2486,16 @@ impl AnchoredRule {
     pub fn new(rule: Rule, path: Option<PathBuf>, line: usize) -> Self {
         Self { rule, path, line }
     }
+
+    /// A key identifying the source location this rule came from, stable enough
+    /// to use for coverage tracking across translations.
+    pub fn key(&self) -> RuleKey {
+        (self.path.clone(), self.line)
+    }
 }
+
+/// Identifies a rule by its source location (table file + line number).
+pub type RuleKey = (Option<PathBuf>, usize);
 
 impl HasDirection for AnchoredRule {
     fn directions(&self) -> EnumSet<Direction> {

@@ -1,13 +1,19 @@
 //! A parser for [liblouis](https://liblouis.io) YAML test files
 
-use std::{collections::HashMap, fs::File, iter::Peekable, num::ParseIntError, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    fs::File,
+    iter::Peekable,
+    num::ParseIntError,
+    path::PathBuf,
+};
 
 use crate::{parser, parser::EscapingContext, parser::unescape};
 
 use libyaml::{Encoding, Event, Parser, ParserIter, ScalarStyle};
 
 use crate::emphasis::EmphasisSpan;
-use crate::parser::Direction;
+use crate::parser::{Direction, RuleKey};
 use crate::test::{
     CursorPosition, Directions, Display, ExpectedFailure, Table, TableQuery, Test, TestError,
     TestMatrix, TestMode, TestResult,
@@ -530,6 +536,66 @@ impl YAMLParser<'_> {
         self.document_end()?;
         self.stream_end()?;
         Ok(results)
+    }
+
+    /// Like [`yaml`](Self::yaml), but runs coverage analysis instead of checking
+    /// results: collects every rule any test exercised, and also returns the
+    /// full universe of rules defined by the tables involved.
+    pub fn coverage(
+        &mut self,
+    ) -> Result<(HashSet<RuleKey>, HashMap<RuleKey, String>), ParseError> {
+        let mut hit = HashSet::new();
+        let mut universe = HashMap::new();
+        let mut current_display_table = None;
+        let mut current_tables = Vec::new();
+        let mut test_mode: TestMode = TestMode::Forward;
+        let mut previous_event_was_table = false;
+
+        self.stream_start()?;
+        self.document_start()?;
+        self.mapping_start()?;
+        while let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
+            let value = self.scalar()?;
+            match &*value {
+                "display" => {
+                    current_display_table = Some(self.display_table()?);
+                    previous_event_was_table = false;
+                }
+                "table" => {
+                    if previous_event_was_table {
+                        current_tables.push(self.table()?);
+                    } else {
+                        current_tables.clear();
+                        current_tables.push(self.table()?);
+                    }
+                    previous_event_was_table = true;
+                }
+                "flags" => {
+                    test_mode = self.flags()?;
+                    previous_event_was_table = false;
+                }
+                "tests" => {
+                    let tests = self.tests()?;
+                    let suite = TestMatrix::new(
+                        &current_display_table,
+                        &current_tables,
+                        &test_mode,
+                        &tests,
+                    );
+                    let (test_hit, table_universe) = suite.coverage()?;
+                    hit.extend(test_hit);
+                    universe.extend(table_universe);
+                    previous_event_was_table = false;
+                }
+                _ => {
+                    return Err(ParseError::InvalidToken(value));
+                }
+            }
+        }
+        self.mapping_end()?;
+        self.document_end()?;
+        self.stream_end()?;
+        Ok((hit, universe))
     }
 }
 

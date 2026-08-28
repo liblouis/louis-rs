@@ -19,6 +19,7 @@ use crate::translator::ResolvedTranslation;
 use crate::translator::TranslationPipeline;
 use crate::translator::TranslationStage;
 
+mod coverage;
 pub mod emphasis;
 mod hyphenation;
 mod metadata;
@@ -81,6 +82,16 @@ enum Commands {
     /// Test braille translations from given YAML file(s).
     Check {
         /// Only show a summary of the test results
+        #[arg(short, long)]
+        summary: bool,
+        /// YAML document(s) that specify the tests
+        #[arg(required = true)]
+        yaml_files: Vec<PathBuf>,
+    },
+    /// [Experimental] List the rules in the given YAML test file(s)' table(s) that no
+    /// test ever exercises.
+    Coverage {
+        /// Only show the count of uncovered rules, not the rules themselves
         #[arg(short, long)]
         summary: bool,
         /// YAML document(s) that specify the tests
@@ -451,6 +462,10 @@ fn main() {
             yaml_files,
             summary,
         } => check_yaml(yaml_files, summary),
+        Commands::Coverage {
+            yaml_files,
+            summary,
+        } => coverage::coverage_yaml(yaml_files, summary),
         Commands::Query { query } => match metadata::index() {
             Ok(index) => {
                 let query = query
