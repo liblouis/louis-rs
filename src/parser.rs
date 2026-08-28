@@ -16,6 +16,7 @@ use enumset::{EnumSet, EnumSetType};
 
 use search_path::SearchPath;
 
+use crate::hyphenation::{self, HyphenationTable};
 use crate::parser::braille::BrailleChar;
 
 pub use attribute::Attribute;
@@ -341,12 +342,15 @@ pub enum Rule {
     Include {
         file: String,
     },
-    /// A rule for including a hyphenation table.
+    /// A rule carrying an included hyphenation table.
     ///
     /// There is no specific opcode for this but we make this an extra rule to separate the
-    /// inclusion of braille tables vs hyphenation pattern
+    /// inclusion of braille tables vs hyphenation pattern. Like every other `include`, the
+    /// included content is embedded here during expansion rather than left as a path to be
+    /// read later, so an expanded rule list does not depend on the filesystem it was parsed
+    /// on.
     IncludeHyphenation {
-        path: PathBuf,
+        table: HyphenationTable,
     },
     Undefined {
         dots: BrailleChars,
@@ -2442,12 +2446,19 @@ pub enum TableError {
     },
     #[error("Include directives are not supported when parsing table source in memory")]
     IncludesNotSupportedInMemory,
-    #[error("Cannot read table")]
-    TableNotReadable(#[from] io::Error),
+    #[error("Cannot read table {path}: {error}")]
+    TableNotReadable { path: PathBuf, error: io::Error },
     #[error("Cannot find table {0:?}")]
     TableNotFound(PathBuf),
     #[error("Hyphenation table {0} not found")]
     HyphenationTableNotFound(PathBuf),
+    #[error("Cannot read hyphenation table {path}: {error}")]
+    HyphenationTableNotReadable { path: PathBuf, error: io::Error },
+    #[error("Cannot parse hyphenation table {path}: {error}")]
+    HyphenationTableNotParseable {
+        path: PathBuf,
+        error: hyphenation::ParseError,
+    },
     #[error("circular table inclusion detected: {0:?}")]
     CircularInclude(Vec<PathBuf>),
     #[error("table inclusion chain exceeds the maximum depth of {0}")]
@@ -2545,7 +2556,12 @@ pub fn table(table: &str, path: Option<PathBuf>) -> Result<Vec<AnchoredRule>, Ve
 }
 
 pub fn table_file(path: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
-    let text = read_to_string(path).map_err(|e| vec![TableError::TableNotReadable(e)])?;
+    let text = read_to_string(path).map_err(|error| {
+        vec![TableError::TableNotReadable {
+            path: path.into(),
+            error,
+        }]
+    })?;
     table(&text, Some(path.into()))
 }
 
@@ -2567,9 +2583,12 @@ fn table_expanded_with(
 ) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     match search_path.find_file(file) {
         Some(path) => {
-            let canonical = path
-                .canonicalize()
-                .map_err(|e| vec![TableError::TableNotReadable(e)])?;
+            let canonical = path.canonicalize().map_err(|error| {
+                vec![TableError::TableNotReadable {
+                    path: path.clone(),
+                    error,
+                }]
+            })?;
             if chain.len() >= MAX_INCLUDE_DEPTH {
                 return Err(vec![TableError::IncludeTooDeep(MAX_INCLUDE_DEPTH)]);
             }
@@ -2597,12 +2616,24 @@ fn expand_include(
             if path.extension().and_then(OsStr::to_str) == Some("dic") {
                 // Hyphenation dictionaries are liblouis's own pattern-dictionary
                 // format (see the `hyphenation` module), not a translation table --
-                // resolve the path as-is and hand it through untouched.
-                let path = search_path
+                // parse them with their own parser and embed the result.
+                let resolved = search_path
                     .find_file(path)
                     .ok_or(vec![TableError::HyphenationTableNotFound(path.into())])?;
+                let source = read_to_string(&resolved).map_err(|error| {
+                    vec![TableError::HyphenationTableNotReadable {
+                        path: resolved.clone(),
+                        error,
+                    }]
+                })?;
+                let table = HyphenationTable::parse(&source).map_err(|error| {
+                    vec![TableError::HyphenationTableNotParseable {
+                        path: resolved,
+                        error,
+                    }]
+                })?;
                 return Ok(vec![AnchoredRule::new(
-                    Rule::IncludeHyphenation { path },
+                    Rule::IncludeHyphenation { table },
                     rule.path,
                     rule.line,
                 )]);

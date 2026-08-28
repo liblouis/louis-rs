@@ -1,6 +1,6 @@
 //! A braille translator that uses [liblouis](https://liblouis.io) braille tables
 
-use std::{collections::HashMap, io};
+use std::collections::HashMap;
 
 pub use options::{TranslationMode, TranslationModes, TranslationOptions};
 pub use pipeline::TranslationPipeline;
@@ -35,10 +35,6 @@ pub enum TranslationError {
     BaseCharacterNotDefined { base: char, derived: char },
     #[error("Swap class {0} not defined")]
     SwapClassNotDefined(String),
-    #[error(transparent)]
-    HyphenationTableIoError(#[from] io::Error),
-    #[error(transparent)]
-    HyphenationTableParseError(#[from] crate::hyphenation::ParseError),
 }
 
 #[derive(Debug, Default, Clone)]

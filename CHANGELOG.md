@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Changed
+- An `include`d `.dic` hyphenation dictionary is now embedded in the rule while
+  includes are expanded, like every other `include`, so an expanded rule list no
+  longer depends on the filesystem it was parsed on. Bad dictionaries are
+  reported as table errors naming the file.
+- `TableError::TableNotReadable` now names the file and the I/O error.
 - `TranslationOptions` fields are now private. Construct it with
   `TranslationOptions::default()` and the `with_mode`/`with_emphasis`/
   `with_cursor_pos` builder methods, and read it back with the `mode`/
