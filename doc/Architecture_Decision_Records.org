@@ -1,6 +1,6 @@
 #+options: todo:t
 #+title: Architecture Decision Records
-#+date: <2024-03-08 Fr>
+#+date: <2024-03-08 Fri>
 #+author: Christian Egli
 #+email: christian.egli@sbs.ch
 #+language: en
@@ -12,7 +12,7 @@
 
 * ACCEPTED A rule-level coverage tool for the YAML test suite
 - Deciders :: CE
-- Date :: [2026-08-28 Fr]
+- Date :: [2026-08-28 Fri]
 
 ** Context and Problem Statement
 
@@ -88,7 +88,7 @@ outside contributor included -- who wants to pick it up.
 
 * ACCEPTED Don't infer ~DisplayTable~ entries from a table's own character definitions
 - Deciders :: CE
-- Date :: [2026-08-25 Di]
+- Date :: [2026-08-25 Tue]
 
 ** Context and Problem Statement
 
@@ -117,7 +117,7 @@ obvious way is what this ADR declines to do.
 
 * ACCEPTED Opcodes deliberately not implemented: ~uplow~, ~locale~, ~backmatch~, ~compdots~, ~nobreak~, ~macro~
 - Deciders :: CE
-- Date :: [2026-08-25 Di]
+- Date :: [2026-08-25 Tue]
 
 ** Context and Problem Statement
 
@@ -164,7 +164,7 @@ Do not implement ~uplow~, ~locale~, ~backmatch~, ~compdots~,
 
 * ACCEPTED Give ~CompiledRegexp::find~ an inline bitset and fixed-capacity thread buffer, swapped by reference
 - Deciders :: CE
-- Date :: [2026-08-20 Do]
+- Date :: [2026-08-20 Thu]
 
 ** Context and Problem Statement
 
@@ -449,7 +449,7 @@ outright:
 
 * DRAFT Isolated single-letter capitalization: capsletter vs. begcapsword tier selection
 - Deciders :: CE
-- Date :: [2026-08-18 Di]
+- Date :: [2026-08-18 Tue]
 
 ** Context and Problem Statement
 
@@ -613,8 +613,8 @@ reasons already documented in this file).
 
 * ACCEPTED Unify word/number-boundary checks onto class-constraint lookaround
 - Deciders :: CE
-- Date :: [2026-08-18 Di]
-- Implemented :: [2026-08-19 Mi]
+- Date :: [2026-08-18 Tue]
+- Implemented :: [2026-08-19 Wed]
 
 ** Context and Problem Statement
 
@@ -791,7 +791,7 @@ against ~constraints.prepunc_ok_at()~/~postpunc_ok_at()~.
 
 * DRAFT Normalize input text and translation rules to a canonical Unicode form
 - Deciders :: CE
-- Date :: [2026-06-23 Di]
+- Date :: [2026-06-23 Tue]
 
 ** Context and Problem Statement
 
@@ -979,7 +979,7 @@ here as the case for revisiting NFC/NFD:
 
 * DRAFT Match-rule candidate selection: weight vs. table-definition order
 - Deciders :: CE
-- Date :: [2026-07-04 Sa]
+- Date :: [2026-07-04 Sat]
 
 ** Context and Problem Statement
 
@@ -1134,8 +1134,8 @@ never be) similarly revisited.
 
 * ACCEPTED Pre-compute indication events before translation
 - Deciders :: CE
-- Date :: [2026-06-23 Di]
-- Implemented :: [2026-06-26 Do]
+- Date :: [2026-06-23 Tue]
+- Implemented :: [2026-06-26 Thu]
 
 ** Context and Problem Statement
 
@@ -1329,7 +1329,7 @@ callers ask for ~translations_at(pos)~ directly.
 
 * ACCEPTED Backward-translation indication with pre-computed events
 - Deciders :: CE
-- Date :: [2026-06-26 Do]
+- Date :: [2026-06-26 Thu]
 
 ** Context and Problem Statement
 
@@ -1473,7 +1473,7 @@ before translation, consulted read-only during it.
 
 * SUPERSEDED Regexps duplicate character transitions
 - Deciders :: CE
-- Date :: [2024-12-24 Di]
+- Date :: [2024-12-24 Tue]
 
 ** Context and Problem Statement
 We have a graph for all regular expressions. For alternatives we
@@ -1527,7 +1527,7 @@ collide on in the first place.
 
 * ACCEPTED Hyphenation
 - Deciders :: CE
-- Date :: [2026-08-20 Do]
+- Date :: [2026-08-20 Thu]
 
 ** Context and Problem Statement
 
@@ -1673,7 +1673,7 @@ and the previously-~#[ignore]~d ~nocross~ unit test in
 
 * ACCEPTED Handle word boundaries
 - Deciders :: CE
-- Date :: [2024-03-08 Fr]
+- Date :: [2024-03-08 Fri]
 
 We need a way to handle word boundaries, as some rules only apply at
 specific boundaries. Currently the trie does not account for any
@@ -1981,7 +1981,7 @@ trie entirely. See the linked follow-up ADR for the full analysis.
 
 * ACCEPTED Hand-rolled regexp VM instead of the ~regex~/~regex-automata~ crates
 - Deciders :: CE
-- Date :: [2026-07-04 Sa]
+- Date :: [2026-07-04 Sat]
 
 ** Context and Problem Statement
 
