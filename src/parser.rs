@@ -349,6 +349,12 @@ pub enum Rule {
     /// included content is embedded here during expansion rather than left as a path to be
     /// read later, so an expanded rule list does not depend on the filesystem it was parsed
     /// on.
+    // FIXME: The `.dic` is parsed here, during expansion, rather than each pattern line
+    // becoming a rule of its own for the compiler to assemble. That split would be the tidier
+    // one, but for some tables this would blow up the rule count enormously. The pipeline
+    // clones and re-filters the whole rule list per direction. If we ever get table bundling
+    // (#10) this might have to be reconsidered, as this couples the bundle format to
+    // `HyphenationTable`'s field layout.
     IncludeHyphenation {
         table: HyphenationTable,
     },
