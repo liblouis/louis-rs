@@ -78,6 +78,17 @@ pub enum ClassConstraint {
 #[derive(Default, Debug, Clone)]
 struct TrieNode {
     translation: Option<ResolvedTranslation>,
+    // FIXME: `HashMap` iteration order is randomized per process, so the order in which
+    // `find_translations_from_node` collects candidates varies between runs. Candidates that
+    // tie on [`ResolvedTranslation::rank`] are resolved by `max_by_key`, which returns the
+    // last of them, so a tie is decided by chance: `fr-bfu-g2.ctb` back-translates `⠡` to
+    // either `tout` (`word tout ⠡`) or `ation` (`endword ation ⠡`), both ranking (1, 3).
+    // A `BTreeMap` makes this reproducible for 4 lines (derive `Ord` here and on
+    // `ResolvedClasses`) at no cost -- translation is unchanged within noise and compiling
+    // en-ueb-g2 got ~12% faster, since hashing a `ResolvedClasses` hashes its whole
+    // `Vec<char>` while an ordered compare short-circuits on the discriminant. It was left
+    // out because it only freezes an arbitrary order: liblouis breaks such a tie by
+    // definition order, the last rule defined winning, which neither map reproduces.
     transitions: HashMap<ResolvedTransition, TrieNode>,
 }
 
