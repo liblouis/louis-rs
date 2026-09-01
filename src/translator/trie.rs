@@ -248,7 +248,7 @@ impl Trie {
                 current_node.translation = Some(ResolvedTranslation::new(
                     from,
                     to,
-                    from.chars().count(),
+                    length,
                     stage,
                     origin.clone(),
                 ));

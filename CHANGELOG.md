@@ -55,6 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   rejected as a table error instead of silently keeping only the last one seen.
 
 ### Fixed
+- A translation rule that displaced a lower-precedence rule at the same trie node
+  lost its `before`/`after` conditions from its weight, so it was ranked as if it
+  were unconditional.
 - `comp6` rules are now looked up case sensitively. Previously `comp6 T 23457`
   never applied to `T`, so capitals lost their dot 7 form in computer braille.
 - Fixed three issues found by Shielder/OSTIF's security audit: a crafted table
