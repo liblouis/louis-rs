@@ -253,6 +253,22 @@ impl ResolvedTranslation {
         self.weight
     }
 
+    /// The key used to pick between competing translation candidates at the same position.
+    ///
+    /// Among candidates that consume input, the number of characters consumed dominates,
+    /// so a longer match always beats a shorter one. `weight` counts the consumed
+    /// characters *plus* the `before`/`after` conditions the rule carries, so comparing
+    /// it second lets the more constrained of two equally long matches win without ever
+    /// outweighing a longer match.
+    ///
+    /// A zero-length candidate is not competing for the same input at all, e.g. a `context`
+    /// or `match` rule that only emits an indicator consumes nothing and lets the next
+    /// iteration pick the rule that does. Ranking it by characters consumed would mean it
+    /// could never win, so it is ranked ahead of every consuming candidate instead.
+    pub fn rank(&self) -> (bool, usize, usize) {
+        (self.length == 0, self.length, self.weight)
+    }
+
     pub fn offset(&self) -> usize {
         self.offset
     }

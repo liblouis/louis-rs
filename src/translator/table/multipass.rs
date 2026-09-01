@@ -136,7 +136,7 @@ impl MultipassTable {
                 // input
                 .filter(|&t| !seen.contains(&TranslationSubset::from(t)))
                 .cloned()
-                .max_by_key(|translation| translation.weight());
+                .max_by_key(|translation| translation.rank());
             if let Some(t) = candidate {
                 if t.length() == 0 {
                     // if there is a zero-length translation candiate we run the risk of an infinite

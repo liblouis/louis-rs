@@ -1554,7 +1554,7 @@ impl PrimaryTable {
             let nocross_candidate = self
                 .nocross_candidates(chars.as_str(), prev, char_pos, &constraints)
                 .into_iter()
-                .max_by_key(|t| t.weight());
+                .max_by_key(|t| t.rank());
 
             // given an input query the trie for matching translations. Then split off the
             // translations that are delayed, i.e. have an offset because they have a pre-pattern
@@ -1650,11 +1650,11 @@ impl PrimaryTable {
                 // drop translation candidates that we have applied already at this position in the
                 // input
                 .filter(|t| !seen.contains(&TranslationSubset::from(*t)))
-                .max_by_key(|translation| translation.weight());
+                .max_by_key(|translation| translation.rank());
             // A nocross rule wins if there is no plain candidate to beat (many, e.g.
             // liblouis' `nocross always en`, have no plain counterpart at all).
             if let Some(nocross) = &nocross_candidate
-                && candidate.is_none_or(|t| nocross.weight() >= t.weight())
+                && candidate.is_none_or(|t| nocross.rank() >= t.rank())
             {
                 let translation = nocross.clone();
                 let translation = uppercase_if_needed(translation);

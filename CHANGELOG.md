@@ -55,6 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   rejected as a table error instead of silently keeping only the last one seen.
 
 ### Fixed
+- Competing translation rules are now ranked by the number of characters they
+  consume first, and only then by the `before`/`after` conditions they carry. The
+  two were summed into a single weight, so a rule with enough conditions could
+  beat a longer match.
 - A translation rule that displaced a lower-precedence rule at the same trie node
   lost its `before`/`after` conditions from its weight, so it was ranked as if it
   were unconditional.
