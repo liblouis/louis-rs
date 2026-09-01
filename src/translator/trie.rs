@@ -82,16 +82,19 @@ struct TrieNode {
 }
 
 impl TrieNode {
-    fn char_transition(&self, c: char) -> Option<&TrieNode> {
-        // FIXME: we ignore characters that do not map to a single
-        // character lowercase character
-        if c.to_lowercase().count() != 1 {
-            return None;
-        };
-        // character transitions are always case insensitive
-        let lowercase = c.to_lowercase().next().unwrap();
-        self.transitions
-            .get(&ResolvedTransition::Character(lowercase))
+    fn char_transition(&self, c: char, case_sensitive: bool) -> Option<&TrieNode> {
+        if case_sensitive {
+            self.transitions.get(&ResolvedTransition::Character(c))
+        } else if c.to_lowercase().count() != 1 {
+            // FIXME: we ignore characters that do not map to a single
+            // character lowercase character
+            None
+        } else {
+            // case insensitive character transition
+            let lowercase = c.to_lowercase().next().unwrap();
+            self.transitions
+                .get(&ResolvedTransition::Character(lowercase))
+        }
     }
 
     fn any_transition(&self) -> Option<&TrieNode> {
@@ -106,6 +109,10 @@ pub struct Trie {
     /// `StartClass`/`EndClass` constraint checks. Set to text classes for forward translation,
     /// braille classes for backward.
     ctx: CharacterClasses,
+    /// When true, character transitions are matched on the exact character instead of
+    /// being lowercased first. Needed for `comp6`, where `comp6 a 1` and `comp6 A 17`
+    /// are independent rules.
+    case_sensitive: bool,
 }
 
 impl Trie {
@@ -113,11 +120,19 @@ impl Trie {
         Trie {
             root: TrieNode::default(),
             ctx: CharacterClasses::default(),
+            case_sensitive: false,
         }
     }
 
     pub fn with_context(self, ctx: CharacterClasses) -> Self {
         Trie { ctx, ..self }
+    }
+
+    pub fn case_sensitive(self) -> Self {
+        Trie {
+            case_sensitive: true,
+            ..self
+        }
     }
 
     fn resolve_transition(&self, transition: Transition) -> ResolvedTransition {
@@ -278,7 +293,7 @@ impl Trie {
         let c = chars.next();
         if let Some(c) = c {
             let bytes = c.len_utf8();
-            if let Some(node) = node.char_transition(c) {
+            if let Some(node) = node.char_transition(c, self.case_sensitive) {
                 matching_rules.extend(self.find_translations_from_node(
                     &input[bytes..],
                     Some(c),
@@ -699,6 +714,30 @@ mod tests {
         assert_eq!(trie.find_translations("Foo", None), vec![foo.clone()]);
         assert_eq!(trie.find_translations("FOO", None), vec![foo.clone()]);
         assert_eq!(trie.find_translations("foO", None), vec![foo.clone()]);
+    }
+
+    #[test]
+    fn find_translations_case_sensitive() {
+        // a case sensitive trie keeps `a` and `A` apart, as comp6 requires
+        let mut trie = Trie::new().case_sensitive();
+        let rule = fake_rule();
+        let lower = ResolvedTranslation::new("a", "1", 1, TranslationStage::Main, rule.clone());
+        let upper = ResolvedTranslation::new("A", "17", 1, TranslationStage::Main, rule.clone());
+        for (from, to) in [("a", "1"), ("A", "17")] {
+            trie.insert(
+                from,
+                to,
+                None,
+                None,
+                Direction::Forward,
+                Precedence::Default,
+                vec![],
+                TranslationStage::Main,
+                &rule,
+            );
+        }
+        assert_eq!(trie.find_translations("a", None), vec![lower]);
+        assert_eq!(trie.find_translations("A", None), vec![upper]);
     }
 
     #[test]

@@ -55,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   rejected as a table error instead of silently keeping only the last one seen.
 
 ### Fixed
+- `comp6` rules are now looked up case sensitively. Previously `comp6 T 23457`
+  never applied to `T`, so capitals lost their dot 7 form in computer braille.
 - Fixed three issues found by Shielder/OSTIF's security audit: a crafted table
   with a circular or overly deep `include` chain could overflow the stack
   (finding 6.1); a pattern with nested quantifiers (e.g. `(a+)+b`) could make

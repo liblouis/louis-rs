@@ -623,7 +623,7 @@ pub enum Rule {
         constraints: Constraints,
     },
     Comp6 {
-        chars: String,
+        character: char,
         dots: Braille,
     },
     Nocont {
@@ -882,7 +882,7 @@ impl std::fmt::Display for Rule {
             Rule::Numsign { dots } => write!(f, "numsign {}", dots),
             Rule::Nonumsign { dots, .. } => write!(f, "nonumsign {}", dots),
             Rule::Compbrl { chars, .. } => write!(f, "compbrl {}", chars),
-            Rule::Comp6 { chars, dots } => write!(f, "comp6 {} {}", chars, dots),
+            Rule::Comp6 { character, dots } => write!(f, "comp6 {} {}", character, dots),
             Rule::Always { chars, dots, .. } => write!(f, "always {} {}", chars, dots),
             Rule::Largesign { chars, dots } => {
                 write!(f, "largesign {} {}", chars, dots)
@@ -2153,7 +2153,7 @@ impl<'a> RuleParser<'a> {
             Opcode::Comp6 => {
                 fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Comp6 {
-                    chars: self.chars()?,
+                    character: self.one_char()?,
                     dots: self.dots()?,
                 }
             }

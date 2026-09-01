@@ -174,7 +174,7 @@ impl PrimaryTableBuilder {
             undefined: None,
             character_translations: CharacterTranslation::new(),
             trie: Trie::new().with_context(trie_ctx.clone()),
-            comp6_trie: Trie::new().with_context(trie_ctx.clone()),
+            comp6_trie: Trie::new().with_context(trie_ctx.clone()).case_sensitive(),
             nocross_trie: Trie::new().with_context(trie_ctx),
             match_patterns: MatchPatternsBuilder::new(),
             context_patterns: ContextPatternsBuilder::new(),
@@ -836,12 +836,13 @@ impl PrimaryTable {
                         }
                     }
                 }
-                Rule::Comp6 { chars, dots } => {
+                Rule::Comp6 { character, dots } => {
+                    let character = character.to_string();
                     let dots = ctx
                         .character_definitions()
-                        .braille_to_unicode(dots, chars)?;
+                        .braille_to_unicode(dots, &character)?;
                     builder.comp6_trie.insert(
-                        chars,
+                        &character,
                         &dots,
                         None,
                         None,
