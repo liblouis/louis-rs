@@ -66,6 +66,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `doc/Architecture_Decision_Records.org` for how table lookup differs from
   liblouis generally.
 
+### Removed
+- `TranslationResult::spacing` and the empty `SpacingInfo` struct. The field was
+  never populated and liblouis is considering dropping the parameter altogether
+  (liblouis/liblouis#496).
+
 ### Fixed
 - Competing translation rules are now ranked by the number of characters they
   consume first, and only then by the `before`/`after` conditions they carry. The

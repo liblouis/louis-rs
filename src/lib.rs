@@ -45,18 +45,13 @@ pub enum TranslationError {
     #[error("Errors when reading given braille table(s)")]
     ParseFailed(Vec<parser::TableError>),
 }
-#[derive(Debug, Clone)]
-pub struct SpacingInfo {
-    // TODO:
-}
 
 #[derive(Debug, Default)]
 pub struct TranslationResult {
     pub output: String,
     pub emphasis: Option<Vec<EmphasisSpan>>, // Only if input had emphasis
-    pub spacing: Option<Vec<SpacingInfo>>,
     pub output_positions: Option<Vec<usize>>, // Maps input pos -> output pos
-    pub input_positions: Option<Vec<usize>>,  // Maps output pos -> input pos
+    pub input_positions: Option<Vec<usize>>, // Maps output pos -> input pos
     pub cursor_pos: Option<usize>,
 }
 
