@@ -10,9 +10,18 @@
 # New entries go at the top of this file; existing entries are not
 # reordered when they're revised.
 
-* ACCEPTED Table lookup: a distinct ~LOUIS_TABLE_PATH~, and which liblouis resolution steps we skip
+* PROPOSED Table lookup: a distinct ~LOUIS_TABLE_PATH~, and which liblouis resolution steps we skip
 - Deciders :: CE
 - Date :: [2026-09-02 Wed]
+
+#+begin_quote
+Status is PROPOSED, not ACCEPTED, because [[https://github.com/liblouis/louis-rs/pull/28][PR #28]] is open and proposes a
+different structure for the same problem: a ~TableResolver~ trait with a
+~SearchDirs~ implementation, dropping the ~search_path~ crate for
+~std::env::split_paths~. The divergences from liblouis recorded below hold
+either way; the resolution *order* described under "Decision Outcome" is
+what this repository does today and would be restructured by that PR.
+#+end_quote
 
 ** Context and Problem Statement
 
