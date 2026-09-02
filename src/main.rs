@@ -8,6 +8,7 @@ use std::process::exit;
 
 use clap::{Parser, Subcommand};
 use rayon::prelude::*;
+use search_path::SearchPath;
 
 mod parser;
 use parser::RuleParser;
@@ -116,8 +117,22 @@ fn print_errors(errors: Vec<TableError>) {
     }
 }
 
+/// The search path for a table named on the command line: its own directory first, so that
+/// `louis parse /some/where/top.utb` finds an `include base.utb` sitting next to it without that
+/// directory being on `LOUIS_TABLE_PATH`. This is a convenience for a human typing a path, not a
+/// lookup rule -- the library API resolves names against the search path it is handed and
+/// nothing else. Unlike liblouis, which rebases on the including table at every level, the
+/// directory stays on the search path for nested includes too: more permissive, never less.
+fn cli_search_path(table: &Path) -> SearchPath {
+    let mut search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
+    if let Some(dir) = table.parent() {
+        search_path.prepend(dir.to_path_buf());
+    }
+    search_path
+}
+
 fn parse(file: &Path) {
-    match parser::table_expanded(file) {
+    match parser::table_expanded_in(file, &cli_search_path(file)) {
         Ok(rules) => {
             for rule in rules {
                 println!("{:?}", rule);
@@ -184,7 +199,7 @@ fn print_trace(all_translations: &Vec<Vec<ResolvedTranslation>>, style: &TraceSt
 }
 
 fn trace(table: &Path, direction: Direction, input: &str, style: &TraceStyle) {
-    let rules = parser::table_expanded(table);
+    let rules = parser::table_expanded_in(table, &cli_search_path(table));
     match rules {
         Ok(rules) => {
             match TranslationPipeline::compile(&rules, direction) {
@@ -202,7 +217,7 @@ fn trace(table: &Path, direction: Direction, input: &str, style: &TraceStyle) {
 }
 
 fn translate(table: &Path, direction: Direction, input: &str) {
-    let rules = parser::table_expanded(table);
+    let rules = parser::table_expanded_in(table, &cli_search_path(table));
     match rules {
         Ok(rules) => {
             match TranslationPipeline::compile(&rules, direction) {
@@ -408,7 +423,7 @@ fn main() {
                 translate(&table, direction, &input);
             }
             None => {
-                let rules = parser::table_expanded(&table);
+                let rules = parser::table_expanded_in(&table, &cli_search_path(&table));
                 match rules {
                     Ok(rules) => match TranslationPipeline::compile(&rules, direction) {
                         Ok(table) => repl(Box::new(move |input| {
@@ -432,7 +447,7 @@ fn main() {
                 trace(&table, direction, &input, &style);
             }
             None => {
-                let rules = parser::table_expanded(&table);
+                let rules = parser::table_expanded_in(&table, &cli_search_path(&table));
                 match rules {
                     Ok(rules) => match TranslationPipeline::compile(&rules, direction) {
                         Ok(table) => repl(Box::new(move |input| {
@@ -466,5 +481,20 @@ fn main() {
                 eprint!("Could not index all tables: {:?}", e)
             }
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cli_search_path_starts_at_the_tables_own_directory() {
+        // Only the first entry is asserted, so the ambient LOUIS_TABLE_PATH does not matter.
+        let search_path = cli_search_path(Path::new("/some/where/top.utb"));
+        assert_eq!(
+            search_path.iter().next(),
+            Some(&PathBuf::from("/some/where"))
+        );
     }
 }

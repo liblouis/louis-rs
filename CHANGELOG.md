@@ -53,6 +53,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A table (including whatever it pulls in via `include`) mixing `before` and
   `after` for the same `endmodephrase` class, or for `endcapsphrase`, is now
   rejected as a table error instead of silently keeping only the last one seen.
+- `Translator::with_search_path` looks tables up in a caller-supplied list of
+  directories instead of reading `LOUIS_TABLE_PATH`, for a host application
+  that manages its own table locations. `Translator::new` is unchanged and
+  remains the `LOUIS_TABLE_PATH` shorthand. Table lookup adds no directories of
+  its own to the list it is given.
+- `louis parse`, `translate` and `trace` search the named table's own directory
+  first, so a table given by path can `include` one sitting next to it without
+  that directory being on `LOUIS_TABLE_PATH`. Unlike liblouis, which rebases on
+  the including table at every level, the directory stays on the search path for
+  nested includes too. This is a convenience of the command line tool; see
+  `doc/Architecture_Decision_Records.org` for how table lookup differs from
+  liblouis generally.
 
 ### Fixed
 - Competing translation rules are now ranked by the number of characters they

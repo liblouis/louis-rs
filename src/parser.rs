@@ -2571,9 +2571,14 @@ pub fn table_file(path: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     table(&text, Some(path.into()))
 }
 
-pub fn table_expanded(file: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
-    let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
-    table_expanded_with(file, &search_path, &[])
+/// Expands `file` and every table it includes, looking names up in `search_path`. Where that
+/// search path comes from is the caller's business: the parser neither reads the environment nor
+/// adds directories of its own.
+pub fn table_expanded_in(
+    file: &Path,
+    search_path: &SearchPath,
+) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
+    table_expanded_with(file, search_path, &[])
 }
 
 /// `chain` holds the canonicalized path of every table currently being expanded, from the root
