@@ -2573,7 +2573,16 @@ pub fn table_file(path: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
 
 pub fn table_expanded(file: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     let search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
-    table_expanded_with(file, &search_path, &[])
+    table_expanded_in(file, &search_path)
+}
+
+/// Like [`table_expanded`], but looking names up in `search_path` rather than in
+/// `LOUIS_TABLE_PATH`.
+pub fn table_expanded_in(
+    file: &Path,
+    search_path: &SearchPath,
+) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
+    table_expanded_with(file, search_path, &[])
 }
 
 /// `chain` holds the canonicalized path of every table currently being expanded, from the root

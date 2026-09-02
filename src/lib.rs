@@ -30,10 +30,11 @@ mod hyphenation;
 mod parser;
 mod translator;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub use emphasis::EmphasisSpan;
 pub use parser::Direction;
+use search_path::SearchPath;
 use translator::TranslationPipeline;
 pub use translator::{TranslationMode, TranslationModes, TranslationOptions};
 
@@ -63,15 +64,41 @@ pub struct TranslationResult {
 pub struct Translator(TranslationPipeline);
 
 impl Translator {
+    /// Tables are looked up in the `LOUIS_TABLE_PATH` search path. Use
+    /// [`Self::with_search_path`] to supply the directories instead, which a host
+    /// application managing its own table locations will want.
     pub fn new<P: AsRef<Path>>(
         tables: &[P],
         direction: Direction,
+    ) -> Result<Self, TranslationError> {
+        Self::compile_tables(
+            tables,
+            direction,
+            &SearchPath::new_or("LOUIS_TABLE_PATH", "."),
+        )
+    }
+
+    /// Like [`Self::new`], but looking tables up in `search_path` instead of reading the
+    /// `LOUIS_TABLE_PATH` environment variable.
+    pub fn with_search_path<P: AsRef<Path>>(
+        tables: &[P],
+        direction: Direction,
+        search_path: Vec<PathBuf>,
+    ) -> Result<Self, TranslationError> {
+        Self::compile_tables(tables, direction, &SearchPath::from(search_path))
+    }
+
+    fn compile_tables<P: AsRef<Path>>(
+        tables: &[P],
+        direction: Direction,
+        search_path: &SearchPath,
     ) -> Result<Self, TranslationError> {
         let mut all_rules = Vec::new();
 
         for table_path in tables {
             let path = table_path.as_ref();
-            let rules = parser::table_expanded(path).map_err(TranslationError::ParseFailed)?;
+            let rules = parser::table_expanded_in(path, search_path)
+                .map_err(TranslationError::ParseFailed)?;
             all_rules.extend(rules);
         }
 
