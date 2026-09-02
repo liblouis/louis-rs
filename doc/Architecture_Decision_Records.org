@@ -10,6 +10,105 @@
 # New entries go at the top of this file; existing entries are not
 # reordered when they're revised.
 
+* ACCEPTED Table lookup: a distinct ~LOUIS_TABLE_PATH~, and which liblouis resolution steps we skip
+- Deciders :: CE
+- Date :: [2026-09-02 Wed]
+
+** Context and Problem Statement
+
+liblouis resolves a table name in ~resolveSubtable~
+(~compileTranslationTable.c~) in three steps, in order:
+
+1. against ~base~ -- the directory of the including table, or of the
+   *first* table in a comma-separated table list;
+2. the name as given, i.e. absolute or relative to the current working
+   directory;
+3. each entry of the search path, tried both as ~dir/name~ and as
+   ~dir/liblouis/tables/name~.
+
+The search path is ~LOUIS_TABLEPATH~, followed by liblouis's compiled-in
+~dataPath~ and ~programPath~, and it is *comma* separated.
+
+louis-rs grew its own lookup independently. It has a single mechanism --
+~SearchPath::find_file~ from the ~search_path~ crate, which joins the
+name onto each entry in turn -- and reads ~LOUIS_TABLE_PATH~, which is
+*colon* separated (the platform path separator). The two environment
+variable names differ by one underscore, which was an accident of
+naming rather than a decision.
+
+That accident forces a decision, because a name is a promise about
+format. If we read ~LOUIS_TABLEPATH~, then a value like ~a,b~ -- correct
+for liblouis, and likely already exported by anyone who uses it -- would
+be silently taken as a single directory literally named ~a,b~, and every
+table lookup would fail with no hint as to why.
+
+** Decision Drivers
+
+- Same name, different format is the worst outcome: it fails silently
+  and blames the tables rather than the configuration.
+- The separator is not the only divergence. We skip ~dataPath~ and
+  ~programPath~ and the ~dir/liblouis/tables/name~ form, so the same
+  value can legitimately resolve differently under the two
+  implementations. The variables are genuinely not interchangeable.
+- Colon is the convention for path lists on Unix (~PATH~, ~MANPATH~,
+  ~LD_LIBRARY_PATH~) and is what ~search_path~ provides. liblouis's comma
+  is the outlier, presumably because table lists are comma separated
+  too.
+- A rename to something unmistakable, such as ~LOUIS_RS_TABLE_PATH~,
+  was considered. It is the clearer name, but it touches 32 references
+  across 10 files plus every contributor's shell setup, to fix a
+  confusion that documenting also fixes.
+
+** Decision Outcome
+
+Keep ~LOUIS_TABLE_PATH~, colon separated, as a variable distinct from
+liblouis's ~LOUIS_TABLEPATH~, and document that it is distinct rather
+than leaving it to be discovered.
+
+Resolution order in louis-rs is:
+
+1. For a table named by path (~parser::table_expanded~, i.e. the CLI),
+   the table's own directory, prepended to the search path.
+2. Each entry of ~LOUIS_TABLE_PATH~, or ~.~ when it is unset.
+
+Absolute names need no step of their own: ~PathBuf::push~ discards the
+accumulated directory when what it pushes is absolute, so ~find_file~
+returns an absolute name unchanged for the first entry it tries. This
+does mean an absolute name fails against a genuinely empty search path,
+which only ~Translator::with_search_path~ can produce.
+
+Deliberately not replicated:
+
+- ~dataPath~ and ~programPath~. These are liblouis's install-location
+  fallbacks; louis-rs has no installed table corpus of its own to fall
+  back to.
+- The ~dir/liblouis/tables/name~ second form per search-path entry.
+  Callers can name that directory directly.
+- Base resolution for a table *list*. liblouis resolves later entries of
+  a comma-separated list against the first entry's directory, and pins
+  ~base~ to the first entry only (~if (k == 1) base = subTable;~), so a
+  list whose second entry is a full path and third a sibling of it
+  fails. Our tables arrive as a slice and each entry resolves
+  independently.
+- Per-level rebasing of includes. liblouis rebases on the including
+  table at every level; we prepend the top table's directory once, so it
+  stays visible for nested includes. Ours is more permissive and never
+  resolves less.
+
+The general shape here is that we did not set out to support tables
+outside the search path at all -- a caller that owns its tables passes
+their directory to ~Translator::with_search_path~. The prepend exists
+only so that ~louis parse /some/where/top.utb~ does not work or fail
+depending on whether ~top.utb~ happens to contain an ~include~.
+
+** Links
+
+- liblouis's resolver: ~compileTranslationTable.c~, ~resolveSubtable~
+  and ~_lou_getTablePath~
+- liblouis's own conformance test for resolution:
+  ~tests/resolve_table.c~ and the fixture tree in
+  ~tests/tables/resolve_table/~
+
 * ACCEPTED A rule-level coverage tool for the YAML test suite
 - Deciders :: CE
 - Date :: [2026-08-28 Fri]

@@ -36,6 +36,31 @@ The goal is to be as compatible as possible with liblouis, when it
 makes sense.
 
 
+### Table lookup
+
+Tables are looked up in `LOUIS_TABLE_PATH`. This is **not** liblouis's
+`LOUIS_TABLEPATH`: the names differ by an underscore, and so does the
+format. `LOUIS_TABLE_PATH` is separated by the platform path separator,
+a colon on Unix, the way `PATH` is; `LOUIS_TABLEPATH` is separated by
+commas. Exporting one has no effect on the other, and a comma separated
+value handed to louis-rs is read as a single directory whose name
+contains commas.
+
+They are kept apart deliberately, because the separator is not the only
+difference: louis-rs does not search liblouis's compiled-in install
+locations, nor the `<dir>/liblouis/tables/` form of each entry, so the
+same directories can legitimately resolve differently under the two
+implementations.
+
+A table named by path is looked up in its own directory first, so a
+table can include one sitting next to it without that directory being on
+`LOUIS_TABLE_PATH`:
+
+```shell
+$ louis parse /some/where/top.utb   # finds an "include base.utb" next to it
+```
+
+
 ## Installation
 
     $ cargo install louis-rs
