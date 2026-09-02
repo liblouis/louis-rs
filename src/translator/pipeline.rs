@@ -218,7 +218,8 @@ mod tests {
         ];
         let pipeline = TranslationPipeline::compile(&rules, Direction::Forward).unwrap();
         assert_eq!(pipeline.translate("o"), "⠕");
-        assert_eq!(pipeline.translate("oύ"), "⠕⠐⠥⠽");
+        // the `*` action consumes the whole match, context included
+        assert_eq!(pipeline.translate("oύ"), "⠐⠥");
     }
 
     #[test]

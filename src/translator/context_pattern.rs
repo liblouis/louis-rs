@@ -37,20 +37,21 @@ impl Regexp {
 
     fn from_instruction(instruction: &TestInstruction, ctx: &CharacterClasses) -> Self {
         match instruction {
-            // liblouis' `_N` rewinds a single mutable cursor by N so a later test can peek at
-            // already-consumed (or, at the end of a test, not-yet-consumed) text without that
-            // text becoming part of the replaceable span — its own matcher needs this because it
-            // has no other way to look outside the span it's currently walking. We don't: (1)
-            // `ResolvedTranslation::resolve` sets the reported length to the *captured bracket's*
-            // length alone, never however much surrounding "before"/"after" content was checked,
-            // so a check placed before or after the bracket is never mistakenly swallowed into
-            // the consumed span regardless of `_N`'s value; and (2) `context_candidates` is
-            // queried at every cursor position (like `match`'s `pre`), so a check placed before
-            // the bracket is naturally discovered starting at the earlier position and held via
-            // `delayed_translations`/`offset()` until the cursor catches up. Dropping `_N`
-            // entirely and just compiling the surrounding checks in place is therefore already
-            // correct, not a stand-in for a real implementation — hence `Empty`, not some
-            // "unimplemented" marker.
+            // liblouis' `_N` rewinds a single mutable cursor by N so a later check can peek at
+            // already-consumed (leading `_N`) or not-yet-consumed (trailing `_N`) text without
+            // that text becoming part of the matched span — its own matcher needs this because
+            // it has no other way to look outside the span it's currently walking. We compile
+            // the rewound-over checks in place instead: the compiled pattern then starts N
+            // characters before (or ends N characters after) the span liblouis matches, and
+            // `insert` records those counts on the compiled pattern via
+            // `CompiledRegexp::with_lookback`, whose `find` excludes them from the spans it
+            // reports. This works because `context_candidates` is queried at every cursor
+            // position (like `match`'s `pre`): a check placed before the bracket is naturally
+            // discovered starting at the earlier position and held via
+            // `delayed_translations`/`offset()` until the cursor catches up. Only `_N`s at the
+            // very start or end of the test are accounted for this way; a rewind in the middle
+            // of a test would make the in-place checks examine different text than liblouis
+            // re-examines, but no shipped table interleaves rewinds with forward checks.
             TestInstruction::Lookback { .. } => Regexp::Empty,
             TestInstruction::Variable { var, op, operand } => match op {
                 Operator::Eq => Regexp::VariableEqual(*var, *operand),
@@ -207,7 +208,7 @@ impl ContextPatternsBuilder {
         }
     }
 
-    /// Create a translation based on `test`, `action`, `origin` and `swap_classes`
+    /// Create a translation based on `action`, `origin` and `swap_classes`
     fn translation(
         &self,
         action: &Action,
@@ -217,13 +218,20 @@ impl ContextPatternsBuilder {
     ) -> Result<UnresolvedTranslation, TranslationError> {
         let targets = TranslationTargets::from_instructions(&action.actions(), swap_classes)?;
         let effects = Effects::from_instructions(&action.actions());
-        Ok(UnresolvedTranslation::new(
+        let translation = UnresolvedTranslation::new(
             &targets,
             origin.precedence(),
             stage,
             &effects,
             origin.clone(),
-        ))
+        );
+        // a `*` in the action consumes the whole match; a `%swap` also resolves from the focus
+        // but leaves the context in the input
+        Ok(if targets.contains(&TranslationTarget::Capture) {
+            translation.consuming_match()
+        } else {
+            translation
+        })
     }
 
     pub fn insert(
@@ -245,7 +253,9 @@ impl ContextPatternsBuilder {
                 ctx.dots_classes()
             }
         };
-        let regexp = Regexp::from_test(&test, character_classes).compile_with_payload(translation);
+        let regexp = Regexp::from_test(&test, character_classes)
+            .compile_with_payload(translation)
+            .with_lookback(test.leading_lookback(), test.trailing_lookback());
         self.regexps.push(regexp);
         Ok(())
     }
@@ -865,9 +875,9 @@ mod tests {
         builder
             .insert(&tests, &action, &origin, stage, &ctx)
             .unwrap();
+        // the `*` action consumes the whole match, context included
         let translation =
-            ResolvedTranslation::new("⠐", "⠐⠥", 3, TranslationStage::Post1, origin.clone())
-                .with_offset(1);
+            ResolvedTranslation::new("⠕⠐⠽", "⠐⠥", 3, TranslationStage::Post1, origin.clone());
         let patterns = builder.build();
         assert_eq!(patterns.find("⠕⠐⠽", &env, true), [translation]);
         assert!(patterns.find("⠕", &env, true).is_empty());
@@ -889,9 +899,14 @@ mod tests {
         builder
             .insert(&tests, &action, &origin, stage, &context)
             .unwrap();
-        let translation =
-            ResolvedTranslation::new("abc", "<abc>", 9, TranslationStage::Main, origin.clone())
-                .with_offset(3);
+        // the `*` action consumes the whole match, context included
+        let translation = ResolvedTranslation::new(
+            "{{{abc}}}",
+            "<abc>",
+            9,
+            TranslationStage::Main,
+            origin.clone(),
+        );
         let patterns = builder.build();
         assert_eq!(patterns.find("{{{abc}}}", &env, true), [translation]);
         assert!(patterns.find("def", &env, true).is_empty());
