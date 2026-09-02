@@ -76,8 +76,10 @@ than leaving it to be discovered.
 
 Resolution order in louis-rs is:
 
-1. For a table named by path (~parser::table_expanded~, i.e. the CLI),
-   the table's own directory, prepended to the search path.
+1. For a table named on the command line (~cli_search_path~ in
+   ~main.rs~), the table's own directory, prepended to the search path.
+   This step is the CLI's alone; the library API resolves names against
+   the search path it is handed and nothing else.
 2. Each entry of ~LOUIS_TABLE_PATH~, or ~.~ when it is unset.
 
 Absolute names need no step of their own: ~PathBuf::push~ discards the

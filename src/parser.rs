@@ -2571,20 +2571,9 @@ pub fn table_file(path: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     table(&text, Some(path.into()))
 }
 
-/// The table's own directory is searched first, so a table named by path can include a table
-/// sitting next to it without that directory being on `LOUIS_TABLE_PATH`. Unlike liblouis, which
-/// rebases on the including table at every level, the directory stays on the search path for
-/// nested includes too -- more permissive, never less.
-pub fn table_expanded(file: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
-    let mut search_path = SearchPath::new_or("LOUIS_TABLE_PATH", ".");
-    if let Some(dir) = file.parent() {
-        search_path.prepend(dir.to_path_buf());
-    }
-    table_expanded_in(file, &search_path)
-}
-
-/// Like [`table_expanded`], but looking names up in `search_path` rather than in
-/// `LOUIS_TABLE_PATH`.
+/// Expands `file` and every table it includes, looking names up in `search_path`. Where that
+/// search path comes from is the caller's business: the parser neither reads the environment nor
+/// adds directories of its own.
 pub fn table_expanded_in(
     file: &Path,
     search_path: &SearchPath,
@@ -3041,22 +3030,6 @@ mod tests {
     /// table-inclusion test and returns a [`SearchPath`] rooted at it -- built directly from the
     /// directory rather than via [`SearchPath::new_or`], so tests don't need to touch the
     /// process-wide `LOUIS_TABLE_PATH` env var (which would race with other tests).
-    #[test]
-    fn table_named_by_path_includes_its_own_directory() {
-        // The included table sits next to the includer, and LOUIS_TABLE_PATH points elsewhere.
-        let (dir, _) = include_test_dir("named-by-path");
-        std::fs::write(dir.join("top.utb"), "include base.utb\n").unwrap();
-        std::fs::write(dir.join("base.utb"), "letter a 1\n").unwrap();
-        let rules = table_expanded(&dir.join("top.utb")).unwrap();
-        assert!(matches!(
-            rules.as_slice(),
-            [AnchoredRule {
-                rule: Rule::Letter { .. },
-                ..
-            }]
-        ));
-    }
-
     fn include_test_dir(name: &str) -> (PathBuf, SearchPath) {
         let dir = std::env::temp_dir().join(format!("louis-rs-include-test-{name}"));
         let _ = std::fs::remove_dir_all(&dir);

@@ -48,13 +48,18 @@ locations, nor the ~<dir>/liblouis/tables/~ form of each entry, so the
 same directories can legitimately resolve differently under the two
 implementations.
 
-A table named by path is looked up in its own directory first, so a
-table can include one sitting next to it without that directory being on
-~LOUIS_TABLE_PATH~:
+A table named on the command line is looked up in its own directory
+first, so a table can include one sitting next to it without that
+directory being on ~LOUIS_TABLE_PATH~:
 
 #+BEGIN_SRC shell
   $ louis parse /some/where/top.utb   # finds an "include base.utb" next to it
 #+END_SRC
+
+That first step belongs to the command line tool. The library resolves
+names against the search path it is handed and nothing else, so an
+application owning its own tables passes their directories to
+~Translator::with_search_path~.
 
 ** Installation
 
