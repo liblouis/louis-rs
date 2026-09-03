@@ -51,6 +51,12 @@ impl TableContext {
         let mut dots_classes = CharacterClasses::default();
         let mut swap_classes = SwapClasses::default();
 
+        // First pass: everything that later rules need to *look up*. These include
+        // character definitions (`space`, `letter`, `digit`, …), because `Rule::Base` and
+        // the attribute opcodes in the second pass resolve a character to its dots
+        // through them, and also the letter dots class, because a boundary check in
+        // backward translation asks whether a neighbouring *cell* is a letter and a
+        // contraction's cell only qualifies via the rule that produced it.
         for rule in rules {
             match &rule.rule {
                 Rule::Space {
@@ -134,12 +140,43 @@ impl TableContext {
                     character_classes.insert(CharacterClass::Punctuation, *character);
                     dots_classes.insert_dots(CharacterClass::Punctuation, dots);
                 }
-                // `always` rules commonly spell out letter-group contractions (e.g. "le", "ing")
+                // Contraction rules commonly spell out letter groups (e.g. "le", "ing", "re")
                 // as a single cell or short cell sequence. Backward translation's word-boundary
                 // checks rely on `dots_classes` to recognize these cells as letters too, or a
                 // `word`-level rule sharing a prefix with the contraction wrongly thinks the word
-                // ends right after it.
-                Rule::Always { chars, dots, .. } if chars.chars().all(|c| c.is_alphabetic()) => {
+                // ends right after it — and a `partword` contraction adjacent to another
+                // contraction sees no letter on either side, so it never fires.
+                //
+                // Ceiling: this precomputes a property of a *cell* where liblouis asks a
+                // question about a *position* — `isEndWord` walks the rules attached to the
+                // next cell and treats any rule with `charslen > 1` as word-continuation.
+                // The `is_alphabetic` guard is therefore narrower than liblouis's, and a
+                // contraction spelling non-letters still breaks a neighbouring `partword`
+                // (`always n't` next to `partword ed` back-translates to a hex fallback).
+                // Widening the guard only moves the ceiling; see the backward-boundary
+                // entry under "Known gaps" in TODO.org for the real fix.
+                Rule::Always { chars, dots, .. }
+                | Rule::Word { chars, dots, .. }
+                | Rule::Sufword { chars, dots, .. }
+                | Rule::Prfword { chars, dots, .. }
+                | Rule::Begword { chars, dots, .. }
+                | Rule::Begmidword { chars, dots, .. }
+                | Rule::Midword { chars, dots, .. }
+                | Rule::Midendword { chars, dots, .. }
+                | Rule::Endword { chars, dots, .. }
+                | Rule::Partword { chars, dots, .. }
+                    if chars.chars().all(|c| c.is_alphabetic()) =>
+                {
+                    for cell in dots.to_string().chars() {
+                        dots_classes.insert(CharacterClass::Letter, cell);
+                    }
+                }
+                // `lowword` and `joinword` carry `BrailleChars` rather than `Braille`,
+                // so they cannot share the or-pattern above, but the reasoning is the
+                // same and so is the body.
+                Rule::Lowword { chars, dots, .. } | Rule::Joinword { chars, dots, .. }
+                    if chars.chars().all(|c| c.is_alphabetic()) =>
+                {
                     for cell in dots.to_string().chars() {
                         dots_classes.insert(CharacterClass::Letter, cell);
                     }

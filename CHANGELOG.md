@@ -72,6 +72,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   (liblouis/liblouis#496).
 
 ### Fixed
+- A contraction next to another contraction no longer blocks a `partword` rule
+  in backward translation. Backward word-boundary checks classify the
+  neighbouring braille cell, and the letter class they consult was seeded only
+  from character definitions and `always` rules, so a cell produced by any other
+  contraction opcode counted as no letter at all and a neighbouring `partword`
+  never fired. The whole word-family now contributes its dots to that class. A
+  contraction spelling non-letters still hits the same gap; see the
+  backward-boundary entry under "Known gaps" in `TODO.org`.
 - Competing translation rules are now ranked by the number of characters they
   consume first, and only then by the `before`/`after` conditions they carry. The
   two were summed into a single weight, so a rule with enough conditions could

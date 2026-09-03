@@ -26,6 +26,47 @@
   languages (see [[https://github.com/mozilla/cbindgen][cbindgen]] or [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 
 * Known gaps
+- [ ] Backward word-boundary checks ask about a cell, not a position
+  - Both sides of a backward boundary check are evaluated against the
+    braille input via ~dots_classes~ (~PrimaryTable~'s ~trie_ctx~,
+    ~src/translator/table/primary.rs~). liblouis is asymmetric
+    (~lou_backTranslateString.c~):
+    - the *before* side reads the last character of the output
+      produced so far and classifies it with the text classes
+      (~back_setBefore~, ~isBegWord~ — "look at what has already been
+      translated")
+    - the *after* side reads the next braille cell and classifies it
+      with the dots classes, but when that cell is not a letter by
+      attribute it walks the rules attached to the cell and treats any
+      rule with ~charslen > 1~ as word-continuation (~isEndWord~,
+      excluding ~begword~/~midword~ per liblouis#360)
+  - So liblouis never needs contraction dots in its letter class. We
+    approximate that rule walk by pre-seeding ~dots_classes~ from
+    every all-alphabetic contraction opcode (~TableContext::compile~,
+    ~src/translator/table.rs~). That has now been widened three times
+    for three opcode families (edf1b4c, bed6112, and the ~partword~
+    fix), and it still has a ceiling:
+    - the guard is narrower than liblouis's ~charslen > 1~, so a
+      contraction spelling non-letters still breaks a neighbouring
+      ~partword~. Reproducer: a table with ~always n't 12356~ and
+      ~partword ed 1246~ translates "can'ted" forward but
+      back-translates ~⠉⠁⠷⠫~ to "can't" plus a hex fallback
+    - the property is per-cell and global, so a cell counts as a
+      letter at every position, not only where a contraction applies
+    - "a translation continues the word here" is not "this cell is a
+      letter", but the letter class is the only way we can say it, so
+      the cell also reads as a letter to number/punctuation boundary
+      checks, ~before~/~after~ class constraints and the
+      capitalization tiers. Over-application this way is what
+      regressed the suite in earlier attempts
+    - the before side cannot be fixed this way at all: its correct
+      answer depends on the text already produced, which no property
+      of a cell can encode (an indicator cell emits no text, so
+      liblouis's output-side lookup sees past it while ours sees the
+      indicator)
+  - Fixing it properly means matching liblouis's split: text classes
+    over produced output for the before side, dots classes plus a rule
+    walk for the after side. Widening the guard only moves the ceiling.
 - [ ] Literal hyphen character breaks per-segment contraction in compounds
   - e.g. en-ueb.yaml: "do-it-yourself" -> expected "d-x-yrf", actual
     "do-x-y|rself" ("do" and "yourself" fail to contract on their own
