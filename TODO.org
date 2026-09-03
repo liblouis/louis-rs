@@ -26,6 +26,62 @@
   languages (see [[https://github.com/mozilla/cbindgen][cbindgen]] or [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 
 * Known gaps
+- [ ] ~letsign~ is unhandled in both directions, and its dots collide
+  with multi-cell letter definitions
+  - ~da-dk-g28.ctb~ line 870 declares ~letsign 56~, but dots 56 is
+    *also* the lead cell of that table's two-cell letter definitions:
+    #+begin_src
+    lowercase q 56-12345    lowercase x 56-1346     lowercase à 56-12356
+    lowercase w 56-2456     lowercase z 56-1356     lowercase ç 56-12346
+    #+end_src
+    so a leading ⠰ is genuinely ambiguous — letter sign, or first half
+    of a ~q~/~w~/~x~/~z~.
+  - *Forward* (312 of the 324): a letter immediately followed by a
+    digit takes the letter sign; we emit none. liblouis treats a digit
+    as a word boundary for letter-sign purposes and
+    ~src/translator/indication/lettersign.rs~ does not. The remaining
+    3 are two-letter words (~ii~, ~ik~).
+  - *Backward* (1031 of the 1032): the letsign/two-cell-letter
+    ambiguity is resolved inconsistently, and position-dependently.
+    ⠰ as a letter sign is never dropped, and ⠰ as a lead cell resolves
+    in some positions but not others.
+  - Reproducers, both runnable as-is against the real table:
+    #+begin_src yaml
+    # forward: a letter against a digit takes the letter sign
+    display: unicode-without-blank.dis
+    table: da-dk-g28.ctb
+    flags: {testmode: forward}
+    tests:
+      - [a1, ⠰⠁⢁]        # FAILS: ⠁⢁
+      - [a500, ⠰⠁⢑⢚⢚]    # FAILS: ⠁⢑⢚⢚
+    #+end_src
+    #+begin_src yaml
+    # backward: same dots, four positions, three different outcomes
+    display: unicode-without-blank.dis
+    table: da-dk-g28.ctb
+    flags: {testmode: backward}
+    tests:
+      - [⠰⠭⠽⠇⠕⠋⠕⠝, xylofon]  # passes — two-cell x at word start
+      - [⠞⠁⠰⠭⠊, taxi]          # passes — two-cell x mid-word
+      - [⠕⠰⠭⠊⠙, oxid]          # FAILS: "opxid" — two-cell x mid-word
+      - [⠁⠰⠭, ax]               # FAILS: "atx"   — two-cell x at word end
+      - [⢚⠰⠊, 0i]              # FAILS: "0¨i"   — no 56-24 letter exists,
+                                #                 so ⠰ can only be letsign
+    #+end_src
+    ~taxi~ passing while ~oxid~ and ~ax~ fail is the useful clue: the
+    two-cell path works, so this is about how the ambiguity is resolved
+    per position, not a missing definition.
+  - There is precedent for the backward half. The same collision shape
+    was solved for ~capsletter~/~numsign~ against a real letter in the
+    Malayalam and Punjabi tables — an opcode is only recognized as an
+    indicator when its dots aren't already claimed by a real letter.
+    Extending that check to ~letsign~, where the claimant is a
+    *multi-cell* definition rather than a single cell, is the likely
+    shape of the fix.
+  - Not part of this: 6 forward failures where an all-caps word takes a
+    word contraction instead of being spelled out (~AF-kontor~ →
+    expected ~⡁⡋⠤⠅⠕⠝⠞⠭~, actual ~⡴⠤⠅⠕⠝⠞⠭~) and 1 backward
+    equivalent (~⡙⠝⠅~ → "Dnk" rather than "Danmark").
 - [ ] Backward word-boundary checks ask about a cell, not a position
   - Both sides of a backward boundary check are evaluated against the
     braille input via ~dots_classes~ (~PrimaryTable~'s ~trie_ctx~,
