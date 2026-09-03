@@ -67,15 +67,17 @@
       ~resolve(capture, ..)~, and the indicator modules derive theirs
       per position -- so the collectors want
       ~Cow<'_, ResolvedTranslation>~.
-  - [ ] keep the values of maps consulted per character small. What
-    actually cost ~15% on the YAML suite (58s → 66s, interleaved runs)
-    when ~DisplayTable~ started storing whole translations was not the
-    cloning but the *value size*: widening ~HashMap<char, char>~ (4-byte
-    values, ~1KB) to ~HashMap<char, ResolvedTranslation>~ (288-byte
-    values, ~73KB for ~unicode.dis~) turns a per-character lookup into a
-    cache miss, over 2.2M assertions. Keeping the mapping in a
-    small-valued map and looking the rule up out of a ~Vec~ by index
-    only when a trace needs it should get that back.
+  - [X] keep the values of maps consulted per character small. What
+    cost ~12% on the YAML suite when ~DisplayTable~ started storing
+    whole translations was not the cloning but the *value size*:
+    widening ~HashMap<char, char>~ (4-byte values, ~1KB) to
+    ~HashMap<char, ResolvedTranslation>~ (288-byte values, ~73KB for
+    ~unicode.dis~) turns a per-character lookup into a cache miss, over
+    2.2M assertions. Fixed by boxing the rule in the value, which is 16
+    bytes. Interleaved, four ways: baseline without rules 58.2s, inline
+    translations 65.3s, small value plus a ~Vec~ indexed by ~usize~
+    57.9s, boxed rule 58.7s -- so how the value is shrunk does not
+    matter, only that it is.
 - [ ] Expose the library via a C ABI so it can be used from other
   languages (see [[https://github.com/mozilla/cbindgen][cbindgen]] or [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 

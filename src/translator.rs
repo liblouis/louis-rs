@@ -91,13 +91,18 @@ impl CharacterDefinition {
 
 #[derive(Debug)]
 pub struct DisplayTable {
-    /// The translation per mapped character, carrying the `display` rule it came from
-    mappings: HashMap<char, ResolvedTranslation>,
+    /// What each mapped character is shown as, and the `display` rule that says so.
+    ///
+    /// The rule is boxed because this map is consulted once per character of every
+    /// translation: a `(char, Box<AnchoredRule>)` value is 16 bytes where an inline
+    /// `ResolvedTranslation` is 288, which for a 256-rule display table is the difference
+    /// between a map that fits in cache and one that does not.
+    dots_to_char: HashMap<char, (char, Box<AnchoredRule>)>,
 }
 
 impl DisplayTable {
     pub fn compile(rules: &[AnchoredRule], direction: Direction) -> DisplayTable {
-        let mut mappings = HashMap::new();
+        let mut mapping = HashMap::new();
         let rules: Vec<_> = rules.iter().filter(|r| r.is_direction(direction)).collect();
 
         for rule in rules {
@@ -111,25 +116,21 @@ impl DisplayTable {
                         Direction::Forward => (braille, *character),
                         Direction::Backward => (*character, braille),
                     };
-                    let translation = ResolvedTranslation::new(
-                        &from.to_string(),
-                        &to.to_string(),
-                        1,
-                        TranslationStage::Display,
-                        (*rule).clone(),
-                    );
+                    let entry = (to, Box::new((*rule).clone()));
                     if cfg!(feature = "backwards_compatibility") {
                         // first rule wins
-                        mappings.entry(from).or_insert(translation);
+                        mapping.entry(from).or_insert(entry);
                     } else {
                         // last rule wins
-                        mappings.insert(from, translation);
+                        mapping.insert(from, entry);
                     }
                 }
                 _ => (), // ignore all other rules for display tables
             }
         }
-        DisplayTable { mappings }
+        DisplayTable {
+            dots_to_char: mapping,
+        }
     }
 
     /// Map the `input` to the output using the display rules in the
@@ -138,7 +139,12 @@ impl DisplayTable {
     /// If the `DisplayTable` does not contain a mapping for a
     /// specific char then the original character is returned
     pub fn translate(&self, input: &str) -> String {
-        self.trace(input).iter().map(|t| t.output()).collect()
+        input.chars().map(|c| self.displayed(c)).collect()
+    }
+
+    /// The character `c` is shown as, or `c` itself when the table has no mapping for it.
+    fn displayed(&self, c: char) -> char {
+        self.dots_to_char.get(&c).map_or(c, |(to, _)| *to)
     }
 
     /// One [`ResolvedTranslation`] per character, so a display table can take part in the
@@ -150,15 +156,18 @@ impl DisplayTable {
     pub fn trace(&self, input: &str) -> Vec<ResolvedTranslation> {
         input
             .chars()
-            .map(|c| match self.mappings.get(&c) {
-                Some(translation) => translation.clone(),
-                None => ResolvedTranslation::new(
+            .map(|c| {
+                let (to, origin) = match self.dots_to_char.get(&c) {
+                    Some((to, rule)) => (*to, Some((**rule).clone())),
+                    None => (c, None),
+                };
+                ResolvedTranslation::new(
                     &c.to_string(),
-                    &c.to_string(),
+                    &to.to_string(),
                     1,
                     TranslationStage::Display,
-                    None::<AnchoredRule>,
-                ),
+                    origin,
+                )
             })
             .collect()
     }
