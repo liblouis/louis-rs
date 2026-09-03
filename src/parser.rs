@@ -943,6 +943,9 @@ impl std::fmt::Display for Rule {
                 dots,
                 ..
             } => write!(f, "match {} {} {} {}", pre, chars, post, dots),
+            Rule::Display {
+                character, dots, ..
+            } => write!(f, "display {} {}", character, dots),
             _ => todo!(),
         }
     }

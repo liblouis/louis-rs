@@ -41,6 +41,33 @@
   - put translations into offset buckets
   - measure performance
   - reduce the regexp opcode operand to only 32 bit
+  - hand out references to stored translations instead of cloning them.
+    A ~ResolvedTranslation~ is 288 bytes, of which 184 are its
+    ~Option<AnchoredRule>~ (a ~Rule~ is 152 and carries ~String~s of
+    its own, so a clone allocates several times). The trie clones one
+    per candidate, for every node along the match path, at every input
+    position (~find_translations_from_node~, ~src/translator/trie.rs~),
+    and ~DisplayTable::trace~ clones one per character. Measured cost
+    of the latter alone: ~15% on the YAML suite (58s → 66s, interleaved
+    runs against the previous binary).
+    - the tables can keep owning their translations, as they do now,
+      and hand out ~&ResolvedTranslation~ -- no lifetime on the stored
+      type, so no self-reference. ~translate~ only ever reads the
+      ~output~ field.
+    - the candidate list is mixed, though: trie and display candidates
+      are stored, while ~match~/~context~ candidates are built per
+      match from ~Translation::Unresolved~ via ~resolve(capture, ..)~
+      and the indicator modules derive theirs per position. So the
+      collectors want ~Cow<'_, ResolvedTranslation>~ -- borrowed for
+      the stored ones, owned for the computed ones. ~max_by_key~ works
+      through ~Deref~.
+    - ~trace~ is fine: each stage feeds the next a fresh ~String~ and
+      the translations borrow the *table*, not that string, so the
+      borrows outlive ~print_trace~.
+    - touches ~trie.rs~, the four candidate collectors and the
+      selection in ~primary.rs~, ~pipeline.rs~ and ~print_trace~. No
+      algorithm changes. Benchmark first (~benches/translate.rs~) to
+      confirm how much of the suite time this actually is.
 - [ ] Expose the library via a C ABI so it can be used from other
   languages (see [[https://github.com/mozilla/cbindgen][cbindgen]] or [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 

@@ -37,8 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `louis translate` and `louis trace` accept `--display <TABLE>`. Without it braille is
   read and written as Unicode braille, as before; with it, cells are shown as the
   characters the display table names, so a table like `da-dk-g28.ctb` can be exercised in
-  the octo braille encoding its own `include`d display table describes. Display mappings
-  carry no originating rule and so don't appear as rows in `louis trace`.
+  the octo braille encoding its own `include`d display table describes. `louis trace` shows
+  the `display` rule behind each character as its own row, in a `Display` stage, but only
+  when a display table was given -- without `--display` there is no such stage.
 - Implement indication handling for backward-translation of `capsletter`,
   `begcapsword`/ `endcapsword`, and `numsign`/`nonumsign`. An opcode is only
   recognized as an indicator when its dots aren't already claimed by a real

@@ -91,12 +91,13 @@ impl CharacterDefinition {
 
 #[derive(Debug)]
 pub struct DisplayTable {
-    dots_to_char: HashMap<char, char>,
+    /// The translation per mapped character, carrying the `display` rule it came from
+    mappings: HashMap<char, ResolvedTranslation>,
 }
 
 impl DisplayTable {
     pub fn compile(rules: &[AnchoredRule], direction: Direction) -> DisplayTable {
-        let mut mapping = HashMap::new();
+        let mut mappings = HashMap::new();
         let rules: Vec<_> = rules.iter().filter(|r| r.is_direction(direction)).collect();
 
         for rule in rules {
@@ -110,20 +111,25 @@ impl DisplayTable {
                         Direction::Forward => (braille, *character),
                         Direction::Backward => (*character, braille),
                     };
+                    let translation = ResolvedTranslation::new(
+                        &from.to_string(),
+                        &to.to_string(),
+                        1,
+                        TranslationStage::Display,
+                        (*rule).clone(),
+                    );
                     if cfg!(feature = "backwards_compatibility") {
                         // first rule wins
-                        mapping.entry(from).or_insert(to);
+                        mappings.entry(from).or_insert(translation);
                     } else {
                         // last rule wins
-                        mapping.insert(from, to);
+                        mappings.insert(from, translation);
                     }
                 }
                 _ => (), // ignore all other rules for display tables
             }
         }
-        DisplayTable {
-            dots_to_char: mapping,
-        }
+        DisplayTable { mappings }
     }
 
     /// Map the `input` to the output using the display rules in the
@@ -132,34 +138,27 @@ impl DisplayTable {
     /// If the `DisplayTable` does not contain a mapping for a
     /// specific char then the original character is returned
     pub fn translate(&self, input: &str) -> String {
-        input.chars().map(|c| self.displayed(c)).collect()
-    }
-
-    /// The character `c` is shown as, or `c` itself when the table has no mapping for it.
-    fn displayed(&self, c: char) -> char {
-        *self.dots_to_char.get(&c).unwrap_or(&c)
+        self.trace(input).iter().map(|t| t.output()).collect()
     }
 
     /// One [`ResolvedTranslation`] per character, so a display table can take part in the
     /// pipeline like any other stage.
     ///
-    /// The mapping is one character to one character, which is what lets
-    /// [`PositionMap::from_trace`] compose this stage as the identity it is. The
-    /// translations carry no originating rule: `dots_to_char` doesn't keep the
-    /// [`AnchoredRule`] a mapping came from, and without an origin `louis trace` leaves
-    /// these rows out, which is what we want by default. Store the rule here and they show
-    /// up in a trace like any other.
+    /// Every mapping is one character to one character, which is what lets
+    /// [`PositionMap::from_trace`] compose this stage as the identity it is. A character the
+    /// table has no rule for translates to itself and carries no origin.
     pub fn trace(&self, input: &str) -> Vec<ResolvedTranslation> {
         input
             .chars()
-            .map(|c| {
-                ResolvedTranslation::new(
+            .map(|c| match self.mappings.get(&c) {
+                Some(translation) => translation.clone(),
+                None => ResolvedTranslation::new(
                     &c.to_string(),
-                    &self.displayed(c).to_string(),
+                    &c.to_string(),
                     1,
                     TranslationStage::Display,
                     None::<AnchoredRule>,
-                )
+                ),
             })
             .collect()
     }
