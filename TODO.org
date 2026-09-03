@@ -1,7 +1,26 @@
 * Todo [0/7]
-- [ ] Move the display tables into the Pipeline
-  - currently only used by the YAML test harness; normal translation
-    (~Pipeline~) has no way to specify a display table
+- [ ] Have the ~louis~ binary depend on the ~louis~ library instead of
+  compiling the same sources again
+  - ~src/main.rs~ declares its own ~mod parser~, ~mod translator~,
+    ~mod metadata~, ~mod test~ and ~mod yaml~; ~src/lib.rs~ declares an
+    overlapping ~mod parser~, ~mod translator~, ~mod emphasis~ and
+    ~mod hyphenation~. Both targets therefore compile the same sources,
+    and to the compiler the resulting types are unrelated: the
+    binary's ~parser::TableError~ is not the library's.
+  - Consequences visible today:
+    - ~main.rs~'s ~TableLoadError~ is a variant-for-variant copy of
+      ~lib.rs~'s public ~TranslationError~, and cannot simply use it
+    - dead-code warnings differ between the two builds, so the same
+      function is "never used" in one target and used in the other,
+      which makes the warnings hard to act on (see
+      ~with_display~/~DisplayTable::compile~)
+    - anything the CLI needs has to exist twice or be duplicated
+  - The blocker is deciding what becomes public API. The CLI reaches
+    for ~parser::table_expanded_in~, ~TranslationPipeline~,
+    ~ResolvedTranslation~, ~AnchoredRule~ and ~TranslationStage~, none
+    of which ~lib.rs~ exports today, and the library API is explicitly
+    not stable yet. Same question as exposing a display table on
+    ~Translator~.
 - [ ] Implement the ~syllable~ opcode with boundary checking
 - [ ] Cursor handling
 - [ ] The boundary functions (~word_start~, etc) only work in forward

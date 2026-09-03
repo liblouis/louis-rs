@@ -2,7 +2,8 @@ use crate::{
     Direction,
     parser::{AnchoredRule, HasDirection, Rule},
     translator::{
-        PositionMap, ResolvedTranslation, TranslationError, TranslationOptions, TranslationStage,
+        DisplayTable, PositionMap, ResolvedTranslation, TranslationError, TranslationOptions,
+        TranslationStage,
         table::{TableContext, multipass::MultipassTable, primary::PrimaryTable},
     },
 };
@@ -12,6 +13,7 @@ pub enum Transformation {
     Pre(MultipassTable),
     Primary(PrimaryTable),
     Post(MultipassTable),
+    Display(DisplayTable),
 }
 
 impl Transformation {
@@ -20,6 +22,7 @@ impl Transformation {
             Transformation::Pre(t) => t.trace(input),
             Transformation::Primary(t) => t.trace(input, options),
             Transformation::Post(t) => t.trace(input),
+            Transformation::Display(t) => t.trace(input),
         }
     }
 
@@ -28,6 +31,7 @@ impl Transformation {
             Transformation::Pre(t) => t.translate(input),
             Transformation::Primary(t) => t.translate(input),
             Transformation::Post(t) => t.translate(input),
+            Transformation::Display(t) => t.translate(input),
         }
     }
 
@@ -36,6 +40,7 @@ impl Transformation {
             Transformation::Pre(t) => t.translate(input),
             Transformation::Primary(t) => t.translate_with_options(input, options),
             Transformation::Post(t) => t.translate(input),
+            Transformation::Display(t) => t.translate(input),
         }
     }
 }
@@ -113,6 +118,23 @@ impl TranslationPipeline {
                 direction,
             }),
         }
+    }
+
+    /// Add `display` as the outermost stage, mapping the braille side of the pipeline.
+    ///
+    /// The display table is supplied rather than compiled from the same rules because the
+    /// caller chooses it independently of the translation table: the YAML harness takes it
+    /// from a test's `display:` key, `louis translate` from `--display`.
+    pub fn with_display(mut self, display: DisplayTable) -> Self {
+        let step = Transformation::Display(display);
+        match self.direction {
+            // translating to braille, so the display table maps what we produced: it runs last
+            Direction::Forward => self.steps.push(step),
+            // translating from braille, so it maps what we are about to read: it runs first.
+            // `compile` has already reversed `steps`, so pushing would put it at the wrong end.
+            Direction::Backward => self.steps.insert(0, step),
+        }
+        self
     }
 
     pub fn trace(&self, input: &str) -> Vec<Vec<ResolvedTranslation>> {
@@ -289,5 +311,31 @@ mod tests {
         assert_eq!(pipeline.translate("foobar"), "⠁⠸");
         assert_eq!(pipeline.translate("  "), "⠀⠀");
         assert_eq!(pipeline.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
+    }
+
+    #[test]
+    fn with_display_puts_the_display_stage_on_the_braille_side() {
+        let rules = [parse_rule("letter a 1"), parse_rule("space \\s 0")];
+        // maps the cell for dot 1 to `A` when displaying, and back when reading
+        let display = [parse_rule("display A 1")];
+
+        // forward: translate to braille, then show the cell as `A`
+        let forward = TranslationPipeline::compile(&rules, Direction::Forward)
+            .unwrap()
+            .with_display(DisplayTable::compile(&display, Direction::Forward));
+        assert_eq!(forward.translate("a"), "A");
+
+        // backward: read `A` as the cell, then translate it back to text. `compile` has
+        // already reversed the steps here, so this only works if `with_display` inserts at
+        // the front rather than pushing.
+        let backward = TranslationPipeline::compile(&rules, Direction::Backward)
+            .unwrap()
+            .with_display(DisplayTable::compile(&display, Direction::Backward));
+        assert_eq!(backward.translate("A"), "a");
+
+        // a one-to-one stage must leave the positions alone
+        let options = TranslationOptions::default();
+        let (output, _) = forward.translate_with_positions("a", &options);
+        assert_eq!(output, "A");
     }
 }

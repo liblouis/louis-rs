@@ -132,9 +132,35 @@ impl DisplayTable {
     /// If the `DisplayTable` does not contain a mapping for a
     /// specific char then the original character is returned
     pub fn translate(&self, input: &str) -> String {
+        input.chars().map(|c| self.displayed(c)).collect()
+    }
+
+    /// The character `c` is shown as, or `c` itself when the table has no mapping for it.
+    fn displayed(&self, c: char) -> char {
+        *self.dots_to_char.get(&c).unwrap_or(&c)
+    }
+
+    /// One [`ResolvedTranslation`] per character, so a display table can take part in the
+    /// pipeline like any other stage.
+    ///
+    /// The mapping is one character to one character, which is what lets
+    /// [`PositionMap::from_trace`] compose this stage as the identity it is. The
+    /// translations carry no originating rule: `dots_to_char` doesn't keep the
+    /// [`AnchoredRule`] a mapping came from, and without an origin `louis trace` leaves
+    /// these rows out, which is what we want by default. Store the rule here and they show
+    /// up in a trace like any other.
+    pub fn trace(&self, input: &str) -> Vec<ResolvedTranslation> {
         input
             .chars()
-            .map(|ref c| *self.dots_to_char.get(c).unwrap_or(c))
+            .map(|c| {
+                ResolvedTranslation::new(
+                    &c.to_string(),
+                    &self.displayed(c).to_string(),
+                    1,
+                    TranslationStage::Display,
+                    None::<AnchoredRule>,
+                )
+            })
             .collect()
     }
 }

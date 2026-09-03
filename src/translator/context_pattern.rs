@@ -244,6 +244,8 @@ impl ContextPatternsBuilder {
             TranslationStage::Post1 | TranslationStage::Post2 | TranslationStage::Post3 => {
                 ctx.dots_classes()
             }
+            // a display table is a plain character mapping, it has no context rules
+            TranslationStage::Display => unreachable!(),
         };
         let regexp = Regexp::from_test(&test, character_classes).compile_with_payload(translation);
         self.regexps.push(regexp);

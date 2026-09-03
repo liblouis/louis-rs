@@ -30,6 +30,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   accepted.
 
 ### Added
+- A display table is now a stage of the translation pipeline rather than something the
+  YAML test harness applies on its own. `TranslationPipeline::with_display` adds it as
+  the outermost stage on the braille side — last when translating to braille, first when
+  translating from it — so it composes into `inputPos`/`outputPos` like any other stage.
+- `louis translate` and `louis trace` accept `--display <TABLE>`. Without it braille is
+  read and written as Unicode braille, as before; with it, cells are shown as the
+  characters the display table names, so a table like `da-dk-g28.ctb` can be exercised in
+  the octo braille encoding its own `include`d display table describes. Display mappings
+  carry no originating rule and so don't appear as rows in `louis trace`.
 - Implement indication handling for backward-translation of `capsletter`,
   `begcapsword`/ `endcapsword`, and `numsign`/`nonumsign`. An opcode is only
   recognized as an indicator when its dots aren't already claimed by a real

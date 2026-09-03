@@ -193,20 +193,22 @@ impl<'a> TestMatrix<'a> {
             }
             Table::Query(..) => return Err(TestError::NotImplemented("Table queries".to_string())),
         };
-        Ok(TranslationPipeline::compile(&rules, direction)?)
+        // the display table is a pipeline stage on the braille side, so the pipeline
+        // applies it in the right place for `direction` and it composes into the positions
+        Ok(TranslationPipeline::compile(&rules, direction)?
+            .with_display(self.display_table(direction)?))
     }
 
     pub fn check(&self) -> Result<Vec<TestResult>, TestError> {
         let mut results = Vec::new();
         match self.mode {
             TestMode::Forward => {
-                let display_table = self.display_table(Direction::Forward)?;
                 for table in self.tables {
                     let table = self.translation_table(table, Direction::Forward)?;
                     results.extend(
                         self.tests
                             .par_iter()
-                            .map(|test| test.check(&table, &display_table, Direction::Forward))
+                            .map(|test| test.check(&table, Direction::Forward))
                             .collect::<Vec<_>>(),
                     );
                 }
@@ -214,32 +216,29 @@ impl<'a> TestMatrix<'a> {
             TestMode::Backward => {
                 // ignore the backward test if LOUIS_TEST_FOWARD_ONLY is defined
                 if option_env!("LOUIS_TEST_FORWARD_ONLY").is_none() {
-                    let display_table = self.display_table(Direction::Backward)?;
                     for table in self.tables {
                         let table = self.translation_table(table, Direction::Backward)?;
                         results.extend(
                             self.tests
                                 .par_iter()
-                                .map(|test| test.check(&table, &display_table, Direction::Backward))
+                                .map(|test| test.check(&table, Direction::Backward))
                                 .collect::<Vec<_>>(),
                         );
                     }
                 }
             }
             TestMode::BothDirections => {
-                let display_table = self.display_table(Direction::Forward)?;
                 for table in self.tables {
                     let table = self.translation_table(table, Direction::Forward)?;
                     results.extend(
                         self.tests
                             .par_iter()
-                            .map(|test| test.check(&table, &display_table, Direction::Forward))
+                            .map(|test| test.check(&table, Direction::Forward))
                             .collect::<Vec<_>>(),
                     );
                 }
                 // ignore the backward test if LOUIS_TEST_FOWARD_ONLY is defined
                 if option_env!("LOUIS_TEST_FORWARD_ONLY").is_none() {
-                    let display_table = self.display_table(Direction::Backward)?;
                     // reverse the tests, i.e. swap `input` and `expected`
                     let reversed: Vec<Test> =
                         self.tests.iter().cloned().map(|t| t.reverse()).collect();
@@ -248,7 +247,7 @@ impl<'a> TestMatrix<'a> {
                         results.extend(
                             reversed
                                 .par_iter()
-                                .map(|test| test.check(&table, &display_table, Direction::Backward))
+                                .map(|test| test.check(&table, Direction::Backward))
                                 .collect::<Vec<_>>(),
                         );
                     }
@@ -330,12 +329,7 @@ pub struct Test {
 }
 
 impl Test {
-    fn check(
-        &self,
-        table: &TranslationPipeline,
-        display_table: &DisplayTable,
-        direction: Direction,
-    ) -> TestResult {
+    fn check(&self, table: &TranslationPipeline, direction: Direction) -> TestResult {
         let mut options = TranslationOptions::default()
             .with_mode(self.modes.clone())
             .with_emphasis(self.emphasis.clone());
@@ -344,20 +338,7 @@ impl Test {
         {
             options = options.with_cursor_pos(cursor);
         }
-        let (translated, positions) = match direction {
-            // For forward translation we first translate the input and then apply the display table
-            // on the result
-            Direction::Forward => {
-                let (translated, positions) = table.translate_with_positions(&self.input, &options);
-                (display_table.translate(&translated), positions)
-            }
-            // For backward translation we first apply the display table on the input and then
-            // translate the result
-            Direction::Backward => {
-                let displayed = display_table.translate(&self.input);
-                table.translate_with_positions(&displayed, &options)
-            }
-        };
+        let (translated, positions) = table.translate_with_positions(&self.input, &options);
         let matched = translated == self.expected;
         if matched {
             if self.xfail.is_failure(direction) {

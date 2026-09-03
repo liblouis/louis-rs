@@ -16,7 +16,9 @@ use parser::TableError;
 
 use crate::parser::AnchoredRule;
 use crate::parser::Direction;
+use crate::translator::DisplayTable;
 use crate::translator::ResolvedTranslation;
+use crate::translator::TranslationError;
 use crate::translator::TranslationPipeline;
 use crate::translator::TranslationStage;
 
@@ -61,6 +63,10 @@ enum Commands {
         /// Direction of translation
         #[arg(value_enum, short, long, default_value_t=Direction::Forward)]
         direction: Direction,
+        /// Display table mapping braille cells to the characters they are shown as. Without
+        /// it braille is read and written as Unicode braille (U+2800).
+        #[arg(long)]
+        display: Option<PathBuf>,
     },
     /// List all the rules that were applied for the translation of `input` using the specified
     /// braille `table`.
@@ -78,6 +84,10 @@ enum Commands {
         direction: Direction,
         #[arg(value_enum, short, long, default_value_t=TraceStyle::Table)]
         style: TraceStyle,
+        /// Display table mapping braille cells to the characters they are shown as. Without
+        /// it braille is read and written as Unicode braille (U+2800).
+        #[arg(long)]
+        display: Option<PathBuf>,
     },
     /// Test braille translations from given YAML file(s).
     Check {
@@ -198,36 +208,74 @@ fn print_trace(all_translations: &Vec<Vec<ResolvedTranslation>>, style: &TraceSt
     }
 }
 
-fn trace(table: &Path, direction: Direction, input: &str, style: &TraceStyle) {
-    let rules = parser::table_expanded_in(table, &cli_search_path(table));
-    match rules {
-        Ok(rules) => {
-            match TranslationPipeline::compile(&rules, direction) {
-                Ok(table) => {
-                    println!("{}", table.translate(input));
-                    print_trace(&table.trace(input), style);
-                }
-                Err(e) => eprintln!("Could not compile table: {:?}", e),
-            };
-        }
-        Err(errors) => {
-            print_errors(errors);
+/// Why a table could not be turned into a [`TranslationPipeline`]: either the table (or the
+/// display table) could not be read, or it read but would not compile.
+///
+/// The two report differently -- reading can fail with any number of errors, each naming its
+/// own file and line -- so they keep their shapes here and [`Self::report`] prints whichever
+/// it is.
+// FIXME: This duplicates the library's own `TranslationError` in `src/lib.rs`, variant for variant.
+// It has to: the binary declares its own `mod parser`/`mod translator` rather than depending
+// on the library, so the two targets compile those sources separately and the library's type
+// cannot name the binary's `TableError`. See the entry about unifying the two targets in
+// `TODO.org` -- fixing that removes this type rather than moving it.
+#[derive(thiserror::Error, Debug)]
+enum TableLoadError {
+    // no `#[from]`: `Vec` doesn't implement `Error`, so it can't be a `thiserror` source
+    #[error("Errors when reading given braille table(s)")]
+    Table(Vec<TableError>),
+    #[error(transparent)]
+    Compile(#[from] TranslationError),
+}
+
+impl TableLoadError {
+    fn report(self) {
+        match self {
+            TableLoadError::Table(errors) => print_errors(errors),
+            TableLoadError::Compile(error) => eprintln!("Could not compile table: {:?}", error),
         }
     }
 }
 
-fn translate(table: &Path, direction: Direction, input: &str) {
-    let rules = parser::table_expanded_in(table, &cli_search_path(table));
-    match rules {
-        Ok(rules) => {
-            match TranslationPipeline::compile(&rules, direction) {
-                Ok(table) => println!("{}", table.translate(input)),
-                Err(e) => eprintln!("Could not compile table: {:?}", e),
-            };
+/// Compile `table`, and `display` if one was given, into a pipeline.
+fn pipeline(
+    table: &Path,
+    display: Option<&Path>,
+    direction: Direction,
+) -> Result<TranslationPipeline, TableLoadError> {
+    let rules =
+        parser::table_expanded_in(table, &cli_search_path(table)).map_err(TableLoadError::Table)?;
+    let pipeline = TranslationPipeline::compile(&rules, direction)?;
+    match display {
+        Some(path) => {
+            let rules = parser::table_expanded_in(path, &cli_search_path(path))
+                .map_err(TableLoadError::Table)?;
+            Ok(pipeline.with_display(DisplayTable::compile(&rules, direction)))
         }
-        Err(errors) => {
-            print_errors(errors);
+        None => Ok(pipeline),
+    }
+}
+
+fn trace(
+    table: &Path,
+    display: Option<&Path>,
+    direction: Direction,
+    input: &str,
+    style: &TraceStyle,
+) {
+    match pipeline(table, display, direction) {
+        Ok(table) => {
+            println!("{}", table.translate(input));
+            print_trace(&table.trace(input), style);
         }
+        Err(e) => e.report(),
+    }
+}
+
+fn translate(table: &Path, display: Option<&Path>, direction: Direction, input: &str) {
+    match pipeline(table, display, direction) {
+        Ok(table) => println!("{}", table.translate(input)),
+        Err(e) => e.report(),
     }
 }
 
@@ -418,49 +466,35 @@ fn main() {
             table,
             input,
             direction,
+            display,
         } => match input {
             Some(input) => {
-                translate(&table, direction, &input);
+                translate(&table, display.as_deref(), direction, &input);
             }
-            None => {
-                let rules = parser::table_expanded_in(&table, &cli_search_path(&table));
-                match rules {
-                    Ok(rules) => match TranslationPipeline::compile(&rules, direction) {
-                        Ok(table) => repl(Box::new(move |input| {
-                            println!("{}", table.translate(&input));
-                        })),
-                        Err(e) => eprintln!("Could not compile table: {:?}", e),
-                    },
-                    Err(errors) => {
-                        print_errors(errors);
-                    }
-                }
-            }
+            None => match pipeline(&table, display.as_deref(), direction) {
+                Ok(table) => repl(Box::new(move |input| {
+                    println!("{}", table.translate(&input));
+                })),
+                Err(e) => e.report(),
+            },
         },
         Commands::Trace {
             table,
             input,
             direction,
             style,
+            display,
         } => match input {
             Some(input) => {
-                trace(&table, direction, &input, &style);
+                trace(&table, display.as_deref(), direction, &input, &style);
             }
-            None => {
-                let rules = parser::table_expanded_in(&table, &cli_search_path(&table));
-                match rules {
-                    Ok(rules) => match TranslationPipeline::compile(&rules, direction) {
-                        Ok(table) => repl(Box::new(move |input| {
-                            println!("{}", table.translate(&input));
-                            print_trace(&table.trace(&input), &style);
-                        })),
-                        Err(e) => eprintln!("Could not compile table: {:?}", e),
-                    },
-                    Err(errors) => {
-                        print_errors(errors);
-                    }
-                }
-            }
+            None => match pipeline(&table, display.as_deref(), direction) {
+                Ok(table) => repl(Box::new(move |input| {
+                    println!("{}", table.translate(&input));
+                    print_trace(&table.trace(&input), &style);
+                })),
+                Err(e) => e.report(),
+            },
         },
         Commands::Check {
             yaml_files,
