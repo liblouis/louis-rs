@@ -41,33 +41,41 @@
   - put translations into offset buckets
   - measure performance
   - reduce the regexp opcode operand to only 32 bit
-  - hand out references to stored translations instead of cloning them.
-    A ~ResolvedTranslation~ is 288 bytes, of which 184 are its
-    ~Option<AnchoredRule>~ (a ~Rule~ is 152 and carries ~String~s of
-    its own, so a clone allocates several times). The trie clones one
-    per candidate, for every node along the match path, at every input
-    position (~find_translations_from_node~, ~src/translator/trie.rs~),
-    and ~DisplayTable::trace~ clones one per character. Measured cost
-    of the latter alone: ~15% on the YAML suite (58s → 66s, interleaved
-    runs against the previous binary).
-    - the tables can keep owning their translations, as they do now,
-      and hand out ~&ResolvedTranslation~ -- no lifetime on the stored
-      type, so no self-reference. ~translate~ only ever reads the
-      ~output~ field.
-    - the candidate list is mixed, though: trie and display candidates
-      are stored, while ~match~/~context~ candidates are built per
-      match from ~Translation::Unresolved~ via ~resolve(capture, ..)~
-      and the indicator modules derive theirs per position. So the
-      collectors want ~Cow<'_, ResolvedTranslation>~ -- borrowed for
-      the stored ones, owned for the computed ones. ~max_by_key~ works
-      through ~Deref~.
-    - ~trace~ is fine: each stage feeds the next a fresh ~String~ and
-      the translations borrow the *table*, not that string, so the
-      borrows outlive ~print_trace~.
-    - touches ~trie.rs~, the four candidate collectors and the
-      selection in ~primary.rs~, ~pipeline.rs~ and ~print_trace~. No
-      algorithm changes. Benchmark first (~benches/translate.rs~) to
-      confirm how much of the suite time this actually is.
+  - [-] handing out references instead of cloning stored translations
+    was tried and *measured to be pointless*, 2026-09-03. The premise
+    was that a ~ResolvedTranslation~ is 288 bytes of which 184 are its
+    ~Option<AnchoredRule>~ (a ~Rule~ is 152 and carries ~String~s), and
+    that the trie clones one per candidate for every node along the
+    match path at every input position
+    (~find_translations_from_node~, ~src/translator/trie.rs~).
+    - upper-bound experiment: store no origin at all in the trie, so a
+      candidate clone skips the rule entirely -- strictly more saving
+      than ~Cow~ would give, since ~Cow~ still clones the computed
+      candidates. Doing *less* work measured 2% *slower* on
+      ~benches/translate.rs~ (word 188.7µs → 193.0µs, sentence 2.127ms
+      → 2.181ms, paragraph 13.95ms → 14.19ms) and identical on
+      ~check da-dk-g28-dictionary_harness.yaml~ (6.63/6.82s → 6.75/6.68s).
+      Two workloads on purpose: the criterion bench is regexp-dominated
+      by design (964 ~match~ rules in en-ueb-g2), the dictionary
+      harness leans on the trie. Neither can see the clone.
+    - so don't do this for the clone's sake. If it is ever wanted for
+      another reason, the shape is: tables keep owning their
+      translations and hand out ~&ResolvedTranslation~ (no lifetime on
+      the stored type, so no self-reference), but the candidate list is
+      mixed -- trie and display candidates are stored, ~match~/~context~
+      ones are built per match from ~Translation::Unresolved~ via
+      ~resolve(capture, ..)~, and the indicator modules derive theirs
+      per position -- so the collectors want
+      ~Cow<'_, ResolvedTranslation>~.
+  - [ ] keep the values of maps consulted per character small. What
+    actually cost ~15% on the YAML suite (58s → 66s, interleaved runs)
+    when ~DisplayTable~ started storing whole translations was not the
+    cloning but the *value size*: widening ~HashMap<char, char>~ (4-byte
+    values, ~1KB) to ~HashMap<char, ResolvedTranslation>~ (288-byte
+    values, ~73KB for ~unicode.dis~) turns a per-character lookup into a
+    cache miss, over 2.2M assertions. Keeping the mapping in a
+    small-valued map and looking the rule up out of a ~Vec~ by index
+    only when a trace needs it should get that back.
 - [ ] Expose the library via a C ABI so it can be used from other
   languages (see [[https://github.com/mozilla/cbindgen][cbindgen]] or [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 
