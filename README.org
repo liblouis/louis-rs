@@ -61,6 +61,31 @@ names against the search path it is handed and nothing else, so an
 application owning its own tables passes their directories to
 ~Translator::with_search_path~.
 
+*** Display tables
+
+A display table maps braille cells to the characters they are shown as.
+liblouis takes it from the first table of a table list, so a table that
+includes one of its own sets it: ~da-dk-g28.ctb~ includes
+~da-dk-octobraille.dis~, and liblouis therefore renders Danish braille in
+that CP1252 encoding.
+
+louis-rs does not. Braille is read and written as Unicode braille
+(U+2800) unless a display table is named explicitly, whether or not the
+translation table includes one:
+
+#+BEGIN_SRC shell
+  $ louis translate da-dk-g28.ctb "ørene"
+  ⠪⠷⠫
+  $ louis translate --display da-dk-octobraille.dis da-dk-g28.ctb "ørene"
+  øàë
+#+END_SRC
+
+Unicode braille is the more useful default for reading dot patterns off a
+terminal, and coupling the display table to the translation table is a
+liblouis design wart rather than something worth reproducing. The library
+takes one through ~TranslationPipeline::with_display~, and the YAML test
+harness through a test's ~display:~ key.
+
 ** Installation
 
 #+BEGIN_SRC shell
@@ -148,6 +173,30 @@ Trace a translation with a pre-translation rule:
   │ 7 │ c     │ ⠉    │ lowercase c ⠉        │ Main  │
   └───┴───────┴──────┴──────────────────────┴───────┘
 #+END_SRC
+
+Show the braille in the encoding a table's own display table describes,
+instead of as Unicode braille, with ~--display~. The mapping is a stage of
+the pipeline like any other, so ~trace~ names the ~display~ rule behind
+each character:
+
+#+BEGIN_SRC shell
+  $ louis trace --display da-dk-octobraille.dis da-dk-g28.ctb "ørene"
+  øàë
+  ┌───┬──────┬────┬───────────────┬─────────┐
+  │   │ From │ To │ Rule          │ Stage   │
+  ├───┼──────┼────┼───────────────┼─────────┤
+  │ 1 │ ø    │ ⠪  │ lowercase ø ⠪ │ Main    │
+  │ 2 │ re   │ ⠷  │ partword re ⠷ │ Main    │
+  │ 3 │ ne   │ ⠫  │ partword ne ⠫ │ Main    │
+  │ 4 │ ⠪    │ ø  │ display ø ⠪   │ Display │
+  │ 5 │ ⠷    │ à  │ display à ⠷   │ Display │
+  │ 6 │ ⠫    │ ë  │ display ë ⠫   │ Display │
+  └───┴──────┴────┴───────────────┴─────────┘
+#+END_SRC
+
+Without ~--display~ there is no such stage, so the trace is unchanged and
+the output stays Unicode braille. See [[*Display tables][Display tables]]
+for how this differs from liblouis.
 
 Test the parser:
 
