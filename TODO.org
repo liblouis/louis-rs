@@ -26,12 +26,14 @@
   languages (see [[https://github.com/mozilla/cbindgen][cbindgen]] or [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 
 * Known gaps
-- [ ] Backward: lower-sign contraction cells satisfy a ~word~ rule's
-  space-or-punctuation boundary
-  - The match-rule candidate-selection ADR: two ~match~ rules both
-    validate at the same position and we pick the wrong one. Reduced
-    to the two competing rules from ~afr-za-g2.ctb~ (lines 143 and
-    274), translating "algemene":
+- [ ] Two ~match~ rules of equal rank: we pick the last defined,
+  liblouis the first
+  - This is the forward half of the ~afr-za-g2~ cluster — 186 of that
+    file's 2663 real failures. See the "sub-case where the weights are
+    equal" under the ADR "Match-rule candidate selection: weight vs.
+    table-definition order" for the full analysis and what a fix needs.
+  - Reduced to the two competing rules from ~afr-za-g2.ctb~ (lines 143
+    and 274), translating "algemene":
     #+begin_src
     # spell-out rule first, as in the real table -> we pick the catch-all (wrong)
     noback match [BbMmSs] en [Ee]%[^_.] 15-1345
@@ -42,10 +44,14 @@
     noback match [BbMmSs] en [Ee]%[^_.] 15-1345    ->  ⠁⠇⠛⠑⠍⠑⠝⠑
     #+end_src
     Either rule alone produces the correct output, so both patterns are
-    fine; only the choice between them is wrong. liblouis returns the
-    first rule that validates in definition order, and the spell-out
-    rule is defined first — we end up favouring the later one, which
-    is what ~max_by_key~ does on equal weights.
+    fine; only the choice between them is wrong. That the order matters
+    at all proves the two rank equally — otherwise ~max_by_key~ would
+    pick the same rule either way — and on a tie it returns the last
+    candidate, which follows table order.
+- [ ] Backward: lower-sign contraction cells satisfy a ~word~ rule's
+  space-or-punctuation boundary
+  - This is the backward half of the same ~afr-za-g2~ cluster: 2477 of
+    its 2663 real failures.
   - Afrikaans's "lower sign group" contractions occupy the same dot
     patterns as punctuation, which ~afr-za-g2.ctb~ inherits through
     ~afr-za-g1.ctb~ → ~en-ueb-g1.ctb~ → ~en-ueb-chardefs.uti~:

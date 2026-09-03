@@ -201,11 +201,11 @@ Good entry points, roughly easiest first:
 3. **The three parser gaps.** Small, concrete, and each has a failing file to check
    against. *(S)*
 4. **Expose the four missing entry points.** Mechanical. *(S each)*
-5. **Survey an unclassified failure cluster** — `afr-za-g2` is the largest one left,
-   and the residual Danish failures need re-surveying now that the `partword` cause is
-   out of the way. Reading failure output rather than deep engine work, and the last
-   two clusters that got this treatment each turned out to be one root cause rather
-   than a tail. *(M)*
+5. **Survey a failure cluster.** Every row in the table above now names a cause, so
+   what's left is the ~2 600 failures spread across roughly 100 smaller files, and
+   the residue of the two clusters already surveyed. Reading failure output rather
+   than deep engine work — and each of the three clusters that got this treatment
+   turned out to be one or two root causes rather than a long tail. *(M)*
 
 The two architectural items — match-rule candidate selection, and unifying the
 capitalization and emphasis tier models — each already have one failed attempt behind
