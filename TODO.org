@@ -26,6 +26,69 @@
   languages (see [[https://github.com/mozilla/cbindgen][cbindgen]] or [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 
 * Known gaps
+- [ ] Backward: lower-sign contraction cells satisfy a ~word~ rule's
+  space-or-punctuation boundary
+  - This is the backward half of the ~afr-za-g2~ cluster: 2477 of the
+    file's 2663 real failures. The other 186 are forward and are the
+    match-rule candidate-selection ADR: two ~match~ rules both
+    validate at the same position and we pick the wrong one. Reduced
+    to the two competing rules from ~afr-za-g2.ctb~ (lines 143 and
+    274), translating "algemene":
+    #+begin_src
+    # spell-out rule first, as in the real table -> we pick the catch-all (wrong)
+    noback match [BbMmSs] en [Ee]%[^_.] 15-1345
+    noback match !%3 en !%3 26                     ->  ⠁⠇⠛⠑⠍⠢⠑
+
+    # same two rules, order swapped -> we pick the spell-out (correct)
+    noback match !%3 en !%3 26
+    noback match [BbMmSs] en [Ee]%[^_.] 15-1345    ->  ⠁⠇⠛⠑⠍⠑⠝⠑
+    #+end_src
+    Either rule alone produces the correct output, so both patterns are
+    fine; only the choice between them is wrong. liblouis returns the
+    first rule that validates in definition order, and the spell-out
+    rule is defined first — we end up favouring the later one, which
+    is what ~max_by_key~ does on equal weights.
+  - Afrikaans's "lower sign group" contractions occupy the same dot
+    patterns as punctuation, which ~afr-za-g2.ctb~ inherits through
+    ~afr-za-g1.ctb~ → ~en-ueb-g1.ctb~ → ~en-ueb-chardefs.uti~:
+    | contraction        | punctuation      | cell |
+    |--------------------+------------------+------|
+    | ~midword aa 2~     | ~punctuation , 2~ | ⠂    |
+    | ~begmidword on 25~ | ~punctuation : 25~ | ⠒    |
+    | ~begmidword te 235~| ~punctuation ! 235~| ⠖    |
+    | ~begword deur 256~ | ~punctuation . 256~| ⠲    |
+  - ~Rule::Word~ (~src/translator/table/primary.rs~) inserts with
+    ~Transition::Start~/~End~ of ~[Space, Punctuation]~ — a *positive*
+    requirement, unlike ~partword~'s letter lookaround. In backward
+    translation those transitions are resolved against ~dots_classes~,
+    so a neighbouring ⠂ counts as the comma and the word boundary is
+    spuriously satisfied. Every single-cell ~word~ contraction then
+    fires mid-word. 1823 of the 2477 failures contain ⠂ alone.
+  - Note this is *not* fixed by seeding the letter dots class (see the
+    entry below): ~word~ asks "is the neighbour space or punctuation",
+    not "is the neighbour a letter", so adding letters changes nothing.
+  - The second symptom of the same collision is a lower-sign cell
+    decoded as the punctuation itself: ~⠐⠣⠲⠐⠜~ → "(.)" rather than
+    "(deur)".
+  - Reproducer, and the discriminator that pins the mechanism:
+    #+begin_src yaml
+    display: unicode-without-blank.dis
+    table: afr-za-g2.ctb
+    flags: {testmode: backward}
+    tests:
+      # ⠅ is letter k and `word kan`; both cases end a longer word
+      - [⠍⠂⠅, maak]   # FAILS: "myaakan" — ⠂ before it has the comma's dots,
+                       #        so `word my` and `word kan` both fire
+      - [⠃⠕⠑⠅, boek]  # passes — ⠑ is a plain letter, no collision
+      - [⠌⠂⠞, staat]  # FAILS: "stilaatot" — `word stil` and `word tot`
+      - [⠃⠗⠂⠊, braai] # FAILS: "briefaais" — `word brief` and `word is`
+    #+end_src
+    ~boek~ passing while ~maak~ fails is the whole diagnosis: the only
+    difference is whether the preceding cell's dots collide with a
+    punctuation definition.
+  - Same family as the two entries below — a backward boundary check
+    classifying a dot pattern instead of asking what the cell is at
+    this position — so the real fix is likely shared with them.
 - [ ] ~letsign~ is unhandled in both directions, and its dots collide
   with multi-cell letter definitions
   - ~da-dk-g28.ctb~ line 870 declares ~letsign 56~, but dots 56 is
@@ -167,6 +230,15 @@
     the word/group-sign gap below)
   - [ ] ~ByOrder~/~Any~ in match_pattern.rs, and all three in
     context_pattern.rs, remain no-ops
+  - Note on reading ~%[...]~: the bracket contents are a *union* of
+    attributes, not a character set and never a negation
+    (~pattern.c~'s ~compileAttributes~): ~_~ space, ~#~ digit, ~a~
+    letter, ~u~ uppercase, ~l~ lowercase, ~.~ punctuation, ~$~ sign,
+    ~m~ math, ~~~ seqdelimiter, ~<~/~>~ seqbefore/after, ~0~-~7~ the
+    numbered attributes, and ~^~ *end of input*. So ~%[^_]~ reads
+    "boundary or space" and ~%[^_.]~ "boundary, space or punctuation" —
+    both word-boundary tests. ~^~ inside the brackets is not negation;
+    only a leading ~!~ negates.
 - [-] Word/group-sign ("lower"/part-word sign) contraction — mostly
   fixed: root cause was ~match~ rules gated on the ~^~ boundary
   attribute never firing, now fixed for both lowercase and capitalized
