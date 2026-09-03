@@ -28,9 +28,7 @@
 * Known gaps
 - [ ] Backward: lower-sign contraction cells satisfy a ~word~ rule's
   space-or-punctuation boundary
-  - This is the backward half of the ~afr-za-g2~ cluster: 2477 of the
-    file's 2663 real failures. The other 186 are forward and are the
-    match-rule candidate-selection ADR: two ~match~ rules both
+  - The match-rule candidate-selection ADR: two ~match~ rules both
     validate at the same position and we pick the wrong one. Reduced
     to the two competing rules from ~afr-za-g2.ctb~ (lines 143 and
     274), translating "algemene":

@@ -1144,6 +1144,77 @@ consumer, not just louis-rs, and go through liblouis's own review
 process on its own timeline. Whether and when to pursue that is the
 maintainer's call, not a default.
 
+*** A sub-case where the weights are equal and the tie-break decides
+
+[2026-09-03] The ~en-ueb-g2~ example above diverges because the two
+candidates end up with *different* weights and we take the larger.
+There is a second, simpler sub-case where they end up with the *same*
+weight, and then the outcome is decided entirely by which candidate
+~max_by_key~ happens to return.
+
+~afr-za-g2.ctb~ has two ~match~ rules for "en" that both validate in
+"algemene" — the one that spells it out, defined at line 143, and a
+catch-all at line 274:
+
+#+begin_example
+noback match [BbMmSs] en [Ee]%[^_.] 15-1345   # line 143, spells "en" out
+noback match !%3 en !%3 26                    # line 274, contracts it
+#+end_example
+
+Both consume one character of ~pre~, the two matched characters, and
+one character of ~post~ — ~%[^_.]~ contributes nothing here because it
+matches the end of input, which consumes no input — so both rank
+~(false, 2, 4)~. Reduced to just those two rules plus ~partword en~,
+swapping their order in the table swaps the result:
+
+#+begin_example
+spell-out rule first (as shipped)  ->  "algemene" = ⠁⠇⠛⠑⠍⠢⠑   wrong
+spell-out rule second              ->  "algemene" = ⠁⠇⠛⠑⠍⠑⠝⠑   correct
+#+end_example
+
+Either rule on its own produces the correct output, so both patterns
+are fine — only the choice between them is wrong. That the order
+matters at all is itself the proof that the ranks are equal: if they
+differed, ~max_by_key~ would pick the same rule either way.
+
+**** liblouis breaks this tie by taking the *first* rule defined
+
+Worth stating precisely, because a ~FIXME~ in ~src/translator/trie.rs~
+asserts the opposite (that liblouis lets the *last* rule defined win).
+That is wrong. ~compileTranslationTable.c~ says so in a comment above
+~addForwardRuleWithSingleChar~ — "rules are considered in the order in
+which they are defined in the table" — and all four insertion
+functions (~addForwardRuleWithSingleChar~,
+~addForwardRuleWithMultipleChars~, ~addBackwardRuleWithSingleCell~,
+~addBackwardRuleWithMultipleCells~) walk past every existing rule that
+is at least as long before splicing the new one in, so within a group
+of equally long rules the bucket preserves definition order.
+~for_selectRule~ then returns on the first rule that validates. First
+defined wins, in both directions.
+
+**** Why this matters for the decision
+
+This sub-case is cheaper to fix than the weight question, and the fix
+points the same way as two other open items:
+
+- It needs an ordering key, not a change to weight semantics: prefer
+  the earliest-defined rule among candidates of equal rank.
+  ~AnchoredRule~ carries ~path~ and ~line~ but no global sequence
+  number; ~path~/~line~ alone do not order rules across an ~include~,
+  whereas the index into the flattened rule list after include
+  expansion does.
+- It subsumes the nondeterminism ~FIXME~ in ~trie.rs~. Candidates that
+  tie today are ordered by ~HashMap~ iteration, which is randomized
+  per process, so a tie is decided by chance and ~fr-bfu-g2.yaml~ and
+  ~pa.yaml~ report different results between runs. An explicit
+  earliest-defined tie-break removes the nondeterminism *and* matches
+  liblouis, which the ~FIXME~ had concluded was unachievable only
+  because it had the direction backwards.
+- It is worth measuring before committing to the larger fix: 186 of
+  ~afr-za-g2.yaml~'s failures are this, and it is unknown how much of
+  ~en-ueb-g2-dictionary_harness~ is the equal-weight tie rather than
+  the divergent-weight case the example above describes.
+
 ** Decision Drivers
 
 - For options 1–3 (the engine keeps behaving the same for a given

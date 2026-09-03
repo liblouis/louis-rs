@@ -88,7 +88,9 @@ struct TrieNode {
     // en-ueb-g2 got ~12% faster, since hashing a `ResolvedClasses` hashes its whole
     // `Vec<char>` while an ordered compare short-circuits on the discriminant. It was left
     // out because it only freezes an arbitrary order: liblouis breaks such a tie by
-    // definition order, the last rule defined winning, which neither map reproduces.
+    // definition order, which neither map reproduces. Note it is the *first* rule defined
+    // that wins there, not the last -- see the tie-break sub-case in the ADR "Match-rule
+    // candidate selection", which also wants that same ordering key.
     transitions: HashMap<ResolvedTransition, TrieNode>,
 }
 
