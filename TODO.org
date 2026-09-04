@@ -1,4 +1,4 @@
-* Todo [0/8]
+* Todo [1/8]
 - [ ] Have the ~louis~ binary depend on the ~louis~ library instead of
   compiling the same sources again
   - ~src/main.rs~ declares its own ~mod parser~, ~mod translator~,
@@ -88,25 +88,33 @@
     translations 65.3s, small value plus a ~Vec~ indexed by ~usize~
     57.9s, boxed rule 58.7s -- so how the value is shrunk does not
     matter, only that it is.
-- [ ] Make the suite reproducible: ~TrieNode::transitions~ is a
-  ~HashMap~, so a tie between candidates is decided by iteration order,
-  which is randomized per process. ~pa.yaml~, ~hi_harness.yaml~ and
-  ~fr-bfu-g2.yaml~ report different numbers between runs of the same
-  binary, which is the size of a real regression. A ~BTreeMap~ fixes it
-  in ~4 lines and measured faster; see the ADR "Rule selection does not
-  depend on table order" for why we freeze an arbitrary order rather
-  than adopt liblouis's definition order, and for the linter idea that
-  would find the underlying table ambiguities.
+- [X] Make the suite reproducible: ~TrieNode::transitions~ was a
+  ~HashMap~, so a tie between candidates was decided by iteration
+  order, which is randomized per process, and ~pa.yaml~,
+  ~hi_harness.yaml~ and ~fr-bfu-g2.yaml~ reported different numbers
+  between runs of the same binary. Fixed with a ~BTreeMap~; see the ADR
+  "Rule selection does not depend on table order" for why we freeze an
+  arbitrary order rather than adopt liblouis's definition order, and
+  for the linter idea that would find the underlying table
+  ambiguities.
 - [ ] Expose the library via a C ABI so it can be used from other
   languages (see [[https://github.com/mozilla/cbindgen][cbindgen]] or [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 
 * Known gaps
 - [ ] Two ~match~ rules of equal rank: we pick the last defined,
-  liblouis the first
+  liblouis the first. *Not an engine gap any more* — see below
   - This is the forward half of the ~afr-za-g2~ cluster — 186 of that
-    file's 2663 real failures. See the "sub-case where the weights are
-    equal" under the ADR "Match-rule candidate selection: weight vs.
-    table-definition order" for the full analysis and what a fix needs.
+    file's 2663 real failures.
+  - Decided against an engine-side fix: the ADR "Rule selection does
+    not depend on table order" holds that candidates which tie after
+    ~rank~ has spoken are an ill-formed table, so no ordering key is
+    introduced, earliest-defined or otherwise. See the "[2026-09-04]
+    Reversed" note under the ADR "Match-rule candidate selection:
+    weight vs. table-definition order", which had argued the other way.
+  - So these 186 are table bugs to fix upstream, not louis-rs work. The
+    entry stays open as the record of them, and because nothing yet
+    enumerates the other tables with the same ambiguity (the linter
+    idea in the first of those two ADRs).
   - Reduced to the two competing rules from ~afr-za-g2.ctb~ (lines 143
     and 274), translating "algemene":
     #+begin_src
@@ -374,11 +382,3 @@
   implemented — mode flags in ~TranslationOptions~ meant to expand the
   current word into computer braille without ~begcomp~/~endcomp~
   indicators
-- [ ] The YAML suite is not deterministic: repeated ~check~ runs of the
-  same binary report different results for ~fr-bfu-g2.yaml~ (94.5–95.0%)
-  and ~pa.yaml~ (87.1–87.3%). Not caused by the position work — plain
-  ~main~ varies the same way. Worth chasing before trusting the suite to
-  catch small regressions, since a few tests flipping is exactly the
-  size of a real regression. Both files have several ~table:~ blocks and
-  the runner is parallel (~rayon~), so shared state or iteration order
-  in table compilation is the first place to look.

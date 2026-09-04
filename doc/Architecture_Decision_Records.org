@@ -16,14 +16,14 @@
 
 ** Context and Problem Statement
 
-The suite is not reproducible. Repeated ~check~ runs of the same binary
-report different results for ~pa.yaml~ (12.2%/12.4% failures),
+The suite was not reproducible. Repeated ~check~ runs of the same
+binary reported different results for ~pa.yaml~ (12.2%/12.4% failures),
 ~hi_harness.yaml~ (11.0%/11.3%) and ~fr-bfu-g2.yaml~ (94.5-95.0%). The
-mechanism is in the ~FIXME~ on ~TrieNode~ (~src/translator/trie.rs~):
+mechanism was the ~FIXME~ on ~TrieNode~ (~src/translator/trie.rs~):
 ~HashMap~ iteration order is randomized per process, so the order in
-which ~find_translations_from_node~ collects candidates varies between
-runs, and candidates that tie on ~ResolvedTranslation::rank~ are
-resolved by ~max_by_key~, which returns the last of them. A tie is
+which ~find_translations_from_node~ collected candidates varied between
+runs, and candidates that tied on ~ResolvedTranslation::rank~ were
+resolved by ~max_by_key~, which returns the last of them. A tie was
 therefore decided by chance.
 
 liblouis has an answer for this: it considers rules in the order they
@@ -31,9 +31,12 @@ are defined in the table and takes the first that validates
 (~compileTranslationTable.c~, the comment above
 ~addForwardRuleWithSingleChar~; all four insertion functions append
 within a group of equally long rules; ~for_selectRule~ returns on the
-first success). Adopting it would make us reproducible *and* match
-liblouis, and the same ordering key would settle the equal-weight
-sub-case in [[*DRAFT Match-rule candidate selection: weight vs. table-definition order][the match-rule candidate selection ADR]].
+first success). Adopting it would have made us reproducible *and*
+matched liblouis, and the same ordering key would have settled the
+equal-weight sub-case in [[*DRAFT Match-rule candidate selection: weight vs. table-definition order][the match-rule candidate selection ADR]]. That
+path was declined -- see Decision Outcome -- in favor of reproducibility
+without adopting liblouis's order semantics, so the two engines can
+still disagree wherever a table actually relies on definition order.
 
 ** Decision Drivers
 
@@ -73,14 +76,12 @@ Consequences accepted:
 - Output will differ from liblouis wherever a table relies on
   definition order. Those are table bugs to fix upstream, not engine
   bugs to emulate.
-- Reproducibility still has to come from somewhere, since chance
-  deciding is not acceptable either. That is a separate, smaller
-  change -- a ~BTreeMap~ for ~TrieNode::transitions~ freezes the
-  order in about 4 lines and measured *faster* (~12% off compiling
-  ~en-ueb-g2~, because hashing a ~ResolvedClasses~ hashes its whole
-  ~Vec<char>~ while an ordered compare short-circuits). It makes the
-  suite an instrument again without claiming the frozen order is
-  meaningful.
+- Reproducibility is guaranteed through a ~BTreeMap~ for
+  ~TrieNode::transitions~. It makes the suite an instrument again
+  without claiming the frozen order is meaningful. It is a stopgap
+  against the ambiguity, not against a missing tie-break: no tie-break
+  is coming, so what should eventually disappear is the tables that tie,
+  not the ~BTreeMap~.
 
 ** How big is the problem
 
@@ -139,8 +140,8 @@ already knows which rule fired where.
 
 ** Links
 
-- ~FIXME~ on ~TrieNode~, ~src/translator/trie.rs~ -- the
-  nondeterminism and the ~BTreeMap~ measurement
+- ~TrieNode::transitions~, ~src/translator/trie.rs~ -- the ~BTreeMap~
+  that fixes the nondeterminism
 - [[*DRAFT Match-rule candidate selection: weight vs. table-definition order][ADR: Match-rule candidate selection]] --
   the equal-weight sub-case this decides against resolving by order
 - ~compileTranslationTable.c~, ~addForwardRuleWithSingleChar~ and
@@ -1352,6 +1353,27 @@ points the same way as two other open items:
   ~en-ueb-g2-dictionary_harness~ is the equal-weight tie rather than
   the divergent-weight case the example above describes.
 
+**** [2026-09-04] Reversed: the tie-break is not earliest-defined
+
+The direction above did not hold up. [[*PROPOSED Rule selection does not depend on table order; a tie is an ill-formed table][The nondeterminism ADR]],
+decided the same day, went the other way for the identical question on
+the trie side: a tie on ~rank~ is an *ill-formed table*, not a case
+wanting a resolution policy, so no ordering key is introduced and the
+~FIXME~ is fixed for reproducibility alone, with a ~BTreeMap~ that
+freezes *an* order without claiming it is the correct one. That
+reasoning applies here just as much -- two ~match~ candidates tying on
+weight are equally uninstructed by the rules themselves, so picking
+"the earliest defined" is exactly the position-dependent tie-break
+that ADR rejects.
+
+So the equal-weight sub-case is answered: it does not get an
+engine-side tie-break, earliest-defined or otherwise. It is a table
+bug (the ~afr-za-g2.yaml~ 186 failures included), tracked as such. What
+remains genuinely open in this ADR is the *divergent*-weight case
+above ("abandoning") -- not a tie at all, so the nondeterminism ADR's
+reasoning does not reach it, and options 1-4 are still undecided for
+it.
+
 ** Decision Drivers
 
 - For options 1–3 (the engine keeps behaving the same for a given
@@ -1449,6 +1471,8 @@ never be) similarly revisited.
 - ~src/translator/table/primary.rs~ — ~match_candidates~,
   ~context_candidates~, weight-based candidate selection
 - ~src/translator/match_pattern.rs~ — ~BoundaryMode::AssumeAtStart~
+- [[*PROPOSED Rule selection does not depend on table order; a tie is an ill-formed table][ADR: Rule selection does not depend on table order]] —
+  reverses this ADR's equal-weight tie-break direction
 
 * ACCEPTED Pre-compute indication events before translation
 - Deciders :: CE

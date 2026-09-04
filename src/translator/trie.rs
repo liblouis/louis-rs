@@ -1,6 +1,6 @@
 //! Store and find simple translation rules using a prefix tree ([Trie](https://en.wikipedia.org/wiki/Trie))
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::{
     parser::{AnchoredRule, CharacterClass, CharacterClasses, Direction, Precedence},
@@ -11,7 +11,7 @@ use super::ResolvedTranslation;
 
 /// The union of one or more character classes, pre-resolved to their actual member
 /// characters.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Default)]
 pub struct ResolvedClasses {
     /// The characters contained in this character class
     chars: Vec<char>,
@@ -58,7 +58,7 @@ pub enum Transition {
 
 /// The resolved, trie-internal counterpart of [`Transition`] plus the transitions that only ever
 /// arise while inserting a plain character sequence.
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 enum ResolvedTransition {
     Character(char),
     Start(ResolvedClasses),
@@ -78,20 +78,14 @@ pub enum ClassConstraint {
 #[derive(Default, Debug, Clone)]
 struct TrieNode {
     translation: Option<ResolvedTranslation>,
-    // FIXME: `HashMap` iteration order is randomized per process, so the order in which
-    // `find_translations_from_node` collects candidates varies between runs. Candidates that
-    // tie on [`ResolvedTranslation::rank`] are resolved by `max_by_key`, which returns the
-    // last of them, so a tie is decided by chance: `fr-bfu-g2.ctb` back-translates `⠡` to
-    // either `tout` (`word tout ⠡`) or `ation` (`endword ation ⠡`), both ranking (1, 3).
-    // A `BTreeMap` makes this reproducible for 4 lines (derive `Ord` here and on
-    // `ResolvedClasses`) at no cost -- translation is unchanged within noise and compiling
-    // en-ueb-g2 got ~12% faster, since hashing a `ResolvedClasses` hashes its whole
-    // `Vec<char>` while an ordered compare short-circuits on the discriminant. It was left
-    // out because it only freezes an arbitrary order: liblouis breaks such a tie by
-    // definition order, which neither map reproduces. Note it is the *first* rule defined
-    // that wins there, not the last -- see the tie-break sub-case in the ADR "Match-rule
-    // candidate selection", which also wants that same ordering key.
-    transitions: HashMap<ResolvedTransition, TrieNode>,
+    // `BTreeMap` rather than `HashMap`: iteration order needs to be deterministic between runs
+    // for candidates that tie on `ResolvedTranslation::rank` in `find_translations_from_node`
+    // (see the ADR "Rule selection does not depend on table order"). A tie is an ill-formed
+    // table, not a case this order is meant to resolve correctly -- it only freezes *a* winner
+    // instead of leaving it to chance. Also measured ~12% faster to compile en-ueb-g2, since
+    // hashing a `ResolvedClasses` hashes its whole `Vec<char>` while an ordered compare
+    // short-circuits on the discriminant.
+    transitions: BTreeMap<ResolvedTransition, TrieNode>,
 }
 
 impl TrieNode {

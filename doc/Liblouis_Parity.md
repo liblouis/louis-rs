@@ -110,7 +110,7 @@ a few hundred either way on the million-assertion files.
 
 | Area                                                | Failing | Root cause                                                                                                                                                                       | Size |
 |-----------------------------------------------------|--------:|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------|
-| `en-ueb-g2-dictionary_harness`, `afr-za-g2` forward |  ≈4 500 | Match-rule candidate selection: rule weight vs. table-definition order. Where two `match` rules both validate, liblouis returns the first in definition order and we favour the later. ADR still DRAFT — the direct fix regresses the suite by exposing a deeper gap. | L    |
+| `en-ueb-g2-dictionary_harness`, `afr-za-g2` forward |  ≈4 500 | Match-rule candidate selection. See ADR about "Match-rule candidate selection" and ADR Rule selection does not depend on table order. | L    |
 | `afr-za-g2` backward                                |  ≈2 500 | Afrikaans's lower-sign contractions share dot patterns with punctuation, and backward boundary checks classify a cell by its dots.                                               | M    |
 | `ml`, `pa`, `hi`, `ta`, `fa`, `th`, `bn`            |  ≈2 600 | Complex scripts: conjunct and reph forms, and stacked combining marks firing an indicator each instead of once per grapheme cluster.                                             | L    |
 | `da-dk-g28-dictionary_harness` (+ `_1993`)          |  ≈1 900 | `letsign`, which are also used as the lead cell of some two-cell definitions.                                                                                                    | M    |
@@ -191,17 +191,12 @@ hyphenation dictionaries. *(S)*
 
 Good entry points, roughly easiest first:
 
-1. **Make the suite deterministic.** Repeated `check` runs of the same binary
-   disagree by about ten tests on `pa.yaml` and `fr-bfu-g2.yaml`, from `HashMap`
-   iteration order in `src/translator/trie.rs` (see the `FIXME` at line 81). Ten
-   tests is exactly the size of a real regression, so this one blocks trusting every
-   other number here. The `BTreeMap` fix is measured and parked. *(S)*
-2. **Wake up the 25 files that don't run.** Six independent small fixes, listed
+1. **Wake up the 25 files that don't run.** Six independent small fixes, listed
    above, and nobody knows what those tests will report. *(S each)*
-3. **The three parser gaps.** Small, concrete, and each has a failing file to check
+2. **The three parser gaps.** Small, concrete, and each has a failing file to check
    against. *(S)*
-4. **Expose the four missing entry points.** Mechanical. *(S each)*
-5. **Survey a failure cluster.** Every row in the table above now names a cause, so
+3. **Expose the four missing entry points.** Mechanical. *(S each)*
+4. **Survey a failure cluster.** Every row in the table above now names a cause, so
    what's left is the ~2 600 failures spread across roughly 100 smaller files, and
    the residue of the two clusters already surveyed. Reading failure output rather
    than deep engine work — and each of the three clusters that got this treatment
