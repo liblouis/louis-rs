@@ -15,14 +15,14 @@ use crate::{
 
 /// What one braille cell is shown as, and the `display` rule that says so.
 ///
-/// The rule is boxed to keep this small. The map holding these is looked up once per
-/// character of every translation, and 16 bytes an entry rather than the 288 of an inline
-/// `ResolvedTranslation` is the difference between a map that fits in cache and one that
-/// does not -- about 12% of a suite run for a 256-rule display table.
 #[derive(Debug)]
 struct DisplayMapping {
     to: char,
-    origin: Box<AnchoredRule>,
+    // FIXME: unboxed AnchoredRule inflates the HashMap value, measured slower than the
+    // Box<AnchoredRule> version (cargo bench --bench translate). Display tables are small and
+    // char-keyed, so a sorted Vec<(char, DisplayMapping)> + binary_search (or a fixed-size array
+    // keyed by dot pattern) would likely beat re-boxing if this shows up as a hot path.
+    origin: AnchoredRule,
 }
 
 #[derive(Debug)]
@@ -48,7 +48,7 @@ impl DisplayTable {
                     };
                     let mapping = DisplayMapping {
                         to,
-                        origin: Box::new((*rule).clone()),
+                        origin: rule.clone(),
                     };
                     if cfg!(feature = "backwards_compatibility") {
                         // first rule wins
@@ -89,7 +89,7 @@ impl DisplayTable {
             .chars()
             .map(|c| {
                 let (to, origin) = match self.mappings.get(&c) {
-                    Some(mapping) => (mapping.to, Some((*mapping.origin).clone())),
+                    Some(mapping) => (mapping.to, Some(mapping.origin.clone())),
                     None => (c, None),
                 };
                 ResolvedTranslation::new(
