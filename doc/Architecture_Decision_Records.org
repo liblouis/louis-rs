@@ -10,6 +10,143 @@
 # New entries go at the top of this file; existing entries are not
 # reordered when they're revised.
 
+* PROPOSED Rule selection does not depend on table order; a tie is an ill-formed table
+- Deciders :: CE
+- Date :: [2026-09-03 Thu]
+
+** Context and Problem Statement
+
+The suite is not reproducible. Repeated ~check~ runs of the same binary
+report different results for ~pa.yaml~ (12.2%/12.4% failures),
+~hi_harness.yaml~ (11.0%/11.3%) and ~fr-bfu-g2.yaml~ (94.5-95.0%). The
+mechanism is in the ~FIXME~ on ~TrieNode~ (~src/translator/trie.rs~):
+~HashMap~ iteration order is randomized per process, so the order in
+which ~find_translations_from_node~ collects candidates varies between
+runs, and candidates that tie on ~ResolvedTranslation::rank~ are
+resolved by ~max_by_key~, which returns the last of them. A tie is
+therefore decided by chance.
+
+liblouis has an answer for this: it considers rules in the order they
+are defined in the table and takes the first that validates
+(~compileTranslationTable.c~, the comment above
+~addForwardRuleWithSingleChar~; all four insertion functions append
+within a group of equally long rules; ~for_selectRule~ returns on the
+first success). Adopting it would make us reproducible *and* match
+liblouis, and the same ordering key would settle the equal-weight
+sub-case in [[*DRAFT Match-rule candidate selection: weight vs. table-definition order][the match-rule candidate selection ADR]].
+
+** Decision Drivers
+
+- Relying on the position of a rule in a file is brittle and
+  unintuitive. Nothing in the rule syntax declares "this rule beats
+  that one"; it is implicit in table position, and in which hash
+  bucket a rule lands in, which table authors do not control either.
+  Reordering two rules, or a table merge that shuffles definitions,
+  can silently change output with no warning.
+- Rules are better understood as a union of regular expressions, and a
+  regexp is not position dependent. The author's job is to write
+  patterns that match only what they are meant to match.
+- Regexp engines do still need a disambiguation rule when several
+  alternatives match, but the good ones state it positionally-
+  independently: POSIX takes leftmost-longest. (PCRE takes
+  leftmost-first, which *is* alternation order -- the thing we are
+  rejecting.)
+- louis-rs's remit is not "replicate liblouis however fragile"; being
+  a more logical implementation is an explicit goal.
+
+** Decision Outcome
+
+Rule selection stays position-independent. ~ResolvedTranslation::rank~
+already implements essentially POSIX's answer --
+~(length == 0, length, weight)~, so longest match first, then the rule
+that checked the most context -- and that is the whole policy.
+
+Two candidates that tie on ~rank~ consume the same number of
+characters after checking the same amount of context. Nothing about
+the rules separates them, so this is not a case that wants a
+resolution policy: it is an *ill-formed table*, two rules that can
+both fire at one position with nothing to choose between them. The
+fix belongs in the table, not in an engine tie-break.
+
+Consequences accepted:
+
+- Output will differ from liblouis wherever a table relies on
+  definition order. Those are table bugs to fix upstream, not engine
+  bugs to emulate.
+- Reproducibility still has to come from somewhere, since chance
+  deciding is not acceptable either. That is a separate, smaller
+  change -- a ~BTreeMap~ for ~TrieNode::transitions~ freezes the
+  order in about 4 lines and measured *faster* (~12% off compiling
+  ~en-ueb-g2~, because hashing a ~ResolvedClasses~ hashes its whole
+  ~Vec<char>~ while an ordered compare short-circuits). It makes the
+  suite an instrument again without claiming the frozen order is
+  meaningful.
+
+** How big is the problem
+
+A throwaway diagnostic was added at the selection site (reverted, not
+committed) that named every pair of candidates tying on ~rank~, keeping
+only ties where the candidates *disagree about the output* -- plenty of
+tables have two rules covering a position with the same dots
+(~begmidword ph ⠴~ beside ~midword ph ⠴~) and then which wins is not
+observable. Across the full suite:
+
+- 114 distinct colliding rule sets, 414 occurrences
+- concentrated in 14 tables: ~afr-za-g2.ctb~ (242 occurrences),
+  ~ru-litbrl-detailed.utb~ (175), ~ru-litbrl.ctb~ (140),
+  ~sk-g1.ctb~ and ~malayalam.cti~ (64 each), ~en-ueb-g2.ctb~ (32),
+  ~fr-bfu-g2.ctb~ (30)
+- it found the ~FIXME~'s own example unprompted
+  (~fr-bfu-g2.ctb~:177 ~endword ation ⠡~ against :858 ~word tout ⠡~)
+  and explained ~hi_harness~'s flakiness (~devanagari.cti~:307
+  ~always ै ⠌~ against ~en-in-g1.ctb~:91 ~endnum st ⠌~)
+
+Crucially, tie counts do *not* correlate with failure counts. The two
+largest failure clusters have 9 ties (~en-ueb-g2-dictionary_harness~,
+4263 failures) and none at all (~da-dk-g28-dictionary_harness~, 1427;
+~hu-hu-g1_dictionary_special_consonants~, 1095), while ~ru.yaml~ has
+more ties than failures. A tie only becomes a failure when the
+arbitrary winner is the wrong one, so 414 occurrences implies of the
+order of 200 wrong results against 17797 failures.
+
+So ambiguity is about *1% of the correctness problem but 100% of the
+determinism problem*. Worth fixing for the second reason, not the
+first.
+
+** Deferred: a table linter
+
+The 414 figure is only what the suite's inputs happen to reach; the
+ambiguity actually present in the tables is larger. A linter would
+find it without needing input, and the list would be useful upstream
+as table-quality output rather than as louis-rs bug reports.
+
+Not built, because the useful version is not small:
+
+- trie rules are cheap: group by ~chars~ and report pairs with
+  different dots whose positional constraints can co-occur
+  (~begmidword~ overlaps ~midword~; ~word~ and ~endword~ do not)
+- ~match~/~context~ rules need pattern intersection. It is decidable
+  on the NFA the regexp VM already builds -- product construction plus
+  an emptiness check -- but it is real work
+- and the collisions actually observed are mostly the *cross-engine*
+  kind (~match - te ... ⠞⠑~ against ~begmidword te ⠖~), so a
+  trie-only linter would miss the interesting ones
+
+It would share machinery with the rule-level coverage tool
+([[*ACCEPTED A rule-level coverage tool for the YAML test suite][ADR]],
+[[https://github.com/liblouis/louis-rs/issues/27][issue #27]]), which
+already knows which rule fired where.
+
+** Links
+
+- ~FIXME~ on ~TrieNode~, ~src/translator/trie.rs~ -- the
+  nondeterminism and the ~BTreeMap~ measurement
+- [[*DRAFT Match-rule candidate selection: weight vs. table-definition order][ADR: Match-rule candidate selection]] --
+  the equal-weight sub-case this decides against resolving by order
+- ~compileTranslationTable.c~, ~addForwardRuleWithSingleChar~ and
+  ~for_selectRule~ in ~lou_translateString.c~ -- liblouis's
+  definition-order behaviour
+
 * PROPOSED Table lookup: a distinct ~LOUIS_TABLE_PATH~, and which liblouis resolution steps we skip
 - Deciders :: CE
 - Date :: [2026-09-02 Wed]

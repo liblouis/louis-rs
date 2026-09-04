@@ -1,4 +1,4 @@
-* Todo [0/7]
+* Todo [0/8]
 - [ ] Have the ~louis~ binary depend on the ~louis~ library instead of
   compiling the same sources again
   - ~src/main.rs~ declares its own ~mod parser~, ~mod translator~,
@@ -78,6 +78,15 @@
     translations 65.3s, small value plus a ~Vec~ indexed by ~usize~
     57.9s, boxed rule 58.7s -- so how the value is shrunk does not
     matter, only that it is.
+- [ ] Make the suite reproducible: ~TrieNode::transitions~ is a
+  ~HashMap~, so a tie between candidates is decided by iteration order,
+  which is randomized per process. ~pa.yaml~, ~hi_harness.yaml~ and
+  ~fr-bfu-g2.yaml~ report different numbers between runs of the same
+  binary, which is the size of a real regression. A ~BTreeMap~ fixes it
+  in ~4 lines and measured faster; see the ADR "Rule selection does not
+  depend on table order" for why we freeze an arbitrary order rather
+  than adopt liblouis's definition order, and for the linter idea that
+  would find the underlying table ambiguities.
 - [ ] Expose the library via a C ABI so it can be used from other
   languages (see [[https://github.com/mozilla/cbindgen][cbindgen]] or [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 
