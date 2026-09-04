@@ -141,9 +141,9 @@ pub struct Indicator {
     space_chars: HashSet<char>,
     /// These letters must never themselves be preceded by a letter sign.
     noletsign_chars: HashSet<char>,
-    /// After these characters the letsign must NOT be inserted.
+    /// When one of these characters follows a single letter the letsign must NOT be inserted.
     noletsignafter_chars: HashSet<char>,
-    /// Before these characters the letsign must NOT be inserted.
+    /// When one of these characters precedes a single letter the letsign must NOT be inserted.
     noletsignbefore_chars: HashSet<char>,
 }
 
@@ -172,12 +172,12 @@ impl Indicator {
             let prev = if i > 0 { Some(chars[i - 1]) } else { None };
             let next = if i + 1 < n { Some(chars[i + 1]) } else { None };
 
-            // Skip if preceded by a noletsignafter character.
-            if prev.is_some_and(|p| self.noletsignafter_chars.contains(&p)) {
+            // Skip if preceded by a noletsignbefore character.
+            if prev.is_some_and(|p| self.noletsignbefore_chars.contains(&p)) {
                 continue;
             }
-            // Skip if followed by a noletsignbefore character.
-            if next.is_some_and(|n| self.noletsignbefore_chars.contains(&n)) {
+            // Skip if followed by a noletsignafter character.
+            if next.is_some_and(|n| self.noletsignafter_chars.contains(&n)) {
                 continue;
             }
 
@@ -245,13 +245,13 @@ mod tests {
 
     fn build_indicator(
         letter_chars: &[char],
-        noletsignafter: &[char],
+        noletsignbefore: &[char],
         contraction: Option<&str>,
     ) -> Indicator {
         let mut builder = IndicatorBuilder::new();
         builder.letsign("⠠", &rule("letsign 6"));
-        let noletsignafter_str: String = noletsignafter.iter().collect();
-        builder.noletsignafter(&noletsignafter_str);
+        let noletsignbefore_str: String = noletsignbefore.iter().collect();
+        builder.noletsignbefore(&noletsignbefore_str);
         if let Some(c) = contraction {
             builder.contraction(c, &rule(&format!("contraction {}", c)));
         }
@@ -338,13 +338,34 @@ mod tests {
     }
 
     #[test]
-    fn noletsignafter_suppresses_isolation_letsign() {
+    fn noletsignbefore_suppresses_isolation_letsign() {
         let indicator = build_indicator(&['a', 'b', 'c'], &['2'], None);
-        // noletsignafter '2' suppresses the letsign for "2b"
+        // noletsignbefore '2' suppresses the letsign for "2b" -- '2' precedes the letter
         assert_eq!(pairs(&indicator.precompute("2b")), vec![]);
         // other non-space, non-letter chars still trigger it
         assert_eq!(
             pairs(&indicator.precompute("3b")),
+            vec![(1, "⠠".to_string())]
+        );
+    }
+
+    #[test]
+    fn noletsignafter_suppresses_isolation_letsign() {
+        let mut builder = IndicatorBuilder::new();
+        builder.letsign("⠠", &rule("letsign 6"));
+        builder.noletsignafter("2");
+        let cc = CharacterClasses::new(&[
+            (CharacterClass::Letter, &['a', 'b', 'c']),
+            (CharacterClass::Space, &[' ']),
+        ]);
+        let ctx = TableContext::new(cc, CharacterClasses::default(), Default::default());
+        let indicator = builder.build(&ctx).unwrap();
+
+        // noletsignafter '2' suppresses the letsign for "3b2" -- '2' follows the letter
+        assert_eq!(pairs(&indicator.precompute("3b2")), vec![]);
+        // a different following char leaves it in place
+        assert_eq!(
+            pairs(&indicator.precompute("3b3")),
             vec![(1, "⠠".to_string())]
         );
     }
