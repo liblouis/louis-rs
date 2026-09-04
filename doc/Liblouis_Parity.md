@@ -8,12 +8,12 @@ This document says what it can do today, what it can't yet, and where the remain
 work is, so you can tell whether it's usable for your case and pick something up if
 it isn't.
 
-Measured at commit `83f6b1d` against liblouis's own suite:
+Measured at commit `1f96c41` against liblouis's own suite:
 
 |                                     |           |
 |-------------------------------------|-----------|
 | Assertions run                      | 2 224 651 |
-| Pass                                | **98.6%** |
+| Pass                                | **98.7%** |
 | Fail                                | 0.8%      |
 | Expected failure                    | 0.5%      |
 | Top-level tables that parse cleanly | 265 / 265 |
