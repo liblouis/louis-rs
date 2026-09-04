@@ -13,20 +13,26 @@ use crate::{
     translator::{ResolvedTranslation, TranslationStage},
 };
 
+/// What one braille cell is shown as, and the `display` rule that says so.
+///
+/// The rule is boxed to keep this small. The map holding these is looked up once per
+/// character of every translation, and 16 bytes an entry rather than the 288 of an inline
+/// `ResolvedTranslation` is the difference between a map that fits in cache and one that
+/// does not -- about 12% of a suite run for a 256-rule display table.
+#[derive(Debug)]
+struct DisplayMapping {
+    to: char,
+    origin: Box<AnchoredRule>,
+}
+
 #[derive(Debug)]
 pub struct DisplayTable {
-    /// What each mapped character is shown as, and the `display` rule that says so.
-    ///
-    /// The rule is boxed because this map is consulted once per character of every
-    /// translation: a `(char, Box<AnchoredRule>)` value is 16 bytes where an inline
-    /// `ResolvedTranslation` is 288, which for a 256-rule display table is the difference
-    /// between a map that fits in cache and one that does not.
-    dots_to_char: HashMap<char, (char, Box<AnchoredRule>)>,
+    mappings: HashMap<char, DisplayMapping>,
 }
 
 impl DisplayTable {
     pub fn compile(rules: &[AnchoredRule], direction: Direction) -> DisplayTable {
-        let mut mapping = HashMap::new();
+        let mut mappings = HashMap::new();
         let rules: Vec<_> = rules.iter().filter(|r| r.is_direction(direction)).collect();
 
         for rule in rules {
@@ -40,21 +46,22 @@ impl DisplayTable {
                         Direction::Forward => (braille, *character),
                         Direction::Backward => (*character, braille),
                     };
-                    let entry = (to, Box::new((*rule).clone()));
+                    let mapping = DisplayMapping {
+                        to,
+                        origin: Box::new((*rule).clone()),
+                    };
                     if cfg!(feature = "backwards_compatibility") {
                         // first rule wins
-                        mapping.entry(from).or_insert(entry);
+                        mappings.entry(from).or_insert(mapping);
                     } else {
                         // last rule wins
-                        mapping.insert(from, entry);
+                        mappings.insert(from, mapping);
                     }
                 }
                 _ => (), // ignore all other rules for display tables
             }
         }
-        DisplayTable {
-            dots_to_char: mapping,
-        }
+        DisplayTable { mappings }
     }
 
     /// Map the `input` to the output using the display rules in the
@@ -68,7 +75,7 @@ impl DisplayTable {
 
     /// The character `c` is shown as, or `c` itself when the table has no mapping for it.
     fn displayed(&self, c: char) -> char {
-        self.dots_to_char.get(&c).map_or(c, |(to, _)| *to)
+        self.mappings.get(&c).map_or(c, |mapping| mapping.to)
     }
 
     /// One [`ResolvedTranslation`] per character, so a display table can take part in the
@@ -81,8 +88,8 @@ impl DisplayTable {
         input
             .chars()
             .map(|c| {
-                let (to, origin) = match self.dots_to_char.get(&c) {
-                    Some((to, rule)) => (*to, Some((**rule).clone())),
+                let (to, origin) = match self.mappings.get(&c) {
+                    Some(mapping) => (mapping.to, Some((*mapping.origin).clone())),
                     None => (c, None),
                 };
                 ResolvedTranslation::new(
