@@ -287,7 +287,6 @@ impl Trie {
         input: &str,
         prev: Option<char>,
         node: &TrieNode,
-        match_length: usize,
     ) -> Vec<ResolvedTranslation> {
         let mut matching_rules = Vec::new();
         let mut chars = input.chars();
@@ -305,14 +304,12 @@ impl Trie {
                     &input[bytes..],
                     Some(c),
                     node,
-                    match_length + 1,
                 ));
             } else if let Some(node) = node.any_transition() {
                 matching_rules.extend(self.find_translations_from_node(
                     &input[bytes..],
                     Some(c),
                     node,
-                    match_length + 1,
                 ));
             }
         }
@@ -324,22 +321,14 @@ impl Trie {
             match transition {
                 ResolvedTransition::Start(resolved) => {
                     if resolved.matches(prev) {
-                        matching_rules.extend(self.find_translations_from_node(
-                            input,
-                            prev,
-                            child_node,
-                            match_length,
-                        ));
+                        matching_rules
+                            .extend(self.find_translations_from_node(input, prev, child_node));
                     }
                 }
                 ResolvedTransition::End(resolved) => {
                     if resolved.matches(c) {
-                        matching_rules.extend(self.find_translations_from_node(
-                            input,
-                            prev,
-                            child_node,
-                            match_length,
-                        ));
+                        matching_rules
+                            .extend(self.find_translations_from_node(input, prev, child_node));
                     }
                 }
                 _ => {}
@@ -349,7 +338,7 @@ impl Trie {
     }
 
     pub fn find_translations(&self, input: &str, prev: Option<char>) -> Vec<ResolvedTranslation> {
-        self.find_translations_from_node(input, prev, &self.root, 0)
+        self.find_translations_from_node(input, prev, &self.root)
     }
 }
 
