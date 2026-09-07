@@ -63,14 +63,13 @@ pub enum Transition {
     End(Vec<CharacterClass>),
 }
 
-/// The resolved, trie-internal counterpart of [`Transition`] plus the transitions that only ever
-/// arise while inserting a plain character sequence.
+/// The resolved, trie-internal counterpart of [`Transition`] plus the character transitions
+/// that only ever arise while inserting a plain character sequence.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 enum ResolvedTransition {
     Character(char),
     Start(ResolvedClasses),
     End(ResolvedClasses),
-    Any,
 }
 
 /// A class-based constraint attached to a rule via the liblouis `before`/`after` keywords.
@@ -110,10 +109,6 @@ impl TrieNode {
             self.transitions
                 .get(&ResolvedTransition::Character(lowercase))
         }
-    }
-
-    fn any_transition(&self) -> Option<&TrieNode> {
-        self.transitions.get(&ResolvedTransition::Any)
     }
 }
 
@@ -313,12 +308,6 @@ impl Trie {
                     Some(c),
                     node,
                 ));
-            } else if let Some(node) = node.any_transition() {
-                matching_rules.extend(self.find_translations_from_node(
-                    &input[bytes..],
-                    Some(c),
-                    node,
-                ));
             }
         }
         // Class-based non-consuming checks. Iterate only transitions that are class variants to
@@ -339,7 +328,8 @@ impl Trie {
                             .extend(self.find_translations_from_node(input, prev, child_node));
                     }
                 }
-                _ => {}
+                // Character transitions have been dealt with above, ignore.
+                ResolvedTransition::Character(_) => {}
             }
         }
         matching_rules
