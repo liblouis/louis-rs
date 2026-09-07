@@ -125,6 +125,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `dots_classes`'s `letter` class (used for backward-translation word-boundary
   checks) now also includes the dots of alphabetic `always` rules, not just
   `letter`/`lowercase`/`uppercase` opcodes.
+- `letsign`, `nocontractsign` and `nonumsign` are now handled in backward
+  translation. The indicator cell is consumed rather than read as whatever
+  character definition shares its dots, and the `word`/`sufword`/`prfword`/
+  `begword` rules are suppressed over the run of letter cells that follows, so
+  the cells an indicator marks as spelled-out letters are no longer claimed by a
+  contraction. The cell is only consumed ahead of a letter or sign cell, since a
+  table may well use the same dots for an ordinary punctuation character.
+- `contraction` rules are now compiled for forward translation only. liblouis
+  gives the opcode no dots operand and keys its backward rule chains on cells, so
+  the rule is never reachable backward there; we synthesized dots from the
+  characters' own definitions in both directions, which additionally required a
+  character definition that a `noback` chardef legitimately withholds.
 - The `match`/`context` pattern parser now scopes `|` (alternation) over the
   whole surrounding sequence of tokens, matching standard regex precedence
   (concatenation binds tighter than alternation) and liblouis's own semantics.
