@@ -839,29 +839,30 @@ impl PrimaryTable {
                 Rule::Noletsignbefore { chars } => {
                     builder.lettersign_indicator.noletsignbefore(chars);
                 }
-                // Treat a contraction rule similarly to a word rule. Pretend the dots have been
-                // defined implicitely
+                // Treat a contraction rule similarly to a word rule, but forward only
                 Rule::Contraction { chars } => {
-                    let dots = ctx
-                        .character_definitions()
-                        .braille_to_unicode(&Braille::Implicit, chars)?;
-                    builder.get_trie_mut(rule).insert(
-                        chars,
-                        &dots,
-                        Some(Transition::Start(vec![
-                            CharacterClass::Space,
-                            CharacterClass::Punctuation,
-                        ])),
-                        Some(Transition::End(vec![
-                            CharacterClass::Space,
-                            CharacterClass::Punctuation,
-                        ])),
-                        direction,
-                        rule.precedence(),
-                        vec![],
-                        TranslationStage::Main,
-                        rule,
-                    );
+                    if direction == Direction::Forward {
+                        let dots = ctx
+                            .character_definitions()
+                            .braille_to_unicode(&Braille::Implicit, chars)?;
+                        builder.get_trie_mut(rule).insert(
+                            chars,
+                            &dots,
+                            Some(Transition::Start(vec![
+                                CharacterClass::Space,
+                                CharacterClass::Punctuation,
+                            ])),
+                            Some(Transition::End(vec![
+                                CharacterClass::Space,
+                                CharacterClass::Punctuation,
+                            ])),
+                            direction,
+                            rule.precedence(),
+                            vec![],
+                            TranslationStage::Main,
+                            rule,
+                        );
+                    }
                     builder.lettersign_indicator.contraction(chars, rule);
                     builder.nocontract_indicator.contraction(chars, rule);
                 }
