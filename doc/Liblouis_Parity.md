@@ -63,6 +63,10 @@ table-defined trigger characters.
 `nonumsign` — the last of these both consumes the indicator cell and suppresses the
 word-family rules in its scope.
 
+**Caller-controlled table resolution.** `Translator::with_search_path` takes the
+directories to search, so a host managing its own table locations doesn't have to
+mutate `LOUIS_TABLE_PATH`.
+
 **Hyphenation, natively.** liblouis `.dic` pattern files are parsed directly
 (`src/hyphenation.rs`) — no external crate, no build or conversion step. Resolved
 through the same search path as any other table.
@@ -183,7 +187,6 @@ hyphenation dictionaries. *(S)*
 | Back-translation finality ([#29](https://github.com/liblouis/louis-rs/issues/29))               | Nothing says whether more cells could change the characters already produced.                                                                             | M      |
 | Display tables for library callers                                                              | `TranslationPipeline::with_display` and `louis translate/trace --display` exist; `Translator` doesn't expose it yet.                                       | S      |
 | `hyphenate`, `charToDots`, `dotsToChar`, `getEmphClasses`                                       | Working internals, nothing exposed on `Translator`.                                                                                                       | S each |
-| Caller-controlled table resolution ([#16](https://github.com/liblouis/louis-rs/issues/16))      | In flight — `with_search_path` has landed; [PR #28](https://github.com/liblouis/louis-rs/pull/28) proposes a resolver abstraction.                        | S–M    |
 | Multipass `*` action ([#21](https://github.com/liblouis/louis-rs/issues/21))                    | Keeps the matched context in the stream, so move and swap rules duplicate characters. [PR #22](https://github.com/liblouis/louis-rs/pull/22) open.        | S      |
 | C ABI                                                                                           | Not started. cbindgen or Diplomat.                                                                                                                        | M–L    |
 
