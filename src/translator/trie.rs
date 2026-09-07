@@ -11,9 +11,16 @@ use super::ResolvedTranslation;
 
 /// The union of one or more character classes, pre-resolved to their actual member
 /// characters.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Default)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Default)]
 pub struct ResolvedClasses {
-    /// The characters contained in this character class
+    /// The characters contained in this character class.
+    ///
+    /// A set, held as a sorted, deduped `Vec` rather than as a `BTreeSet`. This type is
+    /// embedded in [`ResolvedTransition`], the key type of `TrieNode::transitions`, so
+    /// `Trie::insert`'s `entry` call compares two of these on every rule inserted, and a flat
+    /// scan beats walking two trees: `BTreeSet` was measured at +26% on
+    /// `parse_and_compile/en-ueb-g2` (19.0ms to 23.9ms), +10% on `zh-tw`, and +2.7% on
+    /// `translate`. A `HashSet` cannot be used at all -- it is neither `Ord` nor `Hash`.
     chars: Vec<char>,
     /// Whether `Space` was one of the requested classes. A missing neighbor (start/end
     /// of input) is treated as a literal space.
@@ -58,7 +65,7 @@ pub enum Transition {
 
 /// The resolved, trie-internal counterpart of [`Transition`] plus the transitions that only ever
 /// arise while inserting a plain character sequence.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 enum ResolvedTransition {
     Character(char),
     Start(ResolvedClasses),
@@ -83,8 +90,9 @@ struct TrieNode {
     // (see the ADR "Rule selection does not depend on table order"). A tie is an ill-formed
     // table, not a case this order is meant to resolve correctly -- it only freezes *a* winner
     // instead of leaving it to chance. Also measured ~12% faster to compile en-ueb-g2, since
-    // hashing a `ResolvedClasses` hashes its whole `Vec<char>` while an ordered compare
-    // short-circuits on the discriminant.
+    // an ordered compare of two keys short-circuits on the discriminant where hashing one had
+    // to hash every member of its `ResolvedClasses` (whose own layout is chosen for the same
+    // comparison -- see `ResolvedClasses::chars`).
     transitions: BTreeMap<ResolvedTransition, TrieNode>,
 }
 
