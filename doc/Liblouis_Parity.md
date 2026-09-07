@@ -8,11 +8,11 @@ This document says what it can do today, what it can't yet, and where the remain
 work is, so you can tell whether it's usable for your case and pick something up if
 it isn't.
 
-Measured at commit `1f96c41` against liblouis's own suite:
+Measured at commit `a985592` against liblouis's own suite:
 
 |                                     |           |
 |-------------------------------------|-----------|
-| Assertions run                      | 2 224 651 |
+| Assertions run                      | 2 224 727 |
 | Pass                                | **98.7%** |
 | Fail                                | 0.8%      |
 | Expected failure                    | 0.5%      |
@@ -58,9 +58,10 @@ sign, `nocontract`, and the generic `begmode`/`endmode` family.
 `begcomp`/`endcomp`, and a scanner that derives computer-braille spans from
 table-defined trigger characters.
 
-**Backward indication** for `capsletter`, `begcapsword`/`endcapsword` and
-`numsign`/`nonumsign`, including the case where a table's indicator dots collide with
-one of its own script's letters (Malayalam, Punjabi).
+**Backward indication** for `capsletter`, `begcapsword`/`endcapsword`,
+`numsign`/`nonumsign`, and the no-contract family `letsign`/`nocontractsign`/
+`nonumsign` — the last of these both consumes the indicator cell and suppresses the
+word-family rules in its scope.
 
 **Hyphenation, natively.** liblouis `.dic` pattern files are parsed directly
 (`src/hyphenation.rs`) — no external crate, no build or conversion step. Resolved
@@ -113,14 +114,14 @@ a few hundred either way on the million-assertion files.
 | `en-ueb-g2-dictionary_harness`, `afr-za-g2` forward |  ≈4 500 | Match-rule candidate selection. See ADR about "Match-rule candidate selection" and ADR Rule selection does not depend on table order. | L    |
 | `afr-za-g2` backward                                |  ≈2 500 | Afrikaans's lower-sign contractions share dot patterns with punctuation, and backward boundary checks classify a cell by its dots.                                               | M    |
 | `ml`, `pa`, `hi`, `ta`, `fa`, `th`, `bn`            |  ≈2 600 | Complex scripts: conjunct and reph forms, and stacked combining marks firing an indicator each instead of once per grapheme cluster.                                             | L    |
-| `da-dk-g28-dictionary_harness`                      |  ≈1 200 | Backward: `letsign` (⠰) is also the second cell of two-cell contractions.        | M    |
+| `da-dk-g28-dictionary_harness`                      |  ≈1 200 | Backward: `letsign` (⠰) is also the second cell of two-cell contractions. Consuming the indicator and suppressing the word rules in its scope does not settle this one — the ambiguity is which reading the cell has in the first place. | M    |
 | `en-ueb-computer-code`                              |  ≈1 700 | Three bugs: letter sign fires only on the first occurrence in a run; wrong word sign before hyphen or closing bracket; leading indicator dropped at the very start of the input. But the file's own header says many of its expectations are wrong and it needs review ([#590](https://github.com/liblouis/liblouis/issues/590)), so establish which are before chasing them. | M    |
 | `hu-hu-g1_dictionary_special_consonants`            |  ≈1 100 | `nocross` asks "can this hyphenate anywhere?" instead of liblouis's positional `syllableBreak()`.                                                                                | L    |
-| `sw-ke-dictionary`, `sw-ke`                         |    ≈870 | Backward lookup splices in unrelated dictionary words ("wote" → "wizaraote"); single-letter words pick up a spurious letter sign.                                                | M    |
+| `sw-ke-dictionary`, `sw-ke`                         |    ≈850 | Backward lookup splices in unrelated dictionary words ("wote" → "wizaraote"); single-letter words pick up a spurious letter sign.                                                | M    |
 | `en-g3`, `en-ueb`                                   |    ≈600 | A literal hyphen breaks per-segment contraction in compounds — "do-it-yourself" gives `do-x-y\|rself`, not `d-x-yrf`.                                                            | M    |
 | `rw-rw-g1`, `numericmode`                           |    ≈500 | Letters used as pseudo-digits still get a capital sign. Related: `endmode`/`endmodeword` don't fire across a `base` character chain.                                             | M    |
 | `de-g0-detailed-specs`, `de-g1-…`                   |    ≈280 | `capsletter` vs. `begcapsword` tier selection. Needs `uppercase.rs` and `emphasis.rs` unified into one tier model — a blanket engine fix was tried and disproven.                | L    |
-| all other files                                     |  ≈2 600 | Roughly 100 files, each contributing well under 350.                                                                                                                             | —    |
+| all other files                                     |  ≈2 500 | Roughly 100 files, each contributing well under 350.                                                                                                                             | —    |
 
 Two cross-cutting items have no single file behind them:
 
@@ -152,7 +153,7 @@ Two cross-cutting items have no single file behind them:
   `match_pattern.rs` and all three are no-ops in `context_pattern.rs`; the
   `syllable` opcode's cross-boundary restriction is unimplemented. *(M)*
 
-## Twenty-five files that never run
+## Twenty-four files that never run
 
 These error out during table compilation, so they contribute neither passes nor
 failures — they're the one genuine unknown here, and the cheapest work in this
@@ -160,11 +161,10 @@ document.
 
 | Reason                                    | Files | What it needs                                                                                                                                    | Size |
 |-------------------------------------------|------:|--------------------------------------------------------------------------------------------------------------------------------------------------|------|
-| "Table queries have not been implemented" |    10 | The YAML harness can't resolve a `table:` given as a metadata query. The machinery already exists behind the `query` subcommand.                 | S    |
-| `TableNotFound` on a table list           |     5 | `.uti` files next to the YAML aren't found; lists resolve against `LOUIS_TABLE_PATH` only. [#15](https://github.com/liblouis/louis-rs/issues/15) | S    |
-| Parser gaps                               |     3 | An escaped `"\\"` in a multipass operand (`it-it-comp6.utb:248`), UTF-16 surrogate-pair escapes, and an `EmptyTest` in the multipass tests.      | S    |
+| "Table queries have not been implemented" |    11 | The YAML harness can't resolve a `table:` given as a metadata query. The machinery already exists behind the `query` subcommand.                 | S    |
+| `TableNotFound` on a table list           |     6 | `.uti` files next to the YAML aren't found; lists resolve against `LOUIS_TABLE_PATH` only. [#15](https://github.com/liblouis/louis-rs/issues/15) | S    |
+| Parser gaps                               |     4 | An escaped `"\\"` in a multipass operand (`it-it-comp6.utb:248`), UTF-16 surrogate-pair escapes, and an `EmptyTest` in the multipass tests.      | S    |
 | Hyphenation dictionaries                  |     2 | `hyph_en_US.dic` rejected for its ISO-8859-1 encoding; `hyphenation.dic` not found.                                                              | S    |
-| `ImplicitCharacterNotDefined('ƒ')`        |     1 | Swedish. Probably a table-side bug worth reporting upstream.                                                                                     | S    |
 | `macro.utb`                               |     1 | Deliberate non-goal.                                                                                                                             | —    |
 
 Separately, the `hyphenate`, `hyphenateBraille` and `display` test modes fall through a
@@ -191,13 +191,13 @@ hyphenation dictionaries. *(S)*
 
 Good entry points, roughly easiest first:
 
-1. **Wake up the 25 files that don't run.** Six independent small fixes, listed
+1. **Wake up the 24 files that don't run.** Four independent small fixes, listed
    above, and nobody knows what those tests will report. *(S each)*
 2. **The three parser gaps.** Small, concrete, and each has a failing file to check
    against. *(S)*
 3. **Expose the four missing entry points.** Mechanical. *(S each)*
 4. **Survey a failure cluster.** Every row in the table above now names a cause, so
-   what's left is the ~2 600 failures spread across roughly 100 smaller files, and
+   what's left is the ~2 500 failures spread across roughly 100 smaller files, and
    the residue of the two clusters already surveyed. Reading failure output rather
    than deep engine work — and each of the three clusters that got this treatment
    turned out to be one or two root causes rather than a long tail. *(M)*
