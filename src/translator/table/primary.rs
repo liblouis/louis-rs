@@ -1653,7 +1653,7 @@ impl PrimaryTable {
             // boundary and gated here instead. Rejected candidates are simply dropped,
             // leaving the position to fall through to the plain punctuation character
             // definition (`character_translations`), matching liblouis.
-            candidates.retain(|t| match t.origin().map(|a| a.rule) {
+            candidates.retain(|t| match t.rule() {
                 Some(Rule::Prepunc { .. }) => constraints.prepunc_ok_at(char_pos),
                 Some(Rule::Postpunc { .. }) => constraints.postpunc_ok_at(char_pos),
                 _ => true,
@@ -1685,7 +1685,7 @@ impl PrimaryTable {
             if self.direction == Direction::Backward && constraints.no_contract_at(char_pos) {
                 candidates.retain(|t| {
                     !matches!(
-                        t.origin().map(|a| a.rule),
+                        t.rule(),
                         Some(
                             Rule::Word { .. }
                                 | Rule::Sufword { .. }

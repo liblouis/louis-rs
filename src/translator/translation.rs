@@ -1,5 +1,5 @@
 use crate::{
-    parser::{AnchoredRule, Precedence},
+    parser::{AnchoredRule, Precedence, Rule},
     translator::{effect::Effect, swap::Swapper},
 };
 
@@ -284,6 +284,12 @@ impl ResolvedTranslation {
 
     pub fn origin(&self) -> Option<AnchoredRule> {
         self.origin.clone()
+    }
+
+    /// The rule this translation came from, borrowed. Prefer this over
+    /// [`origin`](Self::origin) where only the rule is needed.
+    pub fn rule(&self) -> Option<&Rule> {
+        self.origin.as_ref().map(|anchored| &anchored.rule)
     }
 
     pub fn stage(&self) -> TranslationStage {
