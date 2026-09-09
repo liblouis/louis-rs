@@ -38,56 +38,10 @@
     explicit and precomposed rules still match via longer trie paths.
   - See ADR in [[file:doc/Architecture_Decision_Records.org][Architecture Decision Records]]
 - [ ] performance
-  - put translations into offset buckets
-  - measure performance
-  - reduce the regexp opcode operand to only 32 bit
-  - [-] handing out references instead of cloning stored translations
-    was tried and *measured to be pointless*, 2026-09-03. The premise
-    was that a ~ResolvedTranslation~ is 288 bytes of which 184 are its
-    ~Option<AnchoredRule>~ (a ~Rule~ is 152 and carries ~String~s), and
-    that the trie clones one per candidate for every node along the
-    match path at every input position
-    (~find_translations_from_node~, ~src/translator/trie.rs~).
-    - upper-bound experiment: store no origin at all in the trie, so a
-      candidate clone skips the rule entirely -- strictly more saving
-      than ~Cow~ would give, since ~Cow~ still clones the computed
-      candidates. Doing *less* work measured 2% *slower* on
-      ~benches/translate.rs~ (word 188.7µs → 193.0µs, sentence 2.127ms
-      → 2.181ms, paragraph 13.95ms → 14.19ms) and identical on
-      ~check da-dk-g28-dictionary_harness.yaml~ (6.63/6.82s → 6.75/6.68s).
-      Two workloads on purpose: the criterion bench is regexp-dominated
-      by design (964 ~match~ rules in en-ueb-g2), the dictionary
-      harness leans on the trie. Neither can see the clone.
-    - so don't do this for the clone's sake. If it is ever wanted for
-      another reason, the shape is: tables keep owning their
-      translations and hand out ~&ResolvedTranslation~ (no lifetime on
-      the stored type, so no self-reference), but the candidate list is
-      mixed -- trie and display candidates are stored, ~match~/~context~
-      ones are built per match from ~Translation::Unresolved~ via
-      ~resolve(capture, ..)~, and the indicator modules derive theirs
-      per position -- so the collectors want
-      ~Cow<'_, ResolvedTranslation>~.
-  - [ ] ~DisplayTable~ moving from ~translator.rs~ into
-    ~translator::table::display~ (6e5b591) cost 12% of a suite run for no
-    change in code: 53.1/53.3s before, 59.5/59.8s after, interleaved.
-    Release builds default to 16 codegen units split per module, so
-    ~DisplayTable::trace~ and ~displayed~ lost cross-unit inlining with
-    their caller in ~pipeline.rs~. ~#[inline]~ on those two recovers all
-    of it (53.3/53.0s), measured and then dropped -- parity first. Worth
-    remembering that a purely cosmetic move can cost this much, and that
-    ~codegen-units = 1~ or LTO in the release profile would make the
-    whole question go away.
-  - [X] keep the values of maps consulted per character small. What
-    cost ~12% on the YAML suite when ~DisplayTable~ started storing
-    whole translations was not the cloning but the *value size*:
-    widening ~HashMap<char, char>~ (4-byte values, ~1KB) to
-    ~HashMap<char, ResolvedTranslation>~ (288-byte values, ~73KB for
-    ~unicode.dis~) turns a per-character lookup into a cache miss, over
-    2.2M assertions. Fixed by boxing the rule in the value, which is 16
-    bytes. Interleaved, four ways: baseline without rules 58.2s, inline
-    translations 65.3s, small value plus a ~Vec~ indexed by ~usize~
-    57.9s, boxed rule 58.7s -- so how the value is shrunk does not
-    matter, only that it is.
+  - measured, and written up in
+    [[file:doc/Translation_Performance.md][Translation Performance]]: where the
+    time goes, four ideas with sketches and numbers, what was measured and
+    turned out worse, and the standing lessons. Keep it there rather than here.
 - [X] Make the suite reproducible: ~TrieNode::transitions~ was a
   ~HashMap~, so a tie between candidates was decided by iteration
   order, which is randomized per process, and ~pa.yaml~,

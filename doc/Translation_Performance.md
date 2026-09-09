@@ -314,10 +314,13 @@ Shares are of translation time after ideas 1–3, from the callgrind profile.
   `Vec<ResolvedTranslation>`s for the trie, nocross, `match` and `context` lookups,
   and `partition` doubles them. Thread one reusable buffer through `find` /
   `find_translations` / `trace`.
-- **`ResolvedTranslation` is a fat clone** (~5%). Two `String`s, a `Vec<Effect>` and
-  an `AnchoredRule` per clone. `Arc<AnchoredRule>` for `origin` would make every
-  candidate clone cheap. Low complexity, wide diff. (The `rule()` borrow in `7c79e6e`
-  removed the two worst offenders, in `trace`'s candidate filters, for 0.7–2.9%.)
+- **`ResolvedTranslation` is a fat clone** (~5% of the profile, but see below). It is
+  288 bytes, of which 184 are its `Option<AnchoredRule>`, and the trie clones one per
+  candidate per node along the match path at every position. Making the *rule* cheaper
+  to clone is not the answer, though — that was measured and is disproven below. What
+  is left is the two `String`s and the `Vec<Effect>`. The `rule()` borrow in `7c79e6e`
+  took care of the two worst individual offenders, in `trace`'s candidate filters, for
+  0.7–2.9%.
 - **VM scratch buffers** (~3%). Two `ThreadList`s are built per `find_anchored` and
   `memset` is still 3.3%. Needs actual reuse across calls; shrinking the inline
   capacity from 64 to 32 was measured as noise. Prerequisite for idea 4.
@@ -365,6 +368,46 @@ Do not re-attempt these without a reason to think something has changed.
   weighs. (Recorded in full in `TODO.org`.)
 - **Shrinking `ThreadList`'s inline capacity** from `SmallVec<[Thread; 64]>` to 32,
   to cut the `memset` cost. Noise in both directions.
+- **Handing out references instead of cloning stored translations** (2026-09-03). The
+  premise was the fat clone above: 184 of a `ResolvedTranslation`'s 288 bytes are its
+  `Option<AnchoredRule>`, cloned per candidate per node in
+  `find_translations_from_node`. The experiment was an upper bound — store no origin
+  in the trie at all, so a candidate clone skips the rule entirely, which saves
+  strictly more than any `Arc` or `Cow` could. Doing *less* work measured 2% **slower**
+  (word 188.7 µs → 193.0 µs, sentence 2.127 ms → 2.181 ms, paragraph 13.95 ms →
+  14.19 ms) and unchanged on `check da-dk-g28-dictionary_harness.yaml` (6.63/6.82 s →
+  6.75/6.68 s). Two workloads on purpose: the criterion bench is regexp-dominated by
+  design, the dictionary harness leans on the trie. Neither can see the clone.
+
+  So don't do this for the clone's sake. If it is ever wanted for another reason, the
+  shape is: tables keep owning their translations and hand out
+  `&ResolvedTranslation`, so the stored type needs no lifetime and cannot
+  self-reference — but the candidate list is mixed. Trie and display candidates are
+  stored, `match`/`context` ones are built per match from `Translation::Unresolved` via
+  `resolve(capture, …)`, and the indicator modules derive theirs per position, so the
+  collectors would want `Cow<'_, ResolvedTranslation>`.
+
+## Standing lessons
+
+Both of these cost about 12% of a suite run and neither is visible in the code that
+caused it.
+
+- **Keep the values of maps consulted per character small.** When `DisplayTable`
+  started storing whole translations, widening `HashMap<char, char>` (4-byte values,
+  ~1 KB) to `HashMap<char, ResolvedTranslation>` (288-byte values, ~73 KB for
+  `unicode.dis`) turned a per-character lookup into a cache miss, over 2.2M
+  assertions. Fixed by boxing the rule inside the value, which is 16 bytes.
+  Interleaved four ways: baseline without rules 58.2 s, inline translations 65.3 s,
+  small value plus a `Vec` indexed by `usize` 57.9 s, boxed rule 58.7 s. How the value
+  is shrunk doesn't matter, only that it is.
+- **A purely cosmetic move between modules can cost real time.** Moving
+  `DisplayTable` from `translator.rs` into `translator::table::display` (`6e5b591`)
+  cost 12% of a suite run for no change in code: 53.1/53.3 s before, 59.5/59.8 s
+  after, interleaved. Release builds default to 16 codegen units split per module, so
+  `DisplayTable::trace` and `displayed` lost cross-unit inlining with their caller in
+  `pipeline.rs`. `#[inline]` on those two recovers all of it (53.3/53.0 s) — measured,
+  then dropped, parity first. `codegen-units = 1` or LTO in the release profile would
+  make the whole question go away.
 
 ## Results
 
