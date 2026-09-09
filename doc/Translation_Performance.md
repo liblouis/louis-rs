@@ -8,6 +8,9 @@ Everything here is measured, including the things that turned out not to work. E
 idea records its own numbers so a future attempt can tell whether it is re-treading
 disproven ground.
 
+Ideas 1 to 3 are prototyped on the `regexp-prefilter` branch and have not been
+reviewed for merge; idea 4 is a sketch. Nothing here is on `main`.
+
 ## Measuring
 
 ```sh
