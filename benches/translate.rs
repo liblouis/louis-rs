@@ -1,5 +1,6 @@
 //! Benchmarks translation through en-ueb-g2.ctb, the liblouis table with by far the
-//! most `match`/`context` rules (964), to track the cost of the regexp VM in
+//! most `match`/`context` rules -- its main stage compiles 444 `match` and 57
+//! `context` patterns -- to track the cost of the regexp VM in
 //! `src/translator/regexp.rs` that those opcodes compile to.
 //!
 //! Three groups, because the cost of a rule depends on what the input looks like and
