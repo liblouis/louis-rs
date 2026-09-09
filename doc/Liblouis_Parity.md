@@ -219,11 +219,16 @@ relevant ADR before starting; both record an approach that was tested and dispro
 - gzip+bincode table bundling ([PR #10](https://github.com/liblouis/louis-rs/pull/10))
 - Backward `capsletter`/`begcapsword` failures in `hu-hu-g1`
   ([#4](https://github.com/liblouis/louis-rs/issues/4))
-- Performance has never been measured. Offset buckets for translations and a 32-bit
-  regexp operand are the two ideas on file; benchmarking comes first.
+- Translation performance — the regexp VM was 59% of translation time, and there is a
+  measured 2.0–3.4× in hand plus a larger structural idea (compiling all of a stage's
+  `match`/`context` patterns into one automaton) not yet attempted. Everything on the
+  subject, including the variants that were measured and disproven, is in
+  [Translation_Performance.md](Translation_Performance.md).
 
 ---
 
 Working notes live in [TODO.org](../TODO.org); design decisions and the reasoning
 behind them in
-[Architecture_Decision_Records.org](Architecture_Decision_Records.org).
+[Architecture_Decision_Records.org](Architecture_Decision_Records.org); where
+translation time goes and what to do about it in
+[Translation_Performance.md](Translation_Performance.md).
