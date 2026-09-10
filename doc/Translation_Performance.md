@@ -401,6 +401,25 @@ Do not re-attempt these without a reason to think something has changed.
   on an exhausted-length iterator and `partition`'s two `Vec::new()`s never touch the
   heap.
 
+  The idea is a queue keyed by when an entry comes due: deal with the entries at offset 0,
+  then pop the ones at offset 1, and so on. This would remove the per-position *rebuild*,
+  not just shorten a scan. Measured as an upper bound anyway, by skipping `update_offsets`
+  and `partition_delayed_translations` entirely whenever nothing is pending, which is
+  strictly better than any queue could manage: no measurable difference on any of the
+  three benchmark groups.
+
+  One argument does survive, and it is not about speed. `update_offsets` carries
+
+  ```rust
+  .filter(|t| t.offset() >= decrement)   // drop translations where the offet is smaller than the decrement
+  ```
+
+  so a pending translation whose due position falls *inside* the span just consumed is
+  silently discarded. Keyed by absolute due position, that stops being a filter
+  predicate and becomes visible structure — the buckets inside the consumed span are
+  simply never visited, and whether that is right has to be decided rather than
+  assumed.
+
 ## Standing lessons
 
 Both of these cost about 12% of a suite run and neither is visible in the code that
