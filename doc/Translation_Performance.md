@@ -8,8 +8,8 @@ Everything here is measured, including the things that turned out not to work. E
 idea records its own numbers so a future attempt can tell whether it is re-treading
 disproven ground.
 
-Ideas 1 to 3 are prototyped on the `regexp-prefilter` branch and have not been
-reviewed for merge; idea 4 is a sketch. Nothing here is on `main`.
+Idea 3 is on `main`. Ideas 1 and 2 are prototyped on the `regexp-prefilter` branch and
+have not been reviewed for merge; idea 4 is a sketch.
 
 ## Measuring
 
@@ -203,6 +203,10 @@ survivors.
 
 ## Idea 3 — an inline bitmap for character-class membership
 
+**Landed on `main`** as `src/translator/regexp/character_set.rs`, without ideas 1 and 2.
+Read the Result section below before quoting a number: taken alone it is a
+forward-translation win only, and the branch's figures are not the ones `main` gets.
+
 `Instruction::Class`/`NotClass` tested membership in a `HashSet<char>` for every
 thread of every match attempt, and hashing a `char` with the default SipHash was ~10%
 of translation.
@@ -214,22 +218,41 @@ An inline bitmap for ASCII, and a sorted fallback for everything else:
 ```rust
 struct CharacterSet {
     ascii: [u64; 2],   // U+0000..U+007F
-    chars: Vec<char>,  // every member, sorted
+    chars: Vec<char>,  // the non-ASCII members, sorted
 }
 ```
 
 ### Result
 
-−25% forward, −5% backward, −4% Greek. A win in all three regimes: even for input the
-bitmap doesn't cover, the binary search still beats hashing.
+Forward is −26% either way. The other two regimes depend entirely on whether the
+first-character prefilter of ideas 1 and 2 is already in place, so quote them together
+with the baseline they were measured against:
 
-Note what the regimes mean here. Backward translation feeds the VM dot patterns, so it
-never touches the ASCII bitmap and always takes the fallback, which is why its share of
-this particular win is the smallest of the three. A second bitmap over the 256 Unicode
-braille patterns is worth a further 13% of backward translation, and costs ~2% of
-forward plus a conditionally-present field on a struct that `en-ueb-g2` compiles 1587
-of. Measured, and deliberately not taken: the fallback is fast enough that the
-complexity isn't justified.
+|                            | forward `en-ueb-g2` | backward | Greek |
+|----------------------------|---------------------|----------|-------|
+| on top of ideas 1+2        | −26%                | −7%      | −3%   |
+| on its own, against `main` | −26%                | **+4%**  | ±0%   |
+
+Backward translation feeds the VM dot patterns, so it never touches the ASCII bitmap and
+always takes the fallback. Standing alone that is not a win: binary search does *not*
+beat hashing here, and the extra `cp < 128` branch costs 4%. It only turns into a gain
+once the prefilter is present, because the prefilter is itself worth far more to backward
+translation than to forward (13.0 ms → 4.2 ms), and what survives it is a different, much
+smaller mix of match attempts.
+
+So the bitmap is a forward-translation optimisation that the other two regimes tolerate.
+Take it for the −26%, not for a uniform win.
+
+A second bitmap over the 256 Unicode braille patterns is worth a further 13% of backward
+translation, and costs ~2% of forward plus a conditionally-present field on a struct that
+`en-ueb-g2` compiles 1587 of. Measured, and deliberately not taken: the fallback is fast
+enough that the complexity isn't justified.
+
+Keep the fallback `Vec` to the *non-ASCII* members only, rather than every member as the
+`regexp-prefilter` branch does. The branch stores all of them because its
+`first_char_index` needs `chars()` to be the complete set; where that requirement is
+absent, dropping the ASCII members shortens every binary search and is worth 3% of
+backward and 3% of Greek.
 
 ### Precedent
 
@@ -443,6 +466,26 @@ caused it.
   make the whole question go away.
 
 ## Results
+
+### What landed: idea 3 alone
+
+`cargo bench --bench translate`, against the `HashSet<char>` it replaced:
+
+|                                | before   | after    |           |
+|--------------------------------|----------|----------|-----------|
+| `en-ueb-g2/word`               | 172.3 µs | 135.4 µs | 1.27×     |
+| `en-ueb-g2/sentence`           | 1.999 ms | 1.468 ms | 1.36×     |
+| `en-ueb-g2/paragraph`          | 12.71 ms | 9.403 ms | **1.35×** |
+| `en-ueb-g2-backward/paragraph` | 13.01 ms | 13.59 ms | 0.96×     |
+| `el/paragraph`                 | 1.373 ms | 1.373 ms | 1.00×     |
+
+Table-compile cost is `en-ueb-g2` 19.3 → 20.4 ms (+6%) for building the sorted
+fallbacks; `de-g2` and `zh-tw` are within noise. Paid once per table load.
+
+Correctness unchanged: the full YAML summary — 2 224 727 assertions across 70 files,
+both directions — is byte-identical to the pre-change baseline, and 271 unit tests pass.
+
+### Still on the branch: ideas 1–3 together
 
 `cargo bench --bench translate`, ideas 1–3 against `main`:
 

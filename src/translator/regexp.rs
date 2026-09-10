@@ -11,7 +11,11 @@
 //! complexity and support for features like character classes, quantifiers, and
 //! captures.
 
+mod character_set;
+
 use std::collections::HashSet;
+
+use character_set::CharacterSet;
 
 use smallvec::SmallVec;
 
@@ -148,11 +152,7 @@ impl Regexp {
 
     /// Emit byte code instructions for the RegExp AST and collect all character classes
     /// used in the RegExp.
-    fn emit(
-        &self,
-        instructions: &mut Vec<Instruction>,
-        character_classes: &mut Vec<HashSet<char>>,
-    ) {
+    fn emit(&self, instructions: &mut Vec<Instruction>, character_classes: &mut Vec<CharacterSet>) {
         match self {
             Regexp::Literal(c) => instructions.push(Instruction::Char(*c)),
             Regexp::Concat(left, right) => {
@@ -189,11 +189,11 @@ impl Regexp {
             }
             Regexp::Any => instructions.push(Instruction::Any),
             Regexp::CharacterClass(characters) => {
-                character_classes.push(characters.clone());
+                character_classes.push(characters.into());
                 instructions.push(Instruction::Class(character_classes.len() - 1));
             }
             Regexp::NotCharacterClass(characters) => {
-                character_classes.push(characters.clone());
+                character_classes.push(characters.into());
                 instructions.push(Instruction::NotClass(character_classes.len() - 1));
             }
             Regexp::RepeatExactly(n, regexp) => {
@@ -317,7 +317,7 @@ pub struct CompiledRegexp {
     instructions: Vec<Instruction>,
     /// Character classes defined in this regexp. They are are stored separately
     /// from the instructions to improve cache locality
-    character_classes: Vec<HashSet<char>>,
+    character_classes: Vec<CharacterSet>,
     /// Each match contains a [`Translation`] as a payload. Again, these are
     /// stored separately from the instructions to improve cache locality
     translations: Vec<Translation>,
@@ -551,7 +551,7 @@ impl CompiledRegexp {
                     }
                     Instruction::Class(index) => {
                         if let Some(actual) = next_char
-                            && self.character_classes[index].contains(&actual)
+                            && self.character_classes[index].contains(actual)
                         {
                             self.add_thread(
                                 next,
@@ -566,7 +566,7 @@ impl CompiledRegexp {
                     }
                     Instruction::NotClass(index) => {
                         if let Some(actual) = next_char
-                            && !self.character_classes[index].contains(&actual)
+                            && !self.character_classes[index].contains(actual)
                         {
                             self.add_thread(
                                 next,
