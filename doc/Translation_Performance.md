@@ -331,15 +331,6 @@ Shares are of translation time after ideas 1–3, from the callgrind profile.
   clones every output `String`; `push_str` into one `String` instead. One line.
 - **Two-character index key** (unmeasured). Follow liblouis's `_lou_stringHash` and
   key `FirstCharIndex` on the first two characters instead of one.
-- **Offset buckets for delayed translations** (unmeasured, and the one idea on this
-  list that predates the work above — it comes from `TODO.org`'s performance item).
-  `trace` keeps every delayed translation in one flat `Vec`, and pays for that flatness
-  twice per input position: `update_offsets` rebuilds the whole vector through a
-  `filter` + `map` + `collect` to decrement each offset, and
-  `partition_delayed_translations` walks all of it again to split off the entries that
-  have come due. Bucketing by offset would turn both into an indexed lookup of the
-  bucket for this position. Reading the name against the code, that appears to be what
-  the item means; worth confirming against the original intent before building it.
 
 ## Measured and rejected
 
@@ -389,6 +380,26 @@ Do not re-attempt these without a reason to think something has changed.
   stored, `match`/`context` ones are built per match from `Translation::Unresolved` via
   `resolve(capture, …)`, and the indicator modules derive theirs per position, so the
   collectors would want `Cow<'_, ResolvedTranslation>`.
+- **Offset buckets for delayed translations**. Rejected without being built, because the
+  list it would index is virtually always empty. `trace` keeps delayed translations in one
+  flat `Vec` and rescans it twice per input position — `update_offsets` to decrement each
+  offset, `partition_delayed_translations` to split off what has come due — so bucketing
+  by offset looks like an obvious win. Instrumenting the length over the whole YAML suite
+  says otherwise:
+
+  |                                         |              |
+  |-----------------------------------------|--------------|
+  | input positions measured                | > 20 000 000 |
+  | positions where the list holds anything | 0.84%        |
+  | longest it ever gets                    | 8            |
+
+  Note *why*, because the obvious reason is wrong: it is not that pre-patterns are
+  rare. 230 of `en-ueb-g2`'s 356 `match` rules carry a real one. A position only gets
+  a delayed entry when a pattern actually *matches* there with a non-zero pre-pattern
+  length, and matches are rare relative to positions. Scanning up to eight elements
+  beats indexing a bucket map, and the empty case already allocates nothing: `collect`
+  on an exhausted-length iterator and `partition`'s two `Vec::new()`s never touch the
+  heap.
 
 ## Standing lessons
 
