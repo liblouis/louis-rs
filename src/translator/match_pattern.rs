@@ -109,9 +109,9 @@ impl Regexp {
         Regexp::Concat(
             Box::new(Regexp::Concat(
                 Box::new(Regexp::from_patterns(pre, ctx)),
-                Box::new(Regexp::Capture(Box::new(Regexp::CaseInsensitiveString(
-                    chars,
-                )))),
+                Box::new(Regexp::Consume(Box::new(Regexp::Capture(Box::new(
+                    Regexp::CaseInsensitiveString(chars),
+                ))))),
             )),
             Box::new(Regexp::from_patterns(post, ctx)),
         )

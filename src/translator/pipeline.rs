@@ -241,7 +241,9 @@ mod tests {
         ];
         let pipeline = TranslationPipeline::compile(&rules, Direction::Forward).unwrap();
         assert_eq!(pipeline.translate("o"), "⠕");
-        assert_eq!(pipeline.translate("oύ"), "⠕⠐⠥⠽");
+        // `*@136` copies the accent out of the bracket and consumes the whole match,
+        // so the @135 and @13456 cells around it are replaced, not kept
+        assert_eq!(pipeline.translate("oύ"), "⠐⠥");
     }
 
     #[test]

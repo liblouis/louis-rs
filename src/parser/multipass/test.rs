@@ -20,12 +20,14 @@ impl Test {
         &self.tests
     }
 
-    pub fn add_implicit_replace(self) -> Self {
-        if !self
-            .tests
+    fn has_replace(&self) -> bool {
+        self.tests
             .iter()
             .any(|t| matches!(t, TestInstruction::Replace { .. }))
-        {
+    }
+
+    pub fn add_implicit_replace(self) -> Self {
+        if !self.has_replace() {
             Self {
                 tests: vec![TestInstruction::Replace { tests: self.tests }],
             }

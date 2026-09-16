@@ -20,6 +20,14 @@ impl Action {
     pub fn actions(&self) -> Vec<ActionInstruction> {
         self.actions.clone()
     }
+
+    /// If the action contains a `*` the rule consumes the whole match instead of just
+    /// what is inside the `[]` replacement
+    pub fn consumes_whole_match(&self) -> bool {
+        self.actions
+            .iter()
+            .any(|t| matches!(t, ActionInstruction::Replace { .. }))
+    }
 }
 
 impl IsLiteral for Action {

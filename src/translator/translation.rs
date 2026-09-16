@@ -1,6 +1,6 @@
 use crate::{
     parser::{AnchoredRule, Precedence, Rule},
-    translator::{effect::Effect, swap::Swapper},
+    translator::{effect::Effect, regexp::CharacterRange, swap::Swapper},
 };
 
 /// A translation can have multiple stages.
@@ -67,11 +67,11 @@ impl std::fmt::Display for TranslationTarget {
 }
 
 impl TranslationTarget {
-    pub fn resolve(self, capture: &str) -> Self {
+    pub fn resolve(self, captured: &str) -> Self {
         match self {
             TranslationTarget::Literal(_) => self,
-            TranslationTarget::Capture => TranslationTarget::Literal(capture.to_string()),
-            TranslationTarget::Swap(swapper) => TranslationTarget::Literal(swapper.swap(capture)),
+            TranslationTarget::Capture => TranslationTarget::Literal(captured.to_string()),
+            TranslationTarget::Swap(swapper) => TranslationTarget::Literal(swapper.swap(captured)),
         }
     }
 }
@@ -88,7 +88,12 @@ impl std::fmt::Display for TranslationTargets {
 }
 
 pub trait Resolve {
-    fn resolve(self, capture: &str, weight: usize, offset: usize) -> ResolvedTranslation;
+    fn resolve(
+        self,
+        captured: &str,
+        consumed: CharacterRange,
+        weight: usize,
+    ) -> ResolvedTranslation;
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -119,21 +124,25 @@ impl UnresolvedTranslation {
 }
 
 impl Resolve for UnresolvedTranslation {
-    fn resolve(self, capture: &str, weight: usize, offset: usize) -> ResolvedTranslation {
+    fn resolve(
+        self,
+        captured: &str,
+        consumed: CharacterRange,
+        weight: usize,
+    ) -> ResolvedTranslation {
         let resolved: String = self
             .output
             .iter()
             .cloned()
-            .map(|t| t.resolve(capture))
+            .map(|t| t.resolve(captured))
             .map(|t| t.to_string())
             .collect();
-        let length = capture.chars().count();
         ResolvedTranslation {
-            input: capture.to_string(),
+            input: captured.to_string(),
             output: resolved,
-            length,
+            length: consumed.len(),
             weight,
-            offset,
+            offset: consumed.start,
             precedence: self.precedence,
             stage: self.stage,
             effects: self.effects,
@@ -155,12 +164,18 @@ impl Default for Translation {
 }
 
 impl Resolve for Translation {
-    fn resolve(self, capture: &str, weight: usize, offset: usize) -> ResolvedTranslation {
+    fn resolve(
+        self,
+        captured: &str,
+        consumed: CharacterRange,
+        weight: usize,
+    ) -> ResolvedTranslation {
         match self {
-            Translation::Resolved(translation) => {
-                translation.with_weight(weight).with_offset(offset)
-            }
-            Translation::Unresolved(unresolved) => unresolved.resolve(capture, weight, offset),
+            Translation::Resolved(translation) => translation
+                .with_weight(weight)
+                .with_length(consumed.len())
+                .with_offset(consumed.start),
+            Translation::Unresolved(unresolved) => unresolved.resolve(captured, consumed, weight),
         }
     }
 }
@@ -175,7 +190,7 @@ pub struct ResolvedTranslation {
     /// The translation of `input`, typically Unicode braille. In the case of back-translation the
     /// `input` contains Unicode braille and the output plain text.
     output: String,
-    /// Number of chars in `input`
+    /// Number of matched chars in `input`
     length: usize,
     /// Weight of a translation. Typically this is the length of the input, but often it includes
     /// word boundaries as well. In some cases the weight has to be calculated dynamically, for
@@ -314,6 +329,11 @@ impl ResolvedTranslation {
         Self { weight, ..self }
     }
 
+    /// Set the `length` of a translation.
+    pub fn with_length(self, length: usize) -> Self {
+        Self { length, ..self }
+    }
+
     /// Set the `output` of a translation.
     pub fn with_output(self, output: &str) -> Self {
         Self {
@@ -372,7 +392,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("", 5, 0);
+        let result = translation.resolve("", 0..0, 0);
 
         assert_eq!(result.input(), "");
         assert_eq!(result.output(), "");
@@ -387,7 +407,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("captured", 8, 0);
+        let result = translation.resolve("captured", 0..8, 0);
 
         assert_eq!(result.input(), "captured");
         assert_eq!(result.output(), "captured");
@@ -406,7 +426,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("MIDDLE", 8, 0);
+        let result = translation.resolve("MIDDLE", 0..8, 0);
 
         assert_eq!(result.input(), "MIDDLE");
         assert_eq!(result.output(), "<MIDDLE>");
@@ -427,7 +447,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("xyz", 8, 0);
+        let result = translation.resolve("xyz", 0..8, 0);
 
         assert_eq!(result.input(), "xyz");
         assert_eq!(result.output(), "<XYz>");
@@ -446,7 +466,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("café🚀🚀", 6, 0);
+        let result = translation.resolve("café🚀🚀", 0..6, 0);
 
         assert_eq!(result.input(), "café🚀🚀");
         assert_eq!(result.length(), 6);

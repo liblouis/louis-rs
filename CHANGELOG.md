@@ -82,6 +82,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   (liblouis/liblouis#496).
 
 ### Fixed
+- A `context`, `correct` or `pass2`--`pass4` rule whose action copies the
+  replacement brackets with `*` now consumes everything its test matched, not
+  just the bracketed part. liblouis' `passDoAction` advances the cursor to the
+  end of the whole match for such a copy action, discarding what it had already
+  copied ahead of the brackets; every other action stops at the end of the
+  brackets instead. Rules that collapse the cells surrounding a bracket into
+  one, such as the Greek diphthong rules `pass2 @1[%accent]@24 *@126`, left
+  those surrounding cells in the output before.
 - A contraction next to another contraction no longer blocks a `partword` rule
   in backward translation. Backward word-boundary checks classify the
   neighbouring braille cell, and the letter class they consult was seeded only

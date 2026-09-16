@@ -13,7 +13,7 @@
 
 mod character_set;
 
-use std::collections::HashSet;
+use std::{collections::HashSet, ops::Range};
 
 use character_set::CharacterSet;
 
@@ -46,7 +46,12 @@ pub enum Regexp {
     RepeatExactly(u8, Box<Regexp>),
     RepeatAtLeast(u8, Box<Regexp>),
     RepeatAtLeastAtMost(u8, u8, Box<Regexp>),
+    /// The part of the regexp that is captured. Never nest one inside another: The VM
+    /// instructions do not handle that.
     Capture(Box<Regexp>),
+    /// The part of the regexp that is consumed, as opposed to merely matched. Never nest
+    /// one inside another: The VM instructions do not handle that.
+    Consume(Box<Regexp>),
     /// Convenience that is unrolled into a sequence of [`Char`](Instruction#variant.Char)
     String(String),
     /// Convenience that is unrolled into a sequence of [`NotChar`](Instruction#variant.NotChar)
@@ -117,6 +122,7 @@ impl Regexp {
             }
             // unreachable: the parser rejects negating a capture before it reaches here
             Regexp::Capture(_) => unreachable!(),
+            Regexp::Consume(_) => unreachable!(),
             Regexp::String(s) => Regexp::NotString(s),
             // unreachable: the parser rejects double negation before it reaches here
             Regexp::NotString(_) => unreachable!(),
@@ -228,6 +234,11 @@ impl Regexp {
                 regexp.emit(instructions, character_classes);
                 instructions.push(Instruction::CaptureEnd);
             }
+            Regexp::Consume(regexp) => {
+                instructions.push(Instruction::ConsumeStart);
+                regexp.emit(instructions, character_classes);
+                instructions.push(Instruction::ConsumeEnd);
+            }
             Regexp::String(s) => {
                 for c in s.chars() {
                     instructions.push(Instruction::Char(c))
@@ -293,6 +304,10 @@ pub enum Instruction {
     CaptureStart,
     /// End a capture
     CaptureEnd,
+    /// Where the actual match starts (after the lookbehind)
+    ConsumeStart,
+    /// Where the actual match ends (before the lookahead)
+    ConsumeEnd,
     /// Test whether a variable is equal to a value
     VariableEqual(VariableIndex, u8),
     /// Test whether a variable is not equal to a value
@@ -323,13 +338,16 @@ pub struct CompiledRegexp {
     translations: Vec<Translation>,
 }
 
+pub type CharacterRange = Range<usize>;
+
 /// A single candidate execution path through the RegExp compiled program at the current
-/// input position, carrying the capture span in progress along that path.
+/// input position, carrying the captured span in progress along that path.
 ///
 /// See the section "Pike's Implementation" at <https://swtch.com/~rsc/regexp/regexp2.html>
 struct Thread {
     pc: InstructionIndex,
-    capture: (usize, usize),
+    captured: CharacterRange,
+    consumed: CharacterRange,
 }
 
 /// A bitset over instruction indices, used to track which `pc`s have already been added
@@ -394,8 +412,12 @@ impl CompiledRegexp {
         &self,
         list: &mut ThreadList,
         pc: InstructionIndex,
-        capture: (usize, usize),
+        captured: CharacterRange,
+        consumed: CharacterRange,
+        // `sp` is a byte offset (the captured span slices the input), `cp` the same
+        // position counted in chars (the consumed span is reported in chars)
         sp: usize,
+        cp: usize,
         input_len: usize,
         at_start: bool,
         env: &Environment,
@@ -405,52 +427,170 @@ impl CompiledRegexp {
         }
         list.seen.insert(pc);
         match self.instructions[pc] {
-            Instruction::Jump(target) => {
-                self.add_thread(list, target, capture, sp, input_len, at_start, env)
-            }
+            Instruction::Jump(target) => self.add_thread(
+                list, target, captured, consumed, sp, cp, input_len, at_start, env,
+            ),
             Instruction::Split(a, b) => {
-                self.add_thread(list, a, capture, sp, input_len, at_start, env);
-                self.add_thread(list, b, capture, sp, input_len, at_start, env);
+                self.add_thread(
+                    list,
+                    a,
+                    captured.clone(),
+                    consumed.clone(),
+                    sp,
+                    cp,
+                    input_len,
+                    at_start,
+                    env,
+                );
+                self.add_thread(
+                    list, b, captured, consumed, sp, cp, input_len, at_start, env,
+                );
             }
-            Instruction::CaptureStart => {
-                self.add_thread(list, pc + 1, (sp, 0), sp, input_len, at_start, env)
-            }
-            Instruction::CaptureEnd => {
-                self.add_thread(list, pc + 1, (capture.0, sp), sp, input_len, at_start, env)
-            }
+            Instruction::CaptureStart => self.add_thread(
+                list,
+                pc + 1,
+                // The end is only known once the matching `CaptureEnd` is reached. Start
+                // empty, so the span stays a well-formed range meanwhile.
+                sp..sp,
+                consumed,
+                sp,
+                cp,
+                input_len,
+                at_start,
+                env,
+            ),
+            Instruction::CaptureEnd => self.add_thread(
+                list,
+                pc + 1,
+                captured.start..sp,
+                consumed,
+                sp,
+                cp,
+                input_len,
+                at_start,
+                env,
+            ),
+            Instruction::ConsumeStart => self.add_thread(
+                list,
+                pc + 1,
+                captured,
+                // The end is only known once the matching `ConsumeEnd` is reached. Start
+                // empty, so the span stays a well-formed range meanwhile.
+                cp..cp,
+                sp,
+                cp,
+                input_len,
+                at_start,
+                env,
+            ),
+            Instruction::ConsumeEnd => self.add_thread(
+                list,
+                pc + 1,
+                captured,
+                consumed.start..cp,
+                sp,
+                cp,
+                input_len,
+                at_start,
+                env,
+            ),
             Instruction::VariableEqual(var, expected) => {
                 if env.get(var) == Some(&expected) {
-                    self.add_thread(list, pc + 1, capture, sp, input_len, at_start, env);
+                    self.add_thread(
+                        list,
+                        pc + 1,
+                        captured,
+                        consumed,
+                        sp,
+                        cp,
+                        input_len,
+                        at_start,
+                        env,
+                    );
                 }
             }
             Instruction::NotVariableEqual(var, expected) => {
                 if env.get(var).is_some_and(|&actual| actual != expected) {
-                    self.add_thread(list, pc + 1, capture, sp, input_len, at_start, env);
+                    self.add_thread(
+                        list,
+                        pc + 1,
+                        captured,
+                        consumed,
+                        sp,
+                        cp,
+                        input_len,
+                        at_start,
+                        env,
+                    );
                 }
             }
             Instruction::AssertEnd => {
                 if sp == input_len {
-                    self.add_thread(list, pc + 1, capture, sp, input_len, at_start, env);
+                    self.add_thread(
+                        list,
+                        pc + 1,
+                        captured,
+                        consumed,
+                        sp,
+                        cp,
+                        input_len,
+                        at_start,
+                        env,
+                    );
                 }
             }
             Instruction::AssertMoreInput => {
                 if sp != input_len {
-                    self.add_thread(list, pc + 1, capture, sp, input_len, at_start, env);
+                    self.add_thread(
+                        list,
+                        pc + 1,
+                        captured,
+                        consumed,
+                        sp,
+                        cp,
+                        input_len,
+                        at_start,
+                        env,
+                    );
                 }
             }
             Instruction::AssertStart => {
                 if at_start && sp == 0 {
-                    self.add_thread(list, pc + 1, capture, sp, input_len, at_start, env);
+                    self.add_thread(
+                        list,
+                        pc + 1,
+                        captured,
+                        consumed,
+                        sp,
+                        cp,
+                        input_len,
+                        at_start,
+                        env,
+                    );
                 }
             }
             Instruction::AssertNotStart => {
                 if !(at_start && sp == 0) {
-                    self.add_thread(list, pc + 1, capture, sp, input_len, at_start, env);
+                    self.add_thread(
+                        list,
+                        pc + 1,
+                        captured,
+                        consumed,
+                        sp,
+                        cp,
+                        input_len,
+                        at_start,
+                        env,
+                    );
                 }
             }
             Instruction::Fail => (),
             // Add a Thread for character consuming instructions. The epsilon closure ends here.
-            _ => list.threads.push(Thread { pc, capture }),
+            _ => list.threads.push(Thread {
+                pc,
+                captured,
+                consumed,
+            }),
         }
     }
 
@@ -476,24 +616,20 @@ impl CompiledRegexp {
         env: &Environment,
         at_start: bool,
     ) -> Option<ResolvedTranslation> {
-        // `current`/`next` stay as fixed-size stack slots (`ThreadList` inlines its thread set
-        // and seen-bitset, up to 64 instructions/threads, to avoid a heap allocation on every
-        // call) and are never moved: `current`/`next` below are references into them, so
-        // swapping which is "current" each step (`mem::swap` further down) swaps two pointers,
-        // not the ~1.5KB of inline storage itself.
-        let mut current_storage = ThreadList::new(self.instructions.len());
-        let mut next_storage = ThreadList::new(self.instructions.len());
-        let mut current = &mut current_storage;
-        let mut next = &mut next_storage;
+        let mut current_threads = ThreadList::new(self.instructions.len());
+        let mut next_threads = ThreadList::new(self.instructions.len());
+        let mut current = &mut current_threads;
+        let mut next = &mut next_threads;
         let mut sp = 0;
         let mut length = 0;
-        // The capture span, consumed-char count and translation of the best match found so far. A
-        // lower-priority thread reaching `Match` doesn't end the search immediately: a still-alive
-        // higher-priority thread might go on to match later
-        let mut matched: Option<((usize, usize), usize, TranslationIndex)> = None;
+        // The captured span, consumed span, consumed-char count and translation of the
+        // best match found so far. A lower-priority thread reaching `Match` doesn't end
+        // the search immediately: a still-alive higher-priority thread might go on to
+        // match later
+        let mut matched: Option<(CharacterRange, CharacterRange, usize, TranslationIndex)> = None;
 
         current.start_step();
-        self.add_thread(current, 0, (0, 0), sp, input.len(), at_start, env);
+        self.add_thread(current, 0, 0..0, 0..0, sp, 0, input.len(), at_start, env);
 
         while !current.threads.is_empty() {
             let next_char = input[sp..].chars().next();
@@ -501,7 +637,12 @@ impl CompiledRegexp {
             for thread in &current.threads {
                 match self.instructions[thread.pc] {
                     Instruction::Match(index) => {
-                        matched = Some((thread.capture, length, index));
+                        matched = Some((
+                            thread.captured.clone(),
+                            thread.consumed.clone(),
+                            length,
+                            index,
+                        ));
                         // every remaining thread in this step is lower priority than the one
                         // that just matched, and so could never improve on it
                         break;
@@ -511,8 +652,10 @@ impl CompiledRegexp {
                             self.add_thread(
                                 next,
                                 thread.pc + 1,
-                                thread.capture,
+                                thread.captured.clone(),
+                                thread.consumed.clone(),
                                 sp + expected.len_utf8(),
+                                length + 1,
                                 input.len(),
                                 at_start,
                                 env,
@@ -526,8 +669,10 @@ impl CompiledRegexp {
                             self.add_thread(
                                 next,
                                 thread.pc + 1,
-                                thread.capture,
+                                thread.captured.clone(),
+                                thread.consumed.clone(),
                                 sp + actual.len_utf8(),
+                                length + 1,
                                 input.len(),
                                 at_start,
                                 env,
@@ -541,8 +686,10 @@ impl CompiledRegexp {
                             self.add_thread(
                                 next,
                                 thread.pc + 1,
-                                thread.capture,
+                                thread.captured.clone(),
+                                thread.consumed.clone(),
                                 sp + actual.len_utf8(),
+                                length + 1,
                                 input.len(),
                                 at_start,
                                 env,
@@ -556,8 +703,10 @@ impl CompiledRegexp {
                             self.add_thread(
                                 next,
                                 thread.pc + 1,
-                                thread.capture,
+                                thread.captured.clone(),
+                                thread.consumed.clone(),
                                 sp + actual.len_utf8(),
+                                length + 1,
                                 input.len(),
                                 at_start,
                                 env,
@@ -571,8 +720,10 @@ impl CompiledRegexp {
                             self.add_thread(
                                 next,
                                 thread.pc + 1,
-                                thread.capture,
+                                thread.captured.clone(),
+                                thread.consumed.clone(),
                                 sp + actual.len_utf8(),
+                                length + 1,
                                 input.len(),
                                 at_start,
                                 env,
@@ -584,8 +735,10 @@ impl CompiledRegexp {
                             self.add_thread(
                                 next,
                                 thread.pc + 1,
-                                thread.capture,
+                                thread.captured.clone(),
+                                thread.consumed.clone(),
                                 sp + actual.len_utf8(),
+                                length + 1,
                                 input.len(),
                                 at_start,
                                 env,
@@ -603,13 +756,11 @@ impl CompiledRegexp {
             length += 1;
         }
 
-        matched.map(|((start, end), length, index)| {
-            let capture = &input[start..end];
-            // offset is in number of chars not a byte offset
-            let offset = input[..start].chars().count();
+        matched.map(|(captured, consumed, length, index)| {
+            let captured = &input[captured];
             self.translations[index]
                 .clone()
-                .resolve(capture, length, offset)
+                .resolve(captured, consumed, length)
         })
     }
 }
@@ -931,7 +1082,7 @@ mod tests {
     }
 
     #[test]
-    fn capture() {
+    fn captured() {
         let env = Environment::new();
         let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Capture],
@@ -957,19 +1108,22 @@ mod tests {
         assert_eq!(
             re.find("foobarfoo", &env).unwrap(),
             ResolvedTranslation::new("bar", "bar", 3, TranslationStage::Main, None)
-                .with_offset(3)
+                .with_offset(0)
+                .with_length(0) // nothing is consumed
                 .with_weight(9)
         );
         assert_eq!(
             re.find("fooxarfoo", &env).unwrap(),
             ResolvedTranslation::new("xar", "xar", 3, TranslationStage::Main, None)
-                .with_offset(3)
+                .with_offset(0)
+                .with_length(0) // nothing is consumed
                 .with_weight(9)
         );
         assert_eq!(
             re.find("foobarfoobar", &env).unwrap(),
             ResolvedTranslation::new("bar", "bar", 3, TranslationStage::Main, None)
-                .with_offset(3)
+                .with_offset(0)
+                .with_length(0) // nothing is consumed
                 .with_weight(9)
         );
         assert_eq!(re.find("aaaaaa", &env), None);
@@ -1003,19 +1157,22 @@ mod tests {
         assert_eq!(
             re.find("foobarfoo", &env).unwrap(),
             ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
-                .with_offset(3)
+                .with_offset(0)
+                .with_length(0) // nothing is consumed
                 .with_weight(9)
         );
         assert_eq!(
             re.find("fooxarfoo", &env).unwrap(),
             ResolvedTranslation::new("xar", "baz", 3, TranslationStage::Main, None)
-                .with_offset(3)
+                .with_offset(0)
+                .with_length(0) // nothing is consumed
                 .with_weight(9)
         );
         assert_eq!(
             re.find("foobarfoobar", &env).unwrap(),
             ResolvedTranslation::new("bar", "baz", 3, TranslationStage::Main, None)
-                .with_offset(3)
+                .with_offset(0)
+                .with_length(0) // nothing is consumed
                 .with_weight(9)
         );
     }
@@ -1037,13 +1194,15 @@ mod tests {
                 Box::new(Regexp::Concat(
                     Box::new(Regexp::Literal('o')),
                     Box::new(Regexp::Concat(
-                        Box::new(Regexp::Capture(Box::new(Regexp::Concat(
-                            Box::new(Regexp::Literal('b')),
-                            Box::new(Regexp::Concat(
-                                Box::new(Regexp::Literal('a')),
-                                Box::new(Regexp::Literal('r')),
-                            )),
-                        )))),
+                        Box::new(Regexp::Consume(Box::new(Regexp::Capture(Box::new(
+                            Regexp::Concat(
+                                Box::new(Regexp::Literal('b')),
+                                Box::new(Regexp::Concat(
+                                    Box::new(Regexp::Literal('a')),
+                                    Box::new(Regexp::Literal('r')),
+                                )),
+                            ),
+                        ))))),
                         Box::new(Regexp::Concat(
                             Box::new(Regexp::Literal('f')),
                             Box::new(Regexp::Concat(
