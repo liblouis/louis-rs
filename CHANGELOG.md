@@ -30,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   accepted.
 
 ### Added
+- A YAML test file's `table:` may now be a metadata query, `{language: da,
+  grade: 2, dots: 6}`, and is resolved against the tables on the search path.
+  Such a block was skipped before. A query that matches no table, or more than
+  one, is reported as an error naming the query; liblouis picks a best match
+  among several where we require exactly one.
 - A display table is now a stage of the translation pipeline rather than something the
   YAML test harness applies on its own. `TranslationPipeline::with_display` adds it as
   the outermost stage on the braille side — last when translating to braille, first when

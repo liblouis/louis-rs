@@ -513,19 +513,15 @@ fn main() {
             yaml_files,
             summary,
         } => check_yaml(yaml_files, summary),
-        Commands::Query { query } => match metadata::index() {
-            Ok(index) => {
-                let query = query
-                    .split(',')
-                    .map(|s| {
-                        let parts: Vec<_> = s.split('=').collect();
-                        (parts[0].to_string(), parts[1].to_string())
-                    })
-                    .collect();
-                println!("{:?}", metadata::find(&index, query));
+        Commands::Query { query } => match (metadata::Query::parse(&query), metadata::index()) {
+            (Ok(query), Ok(index)) => {
+                println!("{:?}", index.find(query));
             }
-            Err(e) => {
-                eprint!("Could not index all tables: {:?}", e)
+            (Err(e), _) => {
+                eprintln!("Invalid query: {e}")
+            }
+            (_, Err(e)) => {
+                eprintln!("Could not index all tables: {e}")
             }
         },
     }

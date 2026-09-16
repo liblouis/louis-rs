@@ -1,4 +1,4 @@
-* Todo [1/8]
+* Todo [1/9]
 - [ ] Have the ~louis~ binary depend on the ~louis~ library instead of
   compiling the same sources again
   - ~src/main.rs~ declares its own ~mod parser~, ~mod translator~,
@@ -21,6 +21,26 @@
     of which ~lib.rs~ exports today, and the library API is explicitly
     not stable yet. Same question as exposing a display table on
     ~Translator~.
+  - Blocks translating from a metadata query: ~metadata~ is a module of
+    the binary only, so ~Translator~ cannot reach the index at all. See
+    the entry below.
+- [ ] Let a ~Translator~ be built from a metadata query, as liblouis
+  allows
+  - ~metadata::Index~ exists and the ~query~ subcommand and the YAML
+    test harness both use it, but it is declared in ~main.rs~, not in
+    ~lib.rs~, so nothing in the library API can reach it. Moving it is
+    part of the binary/library split above.
+  - ~Index::build~ takes the ~SearchPath~ to walk, so the index itself
+    carries no assumption about where tables live. What does is
+    ~metadata::index()~, the convenience the CLI and the harness use: a
+    process-wide ~LazyLock~ over ~LOUIS_TABLE_PATH~, built once from
+    whatever the environment said the first time anybody asked.
+  - That accessor must not become the way a ~Translator~ resolves a
+    query. A host using ~Translator::with_search_path~ supplies its own
+    directories, and the ambient index would quietly answer from
+    somewhere else instead; two different search paths in one process
+    cannot both be served by it either. Either call ~Index::build~ with
+    the caller's search path and pay the walk, or cache per search path.
 - [ ] Implement the ~syllable~ opcode with boundary checking
 - [ ] Cursor handling
 - [ ] The boundary functions (~word_start~, etc) only work in forward

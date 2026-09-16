@@ -9,6 +9,7 @@ use search_path::SearchPath;
 
 use crate::{
     emphasis::EmphasisSpan,
+    metadata,
     parser::{self, Direction, TableError},
     translator::{
         self, DisplayTable, PositionMap, TranslationModes, TranslationOptions, TranslationPipeline,
@@ -23,6 +24,12 @@ pub enum TestError {
     TableErrors(Vec<TableError>),
     #[error("Error when compiling table {0:?}")]
     CompilationError(#[from] translator::TranslationError),
+    #[error("Could not index the tables: {0}")]
+    NotIndexable(String),
+    #[error("No table matches the query {0}")]
+    NoTableForQuery(String),
+    #[error("The query {0} matches more than one table: {1:?}")]
+    AmbiguousTableQuery(String, Vec<PathBuf>),
 }
 
 impl From<Vec<TableError>> for TestError {
@@ -198,7 +205,23 @@ impl<'a> TestMatrix<'a> {
                 let rules = parser::table(text, None)?;
                 parser::expand_includes(rules, &search_path, &[])?
             }
-            Table::Query(..) => return Err(TestError::NotImplemented("Table queries".to_string())),
+            Table::Query(query) => {
+                let index =
+                    metadata::index().map_err(|e| TestError::NotIndexable(e.to_string()))?;
+                let query = metadata::Query::from(query);
+                let matches: Vec<PathBuf> =
+                    index.find(query.clone()).into_iter().cloned().collect();
+                match matches.as_slice() {
+                    [] => return Err(TestError::NoTableForQuery(query.to_string())),
+                    [path] => parser::table_expanded_in(path, &search_path)?,
+                    several => {
+                        return Err(TestError::AmbiguousTableQuery(
+                            query.to_string(),
+                            several.to_vec(),
+                        ));
+                    }
+                }
+            }
         };
         // the display table is a pipeline stage on the braille side, so the pipeline
         // applies it in the right place for `direction` and it composes into the positions
