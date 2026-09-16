@@ -84,13 +84,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - One unusable `tests:` block in a YAML test file no longer discards the whole
   file. A block whose table fails to load or compile is reported on stderr,
-  naming the file, and the other blocks in that file still run. Before, the
-  first such block aborted the file and it vanished from the results entirely,
-  with only a single line on stderr to say so.
+  naming the file, and the other blocks in that file still run.
 - A YAML test file's `table:` may now name several tables as a comma separated
-  list, `hbo-ihbc-rules.uti,braille-patterns.cti`, the same form
-  `lou_translateString` takes. Only `display:` understood it before, so such a
-  block was looked up as one long file name and failed to load.
+  list, `hbo-ihbc-rules.uti,braille-patterns.cti`.
 - A `context`, `correct` or `pass2`--`pass4` rule whose action copies the
   replacement brackets with `*` now consumes everything its test matched, not
   just the bracketed part. liblouis' `passDoAction` advances the cursor to the
