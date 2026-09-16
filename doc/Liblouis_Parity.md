@@ -157,26 +157,33 @@ Two cross-cutting items have no single file behind them:
   `match_pattern.rs` and all three are no-ops in `context_pattern.rs`; the
   `syllable` opcode's cross-boundary restriction is unimplemented. *(M)*
 
-## Twenty-four files that never run
+## Forty-six blocks that never run
 
-These error out during table compilation, so they contribute neither passes nor
-failures — they're the one genuine unknown here, and the cheapest work in this
-document.
+A YAML file is a sequence of blocks, each with its own table. A block whose table
+won't load is reported on stderr and skipped, and the rest of the file still runs.
+Forty-six blocks across fourteen files are skipped this way, so those tests report
+neither passes nor failures — the one genuine unknown in this document, and the
+cheapest work in it.
 
-| Reason                                    | Files | What it needs                                                                                                                                    | Size |
-|-------------------------------------------|------:|--------------------------------------------------------------------------------------------------------------------------------------------------|------|
-| "Table queries have not been implemented" |    11 | The YAML harness can't resolve a `table:` given as a metadata query. The machinery already exists behind the `query` subcommand.                 | S    |
-| `TableNotFound` on a table list           |     6 | `.uti` files next to the YAML aren't found; lists resolve against `LOUIS_TABLE_PATH` only. [#15](https://github.com/liblouis/louis-rs/issues/15) | S    |
-| Parser gaps                               |     4 | An escaped `"\\"` in a multipass operand (`it-it-comp6.utb:248`), UTF-16 surrogate-pair escapes, and an `EmptyTest` in the multipass tests.      | S    |
-| Hyphenation dictionaries                  |     2 | `hyph_en_US.dic` rejected for its ISO-8859-1 encoding; `hyphenation.dic` not found.                                                              | S    |
-| `macro.utb`                               |     1 | Deliberate non-goal.                                                                                                                             | —    |
+| Reason                                    | Blocks | What it needs                                                                                                                                                                                           | Size |
+|-------------------------------------------|-------:|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------|
+| `multipass-vs-match_common.uti` not found |     25 | The include sits next to the YAML file rather than on `LOUIS_TABLE_PATH`. One missing fixture takes out every block of `multipass-vs-match.yaml`. [#15](https://github.com/liblouis/louis-rs/issues/15) | S    |
+| Parser gaps                               |     10 | An escaped `"\\"` in a multipass operand (`it-it-comp6.utb:248`, 4 blocks), plus an `InvalidAction`, an `EmptyTest`, an `OpcodeExpected` and a surrogate-pair escape.                                   | S    |
+| Ambiguous metadata queries                |      7 | `language=grc,region=en` matches two tables and `system=cmn-traditional` three. `lou_findTable` scores its candidates and always lands on one; we intersect and insist on exactly one.                  | M    |
+| Hyphenation dictionaries                  |      2 | `hyph_en_US.dic` rejected for its ISO-8859-1 encoding; `hyphenation.dic` not found.                                                                                                                     | S    |
+| `macro.utb` not found                     |      1 | Deliberate non-goal.                                                                                                                                                                                    | —    |
+| A query matching no table at all          |      1 | `language=grc,region=es` finds nothing on the search path. Possibly a bug in the spec rather than in us.                                                                                                | S    |
 
-Separately, the `hyphenate`, `hyphenateBraille` and `display` test modes fall through a
-catch-all arm in `src/test.rs` and silently report nothing at all. `de-eurobrl6.yaml`
-and `hu-hu-g1-hyph_harness.yaml` consist only of such tests and so report zero tests
-run; `issue-332.yaml` has its `hyphenate` block skipped this way while its remaining 19
-tests all fail. Two more of this kind are already counted above, blocked earlier by the
-hyphenation dictionaries. *(S)*
+Ten files report zero tests. Seven because every one of their blocks is skipped for
+a reason above: `multipass-vs-match.yaml`, `macro.yaml`, `grc-international-es.yaml`,
+`ja-kantenji.yaml`, `face-with-tears-of-joy.yaml`, `hyphenation.yaml` and
+`hyphenation_nocross_harness.yaml`.
+
+The other three are a separate problem: the `hyphenate`, `hyphenateBraille` and
+`display` test modes fall through a catch-all arm in `src/test.rs` and silently report
+nothing at all, and `de-eurobrl6.yaml`, `hu-hu-g1-hyph_harness.yaml` and
+`no_8dot_harness.yaml` consist only of such tests. `issue-332.yaml` has its
+`hyphenate` block skipped the same way while its remaining 19 tests all fail. *(S)*
 
 ## Missing API surface
 
@@ -187,15 +194,14 @@ hyphenation dictionaries. *(S)*
 | Back-translation finality ([#29](https://github.com/liblouis/louis-rs/issues/29))               | Nothing says whether more cells could change the characters already produced.                                                                             | M      |
 | Display tables for library callers                                                              | `TranslationPipeline::with_display` and `louis translate/trace --display` exist; `Translator` doesn't expose it yet.                                       | S      |
 | `hyphenate`, `charToDots`, `dotsToChar`, `getEmphClasses`                                       | Working internals, nothing exposed on `Translator`.                                                                                                       | S each |
-| Multipass `*` action ([#21](https://github.com/liblouis/louis-rs/issues/21))                    | Keeps the matched context in the stream, so move and swap rules duplicate characters. [PR #22](https://github.com/liblouis/louis-rs/pull/22) open.        | S      |
 | C ABI                                                                                           | Not started. cbindgen or Diplomat.                                                                                                                        | M–L    |
 
 ## Help wanted
 
 Good entry points, roughly easiest first:
 
-1. **Wake up the 24 files that don't run.** Four independent small fixes, listed
-   above, and nobody knows what those tests will report. *(S each)*
+1. **Wake up the 46 blocks that don't run.** Several independent small fixes,
+   listed above, and nobody knows what those tests will report. *(S each)*
 2. **The three parser gaps.** Small, concrete, and each has a failing file to check
    against. *(S)*
 3. **Expose the four missing entry points.** Mechanical. *(S each)*
