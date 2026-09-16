@@ -85,6 +85,31 @@
     at all proves the two rank equally — otherwise ~max_by_key~ would
     pick the same rule either way — and on a tie it returns the last
     candidate, which follows table order.
+- [ ] Two ~correct~ rules of equal rank in ~vi~: the same tie, for the
+  multipass opcodes
+  - Since ~9d9bc2b~ a ~correct~ rule whose action copies with ~*~
+    consumes everything its test matched, not just the brackets. That
+    makes ~vi-puncsdef.uti~'s combining-mark reordering rule as long as
+    ~vi-lettersdef.uti~'s precomposing rule, where before it was shorter
+    and lost on ~rank~'s length comparison:
+    #+begin_src
+    # vi-lettersdef.uti:278, included first
+    noback correct "a""\x0301" "á"
+    # vi-puncsdef.uti:110, included later -> now wins the tie (wrong)
+    noback correct [$l]"\x0301" "\x0301"*
+    #+end_src
+    "a" followed by a combining acute now comes out ⠘⠌⠁ — the generic
+    ~sign \x0301 45-34~ from ~vi-puncsdef.uti~ — instead of the
+    precomposed ⠔⠁. 5 of ~vi.yaml~'s 82 tests.
+  - Same mechanism as the ~match~ entry above: ~max_by_key~ returns the
+    last candidate on a tie, and ~vi-charsdef.uti~ includes
+    ~vi-lettersdef.uti~ (line 33) before ~vi-puncsdef.uti~ (line 35).
+  - By the ADR "Rule selection does not depend on table order; a tie is
+    an ill-formed table" this is a table bug rather than louis-rs work.
+    The two rules overlap on every vowel that ~vi-lettersdef.uti~ already
+    precomposes, and only their relative order tells them apart. The
+    upstream fix is to stop the reordering rule matching what the
+    precomposing rules cover.
 - [ ] Backward: lower-sign contraction cells satisfy a ~word~ rule's
   space-or-punctuation boundary
   - This is the backward half of the same ~afr-za-g2~ cluster: 2477 of
