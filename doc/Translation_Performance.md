@@ -336,6 +336,41 @@ shape rather than a clever detour.
 
 Shares are of translation time after ideas 1–3, from the callgrind profile.
 
+- **`Thread` carries a redundant consumed span** (4-10%, wall clock rather than a
+  profile share). Separating what a regexp captures from what it consumes (`9d9bc2b`)
+  put a second `Range<usize>` in `Thread`, growing it from 24 to 40 bytes and cloning
+  two ranges per `add_thread` call; the inlined thread list grew with it. `en-ueb-g2`
+  word, sentence and paragraph cost 10.0%, 6.9% and 8.4%, backward paragraph 4.3%.
+  The field is not needed. Only two pattern shapes exist and neither carries
+  per-thread state: `Consume(Capture(x))` -- every `match` rule, and a `context` rule
+  whose action has no `*` -- makes the two spans coincide, differing only in unit
+  (bytes to slice the input, chars to report offset and length); `Consume(whole test)`
+  -- a `context` rule whose action copies -- puts `ConsumeStart` at pc 0, so it opens
+  at 0 for every thread and the span is `0..length`, where `length` is already the
+  loop counter handed out as `weight`.
+
+  Record the choice as a flag on `CompiledRegexp` during `emit`, drop the
+  `ConsumeStart`/`ConsumeEnd` instructions and the `cp` cursor beside `sp`, and
+  derive the offset and length once on the winning thread. The byte-to-char
+  conversion becomes an O(n) scan per *successful* match instead of per thread
+  per step, which is where it sat before `9d9bc2b` moved it into `add_thread`.
+  The assumption to guard is that those two shapes stay the only ones -- a span
+  that neither coincides with the capture nor spans the whole pattern brings the
+  per-thread field back.
+
+``` rust
+// on CompiledRegexp, set during emit
+enum Consumed { Capture, WholeMatch }
+
+and at match time, once, on the single winning thread:
+
+let (offset, length) = match self.consumed {
+    Consumed::WholeMatch => (0, length),
+    Consumed::Capture => (input[..captured.start].chars().count(),
+                          input[captured.clone()].chars().count()),
+};
+```
+
 - **Per-position `Vec` churn** (~10%). Each position allocates fresh
   `Vec<ResolvedTranslation>`s for the trie, nocross, `match` and `context` lookups,
   and `partition` doubles them. Thread one reusable buffer through `find` /
