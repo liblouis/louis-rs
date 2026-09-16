@@ -18,8 +18,6 @@ use crate::{
 
 #[derive(thiserror::Error, Debug)]
 pub enum TestError {
-    #[error("{0} have not been implemented (yet)")]
-    NotImplemented(String),
     #[error("Errors in table {0:?}")]
     TableErrors(Vec<TableError>),
     #[error("Error when compiling table {0:?}")]
