@@ -346,9 +346,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 -   Make it clear that the library API is unstable.
 
 <!-- next-url -->
-[Unreleased]: https://github.com/assert-rs/predicates-rs/compare/v0.2.8...HEAD
-[0.2.8]: https://github.com/assert-rs/predicates-rs/compare/v0.2.7...v0.2.8
-[0.2.7]: https://github.com/assert-rs/predicates-rs/compare/v0.2.6...v0.2.7
+[Unreleased]: https://github.com/liblouis/louis-rs/compare/v0.2.8...HEAD
+[0.2.8]: https://github.com/liblouis/louis-rs/compare/v0.2.7...v0.2.8
+[0.2.7]: https://github.com/liblouis/louis-rs/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/liblouis/louis-rs/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/liblouis/louis-rs/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/liblouis/louis-rs/compare/v0.2.3...v0.2.4
