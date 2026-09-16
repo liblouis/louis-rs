@@ -531,7 +531,12 @@ impl YAMLParser<'_> {
                         &test_mode,
                         &tests,
                     );
-                    results.extend(suite.check()?);
+                    // A block whose table will not load is reported as one error
+                    // among the results rather than aborting the whole file.
+                    match suite.check() {
+                        Ok(test_results) => results.extend(test_results),
+                        Err(error) => results.push(TestResult::Error(error.to_string())),
+                    }
                     previous_event_was_table = false;
                 }
                 _ => {

@@ -16,6 +16,7 @@ use parser::TableError;
 
 use crate::parser::AnchoredRule;
 use crate::parser::Direction;
+use crate::test::TestResult;
 use crate::translator::DisplayTable;
 use crate::translator::ResolvedTranslation;
 use crate::translator::TranslationError;
@@ -390,7 +391,10 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool) {
     for (path, outcome) in paths.iter().zip(outcomes) {
         match outcome {
             Ok(test_results) => {
-                let tests = test_results.len();
+                // a block that never ran is not a test, so it stays out of the
+                // denominator of the success/failure percentages; it is reported
+                // on stderr instead
+                let tests = test_results.iter().filter(|r| !r.is_error()).count();
                 let successes = test_results.iter().filter(|r| r.is_success()).count();
                 let failures = test_results
                     .iter()
@@ -427,9 +431,18 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool) {
                     unexpected_successes,
                     position_mismatches,
                 });
+                // A block that never ran is a problem with the table or the test
+                // file, not a translation failure, so it goes to stderr with the
+                // file that caused it -- and is counted in its own column, since
+                // the suite is normally run with stderr discarded.
+                for res in &test_results {
+                    if let TestResult::Error(error) = res {
+                        eprintln!("{}: {}", path.display(), error);
+                    }
+                }
                 if !summary {
                     for res in &test_results {
-                        if !res.is_success() {
+                        if !res.is_success() && !res.is_error() {
                             println!("{:?}", res);
                         }
                     }

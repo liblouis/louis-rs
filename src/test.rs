@@ -69,6 +69,10 @@ pub enum TestResult {
         input: String,
         direction: Direction,
     },
+    /// A `tests:` block that could not be run at all, because its table failed
+    /// to load or compile. Recorded per block so that one unusable table does
+    /// not discard every other block in the same file.
+    Error(String),
 }
 
 impl TestResult {
@@ -86,6 +90,9 @@ impl TestResult {
     }
     pub fn is_unexpected_success(&self) -> bool {
         matches!(self, TestResult::UnexpectedSuccess { .. })
+    }
+    pub fn is_error(&self) -> bool {
+        matches!(self, TestResult::Error(_))
     }
 }
 

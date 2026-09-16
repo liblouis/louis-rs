@@ -82,6 +82,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   (liblouis/liblouis#496).
 
 ### Fixed
+- One unusable `tests:` block in a YAML test file no longer discards the whole
+  file. A block whose table fails to load or compile is reported on stderr,
+  naming the file, and the other blocks in that file still run. Before, the
+  first such block aborted the file and it vanished from the results entirely,
+  with only a single line on stderr to say so.
 - A YAML test file's `table:` may now name several tables as a comma separated
   list, `hbo-ihbc-rules.uti,braille-patterns.cti`, the same form
   `lou_translateString` takes. Only `display:` understood it before, so such a
