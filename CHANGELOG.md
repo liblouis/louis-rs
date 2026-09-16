@@ -82,6 +82,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   (liblouis/liblouis#496).
 
 ### Fixed
+- A YAML test file's `table:` may now name several tables as a comma separated
+  list, `hbo-ihbc-rules.uti,braille-patterns.cti`, the same form
+  `lou_translateString` takes. Only `display:` understood it before, so such a
+  block was looked up as one long file name and failed to load.
 - A `context`, `correct` or `pass2`--`pass4` rule whose action copies the
   replacement brackets with `*` now consumes everything its test matched, not
   just the bracketed part. liblouis' `passDoAction` advances the cursor to the

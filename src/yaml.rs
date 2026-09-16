@@ -105,6 +105,15 @@ impl YAMLParser<'_> {
         }
     }
 
+    /// A plain scalar can name several tables at once in the form of a comma separated
+    /// list. Returns `None` when the scalar names a single table. Sequences and block
+    /// literals are handled by the callers.
+    fn comma_separated(value: &str) -> Option<Vec<PathBuf>> {
+        value
+            .contains(',')
+            .then(|| value.split(',').map(|s| s.into()).collect())
+    }
+
     fn display_table(&mut self) -> Result<Display, ParseError> {
         let table = match self.events.peek() {
             Some(Ok(Event::SequenceStart { .. })) => Display::List(self.table_list()?),
@@ -115,11 +124,9 @@ impl YAMLParser<'_> {
             })) => Display::Inline(self.scalar()?),
             Some(Ok(Event::Scalar { .. })) => {
                 let value = self.scalar()?;
-                if value.contains(',') {
-                    let tables = value.split(',').map(|s| s.into()).collect();
-                    Display::List(tables)
-                } else {
-                    Display::Simple(value.into())
+                match Self::comma_separated(&value) {
+                    Some(tables) => Display::List(tables),
+                    None => Display::Simple(value.into()),
                 }
             }
             _ => {
@@ -168,7 +175,13 @@ impl YAMLParser<'_> {
                 style: Some(ScalarStyle::Literal | ScalarStyle::Folded),
                 ..
             })) => Table::Inline(self.scalar()?),
-            Some(Ok(Event::Scalar { .. })) => Table::Simple(self.scalar()?.into()),
+            Some(Ok(Event::Scalar { .. })) => {
+                let value = self.scalar()?;
+                match Self::comma_separated(&value) {
+                    Some(tables) => Table::List(tables),
+                    None => Table::Simple(value.into()),
+                }
+            }
             _ => {
                 return Err(ParseError::InvalidTableValue);
             }
