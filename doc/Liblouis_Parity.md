@@ -8,15 +8,15 @@ This document says what it can do today, what it can't yet, and where the remain
 work is, so you can tell whether it's usable for your case and pick something up if
 it isn't.
 
-Measured at commit `a985592` against liblouis's own suite:
+Measured at louis-rs `a91f3bd` against liblouis `f86133d5`:
 
-|                                     |           |
-|-------------------------------------|-----------|
-| Assertions run                      | 2 224 727 |
-| Pass                                | **98.7%** |
-| Fail                                | 0.8%      |
-| Expected failure                    | 0.5%      |
-| Top-level tables that parse cleanly | 265 / 265 |
+|                                |           |
+|--------------------------------|-----------|
+| Assertions run                 | 2 240 790 |
+| Pass                           | **98.6%** |
+| Fail                           | 0.9%      |
+| Expected failure               | 0.5%      |
+| Table files that parse cleanly | 458 / 458 |
 
 Forward and backward combined. Reproduce with:
 
@@ -33,7 +33,7 @@ cargo run --release -- check \
 before the main stage, character and pattern rules in it, `pass2`–`pass4` after —
 reversed for back-translation.
 
-**Every table under `tables/` parses.** All 265 of them. The three that used to fail
+**Every table under `tables/` parses.** All 458 of them. The three that used to fail
 turned out to be table-authoring bugs rather than louis-rs gaps, and are fixed
 upstream ([#2070](https://github.com/liblouis/liblouis/issues/2070),
 [#2071](https://github.com/liblouis/liblouis/issues/2071),
@@ -52,7 +52,8 @@ three tiers — `capsletter`, `begcapsword`/`endcapsword`, and caps passages via
 sign, `nocontract`, and the generic `begmode`/`endmode` family.
 
 **Emphasis.** `begemph`/`endemph` and the word/symbol tiers. liblouis's own
-`new_emph.yaml` and `en-us-emphasis_harness.yaml` pass at 100%.
+`new_emph.yaml` and `en-us-emphasis_harness.yaml` pass at 100% when given the display
+table their expectations are written in.
 
 **Computer braille** as a full pipeline feature — `comp6`, `compbrl`,
 `begcomp`/`endcomp`, and a scanner that derives computer-braille spans from
@@ -73,6 +74,9 @@ through the same search path as any other table.
 
 **Position mapping.** `inputPos`, `outputPos` and `cursorPos`, composed across every
 pipeline stage in both directions. One known mismatch remains in the whole suite.
+
+**Display tables** as a pipeline stage, renders last when translating to braille and
+first when back-translating. `--display` on `translate` and `trace`.
 
 **Table metadata queries** — find tables by language, contraction grade and the rest.
 
@@ -107,7 +111,7 @@ Honest list, no dates attached:
 
 ## Where the remaining failures are
 
-Most of the failing 0.8% sits in ten files, and several of those share a root cause.
+Most of the failing 0.9% sits in ten files, and several of those share a root cause.
 Sizes are per item — *S* is up to a week, *M* about a week, *L* one to three weeks —
 and are there so you can pick work by appetite, not to add up. Failure counts are
 approximate: `check` reports a per-file percentage, so a count derived from it carries
@@ -167,7 +171,7 @@ cheapest work in it.
 
 | Reason                                    | Blocks | What it needs                                                                                                                                                                                           | Size |
 |-------------------------------------------|-------:|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------|
-| `multipass-vs-match_common.uti` not found |     25 | The include sits next to the YAML file rather than on `LOUIS_TABLE_PATH`. One missing fixture takes out every block of `multipass-vs-match.yaml`. [#15](https://github.com/liblouis/louis-rs/issues/15) | S    |
+| `multipass-vs-match_common.uti` not found |     25 | The include sits next to the YAML file rather than on `LOUIS_TABLE_PATH`. One missing fixture takes out every block of `multipass-vs-match.yaml`. | S    |
 | Parser gaps                               |     10 | An escaped `"\\"` in a multipass operand (`it-it-comp6.utb:248`, 4 blocks), plus an `InvalidAction`, an `EmptyTest`, an `OpcodeExpected` and a surrogate-pair escape.                                   | S    |
 | Ambiguous metadata queries                |      7 | `language=grc,region=en` matches two tables and `system=cmn-traditional` three. `lou_findTable` scores its candidates and always lands on one; we intersect and insist on exactly one.                  | M    |
 | Hyphenation dictionaries                  |      2 | `hyph_en_US.dic` rejected for its ISO-8859-1 encoding; `hyphenation.dic` not found.                                                                                                                     | S    |
