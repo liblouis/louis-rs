@@ -4,7 +4,10 @@
 
 * louis-rs: a liblouis re-implementation in Rust
 
-This is the reduced-to-the-max re-write of [[https://liblouis.io/][liblouis]] in Rust.
+louis-rs is a clean-room re-implementation of [[https://liblouis.io/][liblouis]]
+in Rust. It is not a port of the liblouis source code. Instead it is based on
+the liblouis documentation and its extensive test suite, employing a novel
+design with different data structures and different translation algorithms.
 
 ** Rationale
 Many if not most of the CVEs of liblouis are rooted in the manual
