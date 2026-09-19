@@ -16,9 +16,9 @@ Measured at louis-rs `a91f3bd` against liblouis `f86133d5`:
 | Pass                           | **98.6%** |
 | Fail                           | 0.9%      |
 | Expected failure               | 0.5%      |
-| Table files that parse cleanly | 458 / 458 |
+| Table files that parse cleanly | 457 / 458 |
 
-Forward and backward combined. Reproduce with:
+Forward and backward combined. Reproduce the assertion figures with:
 
 ```sh
 export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
@@ -27,17 +27,24 @@ cargo run --release -- check \
     ~/src/liblouis/tests/yaml/*.yaml --summary
 ```
 
+and the parse figure with:
+
+```sh
+cargo build --release
+export LOUIS_TABLE_PATH=~/src/liblouis/tables
+for f in ~/src/liblouis/tables/*.{ctb,utb,uti,tbl,cti,dis}; do
+    ./target/release/louis parse "$f" > /dev/null
+done
+```
+
 ## What works today
 
 **Translation, both directions.** The full multi-stage pipeline: `correct` rules
 before the main stage, character and pattern rules in it, `pass2`–`pass4` after —
 reversed for back-translation.
 
-**Every table under `tables/` parses.** All 458 of them. The three that used to fail
-turned out to be table-authoring bugs rather than louis-rs gaps, and are fixed
-upstream ([#2070](https://github.com/liblouis/liblouis/issues/2070),
-[#2071](https://github.com/liblouis/liblouis/issues/2071),
-[#2072](https://github.com/liblouis/liblouis/issues/2072)).
+**Almost every table under `tables/` parses** — 457 of 458. The one still failing,
+`it-it-comp6.utb`, trips on an escaped `"\\"` in a multipass operand at line 248.
 
 **Contractions and the word-family opcodes** — `word`, `begword`, `midword`,
 `endword`, `midendword`, `prfword`, `sufword`, `partword`, `begmidword`, with their
