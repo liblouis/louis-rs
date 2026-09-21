@@ -85,7 +85,9 @@ impl Regexp {
                 // attributes that match a character class by order of definition luckily do not
                 // exist in match regular expressions
                 Attribute::ByOrder(_) => unreachable!(),
-                Attribute::Any => (), // TODO
+                // attributes that match any character do not exist in match regular
+                // expressions
+                Attribute::Any => unreachable!(),
             }
         }
         Regexp::CharacterClass(characters)

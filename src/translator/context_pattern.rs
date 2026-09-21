@@ -97,26 +97,21 @@ impl Regexp {
         }
     }
 
+    fn quantified(self, quantifier: &Option<Quantifier>) -> Self {
+        match quantifier {
+            None => self,
+            Some(Quantifier::Number(n)) => Regexp::RepeatExactly(*n, Box::new(self)),
+            Some(Quantifier::Range(min, max)) => {
+                Regexp::RepeatAtLeastAtMost(*min, *max, Box::new(self))
+            }
+            Some(Quantifier::OneOrMore) => Regexp::OneOrMore(Box::new(self)),
+        }
+    }
+
     fn from_class(name: &str, quantifier: &Option<Quantifier>, ctx: &CharacterClasses) -> Self {
         let class = CharacterClass::from(name);
         let characters = ctx.get(&class).unwrap_or_default(); // FIXME: should probably fail if we cannot find the class
-        if let Some(quantifier) = quantifier {
-            match quantifier {
-                Quantifier::Number(n) => {
-                    Regexp::RepeatExactly(*n, Box::new(Regexp::CharacterClass(characters)))
-                }
-                Quantifier::Range(min, max) => Regexp::RepeatAtLeastAtMost(
-                    *min,
-                    *max,
-                    Box::new(Regexp::CharacterClass(characters)),
-                ),
-                Quantifier::OneOrMore => {
-                    Regexp::OneOrMore(Box::new(Regexp::CharacterClass(characters)))
-                }
-            }
-        } else {
-            Regexp::CharacterClass(characters)
-        }
+        Regexp::CharacterClass(characters).quantified(quantifier)
     }
 
     fn from_multipass_attributes(
@@ -124,6 +119,11 @@ impl Regexp {
         quantifier: &Option<Quantifier>,
         ctx: &CharacterClasses,
     ) -> Self {
+        // liblouis compiles `a` to the full attribute mask, so it matches any character no
+        // matter what else is in the list -- an alternative with everything else is pointless
+        if attrs.contains(&Attribute::Any) {
+            return Regexp::Any.quantified(quantifier);
+        }
         let mut characters: HashSet<char> = HashSet::default();
         for attr in attrs {
             match attr {
@@ -134,26 +134,10 @@ impl Regexp {
                 }
                 Attribute::Boundary => (),   // TODO
                 Attribute::ByOrder(_) => (), // TODO
-                Attribute::Any => (),        // TODO
+                Attribute::Any => unreachable!("handled above"),
             }
         }
-        if let Some(quantifier) = quantifier {
-            match quantifier {
-                Quantifier::Number(n) => {
-                    Regexp::RepeatExactly(*n, Box::new(Regexp::CharacterClass(characters)))
-                }
-                Quantifier::Range(min, max) => Regexp::RepeatAtLeastAtMost(
-                    *min,
-                    *max,
-                    Box::new(Regexp::CharacterClass(characters)),
-                ),
-                Quantifier::OneOrMore => {
-                    Regexp::OneOrMore(Box::new(Regexp::CharacterClass(characters)))
-                }
-            }
-        } else {
-            Regexp::CharacterClass(characters)
-        }
+        Regexp::CharacterClass(characters).quantified(quantifier)
     }
 }
 
@@ -356,6 +340,22 @@ mod tests {
             ResolvedTranslation::new("", "", 1, stage, None).with_length(1)
         );
         assert_eq!(re.find("def", &env), None);
+    }
+
+    /// `$a` is liblouis' "any character": it matches whatever is there, even with no
+    /// character classes defined at all
+    #[test]
+    fn find_attribute_any() {
+        let env = Environment::new();
+        let tests = test::Parser::new("$a").tests().unwrap();
+        let stage = TranslationStage::Main;
+        let ctx = CharacterClasses::default();
+        let re = Regexp::from_test(&tests, true, &ctx).compile();
+        assert_eq!(
+            re.find("x", &env).unwrap(),
+            ResolvedTranslation::new("", "", 1, stage, None).with_length(1)
+        );
+        assert_eq!(re.find("", &env), None);
     }
 
     #[test]

@@ -87,6 +87,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   (liblouis/liblouis#496).
 
 ### Fixed
+- The multipass attribute `$a` (any character) now matches. A `correct`,
+  `context` or `pass2`--`pass4` test containing it never fired before.
 - One unusable `tests:` block in a YAML test file no longer discards the whole
   file. A block whose table fails to load or compile is reported on stderr,
   naming the file, and the other blocks in that file still run.
