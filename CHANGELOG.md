@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- An undefined character is now escaped with the correct braille for the hex
+  digit `9`. The fallback used when a table defines no mapping of its own gave
+  `9` the dots of `3`, so any `\xNNNN` escape containing a `9` was printed
+  wrong.
 - An escaped backslash in the quoted operand of a `context`, `correct` or
   `pass2`--`pass4` rule is now read as a single backslash instead of consuming
   the closing quote.
