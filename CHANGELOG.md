@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- An escaped backslash in the quoted operand of a `context`, `correct` or
+  `pass2`--`pass4` rule is now read as a single backslash instead of consuming
+  the closing quote.
 - The `louis` command now exits with a non-zero status when it reports an error.
   `check` exits non-zero for a YAML file it cannot read or parse; failing tests
   are a result of the run, not a failure of it, and still exit 0.
