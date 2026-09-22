@@ -8,7 +8,7 @@ This document says what it can do today, what it can't yet, and where the remain
 work is, so you can tell whether it's usable for your case and pick something up if
 it isn't.
 
-Measured at louis-rs `a91f3bd` against liblouis `f86133d5`:
+Measured at louis-rs `c454d73` against liblouis `011cfb3b`:
 
 |                                |           |
 |--------------------------------|-----------|
@@ -59,8 +59,7 @@ three tiers — `capsletter`, `begcapsword`/`endcapsword`, and caps passages via
 sign, `nocontract`, and the generic `begmode`/`endmode` family.
 
 **Emphasis.** `begemph`/`endemph` and the word/symbol tiers. liblouis's own
-`new_emph.yaml` and `en-us-emphasis_harness.yaml` pass at 100% when given the display
-table their expectations are written in.
+`new_emph.yaml` and `en-us-emphasis_harness.yaml` pass at 100%.
 
 **Computer braille** as a full pipeline feature — `comp6`, `compbrl`,
 `begcomp`/`endcomp`, and a scanner that derives computer-braille spans from
