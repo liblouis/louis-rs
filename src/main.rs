@@ -4,7 +4,7 @@ use std::io::BufRead;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::exit;
+use std::process::{ExitCode, exit};
 
 use clap::{Parser, Subcommand};
 use rayon::prelude::*;
@@ -142,15 +142,17 @@ fn cli_search_path(table: &Path) -> SearchPath {
     search_path
 }
 
-fn parse(file: &Path) {
+fn parse(file: &Path) -> ExitCode {
     match parser::table_expanded_in(file, &cli_search_path(file)) {
         Ok(rules) => {
             for rule in rules {
                 println!("{:?}", rule);
             }
+            ExitCode::SUCCESS
         }
         Err(errors) => {
             print_errors(errors);
+            ExitCode::FAILURE
         }
     }
 }
@@ -263,20 +265,30 @@ fn trace(
     direction: Direction,
     input: &str,
     style: &TraceStyle,
-) {
+) -> ExitCode {
     match pipeline(table, display, direction) {
         Ok(table) => {
             println!("{}", table.translate(input));
             print_trace(&table.trace(input), style);
+            ExitCode::SUCCESS
         }
-        Err(e) => e.report(),
+        Err(e) => {
+            e.report();
+            ExitCode::FAILURE
+        }
     }
 }
 
-fn translate(table: &Path, display: Option<&Path>, direction: Direction, input: &str) {
+fn translate(table: &Path, display: Option<&Path>, direction: Direction, input: &str) -> ExitCode {
     match pipeline(table, display, direction) {
-        Ok(table) => println!("{}", table.translate(input)),
-        Err(e) => e.report(),
+        Ok(table) => {
+            println!("{}", table.translate(input));
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            e.report();
+            ExitCode::FAILURE
+        }
     }
 }
 
@@ -284,7 +296,7 @@ fn translate(table: &Path, display: Option<&Path>, direction: Direction, input: 
 // both the parsing repl and the translation repl. In the case of the
 // parsing repl it is an empty closure but the translation repl closes
 // over the TranslationPipeline.
-fn repl(handler: Box<dyn Fn(String)>) {
+fn repl(handler: Box<dyn Fn(String)>) -> ExitCode {
     print!("> ");
     io::stdout().flush().unwrap();
 
@@ -297,6 +309,7 @@ fn repl(handler: Box<dyn Fn(String)>) {
         print!("> ");
         io::stdout().flush().unwrap();
     }
+    ExitCode::SUCCESS
 }
 
 fn parse_line(line: String) {
@@ -380,12 +393,13 @@ fn check_yaml_file(path: &Path) -> Result<Vec<test::TestResult>, String> {
         .map_err(|e| format!("{}: {}", path.display(), e))
 }
 
-fn check_yaml(paths: Vec<PathBuf>, summary: bool) {
+fn check_yaml(paths: Vec<PathBuf>, summary: bool) -> ExitCode {
     // Each YAML file is independent (its own tables, its own tests), so we
     // run them concurrently and only merge results back together afterwards
     // in the original order, keeping output deterministic.
     let outcomes: Vec<_> = paths.par_iter().map(|path| check_yaml_file(path)).collect();
 
+    let mut unreadable = false;
     let mut total = YAMLTestResult::default();
     let mut yaml_results: Vec<YAMLTestResult> = Vec::new();
     for (path, outcome) in paths.iter().zip(outcomes) {
@@ -450,6 +464,7 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool) {
             }
             Err(message) => {
                 eprintln!("{}", message);
+                unreadable = true;
             }
         }
     }
@@ -463,9 +478,16 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool) {
         table.modify(Rows::last(), Border::inherit(Style::sharp()));
         println!("{}", table);
     }
+    // Only a yaml file we could not read or parse is an error; failing tests are
+    // a result, not a failure of the run.
+    if unreadable {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
 }
 
-fn main() {
+fn main() -> ExitCode {
     env_logger::init();
 
     let args = Cli::parse();
@@ -481,14 +503,15 @@ fn main() {
             direction,
             display,
         } => match input {
-            Some(input) => {
-                translate(&table, display.as_deref(), direction, &input);
-            }
+            Some(input) => translate(&table, display.as_deref(), direction, &input),
             None => match pipeline(&table, display.as_deref(), direction) {
                 Ok(table) => repl(Box::new(move |input| {
                     println!("{}", table.translate(&input));
                 })),
-                Err(e) => e.report(),
+                Err(e) => {
+                    e.report();
+                    ExitCode::FAILURE
+                }
             },
         },
         Commands::Trace {
@@ -498,15 +521,16 @@ fn main() {
             style,
             display,
         } => match input {
-            Some(input) => {
-                trace(&table, display.as_deref(), direction, &input, &style);
-            }
+            Some(input) => trace(&table, display.as_deref(), direction, &input, &style),
             None => match pipeline(&table, display.as_deref(), direction) {
                 Ok(table) => repl(Box::new(move |input| {
                     println!("{}", table.translate(&input));
                     print_trace(&table.trace(&input), &style);
                 })),
-                Err(e) => e.report(),
+                Err(e) => {
+                    e.report();
+                    ExitCode::FAILURE
+                }
             },
         },
         Commands::Check {
@@ -516,12 +540,15 @@ fn main() {
         Commands::Query { query } => match (metadata::Query::parse(&query), metadata::index()) {
             (Ok(query), Ok(index)) => {
                 println!("{:?}", index.find(query));
+                ExitCode::SUCCESS
             }
             (Err(e), _) => {
-                eprintln!("Invalid query: {e}")
+                eprintln!("Invalid query: {e}");
+                ExitCode::FAILURE
             }
             (_, Err(e)) => {
-                eprintln!("Could not index all tables: {e}")
+                eprintln!("Could not index all tables: {e}");
+                ExitCode::FAILURE
             }
         },
     }

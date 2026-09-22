@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - ReleaseDate
 
+### Fixed
+- The `louis` command now exits with a non-zero status when it reports an error.
+  `check` exits non-zero for a YAML file it cannot read or parse; failing tests
+  are a result of the run, not a failure of it, and still exit 0.
+
 ## [0.3.0] - 2026-09-22
 
 ### Changed
