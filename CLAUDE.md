@@ -13,11 +13,11 @@ Use the Linux kernel's coding-assistants trailer format (https://docs.kernel.org
 **Current Status**: Alpha stage
 - Translation: ~98.6% compatibility with the liblouis test suite (forward and
   backward combined)
-- Table parsing: 457/458 table files under `tables/` parse cleanly. 3 that used
+- Table parsing: all 458 table files under `tables/` parse cleanly. 3 that used
   to fail were table-authoring bugs, not louis-rs gaps, and have since been fixed
-  upstream (liblouis/liblouis#2070, #2071, #2072); the remaining one is ours, an
-  escaped `"\\"` multipass operand in `it-it-comp6.utb:248`
-- Figures above measured at louis-rs `c454d73` against liblouis `011cfb3b`; see
+  upstream (liblouis/liblouis#2070, #2071, #2072); the last one was ours, an
+  escaped `"\\"` multipass operand in `it-it-comp6.utb:248`, fixed in 4980ced
+- Figures above measured at louis-rs `4980ced` against liblouis `011cfb3b`; see
   `doc/Liblouis_Parity.md`, which is the one place to update them
 - Library API: Not yet stable
 

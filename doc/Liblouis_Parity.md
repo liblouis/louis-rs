@@ -8,15 +8,15 @@ This document says what it can do today, what it can't yet, and where the remain
 work is, so you can tell whether it's usable for your case and pick something up if
 it isn't.
 
-Measured at louis-rs `c454d73` against liblouis `011cfb3b`:
+Measured at louis-rs `4980ced` against liblouis `011cfb3b`:
 
 |                                |           |
 |--------------------------------|-----------|
-| Assertions run                 | 2 240 790 |
+| Assertions run                 | 2 241 236 |
 | Pass                           | **98.6%** |
 | Fail                           | 0.9%      |
 | Expected failure               | 0.5%      |
-| Table files that parse cleanly | 457 / 458 |
+| Table files that parse cleanly | 458 / 458 |
 
 Forward and backward combined. Reproduce the assertion figures with:
 
@@ -43,8 +43,7 @@ done
 before the main stage, character and pattern rules in it, `pass2`–`pass4` after —
 reversed for back-translation.
 
-**Almost every table under `tables/` parses** — 457 of 458. The one still failing,
-`it-it-comp6.utb`, trips on an escaped `"\\"` in a multipass operand at line 248.
+**Every table under `tables/` parses** — all 458 of them.
 
 **Contractions and the word-family opcodes** — `word`, `begword`, `midword`,
 `endword`, `midendword`, `prfword`, `sufword`, `partword`, `begmidword`, with their
@@ -167,18 +166,18 @@ Two cross-cutting items have no single file behind them:
   `match_pattern.rs` and all three are no-ops in `context_pattern.rs`; the
   `syllable` opcode's cross-boundary restriction is unimplemented. *(M)*
 
-## Forty-six blocks that never run
+## Forty-two blocks that never run
 
 A YAML file is a sequence of blocks, each with its own table. A block whose table
 won't load is reported on stderr and skipped, and the rest of the file still runs.
-Forty-six blocks across fourteen files are skipped this way, so those tests report
+Forty-two blocks across twelve files are skipped this way, so those tests report
 neither passes nor failures — the one genuine unknown in this document, and the
 cheapest work in it.
 
 | Reason                                    | Blocks | What it needs                                                                                                                                                                                           | Size |
 |-------------------------------------------|-------:|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------|
 | `multipass-vs-match_common.uti` not found |     25 | The include sits next to the YAML file rather than on `LOUIS_TABLE_PATH`. One missing fixture takes out every block of `multipass-vs-match.yaml`. | S    |
-| Parser gaps                               |     10 | An escaped `"\\"` in a multipass operand (`it-it-comp6.utb:248`, 4 blocks), plus an `InvalidAction`, an `EmptyTest`, an `OpcodeExpected` and a surrogate-pair escape.                                   | S    |
+| Parser gaps                               |      6 | An `InvalidAction` and an `EmptyTest` in each of `multipass-forward.yaml` and `multipass-backward.yaml`, plus an `OpcodeExpected` and a surrogate-pair escape.                                          | S    |
 | Ambiguous metadata queries                |      7 | `language=grc,region=en` matches two tables and `system=cmn-traditional` three. `lou_findTable` scores its candidates and always lands on one; we intersect and insist on exactly one.                  | M    |
 | Hyphenation dictionaries                  |      2 | `hyph_en_US.dic` rejected for its ISO-8859-1 encoding; `hyphenation.dic` not found.                                                                                                                     | S    |
 | `macro.utb` not found                     |      1 | Deliberate non-goal.                                                                                                                                                                                    | —    |
