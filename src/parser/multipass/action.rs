@@ -184,6 +184,10 @@ impl<'a> Parser<'a> {
                     self.chars.next();
                     Ok('"')
                 }
+                Some('\\') => {
+                    self.chars.next();
+                    Ok('\\')
+                }
                 Some('x') => {
                     self.chars.next();
                     self.unescape_unicode(4)
@@ -409,6 +413,16 @@ mod tests {
         assert_eq!(
             Parser::new(r#"".\s\"""#).string(),
             Ok(ActionInstruction::String { s: ". \"".into() })
+        );
+        // an escaped backslash is one backslash, and must not swallow the
+        // closing quote (it-it-comp6.utb:248, `nofor context @16 "\\"`)
+        assert_eq!(
+            Parser::new(r#""\\""#).string(),
+            Ok(ActionInstruction::String { s: "\\".into() })
+        );
+        assert_eq!(
+            Parser::new(r#""a\\b""#).string(),
+            Ok(ActionInstruction::String { s: "a\\b".into() })
         );
     }
 
