@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - ReleaseDate
 
+## [0.3.0] - 2026-09-22
+
 ### Changed
 - An `include`d `.dic` hyphenation dictionary is now embedded in the rule while
   includes are expanded, like every other `include`, so an expanded rule list no
@@ -348,7 +350,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 -   Make it clear that the library API is unstable.
 
 <!-- next-url -->
-[Unreleased]: https://github.com/liblouis/louis-rs/compare/v0.2.8...HEAD
+[Unreleased]: https://github.com/liblouis/louis-rs/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/liblouis/louis-rs/compare/v0.2.8...v0.3.0
 [0.2.8]: https://github.com/liblouis/louis-rs/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/liblouis/louis-rs/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/liblouis/louis-rs/compare/v0.2.5...v0.2.6
