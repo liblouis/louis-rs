@@ -1848,7 +1848,7 @@ fn fallback(ch: char) -> BrailleChars {
         '6' => "235",
         '7' => "2356",
         '8' => "236",
-        '9' => "25",
+        '9' => "35",
         'a' => "1",
         'b' => "12",
         'c' => "14",
@@ -1878,6 +1878,7 @@ mod tests {
             assert_eq!(fallback(c).len(), 1);
         }
         assert_eq!(fallback('a').to_string(), "\u{2801}"); // dot 1
+        assert_eq!(fallback('9').to_string(), "\u{2814}"); // dots 35, not 25
     }
 
     fn parse_rule(source: &str) -> AnchoredRule {
