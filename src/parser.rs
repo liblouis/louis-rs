@@ -21,7 +21,6 @@ use crate::parser::braille::BrailleChar;
 
 pub use attribute::Attribute;
 pub use braille::BrailleChars;
-pub use braille::fallback;
 pub use character_class::{CharacterClass, CharacterClasses};
 pub use match_rule::{Pattern, PatternParser, Patterns, Side};
 pub use multipass::action::ActionInstruction;

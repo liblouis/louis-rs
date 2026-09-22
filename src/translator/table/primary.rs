@@ -7,7 +7,7 @@ use crate::{
     emphasis::EmphasisSpan,
     parser::{
         AnchoredRule, Braille, BrailleChars, CharacterClass, CharacterClasses, HasNocross,
-        HasPrecedence, WithClass, fallback,
+        HasPrecedence, WithClass,
     },
     translator::{
         CharacterDefinition, ClassConstraint, ResolvedTranslation, Rule, TranslationError,
@@ -1830,6 +1830,38 @@ impl PrimaryTable {
     }
 }
 
+/// Map a char to dots according to the North American Braille Computer Code (NABCC)
+///
+/// A fallback mapping for character to braille in case the table does
+/// not provide a mapping. This is used as a last resort when printing
+/// unicode escapes for undefined characters when the table does not
+/// define the character mappings that are needed. Only the characters
+/// that [`PrimaryTable::handle_undefined_char`] can produce are mapped.
+fn fallback(ch: char) -> BrailleChars {
+    let dots = match ch {
+        '0' => "356",
+        '1' => "2",
+        '2' => "23",
+        '3' => "25",
+        '4' => "256",
+        '5' => "26",
+        '6' => "235",
+        '7' => "2356",
+        '8' => "236",
+        '9' => "25",
+        'a' => "1",
+        'b' => "12",
+        'c' => "14",
+        'd' => "145",
+        'e' => "15",
+        'f' => "124",
+        '\\' => "1256",
+        'x' => "1346",
+        _ => unreachable!("no NABCC fallback for {ch:?}"),
+    };
+    BrailleChars::try_from(dots).expect("NABCC dot pattern is valid")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1837,6 +1869,16 @@ mod tests {
     use search_path::SearchPath;
 
     use crate::parser::{RuleParser, expand_includes};
+
+    #[test]
+    fn fallback_covers_every_escaped_char() {
+        // handle_undefined_char emits `\x` plus lowercase hex digits, so
+        // fallback must map all of them without hitting the unreachable arm
+        for c in r"\x0123456789abcdef".chars() {
+            assert_eq!(fallback(c).len(), 1);
+        }
+        assert_eq!(fallback('a').to_string(), "\u{2801}"); // dot 1
+    }
 
     fn parse_rule(source: &str) -> AnchoredRule {
         RuleParser::new(source).rule().unwrap().into()

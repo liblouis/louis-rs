@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use enumset::{EnumSet, EnumSetType, enum_set};
 
 #[derive(thiserror::Error, Debug, PartialEq)]
@@ -186,65 +184,6 @@ impl FromIterator<BrailleChar> for BrailleChars {
 
 pub fn is_braille_dot(c: char) -> bool {
     matches!(c, '0'..='9' | 'a'..='f')
-}
-
-/// Map char to dots according to North American Braille Computer Code (NABCC)
-///
-/// A fallback mapping for character to braille in case the table does
-/// not provide a mapping. This is used as a last resort when printing
-/// unicode escapes for undefined characters when the table does not
-/// define the character mappings that are needed.
-pub fn fallback(ch: char) -> char {
-    let north_american_braille_computer_code: HashMap<char, BrailleChar> = HashMap::from([
-        (
-            '0',
-            BrailleChar(BrailleDot::Dot3 | BrailleDot::Dot5 | BrailleDot::Dot6),
-        ),
-        ('1', BrailleChar(enum_set!(BrailleDot::Dot2))),
-        ('2', BrailleChar(BrailleDot::Dot2 | BrailleDot::Dot3)),
-        ('3', BrailleChar(BrailleDot::Dot2 | BrailleDot::Dot5)),
-        (
-            '4',
-            BrailleChar(BrailleDot::Dot2 | BrailleDot::Dot5 | BrailleDot::Dot6),
-        ),
-        ('5', BrailleChar(BrailleDot::Dot2 | BrailleDot::Dot6)),
-        (
-            '6',
-            BrailleChar(BrailleDot::Dot2 | BrailleDot::Dot3 | BrailleDot::Dot5),
-        ),
-        (
-            '7',
-            BrailleChar(BrailleDot::Dot2 | BrailleDot::Dot3 | BrailleDot::Dot5 | BrailleDot::Dot6),
-        ),
-        (
-            '8',
-            BrailleChar(BrailleDot::Dot2 | BrailleDot::Dot3 | BrailleDot::Dot6),
-        ),
-        ('9', BrailleChar(BrailleDot::Dot2 | BrailleDot::Dot5)),
-        ('a', BrailleChar(enum_set!(BrailleDot::Dot1))),
-        ('b', BrailleChar(BrailleDot::Dot1 | BrailleDot::Dot2)),
-        ('c', BrailleChar(BrailleDot::Dot1 | BrailleDot::Dot4)),
-        (
-            'd',
-            BrailleChar(BrailleDot::Dot1 | BrailleDot::Dot4 | BrailleDot::Dot5),
-        ),
-        ('e', BrailleChar(BrailleDot::Dot1 | BrailleDot::Dot5)),
-        (
-            'f',
-            BrailleChar(BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot4),
-        ),
-        (
-            '\\',
-            BrailleChar(BrailleDot::Dot1 | BrailleDot::Dot2 | BrailleDot::Dot5 | BrailleDot::Dot6),
-        ),
-        (
-            'x',
-            BrailleChar(BrailleDot::Dot1 | BrailleDot::Dot3 | BrailleDot::Dot4 | BrailleDot::Dot6),
-        ),
-    ]);
-
-    let dots = north_american_braille_computer_code.get(&ch).unwrap();
-    dots.to_unicode()
 }
 
 #[cfg(test)]
