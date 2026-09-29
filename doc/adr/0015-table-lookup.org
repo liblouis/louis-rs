@@ -2,18 +2,9 @@
 #+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
 #+language: en
 
-* PROPOSED ADR-0015: Table lookup: a distinct ~LOUIS_TABLE_PATH~, and which liblouis resolution steps we skip
+* ACCEPTED ADR-0015: Table lookup: a distinct ~LOUIS_TABLE_PATH~, and which liblouis resolution steps we skip
 - Deciders :: CE
-- Date :: [2026-09-02 Wed]
-
-#+begin_quote
-Status is PROPOSED, not ACCEPTED, because [[https://github.com/liblouis/louis-rs/pull/28][PR #28]] is open and proposes a
-different structure for the same problem: a ~TableResolver~ trait with a
-~SearchDirs~ implementation, dropping the ~search_path~ crate for
-~std::env::split_paths~. The divergences from liblouis recorded below hold
-either way; the resolution *order* described under "Decision Outcome" is
-what this repository does today and would be restructured by that PR.
-#+end_quote
+- Date :: [2026-09-29 Tue]
 
 ** Context and Problem Statement
 
@@ -106,6 +97,10 @@ depending on whether ~top.utb~ happens to contain an ~include~.
 
 ** Links
 
+- [[https://github.com/liblouis/louis-rs/pull/28][PR #28]] -- the alternative: a ~TableResolver~ trait with a
+  ~SearchDirs~ implementation, and ~std::env::split_paths~ in place of the
+  ~search_path~ crate. Closed unmerged once ~Translator::with_search_path~
+  covered its use case ([[https://github.com/liblouis/louis-rs/issues/16][issue #16]]).
 - liblouis's resolver: ~compileTranslationTable.c~, ~resolveSubtable~
   and ~_lou_getTablePath~
 - liblouis's own conformance test for resolution:
