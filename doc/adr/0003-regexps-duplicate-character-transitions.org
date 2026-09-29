@@ -1,0 +1,57 @@
+#+options: todo:t
+#+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
+#+language: en
+
+* SUPERSEDED ADR-0003: Regexps duplicate character transitions
+- Deciders :: CE
+- Date :: [2024-12-24 Tue]
+
+** Context and Problem Statement
+We have a graph for all regular expressions. For alternatives we
+create a new node and add all the alternatives between the current and
+the new node. Now what do we do if there is already a character
+transition for one of the characters in the alternatives? We could
+either
+1. merge the nodes
+   - how do we handle the case where both nodes are accepting, i.e.
+     have translations? Which translation gets precedence?
+2. add an epsilon transition
+   - from the new node to the existing one
+   - and delete the edge
+3. allow multiple character transition edges with the same character
+   from the same node
+   - this of course totally breaks the current data structure
+
+#+begin_example
+letter a 1
+letter b 2
+letter o 3
+letter r 4
+letter z 5
+
+always bor 17
+match b(a|o) r z 14
+#+end_example
+
+#+begin_example
+/bor|b(a|o)rz/
+#+end_example
+
+** Decision Drivers
+** Considered Options
+** Decision Outcome
+
+Superseded — the question is moot. The regex engine was later
+rewritten from a shared character-transition graph to a VM that
+compiles alternation to a pair of branching instructions, each
+alternative getting its own instruction stream rather than a node
+other patterns might also land on. Matching runs all live branches
+in parallel and asks which one finished, so two alternatives that
+happen to start with the same character never need to merge, share,
+or otherwise coordinate — there is no shared node for them to
+collide on in the first place.
+
+** Links
+
+- ~src/translator/regexp.rs~ — the VM-based engine that replaced the
+  graph model this ADR was written against

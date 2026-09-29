@@ -86,7 +86,7 @@ struct TrieNode {
     translation: Option<ResolvedTranslation>,
     // `BTreeMap` rather than `HashMap`: iteration order needs to be deterministic between runs
     // for candidates that tie on `ResolvedTranslation::rank` in `find_translations_from_node`
-    // (see the ADR "Rule selection does not depend on table order"). A tie is an ill-formed
+    // (see doc/adr/0016-order-independent-rule-selection.org). A tie is an ill-formed
     // table, not a case this order is meant to resolve correctly -- it only freezes *a* winner
     // instead of leaving it to chance. Also measured ~12% faster to compile en-ueb-g2, since
     // an ordered compare of two keys short-circuits on the discriminant where hashing one had

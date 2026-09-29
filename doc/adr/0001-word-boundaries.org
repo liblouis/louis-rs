@@ -1,0 +1,311 @@
+#+options: todo:t
+#+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
+#+language: en
+
+* ACCEPTED ADR-0001: Handle word boundaries
+- Deciders :: CE
+- Date :: [2024-03-08 Fri]
+
+We need a way to handle word boundaries, as some rules only apply at
+specific boundaries. Currently the trie does not account for any
+boundaries.
+
+** Context and Problem Statement
+
+When given an input we have to look for a matching translation rule.
+This is in some ways similar the process inside a regex engine.
+However in our case mostly have consuming transitions between the
+nodes. Only at the beginning and at the end of a match we can have
+non-consuming word-boundary matches. This simplifies the process quite
+a bit as in most cases we do not have to search through multiple
+branches.
+
+*** Summary of word-boundary opcodes
+:PROPERTIES:
+:COLUMNS: %14ITEM(Opcode) %WORDSTART(WordStart) %WORDEND(WordEnd) %PUNCSTART(PuncStart) %PUNCEND(PuncEnd) %NUMSTART(NumStart) %NUMEND(NumEnd) %CONSTRAINT(Constraint)
+:WORDSTART_ALL: YES NO -
+:WORDEND_ALL: YES NO -
+:PUNCSTART_ALL: YES NO -
+:PUNCEND_ALL: YES NO -
+:NUMSTART_ALL: YES NO -
+:NUMEND_ALL: YES NO -
+:END:
+
+#+BEGIN: columnview :hlines 1 :id local :skip-empty-rows t :match "/-TODO"
+| Opcode          | WordStart | WordEnd | PuncStart | PuncEnd | NumStart | NumEnd | Constraint                                             |
+|-----------------+-----------+---------+-----------+---------+----------+--------+--------------------------------------------------------|
+| Word            | YES       | YES     |           |         |          |        | Surrounded by whitespace and/or punctuation            |
+| Joinword        | YES       | YES     |           |         |          |        | Followed by whitespace and a letter                    |
+| Lowword         | YES       | YES     | NO        | NO      |          |        | Surrounded by whitespace                               |
+| Compbrl         | YES       | YES     |           |         |          |        | Surrounded by whitespace                               |
+| Nocont          | YES       | YES     |           |         |          |        | Surrounded by whitespace                               |
+| Begword         | YES       | NO      |           |         |          |        |                                                        |
+| Sufword         | YES       | -       |           |         |          |        |                                                        |
+| Midword         | NO        | NO      |           |         |          |        |                                                        |
+| Partword        | NO        | NO      |           |         |          |        | Proceeded or followed by a letter                      |
+| Midendword      | NO        | -       |           |         |          |        |                                                        |
+| Prfword         | -         | YES     |           |         |          |        |                                                        |
+| Endword         | -         | YES     |           |         |          |        |                                                        |
+| Begmidword      | -         | NO      |           |         |          |        |                                                        |
+| Replace         | -         | -       |           |         |          |        |                                                        |
+| Always          | -         | -       |           |         |          |        |                                                        |
+| Repeated        | -         | -       |           |         |          |        |                                                        |
+| Largesign       | -         | -       |           |         |          |        |                                                        |
+| Syllable        | -         | -       |           |         |          |        |                                                        |
+| Contraction     | -         | -       |           |         |          |        |                                                        |
+| Prepunc         | (YES)     | (YES)   | YES       |         |          |        | Part of punctuation at the beginning of a word         |
+| Postpunc        | (YES)     | (YES)   |           | YES     |          |        | Part of punctuation at the end of a word               |
+| Begnum          |           |         |           |         | YES      | -      | At the beginning of a number                           |
+| Midnum          |           |         |           |         | NO       | NO     | In the middle of a number                              |
+| Endnum          |           |         |           |         | -        | YES    | At the end of a number                                 |
+| Joinnum         | -         | -       |           |         | -        | -      | If whitespace and a number follows omit the whitespace |
+| TODO Rependword |           | YES     |           |         |          |        |                                                        |
+#+END:
+
+**** Word
+:PROPERTIES:
+:WORDSTART: YES
+:WORDEND:  YES
+:CONSTRAINT: Surrounded by whitespace and/or punctuation
+:END:
+**** Joinword
+:PROPERTIES:
+:WORDSTART: YES
+:WORDEND:  YES
+:CONSTRAINT: Followed by whitespace and a letter
+:END:
+**** Lowword
+:PROPERTIES:
+:WORDSTART: YES
+:WORDEND:  YES
+:CONSTRAINT: Surrounded by whitespace
+:PUNCSTART: NO
+:PUNCEND:  NO
+:END:
+**** Compbrl
+:PROPERTIES:
+:WORDSTART: YES
+:WORDEND:  YES
+:CONSTRAINT: Surrounded by whitespace
+:END:
+**** Nocont
+:PROPERTIES:
+:WORDSTART: YES
+:WORDEND:  YES
+:CONSTRAINT: Surrounded by whitespace
+:END:
+**** Begword
+:PROPERTIES:
+:WORDSTART: YES
+:WORDEND:  NO
+:END:
+**** Sufword
+:PROPERTIES:
+:WORDSTART: YES
+:WORDEND:  -
+:END:
+**** Midword
+:PROPERTIES:
+:WORDSTART: NO
+:WORDEND:  NO
+:END:
+**** Partword
+:PROPERTIES:
+:WORDSTART: NO
+:WORDEND:  NO
+:CONSTRAINT: Proceeded or followed by a letter
+:END:
+**** Midendword
+:PROPERTIES:
+:WORDSTART: NO
+:WORDEND:  -
+:END:
+**** Prfword
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  YES
+:END:
+**** Endword
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  YES
+:END:
+**** Begmidword
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  NO
+:END:
+**** Replace
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  -
+:END:
+**** Always
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  -
+:END:
+**** Repeated
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  -
+:END:
+**** Largesign
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  -
+:END:
+**** Syllable
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  -
+:END:
+**** Contraction
+:PROPERTIES:
+:WORDSTART: -
+:WORDEND:  -
+:END:
+**** Prepunc
+:PROPERTIES:
+:WORDSTART: (YES)
+:WORDEND:  (YES)
+:PUNCSTART: YES
+:CONSTRAINT: Part of punctuation at the beginning of a word
+:END:
+**** Postpunc
+:PROPERTIES:
+:WORDSTART: (YES)
+:WORDEND:  (YES)
+:PUNCEND:  YES
+:CONSTRAINT: Part of punctuation at the end of a word
+:END:
+**** Begnum
+:PROPERTIES:
+:NUMSTART: YES
+:NUMEND:   -
+:CONSTRAINT: At the beginning of a number
+:END:
+**** Midnum
+:PROPERTIES:
+:NUMSTART: NO
+:NUMEND:   NO
+:CONSTRAINT: In the middle of a number
+:END:
+**** Endnum
+:PROPERTIES:
+:NUMSTART: -
+:NUMEND:   YES
+:CONSTRAINT: At the end of a number
+:END:
+**** Joinnum
+:PROPERTIES:
+:NUMSTART: -
+:NUMEND:   -
+:WORDSTART: -
+:WORDEND:  -
+:CONSTRAINT: If whitespace and a number follows omit the whitespace
+:END:
+**** TODO Repword
+**** TODO Rependword
+:PROPERTIES:
+:WORDEND:  YES
+:END:
+**** TODO Exactdots
+seems like a corner case for utdml
+**** TODO Context
+**** TODO Pass2
+**** TODO Pass3
+**** TODO Pass4
+**** TODO Correct
+**** TODO Match
+**** TODO Literal
+
+** Decision Drivers
+
+- start with the simplest solution
+- move as much processing from the translation to the compilation
+  stage
+
+** Considered Options
+
+- Handle different contexts with separate tries :: Leave the trie code
+  as is and handle the context using multiple tries with wrapper code
+- Enhance trie with transitions :: Add transitions to the trie that
+  map to non-consuming word boundaries
+- Filter the candidates found in the trie :: Leave the trie as is and
+  just filter the returned candidates.
+
+** Decision Outcome
+
+Chosen option: "Enhance trie with transitions", because it keeps a
+single search structure instead of splitting rules across multiple
+tries or computing candidates first and filtering them afterwards.
+Boundaries are modelled as non-consuming transitions alongside the
+normal character transitions, so a boundary check is just another
+edge to follow during the same trie walk.
+
+This turned out to generalize well: the same non-consuming-transition
+idea was later reused for the liblouis ~before~/~after~
+class-constraint keywords, which are a lookbehind/lookahead against a
+character class rather than a fixed boundary condition.
+
+*Update (2026-08-19):* the concrete ~Boundary~ enum described above
+did not survive. It checked the wrong pair of characters — the
+matched rule's own edge character in addition to the true neighbor —
+which was harmless for letter-based rules (the gate always passed)
+but wrong for punctuation. ~Boundary~ and the whole
+~is_word_start~/~is_word_end~ family of predicates were deleted in
+commit 96035dd; the non-consuming-transition *idea* survived and was
+generalized instead into ~Transition::Start~/~End(Vec<CharacterClass>)~,
+a direct lookbehind/lookahead against the real neighbor that now
+serves both the opcode-intrinsic boundary checks and the
+~before~/~after~ keyword through one mechanism. Separately,
+~prepunc~/~postpunc~ turned out not to fit a trie transition at all —
+liblouis implements them via a variable-length outward scan, not a
+single-neighbor class check — and were moved to a dedicated
+~PunctuationConstrainer~ checked post-hoc in ~trace()~, outside the
+trie entirely. See the linked follow-up ADR for the full analysis.
+
+** Positive Consequences
+
+- One trie handles both boundary-constrained and unconstrained rules;
+  nothing to keep in sync across parallel structures.
+- The non-consuming-transition mechanism generalized to other
+  lookbehind/lookahead needs (the ~before~/~after~ keywords) without
+  changing the trie's overall shape.
+
+** Negative Consequences
+
+- All boundary conditions are checked at every character position,
+  even when the current node has no boundary transitions to offer.
+  This is a performance cost that has not yet been benchmarked against
+  lazier evaluation.
+- Non-consuming transitions make the trie a less pure prefix tree: a
+  lookup can branch without consuming input, which is a bit more to
+  hold in your head than plain character-by-character descent.
+
+** Pros and Cons of the Options
+
+***  Handle different contexts with separate tries
+
+- Bad :: rules unconstrained by any boundary would need to be
+  duplicated across every context-specific trie, or looked up
+  separately and merged, reintroducing the synchronization problem
+  this option was meant to avoid
+
+***  Enhance trie with transitions
+
+- Good :: unifies the search for candidates
+- Bad :: makes the trie more complicated
+
+***  Filter the candidates found in the trie
+
+- Good :: No change needed in the trie
+- Bad :: Processing during translation
+
+** Links
+
+- [[file:0010-class-constraint-boundary-checks.org][ADR: Unify word/number-boundary checks onto class-constraint lookaround]] —
+  superseded ~Boundary~'s concrete implementation (deleted in
+  96035dd) while keeping this ADR's non-consuming-transition idea;
+  also moved ~prepunc~/~postpunc~ off the trie entirely

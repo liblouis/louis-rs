@@ -92,7 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   that directory being on `LOUIS_TABLE_PATH`. Unlike liblouis, which rebases on
   the including table at every level, the directory stays on the search path for
   nested includes too. This is a convenience of the command line tool; see
-  `doc/Architecture_Decision_Records.org` for how table lookup differs from
+  `doc/adr/0015-table-lookup.org` for how table lookup differs from
   liblouis generally.
 
 ### Removed

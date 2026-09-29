@@ -111,8 +111,8 @@ Honest list, no dates attached:
 - **Six opcodes are deliberately not implemented**: `uplow`, `locale`, `backmatch`,
   `compdots`, `nobreak` and `macro`. Two are deprecated upstream, three are
   undocumented in liblouis's own manual, and none appears in any table or test in
-  liblouis's corpus. See the ADR of that name in
-  [Architecture_Decision_Records.org](Architecture_Decision_Records.org).
+  liblouis's corpus. See
+  [ADR-0012](adr/0012-unimplemented-opcodes.org).
 
 ## Where the remaining failures are
 
@@ -124,7 +124,7 @@ a few hundred either way on the million-assertion files.
 
 | Area                                                | Failing | Root cause                                                                                                                                                                       | Size |
 |-----------------------------------------------------|--------:|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------|
-| `en-ueb-g2-dictionary_harness`, `afr-za-g2` forward |  ≈4 500 | Match-rule candidate selection. See ADR about "Match-rule candidate selection" and ADR Rule selection does not depend on table order. | L    |
+| `en-ueb-g2-dictionary_harness`, `afr-za-g2` forward |  ≈4 500 | Match-rule candidate selection. See [ADR-0008](adr/0008-match-rule-candidate-selection.org) and [ADR-0016](adr/0016-order-independent-rule-selection.org). | L    |
 | `afr-za-g2` backward                                |  ≈2 500 | Afrikaans's lower-sign contractions share dot patterns with punctuation, and backward boundary checks classify a cell by its dots.                                               | M    |
 | `ml`, `pa`, `hi`, `ta`, `fa`, `th`, `bn`            |  ≈2 600 | Complex scripts: conjunct and reph forms, and stacked combining marks firing an indicator each instead of once per grapheme cluster.                                             | L    |
 | `da-dk-g28-dictionary_harness`                      |  ≈1 200 | Backward: `letsign` (⠰) is also the second cell of two-cell contractions. Consuming the indicator and suppressing the word rules in its scope does not settle this one — the ambiguity is which reading the cell has in the first place. | M    |
@@ -223,13 +223,14 @@ Good entry points, roughly easiest first:
 The two architectural items — match-rule candidate selection, and unifying the
 capitalization and emphasis tier models — each already have one failed attempt behind
 them, so they're poor first contributions but well documented in
-[Architecture_Decision_Records.org](Architecture_Decision_Records.org). Read the
+[ADR-0008](adr/0008-match-rule-candidate-selection.org) and
+[ADR-0009](adr/0009-capsletter-vs-begcapsword.org). Read the
 relevant ADR before starting; both record an approach that was tested and disproven.
 
 ## Also open
 
 - Rule-level coverage tool for the YAML suite
-  ([#27](https://github.com/liblouis/louis-rs/issues/27)) — ADR accepted, prototype
+  ([#27](https://github.com/liblouis/louis-rs/issues/27)) — [ADR-0014](adr/0014-rule-level-coverage-tool.org) accepted, prototype
   parked
 - gzip+bincode table bundling ([PR #10](https://github.com/liblouis/louis-rs/pull/10))
 - Backward `capsletter`/`begcapsword` failures in `hu-hu-g1`
@@ -244,6 +245,6 @@ relevant ADR before starting; both record an approach that was tested and dispro
 
 Working notes live in [TODO.org](../TODO.org); design decisions and the reasoning
 behind them in
-[Architecture_Decision_Records.org](Architecture_Decision_Records.org); where
+[doc/adr/](adr/README.org); where
 translation time goes and what to do about it in
 [Translation_Performance.md](Translation_Performance.md).

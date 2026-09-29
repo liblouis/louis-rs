@@ -1,0 +1,26 @@
+#+title: Architecture Decision Records
+#+language: en
+
+One decision per file, numbered in the order they were first written.
+To add one, copy [[file:0000-template.org][0000-template.org]] to the next free number;
+a revised ADR keeps its number.
+
+Status lives in each file's heading keyword, not here, so this list
+cannot go stale. ~grep -H "^\* " doc/adr/0*.org~ lists them with status.
+
+- [[file:0001-word-boundaries.org][ADR-0001]] Handle word boundaries
+- [[file:0002-hyphenation.org][ADR-0002]] Hyphenation
+- [[file:0003-regexps-duplicate-character-transitions.org][ADR-0003]] Regexps duplicate character transitions
+- [[file:0004-unicode-normalization.org][ADR-0004]] Normalize input text and translation rules to a canonical Unicode form
+- [[file:0005-precomputed-indication-events.org][ADR-0005]] Pre-compute indication events before translation
+- [[file:0006-backward-indication-events.org][ADR-0006]] Backward-translation indication with pre-computed events
+- [[file:0007-hand-rolled-regexp-vm.org][ADR-0007]] Hand-rolled regexp VM instead of the ~regex~/~regex-automata~ crates
+- [[file:0008-match-rule-candidate-selection.org][ADR-0008]] Match-rule candidate selection: weight vs. table-definition order
+- [[file:0009-capsletter-vs-begcapsword.org][ADR-0009]] Isolated single-letter capitalization: capsletter vs. begcapsword tier selection
+- [[file:0010-class-constraint-boundary-checks.org][ADR-0010]] Unify word/number-boundary checks onto class-constraint lookaround
+- [[file:0011-regexp-find-inline-bitset.org][ADR-0011]] Give ~CompiledRegexp::find~ an inline bitset and fixed-capacity thread buffer, swapped by reference
+- [[file:0012-unimplemented-opcodes.org][ADR-0012]] Opcodes deliberately not implemented: ~uplow~, ~locale~, ~backmatch~, ~compdots~, ~nobreak~, ~macro~
+- [[file:0013-no-inferred-display-entries.org][ADR-0013]] Don't infer ~DisplayTable~ entries from a table's own character definitions
+- [[file:0014-rule-level-coverage-tool.org][ADR-0014]] A rule-level coverage tool for the YAML test suite
+- [[file:0015-table-lookup.org][ADR-0015]] Table lookup: a distinct ~LOUIS_TABLE_PATH~, and which liblouis resolution steps we skip
+- [[file:0016-order-independent-rule-selection.org][ADR-0016]] Rule selection does not depend on table order; a tie is an ill-formed table

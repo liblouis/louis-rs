@@ -413,7 +413,7 @@ Do not re-attempt these without a reason to think something has changed.
   `ThreadList`'s inline thread set fits in a cache line. It bought nothing on
   `benches/translate.rs`.
 
-  The premise didn't hold because the 42–45% the `ThreadList` ADR once measured came
+  The premise didn't hold because the 42–45% the `ThreadList` ADR ([ADR-0011](adr/0011-regexp-find-inline-bitset.org)) once measured came
   from removing heap allocation and from stopping a 1.5 KB *by-value* swap per input
   character. Neither cost scales with the struct size any more: `current` and `next`
   are references, so the per-step swap is two pointers whatever a `ThreadList`

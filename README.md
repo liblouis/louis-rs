@@ -33,8 +33,8 @@ $ louis translate en-us-g2.ctb "It's about the blind"
 -   [doc/Differences_From_Liblouis.md](doc/Differences_From_Liblouis.md) — where
     louis-rs deliberately does something other than what liblouis does, notably
     table lookup and display tables
--   [doc/Architecture_Decision_Records.org](doc/Architecture_Decision_Records.org)
-    — why the design is the way it is
+-   [doc/adr/](doc/adr/README.org) — why the design is the way it is, one
+    architecture decision record per file
 
 ## Build and try louis-rs
 

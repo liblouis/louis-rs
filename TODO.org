@@ -56,7 +56,7 @@
     normalization happens today. NFD normalization is a promising
     alternative — it decomposes all input, so combining marks stay
     explicit and precomposed rules still match via longer trie paths.
-  - See ADR in [[file:doc/Architecture_Decision_Records.org][Architecture Decision Records]]
+  - See [[file:doc/adr/0004-unicode-normalization.org][ADR-0004]]
 - [ ] performance
   - measured, and written up in
     [[file:doc/Translation_Performance.md][Translation Performance]]: where the
@@ -66,8 +66,8 @@
   ~HashMap~, so a tie between candidates was decided by iteration
   order, which is randomized per process, and ~pa.yaml~,
   ~hi_harness.yaml~ and ~fr-bfu-g2.yaml~ reported different numbers
-  between runs of the same binary. Fixed with a ~BTreeMap~; see the ADR
-  "Rule selection does not depend on table order" for why we freeze an
+  between runs of the same binary. Fixed with a ~BTreeMap~; see
+  [[file:doc/adr/0016-order-independent-rule-selection.org][ADR-0016]] for why we freeze an
   arbitrary order rather than adopt liblouis's definition order, and
   for the linter idea that would find the underlying table
   ambiguities.
@@ -79,16 +79,16 @@
   liblouis the first. *Not an engine gap any more* — see below
   - This is the forward half of the ~afr-za-g2~ cluster — 186 of that
     file's 2663 real failures.
-  - Decided against an engine-side fix: the ADR "Rule selection does
-    not depend on table order" holds that candidates which tie after
+  - Decided against an engine-side fix:
+    [[file:doc/adr/0016-order-independent-rule-selection.org][ADR-0016]] holds that candidates which tie after
     ~rank~ has spoken are an ill-formed table, so no ordering key is
     introduced, earliest-defined or otherwise. See the "[2026-09-04]
-    Reversed" note under the ADR "Match-rule candidate selection:
-    weight vs. table-definition order", which had argued the other way.
+    Reversed" note under
+    [[file:doc/adr/0008-match-rule-candidate-selection.org][ADR-0008]], which had argued the other way.
   - So these 186 are table bugs to fix upstream, not louis-rs work. The
     entry stays open as the record of them, and because nothing yet
     enumerates the other tables with the same ambiguity (the linter
-    idea in the first of those two ADRs).
+    idea in ADR-0016).
   - Reduced to the two competing rules from ~afr-za-g2.ctb~ (lines 143
     and 274), translating "algemene":
     #+begin_src
@@ -124,8 +124,7 @@
   - Same mechanism as the ~match~ entry above: ~max_by_key~ returns the
     last candidate on a tie, and ~vi-charsdef.uti~ includes
     ~vi-lettersdef.uti~ (line 33) before ~vi-puncsdef.uti~ (line 35).
-  - By the ADR "Rule selection does not depend on table order; a tie is
-    an ill-formed table" this is a table bug rather than louis-rs work.
+  - By [[file:doc/adr/0016-order-independent-rule-selection.org][ADR-0016]] this is a table bug rather than louis-rs work.
     The two rules overlap on every vowel that ~vi-lettersdef.uti~ already
     precomposes, and only their relative order tells them apart. The
     upstream fix is to stop the reordering rule matching what the
@@ -294,7 +293,7 @@
   - [ ] emphasis (begemph/endemph etc.) — needs a way to return
     typeform metadata from backward translation, not just text
 - [ ] Isolated single-letter capitalization (capsletter vs.
-  begcapsword tier) — see the ADR of the same name for the full
+  begcapsword tier) — see [[file:doc/adr/0009-capsletter-vs-begcapsword.org][ADR-0009]] for the full
   analysis. liblouis's begin/end/word/symbol emphasis model allows two
   indicator emissions at one position; our flat per-position
   ~Indicators::precompute()~ model doesn't. Properly fixing this likely
@@ -331,8 +330,8 @@
   input. Remaining gap: double-letter contractions
   (~match %a bb %a 23~) fail for standalone words due to a
   ~BoundaryMode::AssumeAtStart~ bug whose direct fix regresses the
-  suite by exposing a bigger architectural gap — see the ADR "Match-rule
-  candidate selection: weight vs. table-definition order".
+  suite by exposing a bigger architectural gap — see
+  [[file:doc/adr/0008-match-rule-candidate-selection.org][ADR-0008]].
 - [ ] Backward translation of those same word/group signs sometimes
   corrupts unrelated surrounding text instead of just failing to
   contract, e.g. sw-ke-dictionary.yaml backward lookups splicing in
