@@ -1,120 +1,55 @@
-
-
 # louis-rs: a liblouis re-implementation in Rust
 
-louis-rs is a clean-room re-implementation of [liblouis](https://liblouis.io/)
-in Rust. It is not a port of the liblouis source code. Instead it is based on
-the liblouis documentation and its extensive test suite, employing a novel
-design with different data structures and different translation algorithms.
-
-
-## Rationale
-
-Many if not most of the CVEs of liblouis are rooted in the manual
-memory management in the C version of liblouis.
-
-Moving to Rust is of tremendous help not only for the solid memory
-management to avoid buffer overflow problems, but also to bring joy
-back into liblouis maintenance.
-
-
-## Status
-
-The re-implementation is in alpha state.
-
-That said, the `louis` binary currently passes around 98.6% of the
-liblouis test suite, some 2.2 million tests, forward and backward
-combined.
-
-The library and its API has not been worked out and is not stable.
-
-
-## Relation to liblouis
-
-louis-rs is **not** a direct port of the liblouis C code to Rust. It
-uses the same tables and the same YAML tests but other than that it is
-a complete rewrite. It uses different data structures and does the
-translation using a different algorithm.
-
-The goal is to be as compatible as possible with liblouis, when it
-makes sense.
-
-
-### Table lookup
-
-Tables are looked up in `LOUIS_TABLE_PATH`. This is **not** liblouis's
-`LOUIS_TABLEPATH`: the names differ by an underscore, and so does the
-format. `LOUIS_TABLE_PATH` is separated by the platform path separator,
-a colon on Unix, the way `PATH` is; `LOUIS_TABLEPATH` is separated by
-commas. Exporting one has no effect on the other, and a comma separated
-value handed to louis-rs is read as a single directory whose name
-contains commas.
-
-They are kept apart deliberately, because the separator is not the only
-difference: louis-rs does not search liblouis's compiled-in install
-locations, nor the `<dir>/liblouis/tables/` form of each entry, so the
-same directories can legitimately resolve differently under the two
-implementations.
-
-A table named on the command line is looked up in its own directory
-first, so a table can include one sitting next to it without that
-directory being on `LOUIS_TABLE_PATH`:
+louis-rs is a clean-room re-implementation of [liblouis](https://liblouis.io/),
+the braille translator and back-translator, in Rust. It reads the same tables and
+passes the same tests, but it is not a port: the data structures and the
+translation algorithm are new, and the manual memory management behind most of
+liblouis's CVEs is gone.
 
 ```shell
-$ louis parse /some/where/top.utb   # finds an "include base.utb" next to it
+$ export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
+$ louis translate en-us-g2.ctb "It's about the blind"
+⠠⠭⠄⠎⠀⠁⠃⠀⠮⠀⠃⠇
 ```
 
-That first step belongs to the command line tool. The library resolves
-names against the search path it is handed and nothing else, so an
-application owning its own tables passes their directories to
-`Translator::with_search_path`.
+> [!CAUTION]
+> louis-rs is in alpha. It passes over 98% of the liblouis test suite, but the
+> library API has not been worked out and is not stable.
 
+## What is here
 
-### Display tables
+-   a hand-rolled two-pass parser for liblouis tables; all 458 table files under
+    `tables/` parse cleanly
+-   forward and backward translation through the full pipeline: correct rules,
+    the main stage, and pass2/pass3/pass4
+-   a virtual-machine regexp engine behind the `match` and `context` opcodes, and
+    a trie for everything else
+-   hyphenation straight from liblouis's `.dic` files, with no external crate and
+    no build step
+-   the `louis` binary: `translate`, `trace`, `parse`, `check` and `query`; see
+    `louis help`
+-   [doc/Liblouis_Parity.md](doc/Liblouis_Parity.md) — what works, what doesn't,
+    and where the remaining failures are
+-   [doc/Differences_From_Liblouis.md](doc/Differences_From_Liblouis.md) — where
+    louis-rs deliberately does something other than what liblouis does, notably
+    table lookup and display tables
+-   [doc/Architecture_Decision_Records.org](doc/Architecture_Decision_Records.org)
+    — why the design is the way it is
 
-A display table maps braille cells to the characters they are shown as.
-liblouis takes it from the first table of a table list, so a table that
-includes one of its own sets it: `da-dk-g28.ctb` includes
-`da-dk-octobraille.dis`, and liblouis therefore renders Danish braille
-in that CP1252 encoding.
+## Build and try louis-rs
 
-louis-rs does not. Braille is read and written as Unicode braille
-(U+2800) unless a display table is named explicitly, whether or not the
-translation table includes one:
-
-```shell
-$ louis translate da-dk-g28.ctb "ørene"
-⠪⠷⠫
-$ louis translate --display da-dk-octobraille.dis da-dk-g28.ctb "ørene"
-øàë
-```
-
-Unicode braille is the more useful default for reading dot patterns off
-a terminal, and coupling the display table to the translation table is
-a liblouis design wart rather than something worth reproducing. The
-library takes one through `TranslationPipeline::with_display`, and the
-YAML test harness through a test's `display:` key.
-
-
-## Installation
+You need the [Rust tool chain](https://www.rust-lang.org/). Then:
 
     $ cargo install louis-rs
 
-
-## Usage
-
-Get help:
-
-    $ louis help
-
-Translate some text:
+Point `LOUIS_TABLE_PATH` at a set of tables and translate something:
 
     $ export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
     $ louis translate de-comp6.utb
     > Guten Tag
     ⠈⠛⠥⠞⠑⠝⠀⠈⠞⠁⠛
 
-Trace a translation:
+`trace` shows which rule produced each cell, and in which stage of the pipeline:
 
     $ louis trace en-us-g2.ctb
     > It's about the blind
@@ -131,85 +66,9 @@ Trace a translation:
     │ 7 │       │ ⠀   │ space   ⠀       │ Main  │
     │ 8 │ blind │ ⠃⠇  │ word blind ⠃⠇   │ Main  │
     └───┴───────┴─────┴─────────────────┴───────┘
-    > 123st
-    ⠼⠂⠆⠒⠌
-    ┌───┬──────┬────┬─────────────┬───────┐
-    │   │ From │ To │ Rule        │ Stage │
-    ├───┼──────┼────┼─────────────┼───────┤
-    │ 1 │      │ ⠼  │ numsign ⠼   │ Main  │
-    │ 2 │ 1    │ ⠂  │ digit 1 ⠂   │ Main  │
-    │ 3 │ 2    │ ⠆  │ digit 2 ⠆   │ Main  │
-    │ 4 │ 3    │ ⠒  │ digit 3 ⠒   │ Main  │
-    │ 5 │ st   │ ⠌  │ endnum st ⠌ │ Main  │
-    └───┴──────┴────┴─────────────┴───────┘
-    > about
-    ⠁⠃
-    ┌───┬───────┬────┬───────────────┬───────┐
-    │   │ From  │ To │ Rule          │ Stage │
-    ├───┼───────┼────┼───────────────┼───────┤
-    │ 1 │ about │ ⠁⠃ │ word about ⠁⠃ │ Main  │
-    └───┴───────┴────┴───────────────┴───────┘
-    > ab
-    ⠰⠁⠃
-    ┌───┬──────┬────┬────────────────┬───────┐
-    │   │ From │ To │ Rule           │ Stage │
-    ├───┼──────┼────┼────────────────┼───────┤
-    │ 1 │      │ ⠰  │ letsign ⠰      │ Main  │
-    │ 2 │ ab   │ ⠁⠃ │ contraction ab │ Main  │
-    └───┴──────┴────┴────────────────┴───────┘
 
-Trace a translation with a pre-translation rule:
+`check` runs liblouis's YAML test suites:
 
-    $ louis trace en-us-mathtext.ctb
-    > cornf abc
-    ⠤⠋⠀⠁⠃⠉
-    ┌───┬───────┬──────┬──────────────────────┬───────┐
-    │   │ From  │ To   │ Rule                 │ Stage │
-    ├───┼───────┼──────┼──────────────────────┼───────┤
-    │ 1 │ cornf │ comf │ correct "cornf" comf │ Pre   │
-    │ 2 │ com   │ ⠤    │ begword com ⠤        │ Main  │
-    │ 3 │ f     │ ⠋    │ lowercase f ⠋        │ Main  │
-    │ 4 │       │ ⠀    │ space   ⠀            │ Main  │
-    │ 5 │ a     │ ⠁    │ largesign a ⠁        │ Main  │
-    │ 6 │ b     │ ⠃    │ lowercase b ⠃        │ Main  │
-    │ 7 │ c     │ ⠉    │ lowercase c ⠉        │ Main  │
-    └───┴───────┴──────┴──────────────────────┴───────┘
-
-Show the braille in the encoding a table's own display table describes,
-instead of as Unicode braille, with `--display`. The mapping is a stage
-of the pipeline like any other, so `trace` names the `display` rule
-behind each character:
-
-    $ louis trace --display da-dk-octobraille.dis da-dk-g28.ctb "ørene"
-    øàë
-    ┌───┬──────┬────┬───────────────┬─────────┐
-    │   │ From │ To │ Rule          │ Stage   │
-    ├───┼──────┼────┼───────────────┼─────────┤
-    │ 1 │ ø    │ ⠪  │ lowercase ø ⠪ │ Main    │
-    │ 2 │ re   │ ⠷  │ partword re ⠷ │ Main    │
-    │ 3 │ ne   │ ⠫  │ partword ne ⠫ │ Main    │
-    │ 4 │ ⠪    │ ø  │ display ø ⠪   │ Display │
-    │ 5 │ ⠷    │ à  │ display à ⠷   │ Display │
-    │ 6 │ ⠫    │ ë  │ display ë ⠫   │ Display │
-    └───┴──────┴────┴───────────────┴─────────┘
-
-Without `--display` there is no such stage, so the trace is unchanged
-and the output stays Unicode braille. See [Display
-tables](#display-tables) for how this differs from liblouis.
-
-Test the parser:
-
-    $ louis parse
-    > nofor letter e 123-1
-    Letter { character: 'e', dots: BrailleChars([BrailleChar(EnumSet(Dot1 | Dot2 | Dot3)), BrailleChar(EnumSet(Dot1))]), constraints: Constraints(EnumSet(Nofor)) }
-
-Build a release version:
-
-    $ cargo build --release
-
-Run the tests in a YAML file:
-
-    $ export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
     $ louis check --summary ~/src/liblouis/tests/braille-specs/de-de-comp8.yaml
     ┌──────────────────┬───────┬───────────┬──────────┬──────────┬────────────┬────────────┐
     │ YAML File        │ Tests │ Successes │ Failures │ Expected │ Unexpected │ Position   │
@@ -220,28 +79,22 @@ Run the tests in a YAML file:
     │ Total            │ 8     │ 100.0%    │ 0.0%     │ 0.0%     │ 0.0%       │ 0          │
     └──────────────────└───────└───────────└──────────└──────────└────────────└────────────┘
 
-Run all YAML tests:
+and `query` finds tables by their metadata:
 
-    $ export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
-    $ louis check --summary ~/src/liblouis/tests/braille-specs/*.yaml ~/src/liblouis/tests/yaml/*.yaml 2> /dev/null
-
-Test the table query functionality:
-
-    $ export LOUIS_TABLE_PATH=~/src/liblouis/tables:~/src/liblouis
     $ louis query language=de,contraction=full
     {"[...]/liblouis/tables/de-g2-detailed.ctb", "[...]/liblouis/tables/de-g2.ctb"}
 
+## Project status
 
-## Prerequisites
-
--   You need the [Rust tool chain](https://www.rust-lang.org/).
-
+Alpha. Compatibility with liblouis is driven by its own test suite, which
+louis-rs runs in full — better than two million assertions, forward and backward
+— on every change; [doc/Liblouis_Parity.md](doc/Liblouis_Parity.md) carries the
+current figures and the reproduction steps.
 
 ## Contributing
 
 If you have any improvements or comments please feel free to file a
 pull request or an issue.
-
 
 ## Acknowledgments
 
@@ -254,7 +107,6 @@ Wirth ("as simple as possible but not simpler").
 The parser is built from the grammar used in [tree-sitter-liblouis](https://github.com/liblouis/tree-sitter-liblouis),
 which is a port of the [EBNF grammar](https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form) in [rewrite-louis](https://github.com/liblouis/rewrite-louis), which in turn is
 a just port of the [Parsing expression grammar](https://en.wikipedia.org/wiki/Parsing_expression_grammar) from [louis-parser](https://github.com/liblouis/louis-parser).
-
 
 ## License
 
@@ -274,4 +126,3 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with this program.  If not, see
 <https://www.gnu.org/licenses/>.
-
