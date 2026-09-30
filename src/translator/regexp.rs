@@ -167,40 +167,40 @@ impl Regexp {
             }
             Regexp::Either(left, right) => {
                 let p1 = instructions.len();
-                instructions.push(Instruction::Split(p1 + 1, 0));
+                instructions.push(Instruction::Split(ix(p1 + 1), ix(0)));
                 left.emit(instructions, character_classes);
                 let p2 = instructions.len();
-                instructions.push(Instruction::Jump(0));
-                instructions[p1] = Instruction::Split(p1 + 1, p2 + 1);
+                instructions.push(Instruction::Jump(ix(0)));
+                instructions[p1] = Instruction::Split(ix(p1 + 1), ix(p2 + 1));
                 right.emit(instructions, character_classes);
-                instructions[p2] = Instruction::Jump(instructions.len());
+                instructions[p2] = Instruction::Jump(ix(instructions.len()));
             }
             Regexp::Optional(regexp) => {
                 let pos = instructions.len();
-                instructions.push(Instruction::Split(pos + 1, 0));
+                instructions.push(Instruction::Split(ix(pos + 1), ix(0)));
                 regexp.emit(instructions, character_classes);
-                instructions[pos] = Instruction::Split(pos + 1, instructions.len());
+                instructions[pos] = Instruction::Split(ix(pos + 1), ix(instructions.len()));
             }
             Regexp::ZeroOrMore(regexp) => {
                 let pos = instructions.len();
-                instructions.push(Instruction::Split(pos + 1, 0));
+                instructions.push(Instruction::Split(ix(pos + 1), ix(0)));
                 regexp.emit(instructions, character_classes);
-                instructions.push(Instruction::Jump(pos));
-                instructions[pos] = Instruction::Split(pos + 1, instructions.len());
+                instructions.push(Instruction::Jump(ix(pos)));
+                instructions[pos] = Instruction::Split(ix(pos + 1), ix(instructions.len()));
             }
             Regexp::OneOrMore(regexp) => {
                 let pos = instructions.len();
                 regexp.emit(instructions, character_classes);
-                instructions.push(Instruction::Split(pos, instructions.len() + 1));
+                instructions.push(Instruction::Split(ix(pos), ix(instructions.len() + 1)));
             }
             Regexp::Any => instructions.push(Instruction::Any),
             Regexp::CharacterClass(characters) => {
                 character_classes.push(characters.into());
-                instructions.push(Instruction::Class(character_classes.len() - 1));
+                instructions.push(Instruction::Class(ix(character_classes.len() - 1)));
             }
             Regexp::NotCharacterClass(characters) => {
                 character_classes.push(characters.into());
-                instructions.push(Instruction::NotClass(character_classes.len() - 1));
+                instructions.push(Instruction::NotClass(ix(character_classes.len() - 1)));
             }
             Regexp::RepeatExactly(n, regexp) => {
                 for _ in 0..*n {
@@ -212,22 +212,22 @@ impl Regexp {
                     regexp.emit(instructions, character_classes);
                 }
                 let pos = instructions.len();
-                instructions.push(Instruction::Split(pos + 1, 0));
+                instructions.push(Instruction::Split(ix(pos + 1), ix(0)));
                 regexp.emit(instructions, character_classes);
-                instructions.push(Instruction::Jump(pos));
-                instructions[pos] = Instruction::Split(pos + 1, instructions.len());
+                instructions.push(Instruction::Jump(ix(pos)));
+                instructions[pos] = Instruction::Split(ix(pos + 1), ix(instructions.len()));
             }
             Regexp::RepeatAtLeastAtMost(min, max, regexp) => {
                 for _ in 0..*min {
                     regexp.emit(instructions, character_classes);
                 }
                 let pos = instructions.len();
-                instructions.push(Instruction::Split(pos + 1, 0));
+                instructions.push(Instruction::Split(ix(pos + 1), ix(0)));
                 for _ in *min..*max {
                     regexp.emit(instructions, character_classes);
                 }
-                instructions.push(Instruction::Jump(pos));
-                instructions[pos] = Instruction::Split(pos + 1, instructions.len());
+                instructions.push(Instruction::Jump(ix(pos)));
+                instructions[pos] = Instruction::Split(ix(pos + 1), ix(instructions.len()));
             }
             Regexp::Capture(regexp) => {
                 instructions.push(Instruction::CaptureStart);
@@ -273,10 +273,15 @@ impl Regexp {
     }
 }
 
-type InstructionIndex = usize;
-type CharacterClassIndex = usize;
-type TranslationIndex = usize;
+type InstructionIndex = u16;
+type CharacterClassIndex = u16;
+type TranslationIndex = u16;
 type VariableIndex = u8;
+
+fn ix(n: usize) -> u16 {
+    n.try_into()
+        .expect("regexp program too large for u16 indexes")
+}
 
 /// Virtual machine instruction set for pattern matching
 #[derive(Debug, Clone)]
@@ -345,7 +350,7 @@ pub type CharacterRange = Range<usize>;
 ///
 /// See the section "Pike's Implementation" at <https://swtch.com/~rsc/regexp/regexp2.html>
 struct Thread {
-    pc: InstructionIndex,
+    pc: usize,
     captured: CharacterRange,
     consumed: CharacterRange,
 }
@@ -411,7 +416,7 @@ impl CompiledRegexp {
     fn add_thread(
         &self,
         list: &mut ThreadList,
-        pc: InstructionIndex,
+        pc: usize,
         captured: CharacterRange,
         consumed: CharacterRange,
         // `sp` is a byte offset (the captured span slices the input), `cp` the same
@@ -428,12 +433,20 @@ impl CompiledRegexp {
         list.seen.insert(pc);
         match self.instructions[pc] {
             Instruction::Jump(target) => self.add_thread(
-                list, target, captured, consumed, sp, cp, input_len, at_start, env,
+                list,
+                target as usize,
+                captured,
+                consumed,
+                sp,
+                cp,
+                input_len,
+                at_start,
+                env,
             ),
             Instruction::Split(a, b) => {
                 self.add_thread(
                     list,
-                    a,
+                    a as usize,
                     captured.clone(),
                     consumed.clone(),
                     sp,
@@ -443,7 +456,7 @@ impl CompiledRegexp {
                     env,
                 );
                 self.add_thread(
-                    list, b, captured, consumed, sp, cp, input_len, at_start, env,
+                    list, b as usize, captured, consumed, sp, cp, input_len, at_start, env,
                 );
             }
             Instruction::CaptureStart => self.add_thread(
@@ -698,7 +711,7 @@ impl CompiledRegexp {
                     }
                     Instruction::Class(index) => {
                         if let Some(actual) = next_char
-                            && self.character_classes[index].contains(actual)
+                            && self.character_classes[index as usize].contains(actual)
                         {
                             self.add_thread(
                                 next,
@@ -715,7 +728,7 @@ impl CompiledRegexp {
                     }
                     Instruction::NotClass(index) => {
                         if let Some(actual) = next_char
-                            && !self.character_classes[index].contains(actual)
+                            && !self.character_classes[index as usize].contains(actual)
                         {
                             self.add_thread(
                                 next,
@@ -758,7 +771,7 @@ impl CompiledRegexp {
 
         matched.map(|(captured, consumed, length, index)| {
             let captured = &input[captured];
-            self.translations[index]
+            self.translations[index as usize]
                 .clone()
                 .resolve(captured, consumed, length)
         })
@@ -777,6 +790,12 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn instruction_size() {
+        // the point of the u16 indexes; a wider payload would silently undo it
+        assert_eq!(std::mem::size_of::<Instruction>(), 8);
+    }
 
     #[test]
     fn character() {
