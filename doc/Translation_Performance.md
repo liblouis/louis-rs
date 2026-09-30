@@ -389,6 +389,15 @@ let (offset, length) = match self.consumed {
   clones every output `String`; `push_str` into one `String` instead. One line.
 - **Two-character index key** (unmeasured). Follow liblouis's `_lou_stringHash` and
   key `FirstCharIndex` on the first two characters instead of one.
+- **`u16` VM indexes** (2-5%, wall clock). `Split(usize, usize)` makes every
+  `Instruction` 24 bytes; with `u16` instruction, class and translation indexes it is 8.
+  The longest program the suite compiles has 510 instructions. `en-ueb-g2` word,
+  sentence and paragraph measured -3.3%, -2.2% and -1.8%, backward paragraph -3.3%,
+  `el` paragraph -5.2%. Parked on branch `regexp-u16-indexes` (`2b86c86`): a checked
+  `ix()` conversion in `emit`, the program counter stays `usize`, and a test pins the
+  size at 8 bytes. Relative jumps were considered first and add nothing on top: in a
+  fixed-width enum they save no space that narrowing doesn't, and they cost an add
+  per jump. Jump distances are short anyway (median 3, 35% are 1).
 
 ## Measured and rejected
 
