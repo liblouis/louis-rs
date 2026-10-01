@@ -1,0 +1,157 @@
+#+options: todo:t
+#+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
+#+language: en
+
+* DRAFT ADR-0017: A braille formatter on top of louis-rs, as a replacement for liblouisutdml
+- Deciders :: CE
+- Date :: [2026-10-01 Thu]
+
+Technical Story: exploration only. Nothing is built, and this may never
+go further than this record.
+
+** Context and Problem Statement
+
+liblouisutdml lays out XML documents into paged braille: it translates
+the text with liblouis and breaks it into lines, pages and volumes,
+driven by its own semantic-action configuration files. Could a
+formatter built on louis-rs replace it, laying out XML according to
+CSS instead?
+
+There is no Rust crate for this. The general CSS layout crates
+(Blitz, Stylo, Taffy) solve a much harder problem -- fonts,
+proportional text, flexbox and grid -- and none of them do paged
+media. Braille layout is far simpler: every glyph is one cell, a page
+is a fixed grid of cells and lines, and margins are counted in cells
+and lines.
+
+** Decision Drivers
+
+- Contractions must work across inline element boundaries
+  (~wo<em>rd</em>~). This is the one thing a naive per-text-node
+  translation gets wrong, and liblouisutdml's UTD mode gets it wrong
+  too (see below).
+- Reuse an existing stylesheet language rather than invent one, so
+  existing stylesheets and documentation carry over.
+- The louis-rs translation API should not grow formatter concerns,
+  and louis-rs library users should not pull in XML or CSS
+  dependencies.
+- It is an exploration: nothing should be solidified before it proves
+  itself.
+
+** Considered Options
+
+*** Stylesheet language
+
+- A subset of the braille CSS spec
+  (https://braillespecs.github.io/braille-css/), as used by the DAISY
+  Pipeline
+- An own CSS dialect
+- liblouisutdml's semantic-action files
+
+*** Translating text that spans several nodes
+
+- Per text node
+- liblouisutdml's approach: one buffer per block, nodes separated by
+  ~LOU_ENDSEGMENT~
+- The DAISY Pipeline's approach: one string per block, node
+  boundaries carried out of band and mapped back
+
+*** Where it lives
+
+- A subcommand of the ~louis~ binary
+- A workspace member crate in this repository
+- A separate repository
+
+** Decision Outcome
+
+*Stylesheet language:* a subset of braille CSS. No compatibility with
+liblouisutdml's configuration files, at least for now.
+
+*Cross-node translation:* the DAISY Pipeline's approach.
+~LiblouisTranslatorJnaImplProvider~ (daisy/pipeline-modules,
+~liblouis-utils~, at ~b7ff3a85~) joins all inline segments of a block,
+records each segment boundary as a flag in the inter-character
+attributes rather than as a character in the text, sets a typeform
+per character from each segment's CSS, translates once, and splits
+the braille back per segment. liblouis sees clean, continuous text,
+so contractions span nodes.
+
+liblouisutdml's UTD mode (~transcriber.c~, ~insert_text_string~,
+~assignIndices~) instead puts ~LOU_ENDSEGMENT~ (~0xFFFF~) into the
+text. For that to pass through, liblouis compiles it into every table
+as a ~space~ (~compileTranslationTable.c~, with a TODO calling it
+"behind the user's back"), so it is a word boundary and no
+contraction ever spans two nodes. Its classic BRF mode does translate
+a whole block in one call, but never maps the braille back to nodes.
+
+louis-rs already has what the Pipeline approach needs:
+~TranslationResult::output_positions~ and ~input_positions~ are
+character-indexed, combined across all passes, and checked against
+liblouis's ~outputPos~/~inputPos~ YAML tests. The boundary before
+input character ~i~ lands at output position ~output_positions[i]~;
+when ~output_positions[i-1] == output_positions[i]~ a single rule's
+output spans the boundary and is given to one side.
+~TranslationOptions::with_emphasis~ is the typeform equivalent.
+
+*Where it lives:* a separate repository, if it ever gets built. It
+would depend on louis-rs only through ~translate_with_options~, and
+ship its own binary, the way liblouisutdml ships ~file2brl~ apart
+from liblouis's ~lou_translate~.
+
+Suggested name: ~louis-typeset~ (free on crates.io as of 2026-10-01).
+Typesetting covers the whole job, text in and finished pages out, and
+the ~louis-~ prefix says what it builds on. ~louis-layout~ was the
+runner-up, but in the braille world "layout" already suggests keyboard
+layouts, and in CSS terms layout excludes pagination. Others
+considered: ~louisxml~ (expects a revived liblouisxml and its
+configuration format), ~louis-css~, ~louis-format~ (reads as code
+formatting), and ~hauy~ (memorable, but says nothing about the tool).
+
+*** Sketched architecture
+
+Pure stages, each turning one immutable structure into the next:
+
+1. Parse: ~roxmltree~.
+2. Style: ~simplecss~ for parsing and selector matching, an own
+   cascade, giving a computed style per element.
+3. Box tree: blocks, and inline runs of segments (text, emphasis,
+   source node, table). Generated content becomes ordinary segments.
+4. Translate: one ~translate_with_options~ call per inline run of
+   segments using the same table, split back as above.
+5. Flow: margins, ~text-indent~ and greedy line breaking at braille
+   spaces, giving lines.
+6. Paginate: ~@page~ size, page breaks, braille page numbers.
+7. Volumes.
+8. Serialize: PEF, later BRF.
+
+A first version would be stages 1-5 producing unpaginated lines --
+enough to show cross-node contractions working.
+
+*** Positive Consequences
+
+- No special characters in tables, unlike liblouisutdml's
+  ~LOU_ENDSEGMENT~.
+- louis-rs needs no new API for the split-back.
+- Stylesheets written for the DAISY Pipeline are a starting point.
+
+*** Negative Consequences
+
+- Hyphenation for line breaking needs a louis-rs API change:
+  ~src/hyphenation.rs~ is only used internally for ~nocross~.
+  Hyphenation points would have to be exposed on the input side and
+  carried into the braille through ~output_positions~.
+- It inherits louis-rs's partial emphasis support.
+- No target document exists, so acceptance tests have to be small
+  per-feature fixtures (~input.xml~, ~style.css~, expected braille
+  lines).
+
+** Links
+
+- braille CSS spec: https://braillespecs.github.io/braille-css/
+- ~LiblouisTranslatorJnaImplProvider.java~ at ~b7ff3a85~:
+  https://github.com/daisy/pipeline-modules/blob/b7ff3a85eda3e6757af66278ee78b29c6e4d9efa/liblouis-utils/src/main/java/org/daisy/pipeline/braille/liblouis/impl/LiblouisTranslatorJnaImplProvider.java
+- liblouisutdml ~liblouisutdml/transcriber.c~ (~insert_translation~,
+  ~insert_text_string~, ~assignIndices~)
+- liblouis ~liblouis/compileTranslationTable.c~ (~LOU_ENDSEGMENT~
+  defined as ~space~), at ~011cfb3b~
+- ~src/lib.rs~ (~TranslationResult~), ~src/translator/positions.rs~
