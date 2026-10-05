@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The `louis` command now exits with a non-zero status when it reports an error.
   `check` exits non-zero for a YAML file it cannot read or parse; failing tests
   are a result of the run, not a failure of it, and still exit 0.
+- Input and output positions no longer drift after a `correct` or
+  `pass2`--`pass4` rule whose action uses `*`. Such a rule consumes its whole
+  match, but only the bracketed part was counted, so every later position was
+  off by the context the rule consumed.
 
 ## [0.3.0] - 2026-09-22
 
