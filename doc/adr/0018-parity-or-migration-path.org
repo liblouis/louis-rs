@@ -1,0 +1,140 @@
+#+options: todo:t
+#+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
+#+language: en
+
+* DRAFT ADR-0018: Every deliberate difference from liblouis needs parity or a migration path
+- Deciders :: CE
+- Date :: [2026-10-06 Tue]
+
+** Context and Problem Statement
+
+Several records decline to reproduce liblouis behavior because it is a
+design wart: [[file:0008-match-rule-candidate-selection.org][ADR-0008]] and [[file:0016-order-independent-rule-selection.org][ADR-0016]] (definition-order tie-breaking),
+[[file:0009-capsletter-vs-begcapsword.org][ADR-0009]] (re-entrant capsletter check), [[file:0012-unimplemented-opcodes.org][ADR-0012]] (six opcodes),
+[[file:0013-no-inferred-display-entries.org][ADR-0013]] (display table taken from the translation table) and
+[[file:0015-table-lookup.org][ADR-0015]] (~LOUIS_TABLEPATH~ and install locations).
+[[file:../Differences_From_Liblouis.md][Differences_From_Liblouis.md]] collects them as "a decision, not a to-do".
+Each is reasonable on its own. Together they amount to a stance:
+louis-rs is a better liblouis, and whatever it does differently is
+liblouis's problem.
+
+That stance stops working once the goal is to *retire* liblouis.
+Memory-safety fixes keep landing in the C code, and the reason to want
+louis-rs is to leave that class of bug behind. But nobody can switch
+while a table or a deployment that works under liblouis silently does
+something else under louis-rs. Being better does not matter if people
+cannot move.
+
+What do we owe someone moving off liblouis, and when is a difference
+acceptable?
+
+** Decision Drivers
+
+- Retiring liblouis is the goal. Better design is how we get there,
+  not a goal in its own right.
+- Scope is the liblouis corpus: the tables under ~tables/~ and the
+  tests under ~tests/~. Private and vendor tables we cannot see are out
+  of scope for now.
+- Silent divergence is the worst outcome: same table, same input,
+  different braille, and no hint why.
+- The design wins in the existing records (order independence,
+  precomputed indication, Unicode braille by default) are real, and
+  should not be thrown away for bug compatibility.
+- An upstream table fix fixes both engines, so it is still the best
+  outcome where it is possible.
+
+** Considered Options
+
+1. *Status quo*: decide each difference on design merit alone.
+2. *Full parity*: reproduce every liblouis behavior, quirks included.
+3. *Parity or migration path*: a difference is acceptable only when a
+   liblouis user has a documented, mechanical way to get the output they
+   had, for every table and test in the liblouis corpus.
+
+** Decision Outcome
+
+Chosen option: 3.
+
+A deliberate difference from liblouis is acceptable only if it comes
+with a migration path, one of these, in order of preference:
+
+1. *Upstream fix landed*: the liblouis tables and tests no longer depend
+   on the behavior (e.g. liblouis PR #2102 naming display tables in the
+   yaml files).
+2. *Diagnostic*: louis-rs detects that a table or setup relies on the
+   behavior and says what to change. It is a message, not a silent
+   fallback. This is the path for setups outside the tables, such as
+   environment variables, which no upstream fix can reach.
+3. *Opt-in compatibility*: the liblouis behavior is implemented behind
+   an explicit switch, contained in one place, off by default.
+
+If none of the three is available, implement the behavior. "It is a
+wart" is still a good reason to push an upstream change and to keep the
+default clean, but it is no longer enough to leave a behavior
+unsupported.
+
+This softens, and does not reverse, the stance in ADR-0008 and
+ADR-0016. Their decisions stand. What changes is that each one now owes
+a migration path, and that path is part of what "done" means.
+Retirement criterion: every entry in [[file:../Differences_From_Liblouis.md][Differences_From_Liblouis.md]] names
+its migration path, and none reads "none".
+
+*** Positive Consequences
+
+- Gives a concrete definition of what "ready to replace liblouis"
+  means, beyond the pass rate.
+- Keeps the clean defaults: compatibility is opt-in and cannot leak
+  into the core engine's design.
+- Diagnostics also help table authors who never touch louis-rs, once
+  upstream adopts the same checks.
+
+*** Negative Consequences
+
+- Real work: the corpus tables that rely on a difference have to be
+  fixed upstream, one by one.
+- Compatibility switches are code we maintain for behavior we think is
+  wrong. Each one needs a removal condition.
+
+** Current differences and their migration paths
+
+| Difference                                         | Record   | Migration path today                                          | Missing                                                                              |
+|----------------------------------------------------+----------+---------------------------------------------------------------+--------------------------------------------------------------------------------------|
+| Rule ties are not broken by definition order       | 0008, 16 | upstream table fixes, case by case                            | fix the ties in ADR-0016's 14 tables upstream                                        |
+| Display table not taken from the translation table | 0013     | yaml tests: #2102, sweep still open; apps: none               | diagnostic when a translation table brings display rules and none is named           |
+| ~LOUIS_TABLEPATH~ not read                         | 0015     | none                                                          | diagnostic when it is set and ~LOUIS_TABLE_PATH~ is not, or read it as a fallback    |
+| Install locations, ~dir/liblouis/tables/~          | 0015     | name the directory explicitly                                 | documented in Differences, nothing detects it                                        |
+| Table-list base resolution                         | 0015     | none                                                          | check whether a list liblouis resolves can fail under us                             |
+| ~$w~-~$z~ attributes                               | (#34)    | upstream removal (liblouis#948); not implemented here         | rewrite the uses in ~es-g2~, ~th-g2~, ~da-dk-g16~/~g26~ upstream                     |
+| Six unimplemented opcodes                          | 0012     | unused in the corpus                                          | check that the parse error names the opcode as unsupported                           |
+| Re-entrant capsletter check                        | 0009     | none; de-g0-detailed is wrong                                 | 0009's option 4 or 5, then 6 upstream                                                |
+
+** Pros and Cons of the Options
+
+*** Status quo
+
+- Good, because no new work.
+- Bad, because liblouis cannot be retired: the remaining differences
+  have no end state.
+
+*** Full parity
+
+- Good, because switching is trivial.
+- Bad, because it re-imports the fragility (order-dependent ties,
+  re-entrant state) that the precomputed architecture exists to avoid.
+- Bad, because some quirks are being removed upstream (~$w~-~$z~,
+  embedded display tables), so we would chase a moving target.
+
+*** Parity or migration path
+
+- Good, because it defines a finish line.
+- Good, because it keeps clean defaults, and most of the work is table
+  fixes that help liblouis too.
+- Bad, because diagnostics and compatibility switches are work the
+  status quo would not do.
+
+** Links
+
+- [[file:../Differences_From_Liblouis.md][Differences_From_Liblouis.md]] -- each entry gains a migration-path line
+- [[file:../Liblouis_Parity.md][Liblouis_Parity.md]] -- unfinished work, as opposed to decisions
+- [[https://github.com/liblouis/liblouis/issues/948][liblouis#948]] -- removal of ~$w~-~$z~
+- [[https://github.com/liblouis/liblouis/pull/2102][liblouis#2102]] -- yaml tests name their display table

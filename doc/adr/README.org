@@ -26,3 +26,4 @@ When you add a record or change its status, update its row in the table below to
 | [[file:0015-table-lookup.org][ADR-0015]] | Table lookup: a distinct ~LOUIS_TABLE_PATH~, and which liblouis resolution steps we skip             | ACCEPTED   |
 | [[file:0016-order-independent-rule-selection.org][ADR-0016]] | Rule selection does not depend on table order; a tie is an ill-formed table                          | PROPOSED   |
 | [[file:0017-braille-formatter.org][ADR-0017]] | A braille formatter on top of louis-rs, as a replacement for liblouisutdml                           | DRAFT      |
+| [[file:0018-parity-or-migration-path.org][ADR-0018]] | Every deliberate difference from liblouis needs parity or a migration path                           | DRAFT      |
