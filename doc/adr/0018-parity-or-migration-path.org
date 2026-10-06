@@ -104,8 +104,8 @@ its migration path, and none reads "none".
 | ~LOUIS_TABLEPATH~ not read                         | 0015     | none                                                          | diagnostic when it is set and ~LOUIS_TABLE_PATH~ is not, or read it as a fallback    |
 | Install locations, ~dir/liblouis/tables/~          | 0015     | name the directory explicitly                                 | documented in Differences, nothing detects it                                        |
 | Table-list base resolution                         | 0015     | none                                                          | check whether a list liblouis resolves can fail under us                             |
-| ~$w~-~$z~ attributes                               | (#34)    | upstream removal (liblouis#948); not implemented here         | rewrite the uses in ~es-g2~, ~th-g2~, ~da-dk-g16~/~g26~ upstream                     |
-| Six unimplemented opcodes                          | 0012     | unused in the corpus                                          | check that the parse error names the opcode as unsupported                           |
+| ~$w~-~$z~ attributes                               | (#34)    | upstream removal (liblouis#948); not implemented here         | rewrite the uses upstream; see Differences for the tables                            |
+| Six unimplemented opcodes                          | 0012     | unused in the corpus                                          | nothing for the corpus; the parse error names the opcode                             |
 | Re-entrant capsletter check                        | 0009     | none; de-g0-detailed is wrong                                 | 0009's option 4 or 5, then 6 upstream                                                |
 
 ** Pros and Cons of the Options

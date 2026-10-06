@@ -8,6 +8,11 @@ Gaps that are merely unfinished work live in
 [Liblouis_Parity.md](Liblouis_Parity.md) instead. Everything here is a decision,
 not a to-do.
 
+Each difference names its **migration path**: how someone moving off liblouis
+gets the output they had. A difference without one is not finished
+([ADR-0018](adr/0018-parity-or-migration-path.org)), and "none yet" below marks
+the work that is still owed.
+
 ## Table lookup
 
 Tables are looked up in `LOUIS_TABLE_PATH`. This is **not** liblouis's
@@ -33,6 +38,11 @@ $ louis parse /some/where/top.utb   # finds an "include base.utb" next to it
 That first step belongs to the command line tool. The library resolves names
 against the search path it is handed and nothing else, so an application owning
 its own tables passes their directories to `Translator::with_search_path`.
+
+**Migration path:** none yet. Rename `LOUIS_TABLEPATH` to `LOUIS_TABLE_PATH`,
+replace its commas with colons, and name the install directory explicitly if you
+relied on it. louis-rs does not yet notice a `LOUIS_TABLEPATH` it is ignoring;
+a diagnostic for that is the missing piece.
 
 ## Display tables
 
@@ -78,3 +88,44 @@ $ louis trace --display da-dk-octobraille.dis da-dk-g28.ctb "ørene"
 
 Without `--display` there is no such stage, so the trace is unchanged and the
 output stays Unicode braille.
+
+**Migration path:** name the display table. The liblouis YAML tests that relied
+on the fallback are being changed to name theirs (liblouis
+[#2102](https://github.com/liblouis/liblouis/pull/2102) fixed three; more remain).
+For an application, none yet: louis-rs does not say when a translation table
+brings display rules that it is ignoring.
+
+## Rules that tie
+
+When two rules match at the same position, consume the same characters and check
+the same amount of context, liblouis takes the one defined first in the table.
+louis-rs does not use table order. Such a tie is an ill-formed table, two rules
+with nothing to choose between them, and louis-rs resolves it arbitrarily but
+reproducibly ([ADR-0016](adr/0016-order-independent-rule-selection.org)).
+
+**Migration path:** fix the table so the rules no longer overlap, which fixes
+liblouis too. The suite reaches ties in 14 tables, listed in ADR-0016; those
+are still to be fixed upstream.
+
+## Attributes `$w`, `$x`, `$y` and `$z`
+
+In multipass and `correct`/`context` rules, `$w` to `$z` name the first four
+user-defined character classes by the order of their `attribute` rules. louis-rs
+does not implement them. They are slated for removal upstream
+([liblouis#948](https://github.com/liblouis/liblouis/issues/948)), because a rule
+whose meaning depends on declaration order is brittle.
+
+**Migration path:** rewrite the rules with the class's own name. Still to be done
+upstream for `da-dk-g16`, `da-dk-g26` and their variants, `es-g2.ctb`,
+`sv-6common.uti`, `th-g1.utb`, `th-g1.uti`, `th-g2.ctb` and the `zhcn` tables.
+Until then those rules are silently dropped.
+
+## Opcodes not implemented
+
+`uplow`, `locale`, `backmatch`, `compdots`, `nobreak` and `macro` are not
+implemented: two are deprecated upstream, three are undocumented in liblouis's own
+manual, and none appears in any table or test in liblouis's corpus
+([ADR-0012](adr/0012-unimplemented-opcodes.org)).
+
+**Migration path:** not needed for the corpus. A table using one fails to load
+with `Opcode expected, got Some("uplow")`.
