@@ -284,6 +284,24 @@ mod tests {
     }
 
     #[test]
+    fn translate_with_positions_counts_the_context_a_star_action_consumes() {
+        let rules = [
+            parse_rule("letter a 1"),
+            parse_rule("letter b 12"),
+            parse_rule("letter c 14"),
+            // `*` copies only the bracketed "a" but consumes the "b" after it as well
+            parse_rule("noback correct [\"a\"]\"b\" *"),
+        ];
+        let pipeline = TranslationPipeline::compile(&rules, Direction::Forward).unwrap();
+        let (output, positions) =
+            pipeline.translate_with_positions("abc", &TranslationOptions::default());
+        assert_eq!(output, "⠁⠉");
+        // the dropped "b" shares the "a"'s cell, and the "c" keeps its own
+        assert_eq!(positions.output_positions(), [0, 0, 1]);
+        assert_eq!(positions.input_positions(), [0, 2]);
+    }
+
+    #[test]
     fn pass3() {
         let rules = [
             parse_rule("always foo 123"),

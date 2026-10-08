@@ -2,13 +2,13 @@
 
 use crate::{parser::Direction, translator::ResolvedTranslation};
 
-/// The (input length, output length) of every translation step of one stage -- all the position
-/// algorithms need.
+/// The (consumed input length, output length) of every translation step of one stage -- all the
+/// position algorithms need.
 fn stage_lengths(steps: &[ResolvedTranslation], direction: Direction) -> Vec<(usize, usize)> {
     steps
         .iter()
         .map(|step| {
-            let (input, output) = (step.input().chars().count(), step.output().chars().count());
+            let (input, output) = (step.length(), step.output().chars().count());
             match direction {
                 Direction::Forward => (input, output),
                 Direction::Backward => (output, input),
