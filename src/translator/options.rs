@@ -34,6 +34,10 @@ impl TranslationModes {
     pub fn insert(&mut self, value: TranslationMode) -> bool {
         self.0.insert(value)
     }
+
+    pub fn contains(&self, value: TranslationMode) -> bool {
+        self.0.contains(value)
+    }
 }
 
 /// Per-call options for a translation.

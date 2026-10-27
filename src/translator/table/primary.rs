@@ -11,7 +11,7 @@ use crate::{
     },
     translator::{
         CharacterDefinition, ClassConstraint, ResolvedTranslation, Rule, TranslationError,
-        TranslationOptions, TranslationStage,
+        TranslationMode, TranslationOptions, TranslationStage,
         context_pattern::{ContextPatterns, ContextPatternsBuilder},
         effect::Environment,
         indication::{
@@ -1817,7 +1817,7 @@ impl PrimaryTable {
                     // otherwise handle it as a undefined character
                     let translation = ResolvedTranslation::new(
                         &next_char.to_string(),
-                        &self.handle_undefined_char(next_char),
+                        &self.handle_undefined_char(next_char, options),
                         1,
                         TranslationStage::Main,
                         None,
@@ -1835,7 +1835,11 @@ impl PrimaryTable {
         translations
     }
 
-    fn handle_undefined_char(&self, ch: char) -> String {
+    fn handle_undefined_char(&self, ch: char, options: &TranslationOptions) -> String {
+        if options.mode().contains(TranslationMode::NoUndefined) {
+            // the caller asked for undefined input to be dropped
+            return String::new();
+        }
         match self.direction {
             // the output is braille, so the escape is spelled in braille
             Direction::Forward => self.escape_to_braille(&unknown_hex(ch)),
