@@ -115,10 +115,15 @@ impl TrieNode {
 #[derive(Default, Debug, Clone)]
 pub struct Trie {
     root: TrieNode,
-    /// Character classes used for word/number/punctuation boundary checks and for
-    /// `StartClass`/`EndClass` constraint checks. Set to text classes for forward translation,
-    /// braille classes for backward.
-    ctx: CharacterClasses,
+    /// Character classes for the lookahead checks (`Transition::End`, `ClassConstraint::End`),
+    /// which read the input after the match: text classes for forward translation, braille
+    /// classes for backward.
+    lookahead_classes: CharacterClasses,
+    /// Character classes for the lookbehind checks (`Transition::Start`,
+    /// `ClassConstraint::Start`), which read `prev`. The same as `lookahead_classes` unless
+    /// set with [`Trie::with_lookbehind_classes`]: backward, `prev` is text while the input
+    /// is braille.
+    lookbehind_classes: CharacterClasses,
     /// When true, character transitions are matched on the exact character instead of
     /// being lowercased first. Needed for `comp6`, where `comp6 a 1` and `comp6 A 17`
     /// are independent rules.
@@ -129,13 +134,27 @@ impl Trie {
     pub fn new() -> Self {
         Trie {
             root: TrieNode::default(),
-            ctx: CharacterClasses::default(),
+            lookahead_classes: CharacterClasses::default(),
+            lookbehind_classes: CharacterClasses::default(),
             case_sensitive: false,
         }
     }
 
+    /// Set the classes for both the lookahead and the lookbehind checks
     pub fn with_context(self, ctx: CharacterClasses) -> Self {
-        Trie { ctx, ..self }
+        Trie {
+            lookbehind_classes: ctx.clone(),
+            lookahead_classes: ctx,
+            ..self
+        }
+    }
+
+    /// Set the classes for the lookbehind checks only
+    pub fn with_lookbehind_classes(self, lookbehind_classes: CharacterClasses) -> Self {
+        Trie {
+            lookbehind_classes,
+            ..self
+        }
     }
 
     pub fn case_sensitive(self) -> Self {
@@ -147,11 +166,12 @@ impl Trie {
 
     fn resolve_transition(&self, transition: Transition) -> ResolvedTransition {
         match transition {
-            Transition::Start(classes) => {
-                ResolvedTransition::Start(ResolvedClasses::resolve(&self.ctx, &classes))
-            }
+            Transition::Start(classes) => ResolvedTransition::Start(ResolvedClasses::resolve(
+                &self.lookbehind_classes,
+                &classes,
+            )),
             Transition::End(classes) => {
-                ResolvedTransition::End(ResolvedClasses::resolve(&self.ctx, &classes))
+                ResolvedTransition::End(ResolvedClasses::resolve(&self.lookahead_classes, &classes))
             }
         }
     }
@@ -215,7 +235,7 @@ impl Trie {
         for constraint in &class_constraints {
             if let ClassConstraint::Start(class) = constraint {
                 length += 1;
-                let resolved = ResolvedClasses::resolve(&self.ctx, &[class.clone()]);
+                let resolved = ResolvedClasses::resolve(&self.lookbehind_classes, &[class.clone()]);
                 current_node = current_node
                     .transitions
                     .entry(ResolvedTransition::Start(resolved))
@@ -244,7 +264,7 @@ impl Trie {
         for constraint in &class_constraints {
             if let ClassConstraint::End(class) = constraint {
                 length += 1;
-                let resolved = ResolvedClasses::resolve(&self.ctx, &[class.clone()]);
+                let resolved = ResolvedClasses::resolve(&self.lookahead_classes, &[class.clone()]);
                 current_node = current_node
                     .transitions
                     .entry(ResolvedTransition::End(resolved))

@@ -189,17 +189,28 @@ struct PrimaryTableBuilder {
 }
 
 impl PrimaryTableBuilder {
-    /// `trie_ctx` must be the character classes to resolve `Transition`/`ClassConstraint`
-    /// boundary checks against: text classes for forward translation, dots classes for
-    /// backward. The tries need it from construction on, since `Trie::insert` resolves those
-    /// checks against its own context immediately rather than deferring to match time.
-    fn new(trie_ctx: CharacterClasses) -> Self {
+    /// `lookahead_classes` must be the character classes to resolve the lookahead
+    /// (`Transition::End`, `ClassConstraint::End`) boundary checks against: text classes for
+    /// forward translation, dots classes for backward. `lookbehind_classes` is the same for the
+    /// lookbehind checks, and is the text classes in both directions, since the lookbehind
+    /// reads the output produced so far when translating backward (see
+    /// [`PrimaryTable::trace`]). The tries need both from construction on, since
+    /// `Trie::insert` resolves those checks against them immediately rather than deferring
+    /// to match time.
+    fn new(lookahead_classes: CharacterClasses, lookbehind_classes: CharacterClasses) -> Self {
         Self {
             undefined: None,
             character_translations: CharacterTranslation::new(),
-            trie: Trie::new().with_context(trie_ctx.clone()),
-            comp6_trie: Trie::new().with_context(trie_ctx.clone()).case_sensitive(),
-            nocross_trie: Trie::new().with_context(trie_ctx),
+            trie: Trie::new()
+                .with_context(lookahead_classes.clone())
+                .with_lookbehind_classes(lookbehind_classes.clone()),
+            comp6_trie: Trie::new()
+                .with_context(lookahead_classes.clone())
+                .with_lookbehind_classes(lookbehind_classes.clone())
+                .case_sensitive(),
+            nocross_trie: Trie::new()
+                .with_context(lookahead_classes)
+                .with_lookbehind_classes(lookbehind_classes),
             match_patterns: MatchPatternsBuilder::new(),
             context_patterns: ContextPatternsBuilder::new(),
             numeric_indicator: numeric::IndicatorBuilder::new(),
@@ -469,16 +480,18 @@ impl PrimaryTable {
         _stage: TranslationStage,
         ctx: &TableContext,
     ) -> Result<Self, TranslationError> {
-        // Word/number boundary checks (`Transition::Start`/`End`, `ClassConstraint`) must
-        // consult the same character classes the compiled trie itself is built over:
-        // text-based classes for forward translation, but braille-based (dots) classes for
-        // backward translation, since the trie's neighbor characters are dots in that
-        // direction.
-        let trie_ctx = match direction {
+        // Word/number boundary checks must consult the classes of the characters they are
+        // checked against. The lookahead (`Transition::End`, `ClassConstraint::End`) reads the
+        // input, which is text forward and braille backward. The lookbehind
+        // (`Transition::Start`, `ClassConstraint::Start`) reads text in both directions:
+        // backward it reads the output produced so far, as liblouis's `back_setBefore` and
+        // `isBegWord` do, because a braille cell does not say how it was translated.
+        let lookahead_classes = match direction {
             Direction::Forward => ctx.character_classes.clone(),
             Direction::Backward => ctx.dots_classes().clone(),
         };
-        let mut builder = PrimaryTableBuilder::new(trie_ctx);
+        let mut builder =
+            PrimaryTableBuilder::new(lookahead_classes, ctx.character_classes.clone());
 
         // In literary braille tables, digit and litdigit serve distinct roles:
         //
@@ -1633,6 +1646,17 @@ impl PrimaryTable {
             if last_indications_pos != Some(char_pos) {
                 translations.extend(indications.translations_at(char_pos));
                 last_indications_pos = Some(char_pos);
+            }
+
+            // Backward, the lookbehind reads the last character of the output produced so
+            // far rather than the previous braille cell (liblouis's `back_setBefore`): the
+            // cell is ambiguous -- ⠂ is both a comma and "aa" in Afrikaans -- but the output
+            // records which reading was chosen.
+            if self.direction == Direction::Backward {
+                prev = translations
+                    .iter()
+                    .rev()
+                    .find_map(|t| t.output().chars().last());
             }
 
             // whether we're about to match starting at the true beginning of the whole input,
