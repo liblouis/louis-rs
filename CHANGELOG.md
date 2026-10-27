@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- Back-translation no longer fires a word contraction right after a cell that
+  is punctuation by its dots but was read as letters. In Afrikaans ⠂ is both
+  the comma and `aa`, so `⠣⠿⠍⠂⠅` gave "aangemaakan" instead of "aangemaak".
+  The check for the start of a word now looks at the text already produced, as
+  liblouis does, rather than at the previous braille cell.
 - Back-translating a cell the table does not define now writes the dot numbers
   between a backslash and a slash, `\12345678/`, the way liblouis does. The
   undefined cell used to be escaped as `\xHHHH` rendered in braille, putting
