@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- Back-translating a cell the table does not define now writes the dot numbers
+  between a backslash and a slash, `\12345678/`, the way liblouis does. The
+  undefined cell used to be escaped as `\xHHHH` rendered in braille, putting
+  braille characters into text output.
 - An undefined character is now escaped with the correct braille for the hex
   digit `9`. The fallback used when a table defines no mapping of its own gave
   `9` the dots of `3`, so any `\xNNNN` escape containing a `9` was printed

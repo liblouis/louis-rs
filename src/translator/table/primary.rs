@@ -6,8 +6,8 @@ use crate::{
     Direction,
     emphasis::EmphasisSpan,
     parser::{
-        AnchoredRule, Braille, BrailleChars, CharacterClass, CharacterClasses, HasNocross,
-        HasPrecedence, WithClass,
+        AnchoredRule, Braille, BrailleChar, BrailleChars, CharacterClass, CharacterClasses,
+        HasNocross, HasPrecedence, WithClass,
     },
     translator::{
         CharacterDefinition, ClassConstraint, ResolvedTranslation, Rule, TranslationError,
@@ -30,6 +30,28 @@ use crate::{
         trie::{Transition, Trie},
     },
 };
+
+/// Spell an undefined character as the hex escape liblouis prints for it
+///
+/// The counterpart of [`unknown_dots`], for the forward direction. Every character
+/// has one, so this cannot fail. The result is still text: the caller renders it
+/// into braille, since that is the direction's output.
+fn unknown_hex(ch: char) -> String {
+    ch.escape_unicode()
+        .to_string()
+        .replace(r"\u", r"\x") // replace \u by \x
+        .replace(['{', '}'], "") // drop the curly braces
+}
+
+/// Spell an undefined braille cell as the dot numbers liblouis prints for it
+///
+/// The counterpart of [`unknown_hex`], for the backward direction. Back-translation
+/// writes text, so an undefined cell cannot be escaped as braille. liblouis spells out
+/// the dot numbers between a backslash and a slash, and uses `\\0/` for a cell with no
+/// dots. Returns `None` for a character that is not a braille cell.
+fn unknown_dots(ch: char) -> Option<String> {
+    BrailleChar::from_unicode(ch).map(|cell| format!("\\{}/", cell.dot_numbers()))
+}
 
 /// Detects compbrl-triggered computer braille regions and adds `computer_braille` spans.
 ///
@@ -1814,10 +1836,19 @@ impl PrimaryTable {
     }
 
     fn handle_undefined_char(&self, ch: char) -> String {
-        ch.escape_unicode()
-            .to_string()
-            .replace(r"\u", r"\x") // replace \u by \x
-            .replace(['{', '}'], "") // drop the curly braces
+        match self.direction {
+            // the output is braille, so the escape is spelled in braille
+            Direction::Forward => self.escape_to_braille(&unknown_hex(ch)),
+            // the output is text, so the escape is spelled in text, and a character
+            // that is not a cell has no dots to spell out
+            Direction::Backward => unknown_dots(ch).unwrap_or_else(|| unknown_hex(ch)),
+        }
+    }
+
+    /// Render the characters of an escape as braille, preferring the table's own
+    /// definitions and falling back to [`fallback`] for what it does not define
+    fn escape_to_braille(&self, escape: &str) -> String {
+        escape
             .chars()
             .map(|c| {
                 if let Some(t) = self.fallback_definitions.get(&c) {
@@ -1889,6 +1920,28 @@ mod tests {
     /// fixtures under `dictionaries/`.
     fn fixture_search_path() -> SearchPath {
         SearchPath::from(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+    }
+
+    #[test]
+    fn test_unknown_hex() {
+        assert_eq!(unknown_hex('\u{4e2d}'), r"\x4e2d");
+        assert_eq!(unknown_hex('a'), r"\x61");
+        // the escape is spelled with the same characters fallback maps
+        assert!(
+            unknown_hex('\u{10ffff}')
+                .chars()
+                .all(|c| c == '\\' || c == 'x' || c.is_ascii_hexdigit())
+        );
+    }
+
+    #[test]
+    fn test_unknown_dots() {
+        assert_eq!(unknown_dots('\u{28ff}'), Some(r"\12345678/".into()));
+        assert_eq!(unknown_dots('\u{2840}'), Some(r"\7/".into()));
+        assert_eq!(unknown_dots('\u{2800}'), Some(r"\0/".into()));
+        // virtual dots live in the private use area
+        assert_eq!(unknown_dots('\u{f0101}'), Some(r"\19/".into()));
+        assert_eq!(unknown_dots('a'), None);
     }
 
     #[test]

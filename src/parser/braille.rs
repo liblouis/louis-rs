@@ -47,6 +47,29 @@ impl BrailleDot {
             BrailleDot::DotF => 0x4000,
         }
     }
+
+    /// The character liblouis uses for this dot when it spells dots out, or `None` for
+    /// [`BrailleDot::Dot0`], which stands for no dot at all.
+    fn to_char(self) -> Option<char> {
+        match self {
+            BrailleDot::Dot0 => None,
+            BrailleDot::Dot1 => Some('1'),
+            BrailleDot::Dot2 => Some('2'),
+            BrailleDot::Dot3 => Some('3'),
+            BrailleDot::Dot4 => Some('4'),
+            BrailleDot::Dot5 => Some('5'),
+            BrailleDot::Dot6 => Some('6'),
+            BrailleDot::Dot7 => Some('7'),
+            BrailleDot::Dot8 => Some('8'),
+            BrailleDot::Dot9 => Some('9'),
+            BrailleDot::DotA => Some('A'),
+            BrailleDot::DotB => Some('B'),
+            BrailleDot::DotC => Some('C'),
+            BrailleDot::DotD => Some('D'),
+            BrailleDot::DotE => Some('E'),
+            BrailleDot::DotF => Some('F'),
+        }
+    }
 }
 
 impl TryFrom<char> for BrailleDot {
@@ -77,6 +100,12 @@ impl TryFrom<char> for BrailleDot {
     }
 }
 
+/// Where cells without virtual dots live: the Unicode braille patterns block
+const BRAILLE_PATTERNS: u32 = 0x2800;
+
+/// Where cells with virtual dots live: Unicode Supplementary Private Use Area-A
+const VIRTUAL_DOTS: u32 = 0xF0000;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrailleChar(EnumSet<BrailleDot>);
 
@@ -102,9 +131,9 @@ impl BrailleChar {
 
     pub fn to_unicode(&self) -> char {
         let unicode_plane = if self.has_virtual_dots() {
-            0xF0000 // Unicode Supplementary Private Use Area-A
+            VIRTUAL_DOTS
         } else {
-            0x2800 // braille patterns
+            BRAILLE_PATTERNS
         };
         let unicode = self
             .0
@@ -112,6 +141,29 @@ impl BrailleChar {
             .map(|dot| dot.to_hex())
             .fold(unicode_plane, |acc, x| acc | x);
         char::from_u32(unicode).unwrap()
+    }
+
+    /// The inverse of [`BrailleChar::to_unicode`]. Returns `None` for a character that
+    /// `to_unicode` never produces.
+    pub fn from_unicode(c: char) -> Option<Self> {
+        let bits = match c as u32 {
+            c @ BRAILLE_PATTERNS..=0x28FF => c - BRAILLE_PATTERNS,
+            // a cell lands here only if it has a virtual dot, i.e. bit 0x100 or above
+            c @ 0xF0100..=0xF7FFF => c - VIRTUAL_DOTS,
+            _ => return None,
+        };
+        let cell: BrailleChar = EnumSet::<BrailleDot>::all()
+            .iter()
+            .filter(|dot| bits & dot.to_hex() != 0)
+            .collect();
+        Some(cell)
+    }
+
+    /// The dot numbers of this cell the way liblouis spells them out, e.g. `1258`, with
+    /// `A` to `F` for the virtual dots and `0` for a cell with no dots
+    pub fn dot_numbers(&self) -> String {
+        let dots: String = self.0.iter().filter_map(BrailleDot::to_char).collect();
+        if dots.is_empty() { "0".into() } else { dots }
     }
 }
 
@@ -257,5 +309,25 @@ mod tests {
             .to_string(),
             "\u{f0101}".to_string()
         );
+    }
+
+    #[test]
+    fn test_unicode_round_trip() {
+        for dots in ["1", "12345678", "19", "2a", "f"] {
+            let cell = BrailleChar::try_from(dots).unwrap();
+            assert_eq!(BrailleChar::from_unicode(cell.to_unicode()), Some(cell));
+        }
+        // dot 1 alone is U+2801, never U+F0001: `to_unicode` uses the private use area
+        // only for cells with a virtual dot, so everything below U+F0100 is not a cell
+        assert_eq!(BrailleChar::from_unicode('\u{f0001}'), None);
+        // outside both the braille patterns block and the private use area
+        assert_eq!(BrailleChar::from_unicode('x'), None);
+    }
+
+    #[test]
+    fn test_dot_numbers() {
+        assert_eq!(BrailleChar::try_from("1258").unwrap().dot_numbers(), "1258");
+        assert_eq!(BrailleChar::try_from("19af").unwrap().dot_numbers(), "19AF");
+        assert_eq!(BrailleChar::try_from("0").unwrap().dot_numbers(), "0");
     }
 }

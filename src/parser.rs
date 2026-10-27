@@ -17,10 +17,9 @@ use enumset::{EnumSet, EnumSetType};
 use search_path::SearchPath;
 
 use crate::hyphenation::{self, HyphenationTable};
-use crate::parser::braille::BrailleChar;
 
 pub use attribute::Attribute;
-pub use braille::BrailleChars;
+pub use braille::{BrailleChar, BrailleChars};
 pub use character_class::{CharacterClass, CharacterClasses};
 pub use match_rule::{Pattern, PatternParser, Patterns, Side};
 pub use multipass::action::ActionInstruction;
