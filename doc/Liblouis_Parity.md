@@ -8,13 +8,13 @@ This document says what it can do today, what it can't yet, and where the remain
 work is, so you can tell whether it's usable for your case and pick something up if
 it isn't.
 
-Measured at louis-rs `4980ced` against liblouis `011cfb3b`:
+Measured at louis-rs `9d4d0af` against liblouis `011cfb3b`:
 
 |                                |           |
 |--------------------------------|-----------|
 | Assertions run                 | 2 241 236 |
-| Pass                           | **98.6%** |
-| Fail                           | 0.9%      |
+| Pass                           | **98.7%** |
+| Fail                           | 0.8%      |
 | Expected failure               | 0.5%      |
 | Table files that parse cleanly | 458 / 458 |
 
@@ -116,7 +116,7 @@ Honest list, no dates attached:
 
 ## Where the remaining failures are
 
-Most of the failing 0.9% sits in ten files, and several of those share a root cause.
+Most of the failing 0.8% sits in ten files, and several of those share a root cause.
 Sizes are per item — *S* is up to a week, *M* about a week, *L* one to three weeks —
 and are there so you can pick work by appetite, not to add up. Failure counts are
 approximate: `check` reports a per-file percentage, so a count derived from it carries
@@ -124,8 +124,8 @@ a few hundred either way on the million-assertion files.
 
 | Area                                                | Failing | Root cause                                                                                                                                                                       | Size |
 |-----------------------------------------------------|--------:|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------|
-| `en-ueb-g2-dictionary_harness`, `afr-za-g2` forward |  ≈4 500 | Match-rule candidate selection. See [ADR-0008](adr/0008-match-rule-candidate-selection.org) and [ADR-0016](adr/0016-order-independent-rule-selection.org). | L    |
-| `afr-za-g2` backward                                |  ≈2 500 | Afrikaans's lower-sign contractions share dot patterns with punctuation, and backward boundary checks classify a cell by its dots.                                               | M    |
+| `en-ueb-g2-dictionary_harness`, `afr-za-g2` forward |  ≈3 800 | Match-rule candidate selection. See [ADR-0008](adr/0008-match-rule-candidate-selection.org) and [ADR-0016](adr/0016-order-independent-rule-selection.org). | L    |
+| `afr-za-g2` backward                                |  ≈1 100 | Afrikaans's lower-sign contractions share dot patterns with punctuation, and the *after* side of a backward boundary check classifies the next cell by its dots.               | M    |
 | `ml`, `pa`, `hi`, `ta`, `fa`, `th`, `bn`            |  ≈2 600 | Complex scripts: conjunct and reph forms, and stacked combining marks firing an indicator each instead of once per grapheme cluster.                                             | L    |
 | `da-dk-g28-dictionary_harness`                      |  ≈1 200 | Backward: `letsign` (⠰) is also the second cell of two-cell contractions. Consuming the indicator and suppressing the word rules in its scope does not settle this one — the ambiguity is which reading the cell has in the first place. | M    |
 | `en-ueb-computer-code`                              |  ≈1 700 | Three bugs: letter sign fires only on the first occurrence in a run; wrong word sign before hyphen or closing bracket; leading indicator dropped at the very start of the input. But the file's own header says many of its expectations are wrong and it needs review ([#590](https://github.com/liblouis/liblouis/issues/590)), so establish which are before chasing them. | M    |
@@ -143,24 +143,25 @@ Two cross-cutting items have no single file behind them:
   all.
 
   Underneath that sits one specific divergence worth fixing properly, because it has
-  now been patched three times for three different opcode families. We evaluate *both*
-  sides of a backward boundary check against the braille input, using a class table
-  (`dots_classes`) populated from character definitions plus whichever contraction
-  opcodes have been added to it so far — so whenever a check meets a family nobody
-  added yet, it sees no letter and the rule silently never fires. liblouis is
-  asymmetric instead (`lou_backTranslateString.c`):
+  now been patched three times for three different opcode families. liblouis is
+  asymmetric about backward boundary checks (`lou_backTranslateString.c`):
 
   - the **before** side reads the last character of the *output produced so far* and
     classifies it with the text classes (`back_setBefore`, `isBegWord` — "look at what
-    has already been translated")
+    has already been translated"). We do the same now.
   - the **after** side reads the next *braille cell* and classifies it with the dots
     classes, but when that cell isn't a letter by attribute it walks the rules attached
     to the cell and treats any multi-character contraction as word-continuation
     (`isEndWord`, excluding `begword`/`midword` per liblouis#360)
 
-  So liblouis never needs contraction dots in its letter class; our class-table
-  patching is an approximation of that rule walk. Matching the real structure removes
-  the whole recurring bug family. *(L)*
+  Our after side still classifies the next cell against a class table (`dots_classes`)
+  populated from character definitions plus whichever contraction opcodes have been
+  added to it so far — so whenever a check meets a family nobody added yet, it sees no
+  letter and the rule silently never fires. liblouis never needs contraction dots in its
+  letter class; our class-table patching is an approximation of that rule walk. A port
+  of `isEndWord` for `word` rules is on the branch `backward-endword`; extending it to
+  the rest of the word family and retiring the patching removes the whole recurring bug
+  family. *(M)*
 - **Engine debt.** Regexp negation of concatenation and alternation is wrong
   (`!(e1e2)` ≠ `(!e1!e2)`); `Attribute::ByOrder` and `Any` are no-ops in
   `match_pattern.rs` and all three are no-ops in `context_pattern.rs`; the

@@ -231,10 +231,13 @@
     expected ~⡁⡋⠤⠅⠕⠝⠞⠭~, actual ~⡴⠤⠅⠕⠝⠞⠭~) and 1 backward
     equivalent (~⡙⠝⠅~ → "Dnk" rather than "Danmark").
 - [ ] Backward word-boundary checks ask about a cell, not a position
-  - Both sides of a backward boundary check are evaluated against the
-    braille input via ~dots_classes~ (~PrimaryTable~'s ~trie_ctx~,
-    ~src/translator/table/primary.rs~). liblouis is asymmetric
-    (~lou_backTranslateString.c~):
+  - The *before* side is done (9d4d0af): backward, ~prev~ is the last
+    character of the output produced so far, and the tries resolve
+    their lookbehind against the text classes (~lookbehind_classes~).
+    What follows is about the *after* side, which still reads the next
+    braille cell via ~dots_classes~ (~lookahead_classes~). A port of
+    ~isEndWord~ for ~word~ rules is on the branch ~backward-endword~.
+  - liblouis is asymmetric (~lou_backTranslateString.c~):
     - the *before* side reads the last character of the output
       produced so far and classifies it with the text classes
       (~back_setBefore~, ~isBegWord~ — "look at what has already been
@@ -263,14 +266,10 @@
       checks, ~before~/~after~ class constraints and the
       capitalization tiers. Over-application this way is what
       regressed the suite in earlier attempts
-    - the before side cannot be fixed this way at all: its correct
-      answer depends on the text already produced, which no property
-      of a cell can encode (an indicator cell emits no text, so
-      liblouis's output-side lookup sees past it while ours sees the
-      indicator)
   - Fixing it properly means matching liblouis's split: text classes
-    over produced output for the before side, dots classes plus a rule
-    walk for the after side. Widening the guard only moves the ceiling.
+    over produced output for the before side (done), dots classes plus a
+    rule walk for the after side. Widening the guard only moves the
+    ceiling.
 - [ ] Literal hyphen character breaks per-segment contraction in compounds
   - e.g. en-ueb.yaml: "do-it-yourself" -> expected "d-x-yrf", actual
     "do-x-y|rself" ("do" and "yourself" fail to contract on their own
