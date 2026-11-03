@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- Back-translation no longer checks what follows a `sufword` or `midendword`
+  contraction, matching liblouis. In Malayalam the vowel sign ു is a
+  `midendword`, so `⠁⠍⠖⠻⠈⠝⠝⠥⠂` gave "അമർന്നഉ," instead of "അമർന്നു,".
 - Back-translation no longer fires a word contraction right before a cell that
   could be punctuation but continues the word. In Afrikaans ⠂ is both the comma
   and `aa`, so `⠍⠂⠅` gave "myaak" instead of "maak". The check for the end of a
