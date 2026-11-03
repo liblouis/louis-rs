@@ -8,13 +8,13 @@ This document says what it can do today, what it can't yet, and where the remain
 work is, so you can tell whether it's usable for your case and pick something up if
 it isn't.
 
-Measured at louis-rs `9d4d0af` against liblouis `011cfb3b`:
+Measured at louis-rs `fdcc7d1` against liblouis `011cfb3b`:
 
 |                                |           |
 |--------------------------------|-----------|
 | Assertions run                 | 2 241 236 |
-| Pass                           | **98.7%** |
-| Fail                           | 0.8%      |
+| Pass                           | **98.8%** |
+| Fail                           | 0.6%      |
 | Expected failure               | 0.5%      |
 | Table files that parse cleanly | 458 / 458 |
 
@@ -116,7 +116,7 @@ Honest list, no dates attached:
 
 ## Where the remaining failures are
 
-Most of the failing 0.8% sits in ten files, and several of those share a root cause.
+Most of the failing 0.6% sits in ten files, and several of those share a root cause.
 Sizes are per item — *S* is up to a week, *M* about a week, *L* one to three weeks —
 and are there so you can pick work by appetite, not to add up. Failure counts are
 approximate: `check` reports a per-file percentage, so a count derived from it carries
@@ -124,10 +124,8 @@ a few hundred either way on the million-assertion files.
 
 | Area                                                | Failing | Root cause                                                                                                                                                                       | Size |
 |-----------------------------------------------------|--------:|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------|
-| `en-ueb-g2-dictionary_harness`, `afr-za-g2` forward |  ≈3 800 | Match-rule candidate selection. See [ADR-0008](adr/0008-match-rule-candidate-selection.org) and [ADR-0016](adr/0016-order-independent-rule-selection.org). | L    |
-| `afr-za-g2` backward                                |  ≈1 100 | Afrikaans's lower-sign contractions share dot patterns with punctuation, and the *after* side of a backward boundary check classifies the next cell by its dots.               | M    |
+| `en-ueb-g2-dictionary_harness`, `afr-za-g2` forward |  ≈2 200 | Match-rule candidate selection. See [ADR-0008](adr/0008-match-rule-candidate-selection.org) and [ADR-0016](adr/0016-order-independent-rule-selection.org). | L    |
 | `ml`, `pa`, `hi`, `ta`, `fa`, `th`, `bn`            |  ≈2 600 | Complex scripts: conjunct and reph forms, and stacked combining marks firing an indicator each instead of once per grapheme cluster.                                             | L    |
-| `da-dk-g28-dictionary_harness`                      |  ≈1 200 | Backward: `letsign` (⠰) is also the second cell of two-cell contractions. Consuming the indicator and suppressing the word rules in its scope does not settle this one — the ambiguity is which reading the cell has in the first place. | M    |
 | `en-ueb-computer-code`                              |  ≈1 700 | Three bugs: letter sign fires only on the first occurrence in a run; wrong word sign before hyphen or closing bracket; leading indicator dropped at the very start of the input. But the file's own header says many of its expectations are wrong and it needs review ([#590](https://github.com/liblouis/liblouis/issues/590)), so establish which are before chasing them. | M    |
 | `hu-hu-g1_dictionary_special_consonants`            |  ≈1 100 | `nocross` asks "can this hyphenate anywhere?" instead of liblouis's positional `syllableBreak()`.                                                                                | L    |
 | `sw-ke-dictionary`, `sw-ke`                         |    ≈850 | Backward lookup splices in unrelated dictionary words ("wote" → "wizaraote"); single-letter words pick up a spurious letter sign.                                                | M    |
@@ -154,14 +152,12 @@ Two cross-cutting items have no single file behind them:
     to the cell and treats any multi-character contraction as word-continuation
     (`isEndWord`, excluding `begword`/`midword` per liblouis#360)
 
-  Our after side still classifies the next cell against a class table (`dots_classes`)
-  populated from character definitions plus whichever contraction opcodes have been
-  added to it so far — so whenever a check meets a family nobody added yet, it sees no
-  letter and the rule silently never fires. liblouis never needs contraction dots in its
-  letter class; our class-table patching is an approximation of that rule walk. A port
-  of `isEndWord` for `word` rules is on the branch `backward-endword`; extending it to
-  the rest of the word family and retiring the patching removes the whole recurring bug
-  family. *(M)*
+  We do the same now for `word`, `begword`, `midword`, `begmidword`, `partword`,
+  `endword` and `prfword`. What is left is the class table (`dots_classes`) that used
+  to approximate that rule walk by adding contraction cells to the letter class. It is
+  still load-bearing: `sufword` and `midendword` check the next cell against it, where
+  liblouis checks nothing, and disabling it costs about 1 200 tests. Finding what else
+  depends on it and retiring it removes the whole recurring bug family. *(M)*
 - **Engine debt.** Regexp negation of concatenation and alternation is wrong
   (`!(e1e2)` ≠ `(!e1!e2)`); `Attribute::ByOrder` and `Any` are no-ops in
   `match_pattern.rs` and all three are no-ops in `context_pattern.rs`; the
