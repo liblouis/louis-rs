@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- The `replace` opcode now works. It was parsed but ignored, so characters a
+  table drops this way, such as the word joiner and the zero-width no-break
+  space in `spaces.uti`, came out as blank cells.
 - `louis check` now applies a YAML file's `flags` to the next `tests` block
   only, as liblouis's `lou_checkyaml` does. A block without `flags` that
   followed a backward block used to run backward too.
