@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use crate::{
     parser::{AnchoredRule, CharacterClass, CharacterClasses, Direction, Precedence},
-    translator::TranslationStage,
+    translator::{TranslationStage, end_word::EndWordScanner},
 };
 
 use super::ResolvedTranslation;
@@ -61,6 +61,15 @@ pub enum Transition {
     /// Non-consuming lookahead: the character immediately after the match must be in one of
     /// these classes. Inserted at the end of the path (after character transitions).
     End(Vec<CharacterClass>),
+    /// Non-consuming lookahead for backward translation: the word ends after the match (see
+    /// [`EndWordScanner`]).
+    ///
+    /// A transition rather than a candidate filter in `PrimaryTable::trace`, because
+    /// `Trie::insert` counts transitions towards a rule's weight, which breaks ties between
+    /// equally long matches. Like `End`, it adds one, however far the scan reads.
+    EndWord,
+    /// The negation of [`Transition::EndWord`]: the word must continue after the match.
+    ContinuesWord,
 }
 
 /// The resolved, trie-internal counterpart of [`Transition`] plus the character transitions
@@ -70,6 +79,8 @@ enum ResolvedTransition {
     Character(char),
     Start(ResolvedClasses),
     End(ResolvedClasses),
+    EndWord,
+    ContinuesWord,
 }
 
 /// A class-based constraint attached to a rule via the liblouis `before`/`after` keywords.
@@ -128,6 +139,9 @@ pub struct Trie {
     /// being lowercased first. Needed for `comp6`, where `comp6 a 1` and `comp6 A 17`
     /// are independent rules.
     case_sensitive: bool,
+    /// Resolves [`Transition::EndWord`] and [`Transition::ContinuesWord`]. Empty for forward
+    /// tries, which never insert them.
+    end_word: EndWordScanner,
 }
 
 impl Trie {
@@ -137,6 +151,7 @@ impl Trie {
             lookahead_classes: CharacterClasses::default(),
             lookbehind_classes: CharacterClasses::default(),
             case_sensitive: false,
+            end_word: EndWordScanner::default(),
         }
     }
 
@@ -157,6 +172,10 @@ impl Trie {
         }
     }
 
+    pub fn with_end_word_scanner(self, end_word: EndWordScanner) -> Self {
+        Trie { end_word, ..self }
+    }
+
     pub fn case_sensitive(self) -> Self {
         Trie {
             case_sensitive: true,
@@ -173,6 +192,8 @@ impl Trie {
             Transition::End(classes) => {
                 ResolvedTransition::End(ResolvedClasses::resolve(&self.lookahead_classes, &classes))
             }
+            Transition::EndWord => ResolvedTransition::EndWord,
+            Transition::ContinuesWord => ResolvedTransition::ContinuesWord,
         }
     }
     pub fn insert_char(
@@ -330,26 +351,18 @@ impl Trie {
                 ));
             }
         }
-        // Class-based non-consuming checks. Iterate only transitions that are class variants to
-        // avoid scanning all transitions on every node visit. The character sets themselves are
-        // already resolved at insert time (see `ResolvedClasses::resolve`), so this is a plain
-        // binary search, not a `CharacterClasses` lookup.
+        // Non-consuming checks: they look at the context of the match without consuming input
         for (transition, child_node) in &node.transitions {
-            match transition {
-                ResolvedTransition::Start(resolved) => {
-                    if resolved.matches(prev) {
-                        matching_rules
-                            .extend(self.find_translations_from_node(input, prev, child_node));
-                    }
-                }
-                ResolvedTransition::End(resolved) => {
-                    if resolved.matches(c) {
-                        matching_rules
-                            .extend(self.find_translations_from_node(input, prev, child_node));
-                    }
-                }
-                // Character transitions have been dealt with above, ignore.
-                ResolvedTransition::Character(_) => {}
+            let context_matches = match transition {
+                ResolvedTransition::Start(resolved) => resolved.matches(prev),
+                ResolvedTransition::End(resolved) => resolved.matches(c),
+                ResolvedTransition::EndWord => self.end_word.is_end_word(input),
+                ResolvedTransition::ContinuesWord => !self.end_word.is_end_word(input),
+                // Character transitions have been dealt with above
+                ResolvedTransition::Character(_) => false,
+            };
+            if context_matches {
+                matching_rules.extend(self.find_translations_from_node(input, prev, child_node));
             }
         }
         matching_rules
@@ -370,6 +383,35 @@ mod tests {
     fn fake_rule() -> AnchoredRule {
         let rule = RuleParser::new("always foo 1").rule().unwrap();
         AnchoredRule::new(rule, None, 0)
+    }
+
+    #[test]
+    fn end_word_transitions_gate_a_rule() {
+        let letter = AnchoredRule::new(RuleParser::new("letter a 1").rule().unwrap(), None, 0);
+        let mut trie = Trie::new().with_end_word_scanner(EndWordScanner::compile(&[letter]));
+        for (chars, dots, transition) in [
+            ("ab", "⠁⠃", Transition::EndWord),
+            ("cd", "⠉⠙", Transition::ContinuesWord),
+        ] {
+            trie.insert(
+                chars,
+                dots,
+                None,
+                Some(transition),
+                Direction::Backward,
+                Precedence::default(),
+                vec![],
+                TranslationStage::Main,
+                &fake_rule(),
+            );
+        }
+
+        // nothing follows, so the word ends
+        assert!(!trie.find_translations("⠁⠃", None).is_empty());
+        assert!(trie.find_translations("⠉⠙", None).is_empty());
+        // a letter follows, so the word continues
+        assert!(trie.find_translations("⠁⠃⠁", None).is_empty());
+        assert!(!trie.find_translations("⠉⠙⠁", None).is_empty());
     }
 
     #[test]

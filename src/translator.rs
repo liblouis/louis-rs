@@ -16,6 +16,7 @@ use crate::{
 
 mod context_pattern;
 mod effect;
+mod end_word;
 mod indication;
 mod match_pattern;
 mod options;

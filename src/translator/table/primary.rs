@@ -14,6 +14,7 @@ use crate::{
         TranslationMode, TranslationOptions, TranslationStage,
         context_pattern::{ContextPatterns, ContextPatternsBuilder},
         effect::Environment,
+        end_word::EndWordScanner,
         indication::{
             Indicator, Indicators, computer_braille, emphasis, lettersign, mode, nocontract,
             numeric, uppercase,
@@ -196,21 +197,27 @@ impl PrimaryTableBuilder {
     /// reads the output produced so far when translating backward (see
     /// [`PrimaryTable::trace`]). The tries need both from construction on, since
     /// `Trie::insert` resolves those checks against them immediately rather than deferring
-    /// to match time.
-    fn new(lookahead_classes: CharacterClasses, lookbehind_classes: CharacterClasses) -> Self {
+    /// to match time. `end_word` resolves `Transition::EndWord` and `Transition::ContinuesWord`.
+    fn new(
+        lookahead_classes: CharacterClasses,
+        lookbehind_classes: CharacterClasses,
+        end_word: EndWordScanner,
+    ) -> Self {
         Self {
             undefined: None,
             character_translations: CharacterTranslation::new(),
             trie: Trie::new()
                 .with_context(lookahead_classes.clone())
-                .with_lookbehind_classes(lookbehind_classes.clone()),
+                .with_lookbehind_classes(lookbehind_classes.clone())
+                .with_end_word_scanner(end_word.clone()),
             comp6_trie: Trie::new()
                 .with_context(lookahead_classes.clone())
                 .with_lookbehind_classes(lookbehind_classes.clone())
                 .case_sensitive(),
             nocross_trie: Trie::new()
                 .with_context(lookahead_classes)
-                .with_lookbehind_classes(lookbehind_classes),
+                .with_lookbehind_classes(lookbehind_classes)
+                .with_end_word_scanner(end_word),
             match_patterns: MatchPatternsBuilder::new(),
             context_patterns: ContextPatternsBuilder::new(),
             numeric_indicator: numeric::IndicatorBuilder::new(),
@@ -474,6 +481,27 @@ impl PrimaryTable {
             .collect()
     }
 
+    /// The after-side boundary check for a rule that must end a word: a class test on the
+    /// next character forward, a scan of the braille that follows backward (see
+    /// [`EndWordScanner`]).
+    fn word_end(direction: Direction) -> Transition {
+        match direction {
+            Direction::Forward => {
+                Transition::End(vec![CharacterClass::Space, CharacterClass::Punctuation])
+            }
+            Direction::Backward => Transition::EndWord,
+        }
+    }
+
+    /// The after-side boundary check for a rule that must not end a word: a letter test on
+    /// the next character forward, the same scan negated backward.
+    fn word_continues(direction: Direction) -> Transition {
+        match direction {
+            Direction::Forward => Transition::End(vec![CharacterClass::Letter]),
+            Direction::Backward => Transition::ContinuesWord,
+        }
+    }
+
     pub fn compile(
         rules: &[AnchoredRule],
         direction: Direction,
@@ -490,8 +518,13 @@ impl PrimaryTable {
             Direction::Forward => ctx.character_classes.clone(),
             Direction::Backward => ctx.dots_classes().clone(),
         };
+        // only backward tries insert `Transition::EndWord` and `Transition::ContinuesWord`
+        let end_word = match direction {
+            Direction::Forward => EndWordScanner::default(),
+            Direction::Backward => EndWordScanner::compile(rules),
+        };
         let mut builder =
-            PrimaryTableBuilder::new(lookahead_classes, ctx.character_classes.clone());
+            PrimaryTableBuilder::new(lookahead_classes, ctx.character_classes.clone(), end_word);
 
         // In literary braille tables, digit and litdigit serve distinct roles:
         //
@@ -1036,10 +1069,7 @@ impl PrimaryTable {
                             CharacterClass::Space,
                             CharacterClass::Punctuation,
                         ])),
-                        Some(Transition::End(vec![
-                            CharacterClass::Space,
-                            CharacterClass::Punctuation,
-                        ])),
+                        Some(Self::word_end(direction)),
                         direction,
                         rule.precedence(),
                         class_constraints,
@@ -1064,7 +1094,7 @@ impl PrimaryTable {
                             CharacterClass::Space,
                             CharacterClass::Punctuation,
                         ])),
-                        Some(Transition::End(vec![CharacterClass::Letter])),
+                        Some(Self::word_continues(direction)),
                         direction,
                         rule.precedence(),
                         class_constraints,
@@ -1086,7 +1116,7 @@ impl PrimaryTable {
                         chars,
                         &dots,
                         Some(Transition::Start(vec![CharacterClass::Letter])),
-                        Some(Transition::End(vec![CharacterClass::Letter])),
+                        Some(Self::word_continues(direction)),
                         direction,
                         rule.precedence(),
                         class_constraints,
@@ -1123,7 +1153,7 @@ impl PrimaryTable {
                         chars,
                         &dots,
                         None,
-                        Some(Transition::End(vec![CharacterClass::Letter])),
+                        Some(Self::word_continues(direction)),
                         direction,
                         rule.precedence(),
                         class_constraints,
@@ -1171,10 +1201,7 @@ impl PrimaryTable {
                         chars,
                         &dots,
                         Some(Transition::Start(vec![CharacterClass::Letter])),
-                        Some(Transition::End(vec![
-                            CharacterClass::Space,
-                            CharacterClass::Punctuation,
-                        ])),
+                        Some(Self::word_end(direction)),
                         direction,
                         rule.precedence(),
                         class_constraints,
@@ -1201,10 +1228,7 @@ impl PrimaryTable {
                             CharacterClass::Space,
                             CharacterClass::Punctuation,
                         ])),
-                        Some(Transition::End(vec![
-                            CharacterClass::Space,
-                            CharacterClass::Punctuation,
-                        ])),
+                        Some(Self::word_end(direction)),
                         direction,
                         rule.precedence(),
                         class_constraints.clone(),
@@ -1215,10 +1239,7 @@ impl PrimaryTable {
                         chars,
                         &dots,
                         Some(Transition::Start(vec![CharacterClass::Letter])),
-                        Some(Transition::End(vec![
-                            CharacterClass::Space,
-                            CharacterClass::Punctuation,
-                        ])),
+                        Some(Self::word_end(direction)),
                         direction,
                         rule.precedence(),
                         class_constraints,
@@ -1288,7 +1309,7 @@ impl PrimaryTable {
                             CharacterClass::Space,
                             CharacterClass::Punctuation,
                         ])),
-                        Some(Transition::End(vec![CharacterClass::Letter])),
+                        Some(Self::word_continues(direction)),
                         direction,
                         rule.precedence(),
                         class_constraints,

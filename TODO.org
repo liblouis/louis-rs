@@ -129,8 +129,11 @@
     precomposes, and only their relative order tells them apart. The
     upstream fix is to stop the reordering rule matching what the
     precomposing rules cover.
-- [ ] Backward: lower-sign contraction cells satisfy a ~word~ rule's
+- [X] Backward: lower-sign contraction cells satisfy a ~word~ rule's
   space-or-punctuation boundary
+  - Fixed by the backward boundary work below: the before side (9d4d0af)
+    and the after side's scan of the following braille. Every
+    reproducer here now passes.
   - This is the backward half of the same ~afr-za-g2~ cluster: 2477 of
     its 2663 real failures.
   - Afrikaans's "lower sign group" contractions occupy the same dot
@@ -174,8 +177,7 @@
   - Same family as the two entries below — a backward boundary check
     classifying a dot pattern instead of asking what the cell is at
     this position — so the real fix is likely shared with them.
-- [ ] ~letsign~ is unhandled in both directions, and its dots collide
-  with multi-cell letter definitions
+- [X] ~da-dk-g28~ failures around ⠰: ~letsign~ against two-cell letters
   - ~da-dk-g28.ctb~ line 870 declares ~letsign 56~, but dots 56 is
     *also* the lead cell of that table's two-cell letter definitions:
     #+begin_src
@@ -184,59 +186,23 @@
     #+end_src
     so a leading ⠰ is genuinely ambiguous — letter sign, or first half
     of a ~q~/~w~/~x~/~z~.
-  - *Forward* (312 of the 324): a letter immediately followed by a
-    digit takes the letter sign; we emit none. liblouis treats a digit
-    as a word boundary for letter-sign purposes and
-    ~src/translator/indication/lettersign.rs~ does not. The remaining
-    3 are two-letter words (~ii~, ~ik~).
-  - *Backward* (1031 of the 1032): the letsign/two-cell-letter
-    ambiguity is resolved inconsistently, and position-dependently.
-    ⠰ as a letter sign is never dropped, and ⠰ as a lead cell resolves
-    in some positions but not others.
-  - Reproducers, both runnable as-is against the real table:
-    #+begin_src yaml
-    # forward: a letter against a digit takes the letter sign
-    display: unicode-without-blank.dis
-    table: da-dk-g28.ctb
-    flags: {testmode: forward}
-    tests:
-      - [a1, ⠰⠁⢁]        # FAILS: ⠁⢁
-      - [a500, ⠰⠁⢑⢚⢚]    # FAILS: ⠁⢑⢚⢚
-    #+end_src
-    #+begin_src yaml
-    # backward: same dots, four positions, three different outcomes
-    display: unicode-without-blank.dis
-    table: da-dk-g28.ctb
-    flags: {testmode: backward}
-    tests:
-      - [⠰⠭⠽⠇⠕⠋⠕⠝, xylofon]  # passes — two-cell x at word start
-      - [⠞⠁⠰⠭⠊, taxi]          # passes — two-cell x mid-word
-      - [⠕⠰⠭⠊⠙, oxid]          # FAILS: "opxid" — two-cell x mid-word
-      - [⠁⠰⠭, ax]               # FAILS: "atx"   — two-cell x at word end
-      - [⢚⠰⠊, 0i]              # FAILS: "0¨i"   — no 56-24 letter exists,
-                                #                 so ⠰ can only be letsign
-    #+end_src
-    ~taxi~ passing while ~oxid~ and ~ax~ fail is the useful clue: the
-    two-cell path works, so this is about how the ambiguity is resolved
-    per position, not a missing definition.
-  - There is precedent for the backward half. The same collision shape
-    was solved for ~capsletter~/~numsign~ against a real letter in the
-    Malayalam and Punjabi tables — an opcode is only recognized as an
-    indicator when its dots aren't already claimed by a real letter.
-    Extending that check to ~letsign~, where the claimant is a
-    *multi-cell* definition rather than a single cell, is the likely
-    shape of the fix.
+  - *Forward* was ~noletsignbefore~ and ~noletsignafter~ being checked
+    on the wrong side of the letter. ~da-dk-g28.ctb~ declares
+    ~noletsignbefore 1234567890~, so we read the trailing digit of "a1"
+    as suppressing and dropped the sign; the declaration is about "1a".
+    Fixed in ~src/translator/indication/lettersign.rs~.
+  - *Backward* was not about ~letsign~ at all. ⠰ is never a letter sign
+    in these cases: it is the first cell of the ~q~/~w~/~x~/~z~
+    definition, and what mis-fired was a ~word~ rule on the cell before
+    it, whose after-side boundary check said the word ended at ⠰. Fixed
+    by the after-side scan in the entry below.
+  - ~da-dk-g28-dictionary_harness~ and its ~_1993~ variant both pass
+    completely, and ~⢚⠰⠊~ now gives "0i".
   - Not part of this: 6 forward failures where an all-caps word takes a
     word contraction instead of being spelled out (~AF-kontor~ →
     expected ~⡁⡋⠤⠅⠕⠝⠞⠭~, actual ~⡴⠤⠅⠕⠝⠞⠭~) and 1 backward
     equivalent (~⡙⠝⠅~ → "Dnk" rather than "Danmark").
-- [ ] Backward word-boundary checks ask about a cell, not a position
-  - The *before* side is done (9d4d0af): backward, ~prev~ is the last
-    character of the output produced so far, and the tries resolve
-    their lookbehind against the text classes (~lookbehind_classes~).
-    What follows is about the *after* side, which still reads the next
-    braille cell via ~dots_classes~ (~lookahead_classes~). A port of
-    ~isEndWord~ for ~word~ rules is on the branch ~backward-endword~.
+- [-] Backward word-boundary checks ask about a cell, not a position
   - liblouis is asymmetric (~lou_backTranslateString.c~):
     - the *before* side reads the last character of the output
       produced so far and classifies it with the text classes
@@ -247,12 +213,25 @@
       attribute it walks the rules attached to the cell and treats any
       rule with ~charslen > 1~ as word-continuation (~isEndWord~,
       excluding ~begword~/~midword~ per liblouis#360)
-  - So liblouis never needs contraction dots in its letter class. We
-    approximate that rule walk by pre-seeding ~dots_classes~ from
-    every all-alphabetic contraction opcode (~TableContext::compile~,
-    ~src/translator/table.rs~). That has now been widened three times
-    for three opcode families (edf1b4c, bed6112, and the ~partword~
-    fix), and it still has a ceiling:
+  - [X] *Before side* (9d4d0af). Backward, ~prev~ is the last character
+    of the output produced so far, and the tries resolve their
+    lookbehind against the text classes (~lookbehind_classes~).
+  - [X] *After side.* ~src/translator/end_word.rs~ scans the braille
+    that follows a match and stops at the first cell that decides. Only
+    single-cell rules count, so each cell's verdict is computed once at
+    compile time. Its letter and space sets come from single-cell
+    character definitions, not the widened ~dots_classes~; reusing those
+    made a ~begword~ cell read as a letter, which is liblouis#360
+    exactly. Used by ~word~, ~endword~ and ~prfword~ (the word must end)
+    and ~begword~, ~midword~, ~begmidword~ and ~partword~ (it must
+    continue).
+  - [ ] ~sufword~ and ~midendword~ still check the next cell against
+    ~dots_classes~ backward, although liblouis applies no after check to
+    either there. They are likely among what still needs the widening.
+  - The remaining ~dots_classes~ letter widening (~TableContext::compile~,
+    ~src/translator/table.rs~) was meant to go with the after side, but
+    is still needed (see below). It had been widened three times for three opcode families (edf1b4c,
+    bed6112, and the ~partword~ fix) and still has a ceiling:
     - the guard is narrower than liblouis's ~charslen > 1~, so a
       contraction spelling non-letters still breaks a neighbouring
       ~partword~. Reproducer: a table with ~always n't 12356~ and
@@ -268,8 +247,9 @@
       regressed the suite in earlier attempts
   - Fixing it properly means matching liblouis's split: text classes
     over produced output for the before side (done), dots classes plus a
-    rule walk for the after side. Widening the guard only moves the
-    ceiling.
+    rule walk for the after side (done). What still depends on the
+    widening is not yet known: disabling it costs about 1 200 tests.
+    Widening the guard only moves the ceiling.
 - [ ] Literal hyphen character breaks per-segment contraction in compounds
   - e.g. en-ueb.yaml: "do-it-yourself" -> expected "d-x-yrf", actual
     "do-x-y|rself" ("do" and "yourself" fail to contract on their own
