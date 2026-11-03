@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- `louis check` now applies a YAML file's `flags` to the next `tests` block
+  only, as liblouis's `lou_checkyaml` does. A block without `flags` that
+  followed a backward block used to run backward too.
 - Back-translation now applies `prepunc` and `postpunc` rules where a word
   begins or ends, as liblouis does. They used to be ignored, so in Malayalam
   `⠁⠒` gave "അഞ" instead of "അ:", reading ⠒ as a letter rather than a colon.
