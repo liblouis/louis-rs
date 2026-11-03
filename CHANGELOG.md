@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- Back-translation no longer fires a word contraction right before a cell that
+  could be punctuation but continues the word. In Afrikaans ⠂ is both the comma
+  and `aa`, so `⠍⠂⠅` gave "myaak" instead of "maak". The check for the end of a
+  word now reads on past such cells to the first one that decides, as liblouis
+  does, rather than judging the next cell alone.
 - Back-translation no longer fires a word contraction right after a cell that
   is punctuation by its dots but was read as letters. In Afrikaans ⠂ is both
   the comma and `aa`, so `⠣⠿⠍⠂⠅` gave "aangemaakan" instead of "aangemaak".
