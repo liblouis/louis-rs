@@ -7,11 +7,12 @@ use crate::{
     emphasis::EmphasisSpan,
     parser::{
         AnchoredRule, Braille, BrailleChar, BrailleChars, CharacterClass, CharacterClasses,
-        HasNocross, HasPrecedence, WithClass,
+        HasDirection, HasNocross, HasPrecedence, WithClass,
     },
     translator::{
         CharacterDefinition, ClassConstraint, ResolvedTranslation, Rule, TranslationError,
         TranslationMode, TranslationOptions, TranslationStage,
+        beg_word::BegWordScanner,
         context_pattern::{ContextPatterns, ContextPatternsBuilder},
         effect::Environment,
         end_word::EndWordScanner,
@@ -197,10 +198,12 @@ impl PrimaryTableBuilder {
     /// reads the output produced so far when translating backward (see
     /// [`PrimaryTable::trace`]). The tries need both from construction on, since
     /// `Trie::insert` resolves those checks against them immediately rather than deferring
-    /// to match time. `end_word` resolves `Transition::EndWord` and `Transition::ContinuesWord`.
+    /// to match time. `beg_word` resolves `Transition::BegWord`, `end_word` resolves
+    /// `Transition::EndWord` and `Transition::ContinuesWord`.
     fn new(
         lookahead_classes: CharacterClasses,
         lookbehind_classes: CharacterClasses,
+        beg_word: BegWordScanner,
         end_word: EndWordScanner,
     ) -> Self {
         Self {
@@ -209,6 +212,7 @@ impl PrimaryTableBuilder {
             trie: Trie::new()
                 .with_context(lookahead_classes.clone())
                 .with_lookbehind_classes(lookbehind_classes.clone())
+                .with_beg_word_scanner(beg_word.clone())
                 .with_end_word_scanner(end_word.clone()),
             comp6_trie: Trie::new()
                 .with_context(lookahead_classes.clone())
@@ -217,6 +221,7 @@ impl PrimaryTableBuilder {
             nocross_trie: Trie::new()
                 .with_context(lookahead_classes)
                 .with_lookbehind_classes(lookbehind_classes)
+                .with_beg_word_scanner(beg_word)
                 .with_end_word_scanner(end_word),
             match_patterns: MatchPatternsBuilder::new(),
             context_patterns: ContextPatternsBuilder::new(),
@@ -435,8 +440,8 @@ impl PrimaryTableBuilder {
                         .then(|| self.hyphenation_constrainer.build())
                         .flatten()
                         .map(Constrainer::Hyphenation),
-                    // liblouis's `CTO_PrePunc`/`CTO_PostPunc` are forward-translation-only
-                    // opcodes (never consulted by `lou_backTranslateString.c`).
+                    // backward, `prepunc` and `postpunc` are gated in the trie by where a
+                    // word begins and ends instead (see the `Rule::Prepunc` arm)
                     (direction == Direction::Forward)
                         .then(|| self.punctuation_constrainer.build())
                         .flatten()
@@ -518,13 +523,37 @@ impl PrimaryTable {
             Direction::Forward => ctx.character_classes.clone(),
             Direction::Backward => ctx.dots_classes().clone(),
         };
-        // only backward tries insert `Transition::EndWord` and `Transition::ContinuesWord`
-        let end_word = match direction {
-            Direction::Forward => EndWordScanner::default(),
-            Direction::Backward => EndWordScanner::compile(rules),
+        // only backward tries insert `Transition::BegWord`, `Transition::EndWord` and
+        // `Transition::ContinuesWord`
+        let (beg_word, end_word) = match direction {
+            Direction::Forward => (BegWordScanner::default(), EndWordScanner::default()),
+            Direction::Backward => (
+                BegWordScanner::new(&ctx.character_classes),
+                EndWordScanner::compile(rules),
+            ),
         };
-        let mut builder =
-            PrimaryTableBuilder::new(lookahead_classes, ctx.character_classes.clone(), end_word);
+        // backward, an `always` rule on a cell outranks a `prepunc` or `postpunc` rule on it.
+        // liblouis decides by table order, and tables put the `always` rule first to override
+        // the punctuation (`pu-in-g1.utb`: "needed to override ! in en-in-g1.ctb"); without
+        // this the word-boundary transition would give the punctuation rule the higher weight
+        let always_cells: HashSet<String> = rules
+            .iter()
+            .filter_map(|rule| match &rule.rule {
+                Rule::Always {
+                    dots: Braille::Explicit(dots),
+                    ..
+                } if dots.len() == 1 && rule.rule.is_direction(Direction::Backward) => {
+                    Some(dots.to_string())
+                }
+                _ => None,
+            })
+            .collect();
+        let mut builder = PrimaryTableBuilder::new(
+            lookahead_classes,
+            ctx.character_classes.clone(),
+            beg_word,
+            end_word,
+        );
 
         // In literary braille tables, digit and litdigit serve distinct roles:
         //
@@ -1384,44 +1413,34 @@ impl PrimaryTable {
                         rule,
                     );
                 }
-                Rule::Prepunc { chars, dots, .. } => {
+                Rule::Prepunc { chars, dots, .. } | Rule::Postpunc { chars, dots, .. } => {
+                    let outranked = direction == Direction::Backward
+                        && always_cells.contains(&dots.to_string());
                     // are all the characters punctuation?
-                    if chars.chars().all(|c| {
-                        ctx.character_classes
-                            .get(&CharacterClass::Punctuation)
-                            .is_some_and(|class| class.contains(&c))
-                    }) {
-                        // Eligibility isn't a fixed-position lookaround (see
-                        // `PunctuationConstrainer`), so the trie itself imposes no
-                        // boundary; `constraints.prepunc_ok_at()` gates it in `trace()`.
+                    if !outranked
+                        && chars.chars().all(|c| {
+                            ctx.character_classes
+                                .get(&CharacterClass::Punctuation)
+                                .is_some_and(|class| class.contains(&c))
+                        })
+                    {
+                        // Forward, eligibility isn't a fixed-position lookaround (see
+                        // `PunctuationConstrainer`), so the trie itself imposes no boundary;
+                        // `trace()` gates it. Backward, a word must begin before a `prepunc`
+                        // and end after a `postpunc`.
                         builder.punctuation_constrainer.mark_present();
+                        let (before, after) = match (direction, &rule.rule) {
+                            (Direction::Forward, _) => (None, None),
+                            (Direction::Backward, Rule::Prepunc { .. }) => {
+                                (Some(Transition::BegWord), None)
+                            }
+                            (Direction::Backward, _) => (None, Some(Transition::EndWord)),
+                        };
                         builder.get_trie_mut(rule).insert(
                             chars,
                             &dots.to_string(),
-                            None,
-                            None,
-                            direction,
-                            rule.precedence(),
-                            vec![],
-                            TranslationStage::Main,
-                            rule,
-                        );
-                    }
-                }
-                Rule::Postpunc { chars, dots, .. } => {
-                    // are all the characters punctuation?
-                    if chars.chars().all(|c| {
-                        ctx.character_classes
-                            .get(&CharacterClass::Punctuation)
-                            .is_some_and(|class| class.contains(&c))
-                    }) {
-                        // See the comment in the `Rule::Prepunc` arm above.
-                        builder.punctuation_constrainer.mark_present();
-                        builder.get_trie_mut(rule).insert(
-                            chars,
-                            &dots.to_string(),
-                            None,
-                            None,
+                            before,
+                            after,
                             direction,
                             rule.precedence(),
                             vec![],
@@ -1581,10 +1600,10 @@ impl PrimaryTable {
     fn translation_candidates(
         &self,
         input: &str,
-        prev: Option<char>,
+        preceding: &str,
     ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
         self.trie
-            .find_translations(input, prev)
+            .find_translations(input, preceding)
             .into_iter()
             .partition(|t| t.offset() == 0)
     }
@@ -1596,12 +1615,12 @@ impl PrimaryTable {
     fn nocross_candidates(
         &self,
         input: &str,
-        prev: Option<char>,
+        preceding: &str,
         char_pos: usize,
         constraints: &PositionConstraints,
     ) -> Vec<ResolvedTranslation> {
         self.nocross_trie
-            .find_translations(input, prev)
+            .find_translations(input, preceding)
             .into_iter()
             .filter(|t| {
                 !(char_pos..char_pos + t.length().saturating_sub(1))
@@ -1646,7 +1665,9 @@ impl PrimaryTable {
 
         let mut env = Environment::new();
         let mut chars = input.chars();
-        let mut prev: Option<char> = None;
+        // backward, the output produced so far, kept up to date with `translations`
+        let mut output = String::new();
+        let mut output_from = 0;
         let mut seen: HashSet<TranslationSubset> = HashSet::default();
         let mut char_pos: usize = 0;
         // A zero-length candidate (e.g. a zero-width `context`/`match` action) re-enters
@@ -1669,16 +1690,18 @@ impl PrimaryTable {
                 last_indications_pos = Some(char_pos);
             }
 
-            // Backward, the lookbehind reads the last character of the output produced so
-            // far rather than the previous braille cell (liblouis's `back_setBefore`): the
-            // cell is ambiguous -- ⠂ is both a comma and "aa" in Afrikaans -- but the output
-            // records which reading was chosen.
-            if self.direction == Direction::Backward {
-                prev = translations
-                    .iter()
-                    .rev()
-                    .find_map(|t| t.output().chars().last());
-            }
+            // Backward, the lookbehind reads the output produced so far rather than the
+            // preceding braille (liblouis's `back_setBefore`): a cell is ambiguous -- ⠂ is
+            // both a comma and "aa" in Afrikaans -- but the output records which reading was
+            // chosen.
+            let preceding = match self.direction {
+                Direction::Forward => &input[..input.len() - chars.as_str().len()],
+                Direction::Backward => {
+                    output.extend(translations[output_from..].iter().map(|t| t.output()));
+                    output_from = translations.len();
+                    output.as_str()
+                }
+            };
 
             // whether we're about to match starting at the true beginning of the whole input,
             // needed by match/context rules anchored with liblouis' `^`/`` ` `` boundary markers
@@ -1686,13 +1709,13 @@ impl PrimaryTable {
 
             // First check for nocross candidates
             let nocross_candidate = self
-                .nocross_candidates(chars.as_str(), prev, char_pos, &constraints)
+                .nocross_candidates(chars.as_str(), preceding, char_pos, &constraints)
                 .into_iter()
                 .max_by_key(|t| t.rank());
 
             // given an input query the trie for matching translations. Then split off the
             // translations that are delayed, i.e. have an offset because they have a pre-pattern
-            let (mut candidates, delayed) = self.translation_candidates(chars.as_str(), prev);
+            let (mut candidates, delayed) = self.translation_candidates(chars.as_str(), preceding);
             delayed_translations.extend(delayed);
 
             // then search for matching match patterns. Unless they have empty pre patterns they will all have
@@ -1715,16 +1738,19 @@ impl PrimaryTable {
             delayed_translations = delayed;
             candidates.extend(current);
 
-            // `prepunc`/`postpunc` need a variable-length scan the trie can't express
-            // (see `PunctuationConstrainer`), so they're inserted with no trie-level
-            // boundary and gated here instead. Rejected candidates are simply dropped,
-            // leaving the position to fall through to the plain punctuation character
-            // definition (`character_translations`), matching liblouis.
-            candidates.retain(|t| match t.rule() {
-                Some(Rule::Prepunc { .. }) => constraints.prepunc_ok_at(char_pos),
-                Some(Rule::Postpunc { .. }) => constraints.postpunc_ok_at(char_pos),
-                _ => true,
-            });
+            // Forward, `prepunc`/`postpunc` need a variable-length scan of the input the
+            // trie can't express (see `PunctuationConstrainer`), so they're inserted with no
+            // trie-level boundary and gated here instead. Rejected candidates are simply
+            // dropped, leaving the position to fall through to the plain punctuation
+            // character definition (`character_translations`), matching liblouis. Backward,
+            // the trie gates them by where a word begins and ends.
+            if self.direction == Direction::Forward {
+                candidates.retain(|t| match t.rule() {
+                    Some(Rule::Prepunc { .. }) => constraints.prepunc_ok_at(char_pos),
+                    Some(Rule::Postpunc { .. }) => constraints.postpunc_ok_at(char_pos),
+                    _ => true,
+                });
+            }
 
             // Backward numeric mode: prefer the digit reading of a cell shared with a
             // letter (common in six-dot literary codes). Rather than out-weighing the
@@ -1767,7 +1793,7 @@ impl PrimaryTable {
             // comp6 rules have no pre-pattern so offset() is always 0 — no delayed handling needed.
             if constraints.use_comp6_at(char_pos) {
                 candidates.clear();
-                candidates.extend(self.comp6_trie.find_translations(chars.as_str(), prev));
+                candidates.extend(self.comp6_trie.find_translations(chars.as_str(), preceding));
             }
 
             // Backward caps mode: capitalize the output of whichever candidate wins below.
@@ -1812,7 +1838,6 @@ impl PrimaryTable {
                 let translation = uppercase_if_needed(translation);
                 // move the iterator forward by the number of characters in the translation
                 chars.nth(nocross.length() - 1);
-                prev = translation.input().chars().last();
                 char_pos += nocross.length();
                 translations.push(translation);
                 delayed_translations = self.update_offsets(delayed_translations, nocross.length());
@@ -1825,7 +1850,6 @@ impl PrimaryTable {
                     seen.clear();
                     // move the iterator forward by the number of characters in the translation
                     chars.nth(t.length() - 1);
-                    prev = t.input().chars().last();
                     char_pos += t.length();
                 }
                 // there is a matching translation rule
@@ -1841,7 +1865,6 @@ impl PrimaryTable {
                     }
                 }
             } else if let Some(next_char) = chars.next() {
-                prev = Some(next_char);
                 char_pos += 1;
                 // no translation rule found
                 if let Some(translation) = self.character_translations.get(&next_char) {

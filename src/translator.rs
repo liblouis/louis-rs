@@ -14,6 +14,7 @@ use crate::{
     parser::{AnchoredRule, Braille, HasDirection, Rule},
 };
 
+mod beg_word;
 mod context_pattern;
 mod effect;
 mod end_word;

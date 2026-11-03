@@ -333,6 +333,12 @@
   genuine mode-resetting character gets silently bridged instead of
   closing the run. No table exercises ~begmode~/~begmodephrase~ with
   ~digit~ today.
+- [ ] Back-translation of a lone cell carrying both a ~prepunc~ and a
+  ~postpunc~ rule (e.g. ~⠠⠦~, ~⠠⠴~, ~⠰⠦~ in the yaml tests) is
+  ambiguous: the cell both begins and ends a word, so both rules apply.
+  liblouis takes whichever comes first in the table; we pick by the
+  transitions' weight. Rule-order dependent per ADR-0016, so a
+  candidate for a table fix rather than for copying liblouis.
 - [ ] Malayalam conjunct/reph rule: a specific virama/conjunct
   sequence consistently produces ⠗ instead of the expected ⠻
   (ml.yaml)

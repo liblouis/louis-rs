@@ -191,17 +191,11 @@ impl Indicator {
 
         // ── Contraction-based letsign ──────────────────────────────────────────
         // Fires when a known contraction is found at a word boundary (grade 2 tables).
-        {
-            let mut prev: Option<char> = None;
-            let mut char_pos = 0;
-            for (byte_pos, c) in input.char_indices() {
-                if !self.noletsign_chars.contains(&c)
-                    && self.next(&input[byte_pos..], prev).is_some()
-                {
-                    fire.insert(char_pos);
-                }
-                prev = Some(c);
-                char_pos += 1;
+        for (char_pos, (byte_pos, c)) in input.char_indices().enumerate() {
+            if !self.noletsign_chars.contains(&c)
+                && self.next(&input[byte_pos..], &input[..byte_pos]).is_some()
+            {
+                fire.insert(char_pos);
             }
         }
 
@@ -213,8 +207,8 @@ impl Indicator {
         result
     }
 
-    pub fn next(&self, s: &str, prev: Option<char>) -> Option<ResolvedTranslation> {
-        let translations = self.contractions.find_translations(s, prev);
+    pub fn next(&self, s: &str, preceding: &str) -> Option<ResolvedTranslation> {
+        let translations = self.contractions.find_translations(s, preceding);
         if !translations.is_empty() {
             let translation = translations.first().unwrap();
             Some(translation.clone().with_input("").with_weight(1))
@@ -266,9 +260,9 @@ mod tests {
     #[test]
     fn contraction_indicator() {
         let indicator = build_indicator(&['a', 'b', 'c', 'd'], &[], Some("ab"));
-        assert_eq!(indicator.next("aa", None), None);
+        assert_eq!(indicator.next("aa", ""), None);
         assert_eq!(
-            indicator.next("ab", None),
+            indicator.next("ab", ""),
             Some(ResolvedTranslation::new(
                 "",
                 "⠠",

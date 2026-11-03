@@ -105,22 +105,17 @@ impl Indicator {
     /// Returns sparse `(position, translation)` pairs.
     pub fn precompute(&self, input: &str) -> Vec<(usize, ResolvedTranslation)> {
         let mut translations: Vec<(usize, ResolvedTranslation)> = Vec::new();
-        let mut prev: Option<char> = None;
-        let mut char_pos = 0;
-
-        for (byte_pos, c) in input.char_indices() {
-            if self.next(&input[byte_pos..], prev).is_some() {
+        for (char_pos, (byte_pos, _)) in input.char_indices().enumerate() {
+            if self.next(&input[byte_pos..], &input[..byte_pos]).is_some() {
                 translations.push((char_pos, self.start_translation.clone()));
             }
-            prev = Some(c);
-            char_pos += 1;
         }
 
         translations
     }
 
-    pub fn next(&self, s: &str, prev: Option<char>) -> Option<ResolvedTranslation> {
-        let translations = self.contractions.find_translations(s, prev);
+    pub fn next(&self, s: &str, preceding: &str) -> Option<ResolvedTranslation> {
+        let translations = self.contractions.find_translations(s, preceding);
         if !translations.is_empty() {
             let translation = translations.first().unwrap();
             Some(translation.clone().with_input("").with_weight(1))
@@ -162,9 +157,9 @@ mod tests {
         builder.contraction("cd", &rule("contraction cd"));
         let ctx = make_ctx(&['a', 'b', 'c', 'd']);
         let indicator = builder.build(&ctx).unwrap();
-        assert_eq!(indicator.next("aa", None), None);
+        assert_eq!(indicator.next("aa", ""), None);
         assert_eq!(
-            indicator.next("ab", None),
+            indicator.next("ab", ""),
             Some(ResolvedTranslation::new(
                 "",
                 "⡀",
@@ -174,7 +169,7 @@ mod tests {
             ))
         );
         assert_eq!(
-            indicator.next("cd", None),
+            indicator.next("cd", ""),
             Some(ResolvedTranslation::new(
                 "",
                 "⡀",

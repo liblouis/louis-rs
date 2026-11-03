@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use crate::{
     parser::{AnchoredRule, CharacterClass, CharacterClasses, Direction, Precedence},
-    translator::{TranslationStage, end_word::EndWordScanner},
+    translator::{TranslationStage, beg_word::BegWordScanner, end_word::EndWordScanner},
 };
 
 use super::ResolvedTranslation;
@@ -61,12 +61,15 @@ pub enum Transition {
     /// Non-consuming lookahead: the character immediately after the match must be in one of
     /// these classes. Inserted at the end of the path (after character transitions).
     End(Vec<CharacterClass>),
-    /// Non-consuming lookahead for backward translation: the word ends after the match (see
-    /// [`EndWordScanner`]).
+    /// Non-consuming lookbehind for backward translation: a word begins before the match
+    /// (see [`BegWordScanner`]).
     ///
     /// A transition rather than a candidate filter in `PrimaryTable::trace`, because
     /// `Trie::insert` counts transitions towards a rule's weight, which breaks ties between
-    /// equally long matches. Like `End`, it adds one, however far the scan reads.
+    /// equally long matches. Like `Start`, it adds one, however far the scan reads.
+    BegWord,
+    /// Non-consuming lookahead for backward translation: the word ends after the match (see
+    /// [`EndWordScanner`]). A transition for the same reason as [`Transition::BegWord`].
     EndWord,
     /// The negation of [`Transition::EndWord`]: the word must continue after the match.
     ContinuesWord,
@@ -79,6 +82,7 @@ enum ResolvedTransition {
     Character(char),
     Start(ResolvedClasses),
     End(ResolvedClasses),
+    BegWord,
     EndWord,
     ContinuesWord,
 }
@@ -131,14 +135,16 @@ pub struct Trie {
     /// classes for backward.
     lookahead_classes: CharacterClasses,
     /// Character classes for the lookbehind checks (`Transition::Start`,
-    /// `ClassConstraint::Start`), which read `prev`. The same as `lookahead_classes` unless
-    /// set with [`Trie::with_lookbehind_classes`]: backward, `prev` is text while the input
-    /// is braille.
+    /// `ClassConstraint::Start`), which read the last character of `preceding`. The same as
+    /// `lookahead_classes` unless set with [`Trie::with_lookbehind_classes`]: backward,
+    /// `preceding` is text while the input is braille.
     lookbehind_classes: CharacterClasses,
     /// When true, character transitions are matched on the exact character instead of
     /// being lowercased first. Needed for `comp6`, where `comp6 a 1` and `comp6 A 17`
     /// are independent rules.
     case_sensitive: bool,
+    /// Resolves [`Transition::BegWord`]. Empty for forward tries, which never insert it.
+    beg_word: BegWordScanner,
     /// Resolves [`Transition::EndWord`] and [`Transition::ContinuesWord`]. Empty for forward
     /// tries, which never insert them.
     end_word: EndWordScanner,
@@ -151,6 +157,7 @@ impl Trie {
             lookahead_classes: CharacterClasses::default(),
             lookbehind_classes: CharacterClasses::default(),
             case_sensitive: false,
+            beg_word: BegWordScanner::default(),
             end_word: EndWordScanner::default(),
         }
     }
@@ -170,6 +177,10 @@ impl Trie {
             lookbehind_classes,
             ..self
         }
+    }
+
+    pub fn with_beg_word_scanner(self, beg_word: BegWordScanner) -> Self {
+        Trie { beg_word, ..self }
     }
 
     pub fn with_end_word_scanner(self, end_word: EndWordScanner) -> Self {
@@ -192,6 +203,7 @@ impl Trie {
             Transition::End(classes) => {
                 ResolvedTransition::End(ResolvedClasses::resolve(&self.lookahead_classes, &classes))
             }
+            Transition::BegWord => ResolvedTransition::BegWord,
             Transition::EndWord => ResolvedTransition::EndWord,
             Transition::ContinuesWord => ResolvedTransition::ContinuesWord,
         }
@@ -252,7 +264,8 @@ impl Trie {
         let mut current_node = &mut self.root;
         let mut length = from.chars().count();
 
-        // StartClass constraints are lookbehind checks on `prev` — inserted before char transitions
+        // StartClass constraints are lookbehind checks on `preceding` — inserted before char
+        // transitions
         for constraint in &class_constraints {
             if let ClassConstraint::Start(class) = constraint {
                 length += 1;
@@ -329,7 +342,7 @@ impl Trie {
     fn find_translations_from_node(
         &self,
         input: &str,
-        prev: Option<char>,
+        preceding: &str,
         node: &TrieNode,
     ) -> Vec<ResolvedTranslation> {
         let mut matching_rules = Vec::new();
@@ -344,9 +357,11 @@ impl Trie {
         if let Some(c) = c {
             let bytes = c.len_utf8();
             if let Some(node) = node.char_transition(c, self.case_sensitive) {
+                // lookbehind checks sit before the characters of a rule, so `preceding`
+                // needn't grow as they are consumed
                 matching_rules.extend(self.find_translations_from_node(
                     &input[bytes..],
-                    Some(c),
+                    preceding,
                     node,
                 ));
             }
@@ -354,22 +369,26 @@ impl Trie {
         // Non-consuming checks: they look at the context of the match without consuming input
         for (transition, child_node) in &node.transitions {
             let context_matches = match transition {
-                ResolvedTransition::Start(resolved) => resolved.matches(prev),
+                ResolvedTransition::Start(resolved) => resolved.matches(preceding.chars().last()),
                 ResolvedTransition::End(resolved) => resolved.matches(c),
+                ResolvedTransition::BegWord => self.beg_word.is_beg_word(preceding),
                 ResolvedTransition::EndWord => self.end_word.is_end_word(input),
                 ResolvedTransition::ContinuesWord => !self.end_word.is_end_word(input),
                 // Character transitions have been dealt with above
                 ResolvedTransition::Character(_) => false,
             };
             if context_matches {
-                matching_rules.extend(self.find_translations_from_node(input, prev, child_node));
+                matching_rules
+                    .extend(self.find_translations_from_node(input, preceding, child_node));
             }
         }
         matching_rules
     }
 
-    pub fn find_translations(&self, input: &str, prev: Option<char>) -> Vec<ResolvedTranslation> {
-        self.find_translations_from_node(input, prev, &self.root)
+    /// The rules that match at the start of `input`, given the `preceding` text: the input
+    /// already consumed forward, the output already produced backward.
+    pub fn find_translations(&self, input: &str, preceding: &str) -> Vec<ResolvedTranslation> {
+        self.find_translations_from_node(input, preceding, &self.root)
     }
 }
 
@@ -383,6 +402,30 @@ mod tests {
     fn fake_rule() -> AnchoredRule {
         let rule = RuleParser::new("always foo 1").rule().unwrap();
         AnchoredRule::new(rule, None, 0)
+    }
+
+    #[test]
+    fn beg_word_transition_gates_a_rule() {
+        let classes = CharacterClasses::new(&[
+            (CharacterClass::Space, &[' ']),
+            (CharacterClass::Letter, &['a']),
+        ]);
+        let mut trie = Trie::new().with_beg_word_scanner(BegWordScanner::new(&classes));
+        trie.insert(
+            "(",
+            "⠶",
+            Some(Transition::BegWord),
+            None,
+            Direction::Backward,
+            Precedence::default(),
+            vec![],
+            TranslationStage::Main,
+            &fake_rule(),
+        );
+
+        assert!(!trie.find_translations("⠶", "").is_empty());
+        assert!(!trie.find_translations("⠶", "a ").is_empty());
+        assert!(trie.find_translations("⠶", "a").is_empty());
     }
 
     #[test]
@@ -407,18 +450,18 @@ mod tests {
         }
 
         // nothing follows, so the word ends
-        assert!(!trie.find_translations("⠁⠃", None).is_empty());
-        assert!(trie.find_translations("⠉⠙", None).is_empty());
+        assert!(!trie.find_translations("⠁⠃", "").is_empty());
+        assert!(trie.find_translations("⠉⠙", "").is_empty());
         // a letter follows, so the word continues
-        assert!(trie.find_translations("⠁⠃⠁", None).is_empty());
-        assert!(!trie.find_translations("⠉⠙⠁", None).is_empty());
+        assert!(trie.find_translations("⠁⠃⠁", "").is_empty());
+        assert!(!trie.find_translations("⠉⠙⠁", "").is_empty());
     }
 
     #[test]
     fn empty_trie() {
         let trie = Trie::new();
         assert_eq!(
-            trie.find_translations("foo", None),
+            trie.find_translations("foo", ""),
             Vec::<ResolvedTranslation>::new()
         );
     }
@@ -489,28 +532,28 @@ mod tests {
             TranslationStage::Main,
             &rule,
         );
-        assert_eq!(trie.find_translations("a", None), vec![a]);
-        assert_eq!(trie.find_translations("f", None), vec![f.clone()]);
+        assert_eq!(trie.find_translations("a", ""), vec![a]);
+        assert_eq!(trie.find_translations("f", ""), vec![f.clone()]);
         assert_eq!(
-            trie.find_translations("fo", None),
+            trie.find_translations("fo", ""),
             vec![f.clone(), fo.clone()]
         );
         assert_eq!(
-            trie.find_translations("foobar", None),
+            trie.find_translations("foobar", ""),
             vec![f.clone(), fo.clone(), foo.clone(), foobar.clone()]
         );
         assert_eq!(
-            trie.find_translations("foobaz", None),
+            trie.find_translations("foobaz", ""),
             vec![f.clone(), fo.clone(), foo.clone()]
         );
-        assert_eq!(trie.find_translations("function", None), vec![f.clone()]);
+        assert_eq!(trie.find_translations("function", ""), vec![f.clone()]);
         assert_eq!(
-            trie.find_translations("folio", None),
+            trie.find_translations("folio", ""),
             vec![f.clone(), fo.clone()]
         );
-        assert_eq!(trie.find_translations("none", None), empty);
+        assert_eq!(trie.find_translations("none", ""), empty);
         assert_eq!(
-            trie.find_translations("The start of a long long sentence", None),
+            trie.find_translations("The start of a long long sentence", ""),
             empty
         );
     }
@@ -534,8 +577,8 @@ mod tests {
             TranslationStage::Main,
             &rule,
         );
-        assert_eq!(trie.find_translations("a", None), vec![a]);
-        assert_eq!(trie.find_translations("aha", None), empty);
+        assert_eq!(trie.find_translations("a", ""), vec![a]);
+        assert_eq!(trie.find_translations("aha", ""), empty);
     }
 
     #[test]
@@ -563,10 +606,10 @@ mod tests {
             TranslationStage::Main,
             &rule,
         );
-        assert_eq!(trie.find_translations("foo", None), empty);
-        assert_eq!(trie.find_translations("foo ", None), empty);
-        assert_eq!(trie.find_translations("foobar", None), vec![foo]);
-        assert_eq!(trie.find_translations("foo.", None), empty);
+        assert_eq!(trie.find_translations("foo", ""), empty);
+        assert_eq!(trie.find_translations("foo ", ""), empty);
+        assert_eq!(trie.find_translations("foobar", ""), vec![foo]);
+        assert_eq!(trie.find_translations("foo.", ""), empty);
     }
 
     #[test]
@@ -591,10 +634,10 @@ mod tests {
             TranslationStage::Main,
             &rule,
         );
-        assert_eq!(trie.find_translations("foo", None), empty);
-        assert_eq!(trie.find_translations("foo", Some(' ')), empty);
-        assert_eq!(trie.find_translations("foo", Some('.')), empty);
-        assert_eq!(trie.find_translations("foo", Some('c')), vec![foo]);
+        assert_eq!(trie.find_translations("foo", ""), empty);
+        assert_eq!(trie.find_translations("foo", " "), empty);
+        assert_eq!(trie.find_translations("foo", "."), empty);
+        assert_eq!(trie.find_translations("foo", "c"), vec![foo]);
     }
 
     #[test]
@@ -620,11 +663,11 @@ mod tests {
             TranslationStage::Main,
             &rule,
         );
-        assert_eq!(trie.find_translations("foo", None), empty);
-        assert_eq!(trie.find_translations("foo", Some(' ')), empty);
-        assert_eq!(trie.find_translations("foo", Some('.')), empty);
-        assert_eq!(trie.find_translations("foo", Some('c')), empty);
-        assert_eq!(trie.find_translations("foobar", Some('c')), vec![foo]);
+        assert_eq!(trie.find_translations("foo", ""), empty);
+        assert_eq!(trie.find_translations("foo", " "), empty);
+        assert_eq!(trie.find_translations("foo", "."), empty);
+        assert_eq!(trie.find_translations("foo", "c"), empty);
+        assert_eq!(trie.find_translations("foobar", "c"), vec![foo]);
     }
 
     #[test]
@@ -653,10 +696,10 @@ mod tests {
             TranslationStage::Main,
             &rule,
         );
-        assert_eq!(trie.find_translations("aaa", None), empty);
-        assert_eq!(trie.find_translations("aaa1", Some(' ')), vec![foo.clone()]);
-        assert_eq!(trie.find_translations("aaa1", Some('.')), vec![foo.clone()]);
-        assert_eq!(trie.find_translations("aaa1", Some('c')), empty);
+        assert_eq!(trie.find_translations("aaa", ""), empty);
+        assert_eq!(trie.find_translations("aaa1", " "), vec![foo.clone()]);
+        assert_eq!(trie.find_translations("aaa1", "."), vec![foo.clone()]);
+        assert_eq!(trie.find_translations("aaa1", "c"), empty);
     }
 
     #[test]
@@ -685,11 +728,11 @@ mod tests {
             TranslationStage::Main,
             &rule,
         );
-        assert_eq!(trie.find_translations("st", None), empty);
-        assert_eq!(trie.find_translations("st", Some(' ')), empty);
-        assert_eq!(trie.find_translations("st", Some('.')), empty);
-        assert_eq!(trie.find_translations("st", Some('1')), vec![foo]);
-        assert_eq!(trie.find_translations("sta", Some('1')), empty);
+        assert_eq!(trie.find_translations("st", ""), empty);
+        assert_eq!(trie.find_translations("st", " "), empty);
+        assert_eq!(trie.find_translations("st", "."), empty);
+        assert_eq!(trie.find_translations("st", "1"), vec![foo]);
+        assert_eq!(trie.find_translations("sta", "1"), empty);
     }
 
     #[test]
@@ -714,10 +757,10 @@ mod tests {
             TranslationStage::Main,
             &rule,
         );
-        assert_eq!(trie.find_translations("(", None), empty);
-        assert_eq!(trie.find_translations("(", Some(' ')), empty);
-        assert_eq!(trie.find_translations("(", Some('.')), empty);
-        assert_eq!(trie.find_translations("(", Some('a')), vec![foo]);
+        assert_eq!(trie.find_translations("(", ""), empty);
+        assert_eq!(trie.find_translations("(", " "), empty);
+        assert_eq!(trie.find_translations("(", "."), empty);
+        assert_eq!(trie.find_translations("(", "a"), vec![foo]);
     }
 
     #[test]
@@ -742,12 +785,12 @@ mod tests {
             TranslationStage::Main,
             &rule,
         );
-        assert_eq!(trie.find_translations("(", None), empty);
-        assert_eq!(trie.find_translations("(", Some(' ')), empty);
-        assert_eq!(trie.find_translations("(", Some('.')), empty);
-        assert_eq!(trie.find_translations("(", Some('a')), empty);
-        assert_eq!(trie.find_translations("(a", None), vec![foo.clone()]);
-        assert_eq!(trie.find_translations("(a", Some('(')), vec![foo.clone()]);
+        assert_eq!(trie.find_translations("(", ""), empty);
+        assert_eq!(trie.find_translations("(", " "), empty);
+        assert_eq!(trie.find_translations("(", "."), empty);
+        assert_eq!(trie.find_translations("(", "a"), empty);
+        assert_eq!(trie.find_translations("(a", ""), vec![foo.clone()]);
+        assert_eq!(trie.find_translations("(a", "("), vec![foo.clone()]);
     }
 
     #[test]
@@ -766,10 +809,10 @@ mod tests {
             TranslationStage::Main,
             &rule,
         );
-        assert_eq!(trie.find_translations("foo", None), vec![foo.clone()]);
-        assert_eq!(trie.find_translations("Foo", None), vec![foo.clone()]);
-        assert_eq!(trie.find_translations("FOO", None), vec![foo.clone()]);
-        assert_eq!(trie.find_translations("foO", None), vec![foo.clone()]);
+        assert_eq!(trie.find_translations("foo", ""), vec![foo.clone()]);
+        assert_eq!(trie.find_translations("Foo", ""), vec![foo.clone()]);
+        assert_eq!(trie.find_translations("FOO", ""), vec![foo.clone()]);
+        assert_eq!(trie.find_translations("foO", ""), vec![foo.clone()]);
     }
 
     #[test]
@@ -792,8 +835,8 @@ mod tests {
                 &rule,
             );
         }
-        assert_eq!(trie.find_translations("a", None), vec![lower]);
-        assert_eq!(trie.find_translations("A", None), vec![upper]);
+        assert_eq!(trie.find_translations("a", ""), vec![lower]);
+        assert_eq!(trie.find_translations("A", ""), vec![upper]);
     }
 
     #[test]
@@ -835,13 +878,10 @@ mod tests {
             &rule,
         );
         // Both rules coexist on different paths — neither stomps the other
-        assert_eq!(
-            trie.find_translations("fooa", None),
-            vec![foo_before_letter]
-        );
-        assert_eq!(trie.find_translations("foo1", None), vec![foo_before_digit]);
-        assert_eq!(trie.find_translations("foo ", None), empty);
-        assert_eq!(trie.find_translations("foo", None), empty);
+        assert_eq!(trie.find_translations("fooa", ""), vec![foo_before_letter]);
+        assert_eq!(trie.find_translations("foo1", ""), vec![foo_before_digit]);
+        assert_eq!(trie.find_translations("foo ", ""), empty);
+        assert_eq!(trie.find_translations("foo", ""), empty);
     }
 
     #[test]
@@ -882,15 +922,9 @@ mod tests {
             TranslationStage::Main,
             &rule,
         );
-        assert_eq!(
-            trie.find_translations("foo", Some('a')),
-            vec![foo_after_letter]
-        );
-        assert_eq!(
-            trie.find_translations("foo", Some('1')),
-            vec![foo_after_digit]
-        );
-        assert_eq!(trie.find_translations("foo", Some(' ')), empty);
-        assert_eq!(trie.find_translations("foo", None), empty);
+        assert_eq!(trie.find_translations("foo", "a"), vec![foo_after_letter]);
+        assert_eq!(trie.find_translations("foo", "1"), vec![foo_after_digit]);
+        assert_eq!(trie.find_translations("foo", " "), empty);
+        assert_eq!(trie.find_translations("foo", ""), empty);
     }
 }
