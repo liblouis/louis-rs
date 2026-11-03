@@ -1,10 +1,13 @@
 //! A parser for [liblouis](https://liblouis.io) YAML test files
 
-use std::{collections::HashMap, fs::File, iter::Peekable, num::ParseIntError, path::PathBuf};
+use std::{
+    collections::HashMap, fs::File, io::Read, iter::Peekable, num::ParseIntError, path::PathBuf,
+    vec,
+};
 
 use crate::{parser, parser::EscapingContext, parser::unescape};
 
-use libyaml::{Encoding, Event, Parser, ParserIter, ScalarStyle};
+use saphyr_parser::{BufferedInput, Event, Parser, ScalarStyle, ScanError, Span};
 
 use crate::emphasis::EmphasisSpan;
 use crate::parser::Direction;
@@ -14,36 +17,24 @@ use crate::test::{
 };
 use crate::translator::{TranslationMode, TranslationModes};
 
-type YAMLEventError = Option<Result<Event, libyaml::ParserError>>;
-
 #[derive(thiserror::Error, Debug)]
 pub enum ParseError {
-    #[error("Scalar expected, got {0:?}")]
-    ScalarExpected(YAMLEventError),
-    #[error("YAML parse error")]
-    YAMLError(#[from] libyaml::ParserError),
-    #[error("Stream start expected")]
-    StreamStartExpected,
-    #[error("Stream end expected")]
-    StreamEndExpected,
-    #[error("Document start expected")]
-    DocumentStartExpected,
-    #[error("Document end expected")]
-    DocumentEndExpected,
-    #[error("Sequence start expected")]
-    SequenceStartExpected,
-    #[error("Sequence end expected, got {0:?}")]
-    SequenceEndExpected(YAMLEventError),
-    #[error("Mapping start expected, got {0:?}")]
-    MappingStartExpected(YAMLEventError),
-    #[error("Mapping end expected")]
-    MappingEndExpected,
+    #[error("line {line}: {expected} expected, found {found}")]
+    Unexpected {
+        expected: &'static str,
+        found: String,
+        line: usize,
+    },
+    #[error("unexpected end of YAML input")]
+    UnexpectedEnd,
+    #[error(transparent)]
+    YAMLError(#[from] ScanError),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
     #[error("Invalid test mode")]
     InvalidTestMode,
     #[error("invalid number")]
     InvalidNumber(#[from] ParseIntError),
-    #[error("Encoding {0:?} not supported")]
-    InvalidEncoding(Encoding),
     #[error("Invalid translation mode {0:?}")]
     InvalidMode(String),
     #[error("Invalid xfail value")]
@@ -58,50 +49,67 @@ pub enum ParseError {
     InvalidEscape(#[from] parser::ParseError),
 }
 
-pub struct YAMLParser<'a> {
-    events: Peekable<ParserIter<'a>>,
+pub struct YAMLParser {
+    events: Peekable<Parser<'static, BufferedInput<vec::IntoIter<char>>>>,
 }
 
-impl YAMLParser<'_> {
-    pub fn new(reader: File) -> Result<Self, ParseError> {
-        let parser = Parser::new(reader)?;
+impl YAMLParser {
+    pub fn new(mut reader: File) -> Result<Self, ParseError> {
+        // read_to_string rejects input that is not UTF-8
+        let mut content = String::new();
+        reader.read_to_string(&mut content)?;
+        let chars: Vec<char> = content.chars().collect();
         Ok(Self {
-            events: parser.into_iter().peekable(),
+            events: Parser::new_from_iter(chars.into_iter()).peekable(),
         })
     }
 
+    /// The next event. A YAML syntax error is reported as such rather than as an
+    /// unexpected event.
+    fn next_event(&mut self) -> Result<(Event<'static>, Span), ParseError> {
+        Ok(self.events.next().ok_or(ParseError::UnexpectedEnd)??)
+    }
+
+    fn unexpected(expected: &'static str, (event, span): (Event, Span)) -> ParseError {
+        ParseError::Unexpected {
+            expected,
+            found: format!("{event:?}"),
+            line: span.start.line(),
+        }
+    }
+
     fn scalar(&mut self) -> Result<String, ParseError> {
-        match self.events.next() {
-            Some(Ok(Event::Scalar { value, .. })) => Ok(value),
-            e => Err(ParseError::ScalarExpected(e)),
+        match self.next_event()? {
+            (Event::Scalar(value, ..), _) => Ok(value.into_owned()),
+            e => Err(Self::unexpected("scalar", e)),
         }
     }
 
     fn mapping_start(&mut self) -> Result<(), ParseError> {
-        match self.events.next() {
-            Some(Ok(Event::MappingStart { .. })) => Ok(()),
-            e => Err(ParseError::MappingStartExpected(e)),
+        match self.next_event()? {
+            (Event::MappingStart(..), _) => Ok(()),
+            e => Err(Self::unexpected("mapping start", e)),
         }
     }
 
     fn mapping_end(&mut self) -> Result<(), ParseError> {
-        match self.events.next() {
-            Some(Ok(Event::MappingEnd)) => Ok(()),
-            _ => Err(ParseError::MappingEndExpected),
+        match self.next_event()? {
+            (Event::MappingEnd, _) => Ok(()),
+            e => Err(Self::unexpected("mapping end", e)),
         }
     }
 
     fn sequence_start(&mut self) -> Result<(), ParseError> {
-        match self.events.next() {
-            Some(Ok(Event::SequenceStart { .. })) => Ok(()),
-            _ => Err(ParseError::SequenceStartExpected),
+        match self.next_event()? {
+            (Event::SequenceStart(..), _) => Ok(()),
+            e => Err(Self::unexpected("sequence start", e)),
         }
     }
 
     fn sequence_end(&mut self) -> Result<(), ParseError> {
-        match self.events.next() {
-            Some(Ok(Event::SequenceEnd)) => Ok(()),
-            e => Err(ParseError::SequenceEndExpected(e)),
+        match self.next_event()? {
+            (Event::SequenceEnd, _) => Ok(()),
+            e => Err(Self::unexpected("sequence end", e)),
         }
     }
 
@@ -116,13 +124,12 @@ impl YAMLParser<'_> {
 
     fn display_table(&mut self) -> Result<Display, ParseError> {
         let table = match self.events.peek() {
-            Some(Ok(Event::SequenceStart { .. })) => Display::List(self.table_list()?),
+            Some(Ok((Event::SequenceStart(..), _))) => Display::List(self.table_list()?),
             // a block literal (`|`) or folded (`>`) scalar is an inline table
-            Some(Ok(Event::Scalar {
-                style: Some(ScalarStyle::Literal | ScalarStyle::Folded),
-                ..
-            })) => Display::Inline(self.scalar()?),
-            Some(Ok(Event::Scalar { .. })) => {
+            Some(Ok((Event::Scalar(_, ScalarStyle::Literal | ScalarStyle::Folded, ..), _))) => {
+                Display::Inline(self.scalar()?)
+            }
+            Some(Ok((Event::Scalar(..), _))) => {
                 let value = self.scalar()?;
                 match Self::comma_separated(&value) {
                     Some(tables) => Display::List(tables),
@@ -139,7 +146,7 @@ impl YAMLParser<'_> {
     fn table_query(&mut self) -> Result<TableQuery, ParseError> {
         self.mapping_start()?;
         let mut query: HashMap<String, String> = HashMap::new();
-        while let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
+        while let Some(Ok((Event::Scalar(..), _))) = self.events.peek() {
             let key = self.scalar()?;
             let value = self.scalar()?;
             query.insert(key, value);
@@ -151,7 +158,7 @@ impl YAMLParser<'_> {
     fn table_list(&mut self) -> Result<Vec<PathBuf>, ParseError> {
         self.sequence_start()?;
         let mut tables = Vec::new();
-        while let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
+        while let Some(Ok((Event::Scalar(..), _))) = self.events.peek() {
             let table = self.scalar()?;
             tables.push(table.into());
         }
@@ -161,7 +168,7 @@ impl YAMLParser<'_> {
 
     fn table(&mut self) -> Result<Table, ParseError> {
         let table = match self.events.peek() {
-            Some(Ok(Event::MappingStart { .. })) => {
+            Some(Ok((Event::MappingStart(..), _))) => {
                 let query = self.table_query()?;
                 if query.contains_key("__assert-match") {
                     Table::Simple(query.get("__assert-match").unwrap().into())
@@ -169,13 +176,12 @@ impl YAMLParser<'_> {
                     Table::Query(query)
                 }
             }
-            Some(Ok(Event::SequenceStart { .. })) => Table::List(self.table_list()?),
+            Some(Ok((Event::SequenceStart(..), _))) => Table::List(self.table_list()?),
             // a block literal (`|`) or folded (`>`) scalar is an inline table
-            Some(Ok(Event::Scalar {
-                style: Some(ScalarStyle::Literal | ScalarStyle::Folded),
-                ..
-            })) => Table::Inline(self.scalar()?),
-            Some(Ok(Event::Scalar { .. })) => {
+            Some(Ok((Event::Scalar(_, ScalarStyle::Literal | ScalarStyle::Folded, ..), _))) => {
+                Table::Inline(self.scalar()?)
+            }
+            Some(Ok((Event::Scalar(..), _))) => {
                 let value = self.scalar()?;
                 match Self::comma_separated(&value) {
                     Some(tables) => Table::List(tables),
@@ -224,7 +230,7 @@ impl YAMLParser<'_> {
     fn xfail_mapping_value(&mut self) -> Result<Directions, ParseError> {
         let mut directions = Directions::empty();
         self.mapping_start()?;
-        while let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
+        while let Some(Ok((Event::Scalar(..), _))) = self.events.peek() {
             let direction = self.scalar()?;
             let value = self.xfail_value()?;
             match &*direction {
@@ -251,10 +257,10 @@ impl YAMLParser<'_> {
 
     fn xfail(&mut self) -> Result<ExpectedFailure, ParseError> {
         match self.events.peek() {
-            Some(Ok(Event::MappingStart { .. })) => {
+            Some(Ok((Event::MappingStart(..), _))) => {
                 Ok(ExpectedFailure::Direction(self.xfail_mapping_value()?))
             }
-            Some(Ok(Event::Scalar { .. })) => self.xfail_value(),
+            Some(Ok((Event::Scalar(..), _))) => self.xfail_value(),
             _ => Err(ParseError::InvalidXFail),
         }
     }
@@ -262,7 +268,7 @@ impl YAMLParser<'_> {
     fn emphasis_spans_value(&mut self) -> Result<Vec<EmphasisSpan>, ParseError> {
         let mut spans: Vec<EmphasisSpan> = Vec::new();
         self.mapping_start()?;
-        while let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
+        while let Some(Ok((Event::Scalar(..), _))) = self.events.peek() {
             let class = self.scalar()?;
             let mask = self.scalar()?;
             // Convert a run-length mask ("++--++") to spans over the class.
@@ -310,7 +316,7 @@ impl YAMLParser<'_> {
     fn pos_values(&mut self) -> Result<Vec<usize>, ParseError> {
         let mut values = Vec::new();
         self.sequence_start()?;
-        while let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
+        while let Some(Ok((Event::Scalar(..), _))) = self.events.peek() {
             let value = self.pos_value()?;
             values.push(value);
         }
@@ -320,7 +326,7 @@ impl YAMLParser<'_> {
 
     fn cursor_position(&mut self) -> Result<CursorPosition, ParseError> {
         let pos = match self.events.peek() {
-            Some(Ok(Event::SequenceStart { .. })) => {
+            Some(Ok((Event::SequenceStart(..), _))) => {
                 self.sequence_start()?;
                 let p = CursorPosition::Tuple(self.usize_value()?, self.usize_value()?);
                 self.sequence_end()?;
@@ -351,7 +357,7 @@ impl YAMLParser<'_> {
     fn translation_modes(&mut self) -> Result<TranslationModes, ParseError> {
         let mut modes = TranslationModes::empty();
         self.sequence_start()?;
-        while let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
+        while let Some(Ok((Event::Scalar(..), _))) = self.events.peek() {
             let mode = self.translation_mode_value()?;
             modes.insert(mode);
         }
@@ -371,7 +377,7 @@ impl YAMLParser<'_> {
         // the YAML format is way too flexible: You can have two
         // scalars in which case those are input and expected. But you
         // can also have 3 scalars so that (description, input, expected)
-        if let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
+        if let Some(Ok((Event::Scalar(..), _))) = self.events.peek() {
             let _description = Some(input);
             input = expected;
             expected = unescape(&self.scalar()?, EscapingContext::Default)?;
@@ -385,9 +391,9 @@ impl YAMLParser<'_> {
         let mut modes = TranslationModes::empty();
         let mut max_output_length = None;
         let mut real_input_length = None;
-        if let Some(Ok(Event::MappingStart { .. })) = self.events.peek() {
+        if let Some(Ok((Event::MappingStart(..), _))) = self.events.peek() {
             self.mapping_start()?;
-            while let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
+            while let Some(Ok((Event::Scalar(..), _))) = self.events.peek() {
                 let value = self.scalar()?;
                 match &*value {
                     "xfail" => {
@@ -446,7 +452,7 @@ impl YAMLParser<'_> {
     fn tests(&mut self) -> Result<Vec<Test>, ParseError> {
         let mut tests: Vec<Test> = Vec::new();
         self.sequence_start()?;
-        while let Some(Ok(Event::SequenceStart { .. })) = self.events.peek() {
+        while let Some(Ok((Event::SequenceStart(..), _))) = self.events.peek() {
             tests.push(self.test()?);
         }
         self.sequence_end()?;
@@ -454,38 +460,30 @@ impl YAMLParser<'_> {
     }
 
     fn stream_start(&mut self) -> Result<(), ParseError> {
-        match self.events.next() {
-            Some(Ok(Event::StreamStart {
-                encoding: Some(encoding),
-            })) => {
-                if encoding == Encoding::Utf8 {
-                    Ok(())
-                } else {
-                    Err(ParseError::InvalidEncoding(encoding))
-                }
-            }
-            _ => Err(ParseError::StreamStartExpected),
+        match self.next_event()? {
+            (Event::StreamStart, _) => Ok(()),
+            e => Err(Self::unexpected("stream start", e)),
         }
     }
 
     fn stream_end(&mut self) -> Result<(), ParseError> {
-        match self.events.next() {
-            Some(Ok(Event::StreamEnd)) => Ok(()),
-            _ => Err(ParseError::StreamEndExpected),
+        match self.next_event()? {
+            (Event::StreamEnd, _) => Ok(()),
+            e => Err(Self::unexpected("stream end", e)),
         }
     }
 
     fn document_start(&mut self) -> Result<(), ParseError> {
-        match self.events.next() {
-            Some(Ok(Event::DocumentStart { .. })) => Ok(()),
-            _ => Err(ParseError::DocumentStartExpected),
+        match self.next_event()? {
+            (Event::DocumentStart(..), _) => Ok(()),
+            e => Err(Self::unexpected("document start", e)),
         }
     }
 
     fn document_end(&mut self) -> Result<(), ParseError> {
-        match self.events.next() {
-            Some(Ok(Event::DocumentEnd { .. })) => Ok(()),
-            _ => Err(ParseError::DocumentEndExpected),
+        match self.next_event()? {
+            (Event::DocumentEnd, _) => Ok(()),
+            e => Err(Self::unexpected("document end", e)),
         }
     }
 
@@ -499,7 +497,7 @@ impl YAMLParser<'_> {
         self.stream_start()?;
         self.document_start()?;
         self.mapping_start()?;
-        while let Some(Ok(Event::Scalar { .. })) = self.events.peek() {
+        while let Some(Ok((Event::Scalar(..), _))) = self.events.peek() {
             let value = self.scalar()?;
             match &*value {
                 "display" => {
