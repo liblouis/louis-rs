@@ -1503,7 +1503,39 @@ impl PrimaryTable {
                 Rule::IncludeHyphenation { table, .. } => {
                     builder.hyphenation_constrainer.hyphenator(table.clone());
                 }
-                _ => (),
+                // compiled into the multipass and display stages
+                Rule::Correct { .. }
+                | Rule::Pass2 { .. }
+                | Rule::Pass3 { .. }
+                | Rule::Pass4 { .. }
+                | Rule::Display { .. } => (),
+                // collected into the table context (see `TableContext::compile`)
+                Rule::Attribute { .. }
+                | Rule::Seqafterchars { .. }
+                | Rule::Seqbeforechars { .. }
+                | Rule::Seqdelimiter { .. }
+                | Rule::Swapcc { .. }
+                | Rule::Swapcd { .. }
+                | Rule::Swapdd { .. } => (),
+                // compiled before this loop
+                Rule::Decpoint { .. } | Rule::Hyphen { .. } => (),
+                // expanded by the parser
+                Rule::Include { .. } => (),
+                // FIXME: not implemented yet, see TODO.org
+                Rule::Capsnocont { .. }
+                | Rule::Class { .. }
+                | Rule::Exactdots { .. }
+                | Rule::Grouping { .. }
+                | Rule::Joinnum { .. }
+                | Rule::Literal { .. }
+                | Rule::Midendnumericmodechars { .. }
+                | Rule::Multind { .. }
+                | Rule::Nocont { .. }
+                | Rule::Repeated { .. }
+                | Rule::Rependword { .. }
+                | Rule::Repword { .. }
+                | Rule::Seqafterexpression { .. }
+                | Rule::Seqafterpattern { .. } => (),
             }
         }
         let numeric_chars = ctx
