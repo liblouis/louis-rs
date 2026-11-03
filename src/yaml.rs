@@ -537,6 +537,8 @@ impl YAMLParser<'_> {
                         Ok(test_results) => results.extend(test_results),
                         Err(error) => results.push(TestResult::Error(error.to_string())),
                     }
+                    // flags apply to the next tests block only
+                    test_mode = TestMode::Forward;
                     previous_event_was_table = false;
                 }
                 _ => {
@@ -582,6 +584,16 @@ mod tests {
     }
 
     const AB_TABLE: &str = "table: |\n  letter a 1\n  letter b 12\n";
+
+    #[test]
+    fn flags_apply_to_the_next_tests_block_only() {
+        let yaml = format!(
+            "{AB_TABLE}flags: {{testmode: backward}}\ntests:\n  - [⠁⠃, ab]\ntests:\n  - [ab, ⠁⠃]\n"
+        );
+        let results = run("flags_per_block", &yaml).unwrap();
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|result| result.is_success()));
+    }
 
     #[test]
     fn matching_positions_are_not_reported() {
