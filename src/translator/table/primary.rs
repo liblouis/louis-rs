@@ -1171,15 +1171,20 @@ impl PrimaryTable {
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
                     let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
-                    builder.get_trie_mut(rule).insert(
-                        chars,
-                        &dots,
-                        Some(Transition::Start(vec![CharacterClass::Letter])),
-                        Some(Transition::End(vec![
+                    // backward, liblouis checks nothing after a midendword
+                    let after = match direction {
+                        Direction::Forward => Some(Transition::End(vec![
                             CharacterClass::Letter,
                             CharacterClass::Space,
                             CharacterClass::Punctuation,
                         ])),
+                        Direction::Backward => None,
+                    };
+                    builder.get_trie_mut(rule).insert(
+                        chars,
+                        &dots,
+                        Some(Transition::Start(vec![CharacterClass::Letter])),
+                        after,
                         direction,
                         rule.precedence(),
                         class_constraints,
@@ -1257,39 +1262,34 @@ impl PrimaryTable {
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
                     let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
-                    // a sufword is basically syntactic sugar for a word rule combined with an
-                    // begword rule. So just make the two appropriate insertions in the trie
-                    builder.get_trie_mut(rule).insert(
-                        chars,
-                        &dots,
-                        Some(Transition::Start(vec![
-                            CharacterClass::Space,
-                            CharacterClass::Punctuation,
-                        ])),
-                        Some(Transition::End(vec![
-                            CharacterClass::Space,
-                            CharacterClass::Punctuation,
-                        ])),
-                        direction,
-                        rule.precedence(),
-                        class_constraints.clone(),
-                        TranslationStage::Main,
-                        rule,
-                    );
-                    builder.get_trie_mut(rule).insert(
-                        chars,
-                        &dots,
-                        Some(Transition::Start(vec![
-                            CharacterClass::Space,
-                            CharacterClass::Punctuation,
-                        ])),
-                        Some(Transition::End(vec![CharacterClass::Letter])),
-                        direction,
-                        rule.precedence(),
-                        class_constraints,
-                        TranslationStage::Main,
-                        rule,
-                    );
+                    // forward, a sufword is basically syntactic sugar for a word rule combined
+                    // with a begword rule; backward, liblouis checks nothing after it
+                    let afters = match direction {
+                        Direction::Forward => vec![
+                            Some(Transition::End(vec![
+                                CharacterClass::Space,
+                                CharacterClass::Punctuation,
+                            ])),
+                            Some(Transition::End(vec![CharacterClass::Letter])),
+                        ],
+                        Direction::Backward => vec![None],
+                    };
+                    for after in afters {
+                        builder.get_trie_mut(rule).insert(
+                            chars,
+                            &dots,
+                            Some(Transition::Start(vec![
+                                CharacterClass::Space,
+                                CharacterClass::Punctuation,
+                            ])),
+                            after,
+                            direction,
+                            rule.precedence(),
+                            class_constraints.clone(),
+                            TranslationStage::Main,
+                            rule,
+                        );
+                    }
                 }
                 Rule::Begmidword {
                     chars,

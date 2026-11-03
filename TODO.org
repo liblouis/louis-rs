@@ -202,7 +202,7 @@
     word contraction instead of being spelled out (~AF-kontor~ →
     expected ~⡁⡋⠤⠅⠕⠝⠞⠭~, actual ~⡴⠤⠅⠕⠝⠞⠭~) and 1 backward
     equivalent (~⡙⠝⠅~ → "Dnk" rather than "Danmark").
-- [-] Backward word-boundary checks ask about a cell, not a position
+- [X] Backward word-boundary checks ask about a cell, not a position
   - liblouis is asymmetric (~lou_backTranslateString.c~):
     - the *before* side reads the last character of the output
       produced so far and classifies it with the text classes
@@ -225,31 +225,12 @@
     exactly. Used by ~word~, ~endword~ and ~prfword~ (the word must end)
     and ~begword~, ~midword~, ~begmidword~ and ~partword~ (it must
     continue).
-  - [ ] ~sufword~ and ~midendword~ still check the next cell against
-    ~dots_classes~ backward, although liblouis applies no after check to
-    either there. They are likely among what still needs the widening.
-  - The remaining ~dots_classes~ letter widening (~TableContext::compile~,
-    ~src/translator/table.rs~) was meant to go with the after side, but
-    is still needed (see below). It had been widened three times for three opcode families (edf1b4c,
-    bed6112, and the ~partword~ fix) and still has a ceiling:
-    - the guard is narrower than liblouis's ~charslen > 1~, so a
-      contraction spelling non-letters still breaks a neighbouring
-      ~partword~. Reproducer: a table with ~always n't 12356~ and
-      ~partword ed 1246~ translates "can'ted" forward but
-      back-translates ~⠉⠁⠷⠫~ to "can't" plus a hex fallback
-    - the property is per-cell and global, so a cell counts as a
-      letter at every position, not only where a contraction applies
-    - "a translation continues the word here" is not "this cell is a
-      letter", but the letter class is the only way we can say it, so
-      the cell also reads as a letter to number/punctuation boundary
-      checks, ~before~/~after~ class constraints and the
-      capitalization tiers. Over-application this way is what
-      regressed the suite in earlier attempts
-  - Fixing it properly means matching liblouis's split: text classes
-    over produced output for the before side (done), dots classes plus a
-    rule walk for the after side (done). What still depends on the
-    widening is not yet known: disabling it costs about 1 200 tests.
-    Widening the guard only moves the ceiling.
+  - [X] ~sufword~ and ~midendword~ no longer check anything after the
+    match backward, as in liblouis. They were what still needed the
+    ~dots_classes~ letter widening, which added the cells of every
+    alphabetic contraction to the letter class to approximate the scan;
+    it is gone. With it went its ceiling: ~always n't 12356~ next to
+    ~partword ed 1246~ now back-translates ~⠉⠁⠷⠫~ to "can'ted".
 - [ ] Literal hyphen character breaks per-segment contraction in compounds
   - e.g. en-ueb.yaml: "do-it-yourself" -> expected "d-x-yrf", actual
     "do-x-y|rself" ("do" and "yourself" fail to contract on their own

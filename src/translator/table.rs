@@ -141,47 +141,6 @@ impl TableContext {
                     character_classes.insert(CharacterClass::Punctuation, *character);
                     dots_classes.insert_dots(CharacterClass::Punctuation, dots);
                 }
-                // Contraction rules commonly spell out letter groups (e.g. "le", "ing", "re")
-                // as a single cell or short cell sequence. Backward translation's word-boundary
-                // checks rely on `dots_classes` to recognize these cells as letters too, or a
-                // `word`-level rule sharing a prefix with the contraction wrongly thinks the word
-                // ends right after it — and a `partword` contraction adjacent to another
-                // contraction sees no letter on either side, so it never fires.
-                //
-                // Ceiling: this precomputes a property of a *cell* where liblouis asks a
-                // question about a *position* — `isEndWord` walks the rules attached to the
-                // next cell and treats any rule with `charslen > 1` as word-continuation.
-                // The `is_alphabetic` guard is therefore narrower than liblouis's, and a
-                // contraction spelling non-letters still breaks a neighbouring `partword`
-                // (`always n't` next to `partword ed` back-translates to a hex fallback).
-                // Widening the guard only moves the ceiling; see the backward-boundary
-                // entry under "Known gaps" in TODO.org for the real fix.
-                Rule::Always { chars, dots, .. }
-                | Rule::Word { chars, dots, .. }
-                | Rule::Sufword { chars, dots, .. }
-                | Rule::Prfword { chars, dots, .. }
-                | Rule::Begword { chars, dots, .. }
-                | Rule::Begmidword { chars, dots, .. }
-                | Rule::Midword { chars, dots, .. }
-                | Rule::Midendword { chars, dots, .. }
-                | Rule::Endword { chars, dots, .. }
-                | Rule::Partword { chars, dots, .. }
-                    if chars.chars().all(|c| c.is_alphabetic()) =>
-                {
-                    for cell in dots.to_string().chars() {
-                        dots_classes.insert(CharacterClass::Letter, cell);
-                    }
-                }
-                // `lowword` and `joinword` carry `BrailleChars` rather than `Braille`,
-                // so they cannot share the or-pattern above, but the reasoning is the
-                // same and so is the body.
-                Rule::Lowword { chars, dots, .. } | Rule::Joinword { chars, dots, .. }
-                    if chars.chars().all(|c| c.is_alphabetic()) =>
-                {
-                    for cell in dots.to_string().chars() {
-                        dots_classes.insert(CharacterClass::Letter, cell);
-                    }
-                }
                 _ => (),
             }
         }
@@ -424,32 +383,6 @@ mod tests {
                 .dots_classes
                 .get(&CharacterClass::UserDefined("accent".to_string())),
             Some(HashSet::from(['⠐']))
-        );
-    }
-
-    #[test]
-    fn dots_classes_includes_alphabetic_always_rules() {
-        let rules = [
-            parse_rule("lowercase h 125"),
-            parse_rule("always le 246"),
-            parse_rule("always sz 234-1235"),
-            parse_rule("always -- 36"),
-        ];
-        let context = TableContext::compile(&rules).unwrap();
-
-        // a single-cell letter-group contraction ("le") is a letter cell, just like "h", and
-        // every cell of a multi-cell contraction ("sz") counts too
-        assert_eq!(
-            context.dots_classes.get(&CharacterClass::Letter),
-            Some(HashSet::from(['⠓', '⠪', '⠎', '⠗']))
-        );
-        // a non-alphabetic always rule (e.g. a dash contraction) is not a letter cell
-        assert!(
-            !context
-                .dots_classes
-                .get(&CharacterClass::Letter)
-                .unwrap()
-                .contains(&'⠤')
         );
     }
 }

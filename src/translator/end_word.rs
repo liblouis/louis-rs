@@ -32,8 +32,7 @@ impl EndWordScanner {
             let Some((cell, text_len)) = single_cell_rule(&rule.rule) else {
                 continue;
             };
-            // The letter and space sets come from the character definitions rather than the
-            // dots classes, which are widened with contraction cells; a `begword` cell read
+            // Only character definitions put a cell in the letter set; a `begword` cell read
             // as a letter would cut the scan short (liblouis#360).
             match &rule.rule {
                 Rule::Letter { .. } | Rule::Lowercase { .. } | Rule::Uppercase { .. } => {
