@@ -1537,8 +1537,20 @@ impl<'a> RuleParser<'a> {
         unescape(s, EscapingContext::Default)
     }
 
-    fn maybe_chars(&mut self) -> Option<String> {
-        self.tokens.next().map(|s| s.to_string())
+    /// The optional replacement of a `replace` rule. One starting with `#` is a comment, so
+    /// there is none; `\#` starts it with a literal `#`.
+    fn replacement(&mut self) -> Result<Option<String>, ParseError> {
+        match self.tokens.next() {
+            None => Ok(None),
+            Some(s) if s.starts_with('#') => Ok(None),
+            Some(s) => match s.strip_prefix("\\#") {
+                Some(rest) => Ok(Some(format!(
+                    "#{}",
+                    unescape(rest, EscapingContext::Default)?
+                ))),
+                None => unescape(s, EscapingContext::Default).map(Some),
+            },
+        }
     }
 
     fn filename(&mut self) -> Result<String, ParseError> {
@@ -2168,7 +2180,7 @@ impl<'a> RuleParser<'a> {
                 fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Replace {
                     chars: self.chars()?,
-                    replacement: self.maybe_chars(),
+                    replacement: self.replacement()?,
                 }
             }
             Opcode::Always => Rule::Always {

@@ -936,6 +936,29 @@ impl PrimaryTable {
                 Rule::Noletsignbefore { chars } => {
                     builder.lettersign_indicator.noletsignbefore(chars);
                 }
+                // The replacement is text, translated by the character definitions; without
+                // one the characters are dropped. Forward only, like liblouis.
+                Rule::Replace { chars, replacement } => {
+                    if direction == Direction::Forward {
+                        let dots = match replacement {
+                            Some(replacement) => ctx
+                                .character_definitions()
+                                .braille_to_unicode(&Braille::Implicit, replacement)?,
+                            None => String::new(),
+                        };
+                        builder.get_trie_mut(rule).insert(
+                            chars,
+                            &dots,
+                            None,
+                            None,
+                            direction,
+                            rule.precedence(),
+                            vec![],
+                            TranslationStage::Main,
+                            rule,
+                        );
+                    }
+                }
                 // Treat a contraction rule similarly to a word rule, but forward only
                 Rule::Contraction { chars } => {
                     if direction == Direction::Forward {
@@ -2030,6 +2053,29 @@ mod tests {
         assert_eq!(table.translate("foobar"), "⠇⠸");
         assert_eq!(table.translate("  "), "⠀⠀");
         assert_eq!(table.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
+    }
+
+    #[test]
+    fn replace() {
+        let rules = [
+            parse_rule("letter a 1"),
+            parse_rule("letter b 12"),
+            parse_rule("space \\x2060 0"),
+            parse_rule("replace \\x2060\t#WORD JOINER"),
+            parse_rule("replace c ab"),
+            parse_rule("punctuation # 3456"),
+            parse_rule("replace d \\#a"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        // without a replacement the character is dropped, a `#` starting a comment
+        assert_eq!(table.translate("a\u{2060}b"), "⠁⠃");
+        // the replacement is text, translated by the character definitions
+        assert_eq!(table.translate("c"), "⠁⠃");
+        // `\#` starts it with a literal `#`
+        assert_eq!(table.translate("d"), "⠼⠁");
     }
 
     #[test]
