@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- Back-translation now applies `prepunc` and `postpunc` rules where a word
+  begins or ends, as liblouis does. They used to be ignored, so in Malayalam
+  `⠁⠒` gave "അഞ" instead of "അ:", reading ⠒ as a letter rather than a colon.
 - Back-translation no longer checks what follows a `sufword` or `midendword`
   contraction, matching liblouis. In Malayalam the vowel sign ു is a
   `midendword`, so `⠁⠍⠖⠻⠈⠝⠝⠥⠂` gave "അമർന്നഉ," instead of "അമർന്നു,".
