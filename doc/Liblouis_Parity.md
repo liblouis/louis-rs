@@ -8,7 +8,7 @@ This document says what it can do today, what it can't yet, and where the remain
 work is, so you can tell whether it's usable for your case and pick something up if
 it isn't.
 
-Measured at louis-rs `b52fe1b` against liblouis `011cfb3b`:
+Measured at louis-rs `97baad0` against liblouis `011cfb3b`:
 
 |                                |           |
 |--------------------------------|-----------|
@@ -125,7 +125,8 @@ a few hundred either way on the million-assertion files.
 | Area                                                | Failing | Root cause                                                                                                                                                                       | Size |
 |-----------------------------------------------------|--------:|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------|
 | `en-ueb-g2-dictionary_harness`, `afr-za-g2` forward |  ≈2 200 | Match-rule candidate selection. See [ADR-0008](adr/0008-match-rule-candidate-selection.org) and [ADR-0016](adr/0016-order-independent-rule-selection.org). | L    |
-| `ml`, `pa`, `hi`, `ta`, `fa`, `th`, `bn`            |  ≈2 300 | Complex scripts: conjunct and reph forms, and stacked combining marks firing an indicator each instead of once per grapheme cluster.                                             | L    |
+| `ta`, `ml`, `pa`, `hi` forward                      |    ≈300 | A stray ⠈ before punctuation. These tables include `en-in-g1.ctb`, whose `word , 4-2` they override with an earlier `always , 2`; that relies on rule order. See [ADR-0016](adr/0016-order-independent-rule-selection.org). | —    |
+| `th`, `fa`, `pa`                                    |    ≈800 | Not yet investigated, and unrelated to each other: Thai letters left untranslated, Persian full stop and number sign, Punjabi addak (gemination) read as a virama going backward. | M    |
 | `en-ueb-computer-code`                              |  ≈1 700 | Three bugs: letter sign fires only on the first occurrence in a run; wrong word sign before hyphen or closing bracket; leading indicator dropped at the very start of the input. But the file's own header says many of its expectations are wrong and it needs review ([#590](https://github.com/liblouis/liblouis/issues/590)), so establish which are before chasing them. | M    |
 | `hu-hu-g1_dictionary_special_consonants`            |  ≈1 100 | `nocross` asks "can this hyphenate anywhere?" instead of liblouis's positional `syllableBreak()`.                                                                                | L    |
 | `sw-ke-dictionary`, `sw-ke`                         |    ≈850 | Backward lookup splices in unrelated dictionary words ("wote" → "wizaraote"); single-letter words pick up a spurious letter sign.                                                | M    |
