@@ -8,13 +8,13 @@ This document says what it can do today, what it can't yet, and where the remain
 work is, so you can tell whether it's usable for your case and pick something up if
 it isn't.
 
-Measured at louis-rs `97baad0` against liblouis `011cfb3b`:
+Measured at louis-rs `ba984d6` against liblouis `011cfb3b`:
 
 |                                |           |
 |--------------------------------|-----------|
-| Assertions run                 | 2 241 236 |
+| Assertions run                 | 2 241 029 |
 | Pass                           | **98.9%** |
-| Fail                           | 0.6%      |
+| Fail                           | 0.5%      |
 | Expected failure               | 0.5%      |
 | Table files that parse cleanly | 458 / 458 |
 
@@ -116,7 +116,7 @@ Honest list, no dates attached:
 
 ## Where the remaining failures are
 
-Most of the failing 0.6% sits in ten files, and several of those share a root cause.
+Most of the failing 0.5% sits in ten files, and several of those share a root cause.
 Sizes are per item — *S* is up to a week, *M* about a week, *L* one to three weeks —
 and are there so you can pick work by appetite, not to add up. Failure counts are
 approximate: `check` reports a per-file percentage, so a count derived from it carries
@@ -132,7 +132,7 @@ a few hundred either way on the million-assertion files.
 | `sw-ke-dictionary`, `sw-ke`                         |    ≈850 | Backward lookup splices in unrelated dictionary words ("wote" → "wizaraote"); single-letter words pick up a spurious letter sign.                                                | M    |
 | `en-g3`, `en-ueb`                                   |    ≈600 | A literal hyphen breaks per-segment contraction in compounds — "do-it-yourself" gives `do-x-y\|rself`, not `d-x-yrf`.                                                            | M    |
 | `rw-rw-g1`, `numericmode`                           |    ≈500 | Letters used as pseudo-digits still get a capital sign. Related: `endmode`/`endmodeword` don't fire across a `base` character chain.                                             | M    |
-| `de-g0-detailed-specs`, `de-g1-…`                   |    ≈280 | `capsletter` vs. `begcapsword` tier selection. Needs `uppercase.rs` and `emphasis.rs` unified into one tier model — a blanket engine fix was tried and disproven.                | L    |
+| `de-g0-detailed-specs`, `de-g1-…`                   |    ≈200 | `capsletter` vs. `begcapsword` tier selection. Needs `uppercase.rs` and `emphasis.rs` unified into one tier model — a blanket engine fix was tried and disproven.                | L    |
 | all other files                                     |  ≈2 500 | Roughly 100 files, each contributing well under 350.                                                                                                                             | —    |
 
 Two cross-cutting items have no single file behind them:
