@@ -25,7 +25,8 @@ use crate::{
             BackwardCapsConstrainerBuilder, BackwardNoContractConstrainerBuilder,
             BackwardNumericConstrainerBuilder, ComputerBrailleConstrainer, Constrainer,
             Constrainers, HyphenationConstrainerBuilder, JoinNumConstrainerBuilder,
-            NumericConstrainerBuilder, PositionConstraints, PunctuationConstrainerBuilder,
+            NoContConstrainerBuilder, NumericConstrainerBuilder, PositionConstraints,
+            PunctuationConstrainerBuilder,
         },
         table::TableContext,
         translation::TranslationSubset,
@@ -187,6 +188,7 @@ struct PrimaryTableBuilder {
     hyphenation_constrainer: HyphenationConstrainerBuilder,
     punctuation_constrainer: PunctuationConstrainerBuilder,
     joinnum_constrainer: JoinNumConstrainerBuilder,
+    nocont_constrainer: NoContConstrainerBuilder,
     backward_digit_overrides: HashMap<char, ResolvedTranslation>,
     compbrl_triggers: Vec<String>,
 }
@@ -240,6 +242,7 @@ impl PrimaryTableBuilder {
             hyphenation_constrainer: HyphenationConstrainerBuilder::new(),
             punctuation_constrainer: PunctuationConstrainerBuilder::new(),
             joinnum_constrainer: JoinNumConstrainerBuilder::new(),
+            nocont_constrainer: NoContConstrainerBuilder::new(),
             backward_digit_overrides: HashMap::new(),
             compbrl_triggers: Vec::new(),
         }
@@ -452,6 +455,10 @@ impl PrimaryTableBuilder {
                         .then(|| self.joinnum_constrainer.build())
                         .flatten()
                         .map(Constrainer::JoinNum),
+                    (direction == Direction::Forward)
+                        .then(|| self.nocont_constrainer.build())
+                        .flatten()
+                        .map(Constrainer::NoCont),
                 ]
                 .into_iter()
                 .flatten()
@@ -1156,6 +1163,10 @@ impl PrimaryTable {
                         .computer_braille_indicator
                         .endcomp(&dots.to_string(), rule);
                 }
+                Rule::Nocont { chars } => {
+                    // Forward only, like liblouis: no dots to back-translate from.
+                    builder.nocont_constrainer.nocont(chars);
+                }
                 Rule::Compbrl { chars, .. } => {
                     builder.compbrl_triggers.push(chars.clone());
                 }
@@ -1632,7 +1643,6 @@ impl PrimaryTable {
                 | Rule::Exactdots { .. }
                 | Rule::Grouping { .. }
                 | Rule::Literal { .. }
-                | Rule::Nocont { .. }
                 | Rule::Rependword { .. }
                 | Rule::Repword { .. }
                 | Rule::Seqafterexpression { .. }
@@ -1684,6 +1694,11 @@ impl PrimaryTable {
         builder.joinnum_constrainer.digit_characters(
             ctx.character_classes()
                 .get(&CharacterClass::Digit)
+                .unwrap_or_default(),
+        );
+        builder.nocont_constrainer.space_characters(
+            ctx.character_classes()
+                .get(&CharacterClass::Space)
                 .unwrap_or_default(),
         );
         builder.joinnum_constrainer.space_characters(
@@ -1877,6 +1892,7 @@ impl PrimaryTable {
             let nocross_candidate = self
                 .nocross_candidates(chars.as_str(), preceding, char_pos, &constraints)
                 .into_iter()
+                .filter(|t| !(constraints.uncontracted_at(char_pos) && Self::contracts(t)))
                 .max_by_key(|t| t.rank());
 
             // given an input query the trie for matching translations. Then split off the
@@ -1933,6 +1949,10 @@ impl PrimaryTable {
             {
                 candidates.retain(|t| t.length() != 1);
                 candidates.push(digit_translation.clone());
+            }
+
+            if constraints.uncontracted_at(char_pos) {
+                candidates.retain(|t| !Self::contracts(t));
             }
 
             // inside a numeric run, suppress multi-character contractions
@@ -2071,6 +2091,33 @@ impl PrimaryTable {
             }
         }
         translations
+    }
+
+    /// Whether `t` comes from an opcode that liblouis switches off in a word with a
+    /// `nocont` string (its dontContract). Character definitions, `prepunc`/`postpunc`,
+    /// `context` and the number opcodes still apply there.
+    fn contracts(t: &ResolvedTranslation) -> bool {
+        matches!(
+            t.rule(),
+            Some(
+                Rule::Always { .. }
+                    | Rule::Syllable { .. }
+                    | Rule::Repeated { .. }
+                    | Rule::Largesign { .. }
+                    | Rule::Word { .. }
+                    | Rule::Partword { .. }
+                    | Rule::Joinnum { .. }
+                    | Rule::Lowword { .. }
+                    | Rule::Joinword { .. }
+                    | Rule::Sufword { .. }
+                    | Rule::Prfword { .. }
+                    | Rule::Begword { .. }
+                    | Rule::Begmidword { .. }
+                    | Rule::Midword { .. }
+                    | Rule::Midendword { .. }
+                    | Rule::Endword { .. }
+            )
+        )
     }
 
     /// Forward, some rules also consume input after their match: `repeated` the
@@ -2256,6 +2303,24 @@ mod tests {
                 .unwrap();
         assert_eq!(table.translate("-------- -"), "⠒⠒⠤⠤⠀⠤");
         assert_eq!(table.translate("-    -"), "⠤⠀⠤");
+    }
+
+    #[test]
+    fn nocont() {
+        let rules = [
+            parse_rule("letter a 1"),
+            parse_rule("letter b 12"),
+            parse_rule("punctuation @ 4"),
+            parse_rule("space \\s 0"),
+            parse_rule("always ab 123456"),
+            parse_rule("nocont @"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        // only the word with the @ is uncontracted, all of it
+        assert_eq!(table.translate("ab ab@ab ab"), "⠿⠀⠁⠃⠈⠁⠃⠀⠿");
     }
 
     #[test]

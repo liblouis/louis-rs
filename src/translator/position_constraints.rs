@@ -70,6 +70,9 @@ pub enum Constraint {
     /// This position is in a run of whitespace that a digit follows, so a `joinnum`
     /// rule just before it may fire and swallow the run, in forward translation.
     SpaceBeforeDigit,
+    /// This position is in a word that contains a `nocont` string, so the word is
+    /// translated uncontracted, in forward translation.
+    Uncontracted,
 }
 
 pub type Constraints = EnumSet<Constraint>;
@@ -134,6 +137,12 @@ impl PositionConstraints {
         self.0
             .get(pos)
             .is_some_and(|f| f.contains(Constraint::PostpuncOk))
+    }
+
+    pub fn uncontracted_at(&self, pos: usize) -> bool {
+        self.0
+            .get(pos)
+            .is_some_and(|f| f.contains(Constraint::Uncontracted))
     }
 
     pub fn space_before_digit_at(&self, pos: usize) -> bool {
@@ -280,6 +289,37 @@ impl PunctuationConstrainer {
                     }
                 }
             }
+        }
+        constraints
+    }
+}
+
+/// Marks every word, delimited by whitespace, that contains one of the `nocont`
+/// strings, mirroring liblouis's `doNocont`: such a word is translated
+/// uncontracted (forward translation only).
+#[derive(Debug, Clone)]
+pub struct NoContConstrainer {
+    strings: Vec<String>,
+    space_chars: HashSet<char>,
+}
+
+impl NoContConstrainer {
+    fn compute(&self, input: &str) -> Vec<Constraints> {
+        let chars: Vec<char> = input.chars().collect();
+        let mut constraints = vec![Constraints::empty(); chars.len()];
+        let mut start = 0;
+        while start < chars.len() {
+            let end = (start..chars.len())
+                .find(|&i| self.space_chars.contains(&chars[i]))
+                .unwrap_or(chars.len());
+            // case-insensitive, like every rule's characters in liblouis
+            let word = String::from_iter(&chars[start..end]).to_lowercase();
+            if self.strings.iter().any(|s| word.contains(s.as_str())) {
+                for c in &mut constraints[start..end] {
+                    c.insert(Constraint::Uncontracted);
+                }
+            }
+            start = end + 1;
         }
         constraints
     }
@@ -555,6 +595,9 @@ pub enum Constrainer {
     /// Detects whitespace runs that a digit follows and sets
     /// [`Constraint::SpaceBeforeDigit`].
     JoinNum(JoinNumConstrainer),
+    /// Detects words containing a `nocont` string and sets
+    /// [`Constraint::Uncontracted`].
+    NoCont(NoContConstrainer),
 }
 
 impl Constrainer {
@@ -568,6 +611,7 @@ impl Constrainer {
             Constrainer::Hyphenation(c) => c.compute(input),
             Constrainer::Punctuation(c) => c.compute(input),
             Constrainer::JoinNum(c) => c.compute(input),
+            Constrainer::NoCont(c) => c.compute(input),
         }
     }
 }
@@ -829,6 +873,34 @@ impl PunctuationConstrainerBuilder {
     }
 }
 
+/// A builder for [`Constrainer::NoCont`].
+#[derive(Debug, Default)]
+pub struct NoContConstrainerBuilder {
+    strings: Vec<String>,
+    space_chars: HashSet<char>,
+}
+
+impl NoContConstrainerBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn nocont(&mut self, s: &str) {
+        self.strings.push(s.to_lowercase());
+    }
+
+    pub fn space_characters(&mut self, chars: HashSet<char>) {
+        self.space_chars = chars;
+    }
+
+    pub fn build(self) -> Option<NoContConstrainer> {
+        (!self.strings.is_empty()).then_some(NoContConstrainer {
+            strings: self.strings,
+            space_chars: self.space_chars,
+        })
+    }
+}
+
 /// A builder for [`Constrainer::JoinNum`].
 #[derive(Debug, Default)]
 pub struct JoinNumConstrainerBuilder {
@@ -1036,6 +1108,23 @@ mod tests {
         builder.multind_capsletter("CL");
         let c = backward_caps_constrainers(builder).precompute("CLab", &[]);
         assert_eq!(titlecase(&c), vec![false, false, true, false]);
+    }
+
+    #[test]
+    fn nocont_marks_the_whole_word() {
+        let mut builder = NoContConstrainerBuilder::new();
+        builder.nocont("c@");
+        builder.space_characters(HashSet::from([' ']));
+        let c = Constrainers::new(vec![Constrainer::NoCont(builder.build().unwrap())])
+            .precompute("ab C@D e", &[]);
+        let marked: Vec<bool> =
+            c.0.iter()
+                .map(|f| f.contains(Constraint::Uncontracted))
+                .collect();
+        assert_eq!(
+            marked,
+            vec![false, false, false, true, true, true, false, false]
+        );
     }
 
     #[test]
