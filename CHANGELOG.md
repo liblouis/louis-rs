@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- The `multind` opcode now works. It was parsed but ignored, so back-translation
+  misread indicators that follow each other: with `multind 56-6 letsign
+  capsletter` in `en-us-g2.ctb`, ⠰⠠⠁ came back as ";A" instead of "A".
 - The `replace` opcode now works. It was parsed but ignored, so characters a
   table drops this way, such as the word joiner and the zero-width no-break
   space in `spaces.uti`, came out as blank cells.
