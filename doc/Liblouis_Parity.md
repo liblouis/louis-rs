@@ -8,12 +8,14 @@ This document says what it can do today, what it can't yet, and where the remain
 work is, so you can tell whether it's usable for your case and pick something up if
 it isn't.
 
-Measured at louis-rs `ba984d6` against liblouis `011cfb3b`:
+Measured at louis-rs `7721e7d` against liblouis `0d3be2c4`, which is `011cfb3b` plus
+[liblouis#2176](https://github.com/liblouis/liblouis/pull/2176). Without that fix four
+YAML files (`en-g3`, `en-ueb`, `it`, `de-g2-sbs`) don't parse and drop out:
 
 |                                |           |
 |--------------------------------|-----------|
 | Assertions run                 | 2 241 029 |
-| Pass                           | **98.9%** |
+| Pass                           | **99.0%** |
 | Fail                           | 0.5%      |
 | Expected failure               | 0.5%      |
 | Table files that parse cleanly | 458 / 458 |
