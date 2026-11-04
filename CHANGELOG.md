@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- `louis trace` no longer panics when it shows a rule of certain opcodes,
+  such as the `begcomp` and `endcomp` indicators of `cy-cy-g1.utb`.
 - The deprecated `literal` opcode now works, as a synonym of `compbrl`. It
   was parsed but ignored: with `cy-cy-g1.utb`, "file.txt" was not put in
   computer braille.
