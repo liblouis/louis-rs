@@ -1662,13 +1662,15 @@ impl PrimaryTable {
                 Rule::Hyphen { .. } => (),
                 // expanded by the parser
                 Rule::Include { .. } => (),
+                // a no-op in liblouis too: compiled, but its only use in pattern.c is
+                // commented out
+                Rule::Seqafterexpression { .. } => (),
                 // FIXME: not implemented yet, see TODO.org
                 Rule::Class { .. }
                 | Rule::Exactdots { .. }
                 | Rule::Grouping { .. }
                 | Rule::Rependword { .. }
                 | Rule::Repword { .. }
-                | Rule::Seqafterexpression { .. }
                 | Rule::Seqafterpattern { .. } => (),
             }
         }
