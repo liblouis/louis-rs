@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- The deprecated `literal` opcode now works, as a synonym of `compbrl`. It
+  was parsed but ignored: with `cy-cy-g1.utb`, "file.txt" was not put in
+  computer braille.
 - The `capsnocont` opcode now works. It was parsed but ignored, so words in
   capitals were contracted: with `no-no-g1.ctb`, "OG" was contracted to ⠉.
 - The `nocont` opcode now works. It was parsed but ignored, so e-mail
