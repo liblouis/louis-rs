@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- The `repeated` opcode now works. It was parsed but ignored, so runs a table
+  shortens this way, such as separator lines of hyphens or runs of spaces,
+  were translated character by character.
 - The `multind` opcode now works. It was parsed but ignored, so back-translation
   misread indicators that follow each other: with `multind 56-6 letsign
   capsletter` in `en-us-g2.ctb`, ⠰⠠⠁ came back as ";A" instead of "A".
