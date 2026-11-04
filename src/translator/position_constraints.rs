@@ -301,6 +301,15 @@ fn matches_at(chars: &[char], pos: usize, pattern: &str) -> bool {
     chars[pos..].starts_with(&pattern)
 }
 
+/// Length in cells of the longest of `patterns` matching at `pos`.
+fn longest_match_at(chars: &[char], pos: usize, patterns: &[String]) -> Option<usize> {
+    patterns
+        .iter()
+        .filter(|p| matches_at(chars, pos, p))
+        .map(|p| p.chars().count())
+        .max()
+}
+
 /// Detects `capsletter`/`begcapsword`/`endcapsword` indicator dots in backward
 /// (braille → text) input and sets [`Constraint::TitleCase`]/[`Constraint::Uppercase`]
 /// at every position whose decoded character(s) should be capitalized.
@@ -312,8 +321,10 @@ fn matches_at(chars: &[char], pos: usize, pattern: &str) -> bool {
 /// auto-termination rule.
 #[derive(Debug, Clone)]
 pub struct BackwardCapsConstrainer {
-    capsletter_dots: Option<String>,
-    begcapsword_dots: Option<String>,
+    /// The indicator's own dots plus any `multind` sequences naming it (e.g.
+    /// `56-6 letsign capsletter`), which act like it, just spelled with more cells.
+    capsletter_dots: Vec<String>,
+    begcapsword_dots: Vec<String>,
     endcapsword_dots: Option<String>,
     letter_cells: HashSet<char>,
 }
@@ -325,13 +336,15 @@ impl BackwardCapsConstrainer {
         let mut constraints: Vec<Constraints> = vec![Constraints::empty(); n];
         let mut pos = 0;
         while pos < n {
-            // Check begcapsword before capsletter: capsletter's dots are commonly a
-            // prefix of begcapsword's (e.g. `46` vs `46-46`), so checking the shorter
-            // pattern first would match a `begcapsword` occurrence one cell early.
-            if let Some(dots) = &self.begcapsword_dots
-                && matches_at(&chars, pos, dots)
+            // Longest match wins, begcapsword on a tie: capsletter's dots are commonly
+            // a prefix of begcapsword's (e.g. `46` vs `46-46`), and a `multind`
+            // (e.g. `56-6 letsign capsletter`) is longer than the bare indicator.
+            let begcapsword = longest_match_at(&chars, pos, &self.begcapsword_dots);
+            let capsletter = longest_match_at(&chars, pos, &self.capsletter_dots);
+            if let Some(len) = begcapsword
+                && len >= capsletter.unwrap_or(0)
             {
-                pos += dots.chars().count();
+                pos += len;
                 loop {
                     if let Some(end_dots) = &self.endcapsword_dots
                         && matches_at(&chars, pos, end_dots)
@@ -348,10 +361,8 @@ impl BackwardCapsConstrainer {
                 }
                 continue;
             }
-            if let Some(dots) = &self.capsletter_dots
-                && matches_at(&chars, pos, dots)
-            {
-                pos += dots.chars().count();
+            if let Some(len) = capsletter {
+                pos += len;
                 if pos < n {
                     constraints[pos].insert(Constraint::TitleCase);
                 }
@@ -375,7 +386,9 @@ impl BackwardCapsConstrainer {
 /// avoid false positives on such tables.
 #[derive(Debug, Clone)]
 pub struct BackwardNumericConstrainer {
-    numsign_dots: Option<String>,
+    /// The `numsign` dots plus any `multind` sequences naming it, e.g.
+    /// `6-3456 letsign numsign`.
+    numsign_dots: Vec<String>,
     nonumsign_dots: Option<String>,
     digit_cells: HashSet<char>,
     letter_cells: HashSet<char>,
@@ -389,11 +402,10 @@ impl BackwardNumericConstrainer {
         let mut pos = 0;
         let mut in_number = false;
         while pos < n {
-            if let Some(dots) = &self.numsign_dots
-                && matches_at(&chars, pos, dots)
+            if let Some(len) = longest_match_at(&chars, pos, &self.numsign_dots)
                 && (pos == 0 || !self.letter_cells.contains(&chars[pos - 1]))
             {
-                pos += dots.chars().count();
+                pos += len;
                 in_number = true;
                 continue;
             }
@@ -436,13 +448,8 @@ impl BackwardNoContractConstrainer {
         let mut pos = 0;
         while pos < n {
             // Longest first: one indicator's dots are often a prefix of another's.
-            if let Some(dots) = self
-                .indicator_dots
-                .iter()
-                .filter(|d| matches_at(&chars, pos, d))
-                .max_by_key(|d| d.chars().count())
-            {
-                pos += dots.chars().count();
+            if let Some(len) = longest_match_at(&chars, pos, &self.indicator_dots) {
+                pos += len;
                 while pos < n && self.letter_cells.contains(&chars[pos]) {
                     constraints[pos].insert(Constraint::NoContract);
                     pos += 1;
@@ -591,6 +598,10 @@ pub struct BackwardCapsConstrainerBuilder {
     capsletter_dots: Option<String>,
     begcapsword_dots: Option<String>,
     endcapsword_dots: Option<String>,
+    /// `multind` sequences that end in (or contain) a `capsletter`/`begcapsword`:
+    /// they act like that indicator, just spelled with more cells.
+    multind_capsletter_dots: Vec<String>,
+    multind_begcapsword_dots: Vec<String>,
     letter_cells: HashSet<char>,
 }
 
@@ -611,17 +622,35 @@ impl BackwardCapsConstrainerBuilder {
         self.endcapsword_dots = Some(dots.to_string());
     }
 
+    pub fn multind_capsletter(&mut self, dots: &str) {
+        self.multind_capsletter_dots.push(dots.to_string());
+    }
+
+    pub fn multind_begcapsword(&mut self, dots: &str) {
+        self.multind_begcapsword_dots.push(dots.to_string());
+    }
+
     pub fn letter_cells(&mut self, cells: HashSet<char>) {
         self.letter_cells = cells;
     }
 
     pub fn build(self) -> Option<BackwardCapsConstrainer> {
-        if self.capsletter_dots.is_none() && self.begcapsword_dots.is_none() {
+        let capsletter_dots: Vec<String> = self
+            .capsletter_dots
+            .into_iter()
+            .chain(self.multind_capsletter_dots)
+            .collect();
+        let begcapsword_dots: Vec<String> = self
+            .begcapsword_dots
+            .into_iter()
+            .chain(self.multind_begcapsword_dots)
+            .collect();
+        if capsletter_dots.is_empty() && begcapsword_dots.is_empty() {
             None
         } else {
             Some(BackwardCapsConstrainer {
-                capsletter_dots: self.capsletter_dots,
-                begcapsword_dots: self.begcapsword_dots,
+                capsletter_dots,
+                begcapsword_dots,
                 endcapsword_dots: self.endcapsword_dots,
                 letter_cells: self.letter_cells,
             })
@@ -633,6 +662,8 @@ impl BackwardCapsConstrainerBuilder {
 #[derive(Debug, Default)]
 pub struct BackwardNumericConstrainerBuilder {
     numsign_dots: Option<String>,
+    /// `multind` sequences containing a `numsign`, e.g. `6-3456 letsign numsign`.
+    multind_numsign_dots: Vec<String>,
     nonumsign_dots: Option<String>,
     digit_cells: HashSet<char>,
     letter_cells: HashSet<char>,
@@ -651,6 +682,10 @@ impl BackwardNumericConstrainerBuilder {
         self.nonumsign_dots = Some(dots.to_string());
     }
 
+    pub fn multind_numsign(&mut self, dots: &str) {
+        self.multind_numsign_dots.push(dots.to_string());
+    }
+
     pub fn digit_cells(&mut self, cells: HashSet<char>) {
         self.digit_cells = cells;
     }
@@ -660,11 +695,16 @@ impl BackwardNumericConstrainerBuilder {
     }
 
     pub fn build(self) -> Option<BackwardNumericConstrainer> {
-        if self.numsign_dots.is_none() {
+        let numsign_dots: Vec<String> = self
+            .numsign_dots
+            .into_iter()
+            .chain(self.multind_numsign_dots)
+            .collect();
+        if numsign_dots.is_empty() {
             None
         } else {
             Some(BackwardNumericConstrainer {
-                numsign_dots: self.numsign_dots,
+                numsign_dots,
                 nonumsign_dots: self.nonumsign_dots,
                 digit_cells: self.digit_cells,
                 letter_cells: self.letter_cells,
@@ -908,6 +948,17 @@ mod tests {
         let c = backward_caps_constrainers(builder).precompute("CCab ", &[]);
         assert_eq!(uppercase(&c), vec![false, false, true, true, false]);
         assert_eq!(titlecase(&c), vec![false, false, false, false, false]);
+    }
+
+    #[test]
+    fn multind_capsletter_after_letsign_titlecases_the_letter() {
+        // `multind LC letsign capsletter`: the bare capsletter `C` would also match
+        // one cell in, but the whole sequence is consumed first.
+        let mut builder = BackwardCapsConstrainerBuilder::new();
+        builder.capsletter("C");
+        builder.multind_capsletter("CL");
+        let c = backward_caps_constrainers(builder).precompute("CLab", &[]);
+        assert_eq!(titlecase(&c), vec![false, false, true, false]);
     }
 
     #[test]

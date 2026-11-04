@@ -79,8 +79,6 @@
   the "not implemented yet" arm of ~PrimaryTable::compile~, which is
   now exhaustive so a new ~Rule~ variant has to be placed. By number
   of liblouis tables using them:
-  - ~multind~ (29): several indicators on one cell, e.g. ~multind
-    6-46 letsign capsletter~
   - ~repeated~ (25): a run of a repeated character as one rule, e.g.
     ~repeated ---- 36~
   - ~midendnumericmodechars~ (16)

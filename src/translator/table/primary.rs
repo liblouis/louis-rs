@@ -927,6 +927,43 @@ impl PrimaryTable {
                             .indicator(&dots.to_string());
                     }
                 }
+                Rule::Multind { dots, names, .. } => {
+                    // Back-translation only: `dots` is several indicators in a row
+                    // (`multind 56-6 letsign capsletter`). Each indicator's own
+                    // backward guard would reject it here -- letsign wants a letter
+                    // next, not the capital sign -- so the whole sequence is consumed
+                    // as one unit and each named indicator's effect is keyed on it.
+                    let dots = dots.to_string();
+                    if direction == Direction::Backward
+                        && PrimaryTableBuilder::backward_indicator_dots_available(
+                            "multind",
+                            &dots,
+                            &letter_dots,
+                        )
+                    {
+                        builder.insert_backward_indicator(&dots, rule);
+                        for name in names {
+                            match name.as_str() {
+                                "letsign" | "nocontractsign" | "nonumsign" => {
+                                    builder.backward_nocontract_constrainer.indicator(&dots)
+                                }
+                                "capsletter" => {
+                                    builder.backward_caps_constrainer.multind_capsletter(&dots)
+                                }
+                                "begcapsword" => {
+                                    builder.backward_caps_constrainer.multind_begcapsword(&dots)
+                                }
+                                "numsign" => {
+                                    builder.backward_numeric_constrainer.multind_numsign(&dots)
+                                }
+                                // endcapsword etc.: consuming the cells is the
+                                // whole effect, the constrainers already end a
+                                // caps word at the first non-letter cell.
+                                _ => (),
+                            }
+                        }
+                    }
+                }
                 Rule::Noletsign { chars } => {
                     builder.lettersign_indicator.noletsign(chars);
                 }
@@ -1529,7 +1566,6 @@ impl PrimaryTable {
                 | Rule::Joinnum { .. }
                 | Rule::Literal { .. }
                 | Rule::Midendnumericmodechars { .. }
-                | Rule::Multind { .. }
                 | Rule::Nocont { .. }
                 | Rule::Repeated { .. }
                 | Rule::Rependword { .. }
