@@ -1072,6 +1072,26 @@ impl PrimaryTable {
                         rule,
                     );
                 }
+                Rule::Repeated { chars, dots, .. } => {
+                    // Like `always`; `trace` then swallows the copies of `chars`
+                    // that follow. liblouis skips the single-cell backward rule
+                    // as too ambiguous (`repeated \s 0` would turn every blank
+                    // cell into a space).
+                    let dots = dots.to_string();
+                    if direction == Direction::Forward || dots.chars().count() > 1 {
+                        builder.get_trie_mut(rule).insert(
+                            chars,
+                            &dots,
+                            None,
+                            None,
+                            direction,
+                            rule.precedence(),
+                            vec![],
+                            TranslationStage::Main,
+                            rule,
+                        );
+                    }
+                }
                 Rule::Always {
                     chars,
                     dots,
@@ -1567,7 +1587,6 @@ impl PrimaryTable {
                 | Rule::Literal { .. }
                 | Rule::Midendnumericmodechars { .. }
                 | Rule::Nocont { .. }
-                | Rule::Repeated { .. }
                 | Rule::Rependword { .. }
                 | Rule::Repword { .. }
                 | Rule::Seqafterexpression { .. }
@@ -1933,6 +1952,7 @@ impl PrimaryTable {
                 translations.push(translation);
                 delayed_translations = self.update_offsets(delayed_translations, nocross.length());
             } else if let Some(t) = candidate {
+                let t = &self.swallow_repeats(t.clone(), chars.as_str());
                 if t.length() == 0 {
                     // if there is a zero-length translation candiate we run the risk of an infinite
                     // loop, so remember the current translation so we only apply it once
@@ -1992,6 +2012,29 @@ impl PrimaryTable {
             }
         }
         translations
+    }
+
+    /// A forward `repeated` rule also consumes the copies of its characters that
+    /// immediately follow, so `repeated --- 36-36-36` turns "---------" into one
+    /// 36-36-36.
+    fn swallow_repeats(&self, t: ResolvedTranslation, rest: &str) -> ResolvedTranslation {
+        if self.direction != Direction::Forward || !matches!(t.rule(), Some(Rule::Repeated { .. }))
+        {
+            return t;
+        }
+        // The matched text, not the rule's `chars`: the trie matches case-insensitively,
+        // so the two can differ, even in byte length.
+        let end = rest
+            .char_indices()
+            .nth(t.length())
+            .map_or(rest.len(), |(i, _)| i);
+        let unit = &rest[..end];
+        let mut consumed = &rest[end..];
+        while let Some(after) = consumed.strip_prefix(unit) {
+            consumed = after;
+        }
+        let input = &rest[..rest.len() - consumed.len()];
+        t.with_input(input)
     }
 
     fn handle_undefined_char(&self, ch: char, options: &TranslationOptions) -> String {
@@ -2121,6 +2164,22 @@ mod tests {
         assert_eq!(table.translate("foobar"), "⠇⠸");
         assert_eq!(table.translate("  "), "⠀⠀");
         assert_eq!(table.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
+    }
+
+    #[test]
+    fn repeated() {
+        let rules = [
+            parse_rule("punctuation - 36"),
+            parse_rule("space \\s 0"),
+            parse_rule("repeated --- 25-25"),
+            parse_rule("repeated \\s 0"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        assert_eq!(table.translate("-------- -"), "⠒⠒⠤⠤⠀⠤");
+        assert_eq!(table.translate("-    -"), "⠤⠀⠤");
     }
 
     #[test]

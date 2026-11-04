@@ -79,8 +79,6 @@
   the "not implemented yet" arm of ~PrimaryTable::compile~, which is
   now exhaustive so a new ~Rule~ variant has to be placed. By number
   of liblouis tables using them:
-  - ~repeated~ (25): a run of a repeated character as one rule, e.g.
-    ~repeated ---- 36~
   - ~midendnumericmodechars~ (16)
   - ~joinnum~ (13): a sign joined to a following number, e.g.
     ~joinnum € 5-15~
