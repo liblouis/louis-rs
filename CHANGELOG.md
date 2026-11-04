@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- `decpoint` now only applies before a digit in forward translation.
+  Before, it replaced the character's own definition: with
+  `cy-cy-g1.utb`, the "." in "file.txt" became ⠂ instead of ⠨ in
+  computer braille.
 - `louis trace` no longer panics when it shows a rule of certain opcodes,
   such as the `begcomp` and `endcomp` indicators of `cy-cy-g1.utb`.
 - The deprecated `literal` opcode now works, as a synonym of `compbrl`. It
