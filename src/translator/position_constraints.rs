@@ -614,7 +614,7 @@ impl NumericConstrainerBuilder {
     }
 
     pub fn numericmodechars(&mut self, s: &str) {
-        self.extra_numeric_chars = HashSet::from_iter(s.chars());
+        self.extra_numeric_chars.extend(s.chars());
     }
 
     pub fn midnum(&mut self, s: &str) {

@@ -64,8 +64,10 @@ impl IndicatorBuilder {
         self.0.terminating_chars = HashSet::from_iter(s.chars());
     }
 
+    /// Also used for `midendnumericmodechars`: within a number both keep it going.
+    /// liblouis's `numericmodechars` can also start one, which isn't implemented.
     pub fn numericmodechars(&mut self, s: &str) {
-        self.0.extra_numeric_chars = HashSet::from_iter(s.chars());
+        self.0.extra_numeric_chars.extend(s.chars());
     }
 
     pub fn numeric_characters(&mut self, chars: HashSet<char>) {
@@ -78,7 +80,7 @@ pub struct Indicator {
     /// Characters that trigger entry into a numeric run (digits)
     numeric_chars: HashSet<char>,
     /// Characters that extend a numeric run without being digits themselves
-    /// (e.g. `numericmodechars`)
+    /// (`numericmodechars`, `midendnumericmodechars`)
     extra_numeric_chars: HashSet<char>,
     /// Characters that extend a numeric run only when sandwiched between two
     /// digits (`midnum`)
@@ -150,6 +152,22 @@ mod tests {
         t.iter()
             .map(|(pos, r)| (*pos, r.output().to_string()))
             .collect()
+    }
+
+    #[test]
+    fn midendnumericmodechars_keep_a_number_going() {
+        // `midendnumericmodechars ,` shares the numericmodechars set: "1,2" is one
+        // number with one numsign, and a leading "," doesn't start one
+        let mut builder = IndicatorBuilder::new();
+        builder.numeric_characters(HashSet::from(['1', '2']));
+        builder.numsign("⠼", &rule("numsign 3456"));
+        builder.numericmodechars(",");
+        let indicator = builder.build().unwrap();
+
+        assert_eq!(
+            pairs(&indicator.precompute("1,2 ,1")),
+            vec![(0, "⠼".to_string()), (5, "⠼".to_string())]
+        );
     }
 
     #[test]

@@ -744,6 +744,11 @@ impl PrimaryTable {
                     builder.numeric_indicator.numericmodechars(chars);
                     builder.numeric_constrainer.numericmodechars(chars);
                 }
+                Rule::Midendnumericmodechars { chars } => {
+                    // Only the number signs, not the numeric constrainer: liblouis's
+                    // numeric mode doesn't block contractions.
+                    builder.numeric_indicator.numericmodechars(chars);
+                }
                 Rule::Capsletter { dots, .. } => {
                     builder
                         .uppercase_indicator
@@ -1627,7 +1632,6 @@ impl PrimaryTable {
                 | Rule::Exactdots { .. }
                 | Rule::Grouping { .. }
                 | Rule::Literal { .. }
-                | Rule::Midendnumericmodechars { .. }
                 | Rule::Nocont { .. }
                 | Rule::Rependword { .. }
                 | Rule::Repword { .. }
