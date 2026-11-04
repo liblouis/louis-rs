@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - ReleaseDate
 
+### Changed
+- The `seqafterexpression` opcode is now deliberately ignored rather than
+  listed as not implemented: liblouis compiles it but never uses it
+  (liblouis#2164).
+
 ### Fixed
 - `decpoint` now only applies before a digit in forward translation.
   Before, it replaced the character's own definition: with
