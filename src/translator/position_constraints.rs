@@ -70,8 +70,8 @@ pub enum Constraint {
     /// This position is in a run of whitespace that a digit follows, so a `joinnum`
     /// rule just before it may fire and swallow the run, in forward translation.
     SpaceBeforeDigit,
-    /// This position is in a word that contains a `nocont` string, so the word is
-    /// translated uncontracted, in forward translation.
+    /// Contractions are off at this position, in forward translation: it is in a word
+    /// with a `nocont` string, or, with `capsnocont`, at or after a run of capitals.
     Uncontracted,
 }
 
@@ -316,6 +316,40 @@ impl NoContConstrainer {
             let word = String::from_iter(&chars[start..end]).to_lowercase();
             if self.strings.iter().any(|s| word.contains(s.as_str())) {
                 for c in &mut constraints[start..end] {
+                    c.insert(Constraint::Uncontracted);
+                }
+            }
+            start = end + 1;
+        }
+        constraints
+    }
+}
+
+/// Marks a word, delimited by whitespace, from the first of two or more consecutive
+/// capitals to its end, mirroring liblouis's `capsnocont` handling in `markEmphases`:
+/// that part is translated uncontracted (forward translation only).
+#[derive(Debug, Clone)]
+pub struct CapsNoContConstrainer {
+    uppercase_chars: HashSet<char>,
+    space_chars: HashSet<char>,
+}
+
+impl CapsNoContConstrainer {
+    fn compute(&self, input: &str) -> Vec<Constraints> {
+        let chars: Vec<char> = input.chars().collect();
+        let mut constraints = vec![Constraints::empty(); chars.len()];
+        let mut start = 0;
+        while start < chars.len() {
+            let end = (start..chars.len())
+                .find(|&i| self.space_chars.contains(&chars[i]))
+                .unwrap_or(chars.len());
+            // find the first pair of capitals
+            if let Some(i) = chars[start..end]
+                .windows(2)
+                .position(|w| w.iter().all(|c| self.uppercase_chars.contains(c)))
+            {
+                // mark dontContract up to the next space
+                for c in &mut constraints[start + i..end] {
                     c.insert(Constraint::Uncontracted);
                 }
             }
@@ -598,6 +632,8 @@ pub enum Constrainer {
     /// Detects words containing a `nocont` string and sets
     /// [`Constraint::Uncontracted`].
     NoCont(NoContConstrainer),
+    /// Detects runs of capitals and sets [`Constraint::Uncontracted`].
+    CapsNoCont(CapsNoContConstrainer),
 }
 
 impl Constrainer {
@@ -612,6 +648,7 @@ impl Constrainer {
             Constrainer::Punctuation(c) => c.compute(input),
             Constrainer::JoinNum(c) => c.compute(input),
             Constrainer::NoCont(c) => c.compute(input),
+            Constrainer::CapsNoCont(c) => c.compute(input),
         }
     }
 }
@@ -901,6 +938,39 @@ impl NoContConstrainerBuilder {
     }
 }
 
+/// A builder for [`Constrainer::CapsNoCont`].
+#[derive(Debug, Default)]
+pub struct CapsNoContConstrainerBuilder {
+    present: bool,
+    uppercase_chars: HashSet<char>,
+    space_chars: HashSet<char>,
+}
+
+impl CapsNoContConstrainerBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn mark_present(&mut self) {
+        self.present = true;
+    }
+
+    pub fn uppercase_characters(&mut self, chars: HashSet<char>) {
+        self.uppercase_chars = chars;
+    }
+
+    pub fn space_characters(&mut self, chars: HashSet<char>) {
+        self.space_chars = chars;
+    }
+
+    pub fn build(self) -> Option<CapsNoContConstrainer> {
+        self.present.then_some(CapsNoContConstrainer {
+            uppercase_chars: self.uppercase_chars,
+            space_chars: self.space_chars,
+        })
+    }
+}
+
 /// A builder for [`Constrainer::JoinNum`].
 #[derive(Debug, Default)]
 pub struct JoinNumConstrainerBuilder {
@@ -1125,6 +1195,22 @@ mod tests {
             marked,
             vec![false, false, false, true, true, true, false, false]
         );
+    }
+
+    #[test]
+    fn capsnocont_marks_from_the_capitals_to_the_end_of_the_word() {
+        let mut builder = CapsNoContConstrainerBuilder::new();
+        builder.mark_present();
+        builder.uppercase_characters(HashSet::from(['A', 'B']));
+        builder.space_characters(HashSet::from([' ']));
+        let c = Constrainers::new(vec![Constrainer::CapsNoCont(builder.build().unwrap())])
+            .precompute("aABa Aa", &[]);
+        let marked: Vec<bool> =
+            c.0.iter()
+                .map(|f| f.contains(Constraint::Uncontracted))
+                .collect();
+        // a single capital is not enough
+        assert_eq!(marked, vec![false, true, true, true, false, false, false]);
     }
 
     #[test]

@@ -23,10 +23,10 @@ use crate::{
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
         position_constraints::{
             BackwardCapsConstrainerBuilder, BackwardNoContractConstrainerBuilder,
-            BackwardNumericConstrainerBuilder, ComputerBrailleConstrainer, Constrainer,
-            Constrainers, HyphenationConstrainerBuilder, JoinNumConstrainerBuilder,
-            NoContConstrainerBuilder, NumericConstrainerBuilder, PositionConstraints,
-            PunctuationConstrainerBuilder,
+            BackwardNumericConstrainerBuilder, CapsNoContConstrainerBuilder,
+            ComputerBrailleConstrainer, Constrainer, Constrainers, HyphenationConstrainerBuilder,
+            JoinNumConstrainerBuilder, NoContConstrainerBuilder, NumericConstrainerBuilder,
+            PositionConstraints, PunctuationConstrainerBuilder,
         },
         table::TableContext,
         translation::TranslationSubset,
@@ -189,6 +189,7 @@ struct PrimaryTableBuilder {
     punctuation_constrainer: PunctuationConstrainerBuilder,
     joinnum_constrainer: JoinNumConstrainerBuilder,
     nocont_constrainer: NoContConstrainerBuilder,
+    capsnocont_constrainer: CapsNoContConstrainerBuilder,
     backward_digit_overrides: HashMap<char, ResolvedTranslation>,
     compbrl_triggers: Vec<String>,
 }
@@ -243,6 +244,7 @@ impl PrimaryTableBuilder {
             punctuation_constrainer: PunctuationConstrainerBuilder::new(),
             joinnum_constrainer: JoinNumConstrainerBuilder::new(),
             nocont_constrainer: NoContConstrainerBuilder::new(),
+            capsnocont_constrainer: CapsNoContConstrainerBuilder::new(),
             backward_digit_overrides: HashMap::new(),
             compbrl_triggers: Vec::new(),
         }
@@ -459,6 +461,10 @@ impl PrimaryTableBuilder {
                         .then(|| self.nocont_constrainer.build())
                         .flatten()
                         .map(Constrainer::NoCont),
+                    (direction == Direction::Forward)
+                        .then(|| self.capsnocont_constrainer.build())
+                        .flatten()
+                        .map(Constrainer::CapsNoCont),
                 ]
                 .into_iter()
                 .flatten()
@@ -1163,6 +1169,7 @@ impl PrimaryTable {
                         .computer_braille_indicator
                         .endcomp(&dots.to_string(), rule);
                 }
+                Rule::Capsnocont {} => builder.capsnocont_constrainer.mark_present(),
                 Rule::Nocont { chars } => {
                     // Forward only, like liblouis: no dots to back-translate from.
                     builder.nocont_constrainer.nocont(chars);
@@ -1638,8 +1645,7 @@ impl PrimaryTable {
                 // expanded by the parser
                 Rule::Include { .. } => (),
                 // FIXME: not implemented yet, see TODO.org
-                Rule::Capsnocont { .. }
-                | Rule::Class { .. }
+                Rule::Class { .. }
                 | Rule::Exactdots { .. }
                 | Rule::Grouping { .. }
                 | Rule::Literal { .. }
@@ -1694,6 +1700,16 @@ impl PrimaryTable {
         builder.joinnum_constrainer.digit_characters(
             ctx.character_classes()
                 .get(&CharacterClass::Digit)
+                .unwrap_or_default(),
+        );
+        builder.capsnocont_constrainer.uppercase_characters(
+            ctx.character_classes()
+                .get(&CharacterClass::Uppercase)
+                .unwrap_or_default(),
+        );
+        builder.capsnocont_constrainer.space_characters(
+            ctx.character_classes()
+                .get(&CharacterClass::Space)
                 .unwrap_or_default(),
         );
         builder.nocont_constrainer.space_characters(

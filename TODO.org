@@ -79,7 +79,6 @@
   the "not implemented yet" arm of ~PrimaryTable::compile~, which is
   now exhaustive so a new ~Rule~ variant has to be placed. By number
   of liblouis tables using them:
-  - ~capsnocont~ (5)
   - ~seqafterexpression~, ~seqafterpattern~ (3 each), ~literal~ (2),
     ~repword~, ~rependword~ (1 each)
   - ~exactdots~, ~grouping~ (none), and ~class~, a deprecated alias of
