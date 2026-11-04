@@ -67,6 +67,9 @@ pub enum Constraint {
     /// A `postpunc` rule may fire on the punctuation character at this position, in
     /// forward translation.
     PostpuncOk,
+    /// This position is in a run of whitespace that a digit follows, so a `joinnum`
+    /// rule just before it may fire and swallow the run, in forward translation.
+    SpaceBeforeDigit,
 }
 
 pub type Constraints = EnumSet<Constraint>;
@@ -131,6 +134,12 @@ impl PositionConstraints {
         self.0
             .get(pos)
             .is_some_and(|f| f.contains(Constraint::PostpuncOk))
+    }
+
+    pub fn space_before_digit_at(&self, pos: usize) -> bool {
+        self.0
+            .get(pos)
+            .is_some_and(|f| f.contains(Constraint::SpaceBeforeDigit))
     }
 }
 
@@ -270,6 +279,35 @@ impl PunctuationConstrainer {
                         break;
                     }
                 }
+            }
+        }
+        constraints
+    }
+}
+
+/// Marks the whitespace runs that a digit follows, so a `joinnum` rule just before one
+/// may fire and swallow it, mirroring liblouis's `CTO_JoinNum` (forward translation
+/// only). Like `prepunc`, a scan of any length that the trie's single-neighbor
+/// transitions can't express.
+#[derive(Debug, Clone)]
+pub struct JoinNumConstrainer {
+    digit_chars: HashSet<char>,
+    space_chars: HashSet<char>,
+}
+
+impl JoinNumConstrainer {
+    fn compute(&self, input: &str) -> Vec<Constraints> {
+        let chars: Vec<char> = input.chars().collect();
+        let mut constraints = vec![Constraints::empty(); chars.len()];
+        // scanning backward, remember whether the next non-space is a digit
+        let mut digit_follows = false;
+        for pos in (0..chars.len()).rev() {
+            if self.space_chars.contains(&chars[pos]) {
+                if digit_follows {
+                    constraints[pos].insert(Constraint::SpaceBeforeDigit);
+                }
+            } else {
+                digit_follows = self.digit_chars.contains(&chars[pos]);
             }
         }
         constraints
@@ -514,6 +552,9 @@ pub enum Constrainer {
     /// Detects `prepunc`/`postpunc` scan eligibility and sets
     /// [`Constraint::PrepuncOk`]/[`Constraint::PostpuncOk`].
     Punctuation(PunctuationConstrainer),
+    /// Detects whitespace runs that a digit follows and sets
+    /// [`Constraint::SpaceBeforeDigit`].
+    JoinNum(JoinNumConstrainer),
 }
 
 impl Constrainer {
@@ -526,6 +567,7 @@ impl Constrainer {
             Constrainer::BackwardNumeric(c) => c.compute(input),
             Constrainer::Hyphenation(c) => c.compute(input),
             Constrainer::Punctuation(c) => c.compute(input),
+            Constrainer::JoinNum(c) => c.compute(input),
         }
     }
 }
@@ -787,6 +829,41 @@ impl PunctuationConstrainerBuilder {
     }
 }
 
+/// A builder for [`Constrainer::JoinNum`].
+#[derive(Debug, Default)]
+pub struct JoinNumConstrainerBuilder {
+    present: bool,
+    digit_chars: HashSet<char>,
+    space_chars: HashSet<char>,
+}
+
+impl JoinNumConstrainerBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Marks that the table declares at least one `joinnum` rule, so `build()`
+    /// produces a constrainer.
+    pub fn mark_present(&mut self) {
+        self.present = true;
+    }
+
+    pub fn digit_characters(&mut self, chars: HashSet<char>) {
+        self.digit_chars = chars;
+    }
+
+    pub fn space_characters(&mut self, chars: HashSet<char>) {
+        self.space_chars = chars;
+    }
+
+    pub fn build(self) -> Option<JoinNumConstrainer> {
+        self.present.then_some(JoinNumConstrainer {
+            digit_chars: self.digit_chars,
+            space_chars: self.space_chars,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -959,6 +1036,26 @@ mod tests {
         builder.multind_capsletter("CL");
         let c = backward_caps_constrainers(builder).precompute("CLab", &[]);
         assert_eq!(titlecase(&c), vec![false, false, true, false]);
+    }
+
+    #[test]
+    fn joinnum_marks_spaces_followed_by_a_digit() {
+        let mut builder = JoinNumConstrainerBuilder::new();
+        builder.mark_present();
+        builder.digit_characters(HashSet::from(['1']));
+        builder.space_characters(HashSet::from([' ']));
+        let c = Constrainers::new(vec![Constrainer::JoinNum(builder.build().unwrap())])
+            .precompute("$  1 a $ 1", &[]);
+        let marked: Vec<bool> =
+            c.0.iter()
+                .map(|f| f.contains(Constraint::SpaceBeforeDigit))
+                .collect();
+        assert_eq!(
+            marked,
+            vec![
+                false, true, true, false, false, false, false, false, true, false
+            ]
+        );
     }
 
     #[test]

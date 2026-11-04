@@ -80,8 +80,6 @@
   now exhaustive so a new ~Rule~ variant has to be placed. By number
   of liblouis tables using them:
   - ~midendnumericmodechars~ (16)
-  - ~joinnum~ (13): a sign joined to a following number, e.g.
-    ~joinnum € 5-15~
   - ~nocont~ (10), ~capsnocont~ (5)
   - ~seqafterexpression~, ~seqafterpattern~ (3 each), ~literal~ (2),
     ~repword~, ~rependword~ (1 each)

@@ -24,8 +24,8 @@ use crate::{
         position_constraints::{
             BackwardCapsConstrainerBuilder, BackwardNoContractConstrainerBuilder,
             BackwardNumericConstrainerBuilder, ComputerBrailleConstrainer, Constrainer,
-            Constrainers, HyphenationConstrainerBuilder, NumericConstrainerBuilder,
-            PositionConstraints, PunctuationConstrainerBuilder,
+            Constrainers, HyphenationConstrainerBuilder, JoinNumConstrainerBuilder,
+            NumericConstrainerBuilder, PositionConstraints, PunctuationConstrainerBuilder,
         },
         table::TableContext,
         translation::TranslationSubset,
@@ -186,6 +186,7 @@ struct PrimaryTableBuilder {
     backward_nocontract_constrainer: BackwardNoContractConstrainerBuilder,
     hyphenation_constrainer: HyphenationConstrainerBuilder,
     punctuation_constrainer: PunctuationConstrainerBuilder,
+    joinnum_constrainer: JoinNumConstrainerBuilder,
     backward_digit_overrides: HashMap<char, ResolvedTranslation>,
     compbrl_triggers: Vec<String>,
 }
@@ -238,6 +239,7 @@ impl PrimaryTableBuilder {
             backward_nocontract_constrainer: BackwardNoContractConstrainerBuilder::new(),
             hyphenation_constrainer: HyphenationConstrainerBuilder::new(),
             punctuation_constrainer: PunctuationConstrainerBuilder::new(),
+            joinnum_constrainer: JoinNumConstrainerBuilder::new(),
             backward_digit_overrides: HashMap::new(),
             compbrl_triggers: Vec::new(),
         }
@@ -446,6 +448,10 @@ impl PrimaryTableBuilder {
                         .then(|| self.punctuation_constrainer.build())
                         .flatten()
                         .map(Constrainer::Punctuation),
+                    (direction == Direction::Forward)
+                        .then(|| self.joinnum_constrainer.build())
+                        .flatten()
+                        .map(Constrainer::JoinNum),
                 ]
                 .into_iter()
                 .flatten()
@@ -1529,6 +1535,43 @@ impl PrimaryTable {
                         );
                     }
                 }
+                Rule::Joinnum { chars, dots, .. } => match direction {
+                    Direction::Forward => {
+                        // Fires only when whitespace and then a digit follow, a scan the
+                        // trie can't express: `trace()` gates it and swallows the whitespace.
+                        builder.joinnum_constrainer.mark_present();
+                        builder.get_trie_mut(rule).insert(
+                            chars,
+                            &dots.to_string(),
+                            Some(Transition::Start(vec![
+                                CharacterClass::Space,
+                                CharacterClass::Punctuation,
+                            ])),
+                            None,
+                            direction,
+                            rule.precedence(),
+                            vec![],
+                            TranslationStage::Main,
+                            rule,
+                        );
+                    }
+                    Direction::Backward => {
+                        // The output puts back the space that forward translation
+                        // swallowed, as liblouis's insertSpace does. Not when a space
+                        // follows anyway.
+                        builder.get_trie_mut(rule).insert(
+                            &format!("{chars} "),
+                            &dots.to_string(),
+                            Some(Transition::BegWord),
+                            Some(Transition::ContinuesWord),
+                            direction,
+                            rule.precedence(),
+                            vec![],
+                            TranslationStage::Main,
+                            rule,
+                        );
+                    }
+                },
                 Rule::Match {
                     pre,
                     chars,
@@ -1583,7 +1626,6 @@ impl PrimaryTable {
                 | Rule::Class { .. }
                 | Rule::Exactdots { .. }
                 | Rule::Grouping { .. }
-                | Rule::Joinnum { .. }
                 | Rule::Literal { .. }
                 | Rule::Midendnumericmodechars { .. }
                 | Rule::Nocont { .. }
@@ -1634,6 +1676,16 @@ impl PrimaryTable {
                 )
                 .copied()
                 .collect(),
+        );
+        builder.joinnum_constrainer.digit_characters(
+            ctx.character_classes()
+                .get(&CharacterClass::Digit)
+                .unwrap_or_default(),
+        );
+        builder.joinnum_constrainer.space_characters(
+            ctx.character_classes()
+                .get(&CharacterClass::Space)
+                .unwrap_or_default(),
         );
         builder.punctuation_constrainer.space_characters(
             ctx.character_classes()
@@ -1858,6 +1910,9 @@ impl PrimaryTable {
                 candidates.retain(|t| match t.rule() {
                     Some(Rule::Prepunc { .. }) => constraints.prepunc_ok_at(char_pos),
                     Some(Rule::Postpunc { .. }) => constraints.postpunc_ok_at(char_pos),
+                    Some(Rule::Joinnum { .. }) => {
+                        constraints.space_before_digit_at(char_pos + t.length())
+                    }
                     _ => true,
                 });
             }
@@ -1952,7 +2007,7 @@ impl PrimaryTable {
                 translations.push(translation);
                 delayed_translations = self.update_offsets(delayed_translations, nocross.length());
             } else if let Some(t) = candidate {
-                let t = &self.swallow_repeats(t.clone(), chars.as_str());
+                let t = &self.swallow_following(t.clone(), chars.as_str(), char_pos, &constraints);
                 if t.length() == 0 {
                     // if there is a zero-length translation candiate we run the risk of an infinite
                     // loop, so remember the current translation so we only apply it once
@@ -2014,12 +2069,29 @@ impl PrimaryTable {
         translations
     }
 
-    /// A forward `repeated` rule also consumes the copies of its characters that
-    /// immediately follow, so `repeated --- 36-36-36` turns "---------" into one
-    /// 36-36-36.
-    fn swallow_repeats(&self, t: ResolvedTranslation, rest: &str) -> ResolvedTranslation {
-        if self.direction != Direction::Forward || !matches!(t.rule(), Some(Rule::Repeated { .. }))
-        {
+    /// Forward, some rules also consume input after their match: `repeated` the
+    /// copies of its characters that immediately follow, so `repeated --- 36-36-36`
+    /// turns "---------" into one 36-36-36, and `joinnum` the whitespace before the
+    /// number, so `joinnum § 346` turns "§ 3" into 346 and the number.
+    fn swallow_following(
+        &self,
+        t: ResolvedTranslation,
+        rest: &str,
+        char_pos: usize,
+        constraints: &PositionConstraints,
+    ) -> ResolvedTranslation {
+        if self.direction != Direction::Forward {
+            return t;
+        }
+        if matches!(t.rule(), Some(Rule::Joinnum { .. })) {
+            let mut length = t.length();
+            while constraints.space_before_digit_at(char_pos + length) {
+                length += 1;
+            }
+            let input: String = rest.chars().take(length).collect();
+            return t.with_input(&input);
+        }
+        if !matches!(t.rule(), Some(Rule::Repeated { .. })) {
             return t;
         }
         // The matched text, not the rule's `chars`: the trie matches case-insensitively,
@@ -2180,6 +2252,39 @@ mod tests {
                 .unwrap();
         assert_eq!(table.translate("-------- -"), "⠒⠒⠤⠤⠀⠤");
         assert_eq!(table.translate("-    -"), "⠤⠀⠤");
+    }
+
+    #[test]
+    fn joinnum() {
+        let rules = [
+            parse_rule("letter a 1"),
+            parse_rule("digit 1 1"),
+            parse_rule("punctuation $ 4"),
+            parse_rule("space \\s 0"),
+            parse_rule("joinnum $ 456"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        // whitespace and then a number: the whitespace goes
+        assert_eq!(table.translate("$  1"), "⠸⠁");
+        // no number, or no whitespace, or a letter before: plain punctuation
+        assert_eq!(table.translate("$ a"), "⠈⠀⠁");
+        assert_eq!(table.translate("$1"), "⠈⠁");
+        assert_eq!(table.translate("a$ 1"), "⠁⠈⠀⠁");
+
+        // backward the space comes back; with a space after the sign the rule doesn't
+        // apply, and nothing else defines ⠸ here
+        let table = PrimaryTable::compile(
+            &rules,
+            Direction::Backward,
+            TranslationStage::Main,
+            &context,
+        )
+        .unwrap();
+        assert_eq!(table.translate("⠸⠁"), "$ a");
+        assert_eq!(table.translate("⠸⠀⠁"), "\\456/ a");
     }
 
     #[test]
