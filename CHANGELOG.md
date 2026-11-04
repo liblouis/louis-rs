@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- The `joinnum` opcode now works. It was parsed but ignored, so a sign such as
+  `§` or a currency symbol stayed separated from the number after it by a
+  blank cell: with `de-g1.ctb`, "§ 3" gave ⠬⠀⠼⠉ instead of ⠬⠼⠉.
 - The `repeated` opcode now works. It was parsed but ignored, so runs a table
   shortens this way, such as separator lines of hyphens or runs of spaces,
   were translated character by character.
