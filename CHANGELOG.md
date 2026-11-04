@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- The `nocont` opcode now works. It was parsed but ignored, so e-mail
+  addresses and URLs were contracted: with `da-dk-g26.ctb`, the "dette" in
+  "www.dette.dk" was contracted.
 - The `midendnumericmodechars` opcode now works. It was parsed but ignored, so
   a comma, colon or slash inside a number ended it: with `no-no-g0.utb`, "1,5"
   got a second number sign before the 5.
