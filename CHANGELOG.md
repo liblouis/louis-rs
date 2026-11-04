@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- The `midendnumericmodechars` opcode now works. It was parsed but ignored, so
+  a comma, colon or slash inside a number ended it: with `no-no-g0.utb`, "1,5"
+  got a second number sign before the 5.
 - The `joinnum` opcode now works. It was parsed but ignored, so a sign such as
   `§` or a currency symbol stayed separated from the number after it by a
   blank cell: with `de-g1.ctb`, "§ 3" gave ⠬⠀⠼⠉ instead of ⠬⠼⠉.
