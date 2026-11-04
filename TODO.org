@@ -75,6 +75,12 @@
   languages (see [[https://github.com/mozilla/cbindgen][cbindgen]] or [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 
 * Known gaps
+- [ ] Ties between equally long matches: liblouis takes the rule the
+  table defines first, the trie ranks by transition weight, then
+  precedence. Backward ~decpoint~ is therefore inserted without its
+  "digit follows" check: with it, ~decpoint . 46~ outweighs the
+  earlier ~always ख 46~ in ~hi-in-g1~ and ⠨⠔ comes out as ".ई"
+  instead of "खी".
 - [ ] Opcodes that parse but compile to nothing. They are listed in
   the "not implemented yet" arm of ~PrimaryTable::compile~, which is
   now exhaustive so a new ~Rule~ variant has to be placed. By number

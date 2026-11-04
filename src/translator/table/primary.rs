@@ -623,21 +623,9 @@ impl PrimaryTable {
             HashSet::new()
         };
 
-        // decpoint and hyphen take precedence over other character definition rules, so insert
-        // them first
+        // hyphen takes precedence over other character definition rules, so insert it first
         for rule in rules {
             match &rule.rule {
-                Rule::Decpoint {
-                    character, dots, ..
-                } => {
-                    builder.insert_character(*character, &dots.to_string(), direction, rule);
-                    // A decimal point extends the numeric run: digits that follow it
-                    // must not get a second numsign.  Registering it as a midnum
-                    // character achieves this via the numeric indicator and constrainer.
-                    let s = character.to_string();
-                    builder.numeric_indicator.midnum(&s);
-                    builder.numeric_constrainer.midnum(&s);
-                }
                 Rule::Hyphen {
                     character, dots, ..
                 } => {
@@ -1492,6 +1480,35 @@ impl PrimaryTable {
                     TranslationStage::Main,
                     rule,
                 ),
+                // Not a character definition: like liblouis, only before a digit (forward)
+                Rule::Decpoint {
+                    character, dots, ..
+                } => {
+                    // A decimal point extends the numeric run: digits that follow it
+                    // must not get a second numsign.
+                    let s = character.to_string();
+                    builder.numeric_indicator.midnum(&s);
+                    builder.numeric_constrainer.midnum(&s);
+                    match direction {
+                        Direction::Forward => builder.get_trie_mut(rule).insert(
+                            &s,
+                            &dots.to_string(),
+                            None,
+                            Some(Transition::End(vec![CharacterClass::Digit])),
+                            direction,
+                            rule.precedence(),
+                            vec![],
+                            TranslationStage::Main,
+                            rule,
+                        ),
+                        // FIXME: liblouis also requires a digit after it backward, but an
+                        // End transition here would add weight and beat an equally long
+                        // `always` the table defines earlier, see TODO.org
+                        Direction::Backward => {
+                            builder.insert_character(*character, &dots.to_string(), direction, rule)
+                        }
+                    }
+                }
                 Rule::Midnum { chars, dots, .. } => {
                     builder.numeric_indicator.midnum(chars);
                     builder.numeric_constrainer.midnum(chars);
@@ -1642,7 +1659,7 @@ impl PrimaryTable {
                 | Rule::Swapcd { .. }
                 | Rule::Swapdd { .. } => (),
                 // compiled before this loop
-                Rule::Decpoint { .. } | Rule::Hyphen { .. } => (),
+                Rule::Hyphen { .. } => (),
                 // expanded by the parser
                 Rule::Include { .. } => (),
                 // FIXME: not implemented yet, see TODO.org
