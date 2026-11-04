@@ -1174,7 +1174,8 @@ impl PrimaryTable {
                     // Forward only, like liblouis: no dots to back-translate from.
                     builder.nocont_constrainer.nocont(chars);
                 }
-                Rule::Compbrl { chars, .. } => {
+                // literal is a deprecated synonym of compbrl
+                Rule::Compbrl { chars, .. } | Rule::Literal { chars } => {
                     builder.compbrl_triggers.push(chars.clone());
                 }
                 Rule::Largesign { chars, dots } => {
@@ -1648,7 +1649,6 @@ impl PrimaryTable {
                 Rule::Class { .. }
                 | Rule::Exactdots { .. }
                 | Rule::Grouping { .. }
-                | Rule::Literal { .. }
                 | Rule::Rependword { .. }
                 | Rule::Repword { .. }
                 | Rule::Seqafterexpression { .. }
