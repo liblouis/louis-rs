@@ -818,6 +818,15 @@ pub enum Rule {
     },
 }
 
+/// Display a list of braille cell sequences the way a table writes it, separated by
+/// commas
+fn display_braille_chars_list(dots: &[BrailleChars]) -> String {
+    dots.iter()
+        .map(BrailleChars::to_string)
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 impl std::fmt::Display for Rule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -944,7 +953,111 @@ impl std::fmt::Display for Rule {
             Rule::Display {
                 character, dots, ..
             } => write!(f, "display {} {}", character, dots),
-            _ => todo!(),
+            Rule::Include { file } => write!(f, "include {}", file),
+            Rule::IncludeHyphenation { .. } => write!(f, "include <hyphenation table>"),
+            Rule::Undefined { dots } => write!(f, "undefined {}", dots),
+            Rule::Multind { dots, names, .. } => {
+                write!(f, "multind {} {}", dots, names.join(" "))
+            }
+            Rule::Space {
+                character, dots, ..
+            } => write!(f, "space {} {}", character, dots),
+            Rule::Punctuation {
+                character, dots, ..
+            } => write!(f, "punctuation {} {}", character, dots),
+            Rule::Digit {
+                character, dots, ..
+            } => write!(f, "digit {} {}", character, dots),
+            Rule::Grouping {
+                name,
+                chars,
+                left,
+                right,
+            } => write!(f, "grouping {} {} {},{}", name, chars, left, right),
+            Rule::Letter {
+                character, dots, ..
+            } => write!(f, "letter {} {}", character, dots),
+            Rule::Capsmodechars { chars } => write!(f, "capsmodechars {}", chars),
+            Rule::Begcapsphrase { dots } => write!(f, "begcapsphrase {}", dots),
+            Rule::Endcapsphrase { dots, position } => {
+                write!(f, "endcapsphrase {} {}", position, dots)
+            }
+            Rule::Lencapsphrase { number } => write!(f, "lencapsphrase {}", number),
+            Rule::Noletsignbefore { chars } => write!(f, "noletsignbefore {}", chars),
+            Rule::Noletsignafter { chars } => write!(f, "noletsignafter {}", chars),
+            Rule::Numericnocontchars { chars } => write!(f, "numericnocontchars {}", chars),
+            Rule::Numericmodechars { chars } => write!(f, "numericmodechars {}", chars),
+            Rule::Midendnumericmodechars { chars } => {
+                write!(f, "midendnumericmodechars {}", chars)
+            }
+            Rule::Seqdelimiter { chars } => write!(f, "seqdelimiter {}", chars),
+            Rule::Seqbeforechars { chars } => write!(f, "seqbeforechars {}", chars),
+            Rule::Seqafterchars { chars } => write!(f, "seqafterchars {}", chars),
+            Rule::Seqafterpattern { chars } => write!(f, "seqafterpattern {}", chars),
+            Rule::Seqafterexpression { chars } => write!(f, "seqafterexpression {}", chars),
+            Rule::Class { name, chars } => write!(f, "class {} {}", name, chars),
+            Rule::Emphclass { name } => write!(f, "emphclass {}", name),
+            Rule::Begemph { name, dots, .. } => write!(f, "begemph {} {}", name, dots),
+            Rule::Endemph { name, dots, .. } => write!(f, "endemph {} {}", name, dots),
+            Rule::Noemphchars { name, chars } => write!(f, "noemphchars {} {}", name, chars),
+            Rule::Emphletter { name, dots } => write!(f, "emphletter {} {}", name, dots),
+            Rule::Begemphword { name, dots } => write!(f, "begemphword {} {}", name, dots),
+            Rule::Endemphword { name, dots } => write!(f, "endemphword {} {}", name, dots),
+            Rule::Emphmodechars { name, chars } => {
+                write!(f, "emphmodechars {} {}", name, chars)
+            }
+            Rule::Begemphphrase { name, dots } => write!(f, "begemphphrase {} {}", name, dots),
+            Rule::Endemphphrase {
+                name,
+                dots,
+                position,
+            } => write!(f, "endemphphrase {} {} {}", name, position, dots),
+            Rule::Lenemphphrase { name, number } => {
+                write!(f, "lenemphphrase {} {}", name, number)
+            }
+            Rule::Begcomp { dots, .. } => write!(f, "begcomp {}", dots),
+            Rule::Endcomp { dots, .. } => write!(f, "endcomp {}", dots),
+            Rule::Capsnocont {} => write!(f, "capsnocont"),
+            Rule::Nocont { chars } => write!(f, "nocont {}", chars),
+            Rule::Replace { chars, replacement } => match replacement {
+                Some(r) => write!(f, "replace {} {}", chars, r),
+                None => write!(f, "replace {}", chars),
+            },
+            Rule::Repeated { chars, dots, .. } => write!(f, "repeated {} {}", chars, dots),
+            Rule::Repword { chars, dots } => write!(f, "repword {} {}", chars, dots),
+            Rule::Rependword { chars, dots, other } => {
+                write!(f, "rependword {} {},{}", chars, dots, other)
+            }
+            Rule::Syllable { chars, dots } => write!(f, "syllable {} {}", chars, dots),
+            Rule::Joinword { chars, dots } => write!(f, "joinword {} {}", chars, dots),
+            Rule::Lowword { chars, dots, .. } => write!(f, "lowword {} {}", chars, dots),
+            Rule::Exactdots { chars } => write!(f, "exactdots {}", chars),
+            Rule::Joinnum { chars, dots, .. } => write!(f, "joinnum {} {}", chars, dots),
+            Rule::Swapcd { name, chars, dots } => {
+                write!(
+                    f,
+                    "swapcd {} {} {}",
+                    name,
+                    chars,
+                    display_braille_chars_list(dots)
+                )
+            }
+            Rule::Swapdd {
+                name,
+                dots,
+                replacement,
+            } => write!(
+                f,
+                "swapdd {} {} {}",
+                name,
+                dots,
+                display_braille_chars_list(replacement)
+            ),
+            Rule::Swapcc {
+                name,
+                chars,
+                replacement,
+            } => write!(f, "swapcc {} {} {}", name, chars, replacement),
         }
     }
 }
@@ -1129,6 +1242,15 @@ impl std::fmt::Display for Braille {
 pub enum Position {
     Before,
     After,
+}
+
+impl std::fmt::Display for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Position::Before => write!(f, "before"),
+            Position::After => write!(f, "after"),
+        }
+    }
 }
 
 #[derive(PartialEq, Debug)]
