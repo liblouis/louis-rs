@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Fixed
+- The `capsnocont` opcode now works. It was parsed but ignored, so words in
+  capitals were contracted: with `no-no-g1.ctb`, "OG" was contracted to ⠉.
 - The `nocont` opcode now works. It was parsed but ignored, so e-mail
   addresses and URLs were contracted: with `da-dk-g26.ctb`, the "dette" in
   "www.dette.dk" was contracted.
