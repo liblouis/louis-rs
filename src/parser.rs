@@ -955,28 +955,15 @@ impl std::fmt::Display for Rule {
             } => write!(f, "display {} {}", character, dots),
             Rule::Include { file } => write!(f, "include {}", file),
             Rule::IncludeHyphenation { .. } => write!(f, "include <hyphenation table>"),
-            Rule::Undefined { dots } => write!(f, "undefined {}", dots),
             Rule::Multind { dots, names, .. } => {
                 write!(f, "multind {} {}", dots, names.join(" "))
             }
-            Rule::Space {
-                character, dots, ..
-            } => write!(f, "space {} {}", character, dots),
-            Rule::Punctuation {
-                character, dots, ..
-            } => write!(f, "punctuation {} {}", character, dots),
-            Rule::Digit {
-                character, dots, ..
-            } => write!(f, "digit {} {}", character, dots),
             Rule::Grouping {
                 name,
                 chars,
                 left,
                 right,
             } => write!(f, "grouping {} {} {},{}", name, chars, left, right),
-            Rule::Letter {
-                character, dots, ..
-            } => write!(f, "letter {} {}", character, dots),
             Rule::Capsmodechars { chars } => write!(f, "capsmodechars {}", chars),
             Rule::Begcapsphrase { dots } => write!(f, "begcapsphrase {}", dots),
             Rule::Endcapsphrase { dots, position } => {
