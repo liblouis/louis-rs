@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   (liblouis#2164).
 
 ### Fixed
+- A `swapdd` class now matches in the passes. Its cells were filed under
+  the wrong class, so `%name` matched nothing: with `no-no-g0.utb` and
+  `et-6dot.utb`, the virtual dot 9 that `pass4 %cleanvirtual` should
+  remove stayed in the output.
 - `decpoint` now only applies before a digit in forward translation.
   Before, it replaced the character's own definition: with
   `cy-cy-g1.utb`, the "." in "file.txt" became ⠂ instead of ⠨ in
