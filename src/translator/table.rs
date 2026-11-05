@@ -221,11 +221,6 @@ impl TableContext {
                     let class = CharacterClass::from(name.as_str());
                     for c in chars.chars() {
                         character_classes.insert(class.clone(), c);
-                        dots_classes.insert_associated_dot(
-                            CharacterClass::Seqafterchars,
-                            c,
-                            &character_definitions,
-                        );
                     }
                     let replacements: Vec<String> =
                         replacement.chars().map(|c| c.to_string()).collect();
@@ -239,11 +234,6 @@ impl TableContext {
                     let class = CharacterClass::from(name.as_str());
                     for c in chars.chars() {
                         character_classes.insert(class.clone(), c);
-                        dots_classes.insert_associated_dot(
-                            CharacterClass::Seqafterchars,
-                            c,
-                            &character_definitions,
-                        );
                     }
                     let replacements: Vec<String> = dots.iter().map(|b| b.to_string()).collect();
                     let mapping: Vec<(char, &str)> = chars
@@ -258,13 +248,9 @@ impl TableContext {
                     replacement,
                 } => {
                     let class = CharacterClass::from(name.as_str());
+                    // swapdd works on cells, and the passes match %name against the dots classes
                     for c in dots.to_string().chars() {
-                        character_classes.insert(class.clone(), c);
-                        dots_classes.insert_associated_dot(
-                            CharacterClass::Seqafterchars,
-                            c,
-                            &character_definitions,
-                        );
+                        dots_classes.insert(class.clone(), c);
                     }
                     let replacements: Vec<String> =
                         replacement.iter().map(|b| b.to_string()).collect();
