@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   parse error. liblouis accepts one, but no table uses it.
 
 ### Fixed
+- Tables that define their digits with `digit` rather than `litdigit` now
+  get a number sign: with `fa-ir-g1.utb`, "1" gave ⠁ instead of ⠼⠁.
 - `joinword` now joins the word that follows. It kept the space, and also
   applied before punctuation: with `en-us-g2.ctb`, "to bed" gave ⠖⠀⠃⠫
   instead of ⠖⠃⠫, and "to." gave ⠖⠲ instead of ⠞⠕⠲.
