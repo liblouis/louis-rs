@@ -1451,11 +1451,23 @@ impl PrimaryTable {
                         rule,
                     );
                 }
-                Rule::Joinword { chars, dots, .. } | Rule::Lowword { chars, dots, .. } => {
+                // whitespace on both sides, no punctuation, see the liblouis manual
+                Rule::Lowword { chars, dots, .. } => builder.get_trie_mut(rule).insert(
+                    chars,
+                    &dots.to_string(),
+                    Some(Transition::Start(vec![CharacterClass::Space])),
+                    Some(Transition::End(vec![CharacterClass::Space])),
+                    direction,
+                    rule.precedence(),
+                    vec![],
+                    TranslationStage::Main,
+                    rule,
+                ),
+                Rule::Joinword { chars, dots, .. } => {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots.to_string(),
-                        // FIXME: joinword, lowword, prepunc and postpunc need more
+                        // FIXME: joinword, prepunc and postpunc need more
                         // advanced scaning of the input. Just checking for before and
                         // after classes as below is too simplistic
                         Some(Transition::Start(vec![
@@ -3089,6 +3101,26 @@ mod tests {
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
                 .unwrap();
         assert_eq!(table.translate("fff"), "⠸");
+    }
+
+    #[test]
+    fn lowword_needs_whitespace_on_both_sides() {
+        let rules = [
+            parse_rule("lowercase b 12"),
+            parse_rule("lowercase e 15"),
+            parse_rule("punctuation . 256"),
+            parse_rule("punctuation ( 2356"),
+            parse_rule("space \\s 0"),
+            parse_rule("lowword be 23"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        assert_eq!(table.translate("be"), "⠆");
+        assert_eq!(table.translate("e be e"), "⠑⠀⠆⠀⠑");
+        assert_eq!(table.translate("be."), "⠃⠑⠲");
+        assert_eq!(table.translate("(be"), "⠶⠃⠑");
     }
 
     #[test]
