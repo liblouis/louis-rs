@@ -1928,8 +1928,9 @@ impl PrimaryTable {
         let mut char_pos: usize = 0;
         // A zero-length candidate (e.g. a zero-width `context`/`match` action) re-enters
         // the loop at the same char_pos without advancing, so indications must only be
-        // emitted the first time a given position is visited, not on every re-entry.
-        let mut last_indications_pos: Option<usize> = None;
+        // emitted the first time a given position is visited, not on every re-entry, and
+        // the zero-length rules applied (`seen`) are forgotten only on moving on.
+        let mut last_pos: Option<usize> = None;
 
         // Enrich spans with compbrl-detected regions.
         let enriched_spans = match &self.compbrl_scanner {
@@ -1941,9 +1942,10 @@ impl PrimaryTable {
         let constraints = self.constrainers.precompute(input, &enriched_spans);
 
         loop {
-            if last_indications_pos != Some(char_pos) {
+            if last_pos != Some(char_pos) {
                 translations.extend(indications.translations_at(char_pos));
-                last_indications_pos = Some(char_pos);
+                seen.clear();
+                last_pos = Some(char_pos);
             }
 
             // Backward, the lookbehind reads the output produced so far rather than the
@@ -2130,7 +2132,6 @@ impl PrimaryTable {
                 chars.nth(consumed - 1);
                 delayed_translations = self.update_offsets(delayed_translations, consumed);
                 char_pos += consumed;
-                seen.clear();
             } else if let Some(t) = candidate {
                 let t = &self.swallow_following(t.clone(), chars.as_str(), char_pos, &constraints);
                 if t.length() == 0 {
@@ -2138,7 +2139,6 @@ impl PrimaryTable {
                     // loop, so remember the current translation so we only apply it once
                     seen.insert(TranslationSubset::from(t));
                 } else {
-                    seen.clear();
                     // move the iterator forward by the number of characters in the translation
                     chars.nth(t.length() - 1);
                     char_pos += t.length();
@@ -3089,6 +3089,26 @@ mod tests {
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
                 .unwrap();
         assert_eq!(table.translate("fff"), "⠸");
+    }
+
+    #[test]
+    fn zero_length_rule_fires_again_after_moving_on() {
+        // a zero-length rule must not stay blocked at the positions after a `nocross`
+        // match or a character definition
+        let rules = vec![
+            parse_rule("include dictionaries/nocross-test.dic"),
+            parse_rule("digit 0 245"),
+            parse_rule("lowercase f 124"),
+            parse_rule("nocross always fff 456"),
+            parse_rule("context $d[]$l @6"),
+        ];
+        let rules = expand_includes(rules, &fixture_search_path(), &[]).unwrap();
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        assert_eq!(table.translate("0fff0fff"), "⠚⠠⠸⠚⠠⠸");
+        assert_eq!(table.translate("0f0f"), "⠚⠠⠋⠚⠠⠋");
     }
 
     #[test]
