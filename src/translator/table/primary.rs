@@ -25,7 +25,7 @@ use crate::{
             BackwardCapsConstrainerBuilder, BackwardNoContractConstrainerBuilder,
             BackwardNumericConstrainerBuilder, CapsNoContConstrainerBuilder,
             ComputerBrailleConstrainer, Constrainer, Constrainers, Constraint,
-            HyphenationConstrainerBuilder, JoinNumConstrainerBuilder, NoContConstrainerBuilder,
+            HyphenationConstrainerBuilder, JoinConstrainerBuilder, NoContConstrainerBuilder,
             NumericConstrainerBuilder, PositionConstraints, PunctuationConstrainerBuilder,
             RepwordConstrainerBuilder,
         },
@@ -188,7 +188,7 @@ struct PrimaryTableBuilder {
     backward_nocontract_constrainer: BackwardNoContractConstrainerBuilder,
     hyphenation_constrainer: HyphenationConstrainerBuilder,
     punctuation_constrainer: PunctuationConstrainerBuilder,
-    joinnum_constrainer: JoinNumConstrainerBuilder,
+    join_constrainer: JoinConstrainerBuilder,
     nocont_constrainer: NoContConstrainerBuilder,
     capsnocont_constrainer: CapsNoContConstrainerBuilder,
     repword_constrainer: RepwordConstrainerBuilder,
@@ -244,7 +244,7 @@ impl PrimaryTableBuilder {
             backward_nocontract_constrainer: BackwardNoContractConstrainerBuilder::new(),
             hyphenation_constrainer: HyphenationConstrainerBuilder::new(),
             punctuation_constrainer: PunctuationConstrainerBuilder::new(),
-            joinnum_constrainer: JoinNumConstrainerBuilder::new(),
+            join_constrainer: JoinConstrainerBuilder::new(),
             nocont_constrainer: NoContConstrainerBuilder::new(),
             capsnocont_constrainer: CapsNoContConstrainerBuilder::new(),
             repword_constrainer: RepwordConstrainerBuilder::new(),
@@ -457,9 +457,9 @@ impl PrimaryTableBuilder {
                         .flatten()
                         .map(Constrainer::Punctuation),
                     (direction == Direction::Forward)
-                        .then(|| self.joinnum_constrainer.build())
+                        .then(|| self.join_constrainer.build())
                         .flatten()
-                        .map(Constrainer::JoinNum),
+                        .map(Constrainer::Join),
                     (direction == Direction::Forward)
                         .then(|| self.nocont_constrainer.build())
                         .flatten()
@@ -1463,28 +1463,6 @@ impl PrimaryTable {
                     TranslationStage::Main,
                     rule,
                 ),
-                Rule::Joinword { chars, dots, .. } => {
-                    builder.get_trie_mut(rule).insert(
-                        chars,
-                        &dots.to_string(),
-                        // FIXME: joinword, prepunc and postpunc need more
-                        // advanced scaning of the input. Just checking for before and
-                        // after classes as below is too simplistic
-                        Some(Transition::Start(vec![
-                            CharacterClass::Space,
-                            CharacterClass::Punctuation,
-                        ])),
-                        Some(Transition::End(vec![
-                            CharacterClass::Space,
-                            CharacterClass::Punctuation,
-                        ])),
-                        direction,
-                        rule.precedence(),
-                        vec![],
-                        TranslationStage::Main,
-                        rule,
-                    )
-                }
                 Rule::Begnum { chars, dots, .. } => builder.get_trie_mut(rule).insert(
                     chars,
                     &dots.to_string(),
@@ -1627,43 +1605,46 @@ impl PrimaryTable {
                         );
                     }
                 }
-                Rule::Joinnum { chars, dots, .. } => match direction {
-                    Direction::Forward => {
-                        // Fires only when whitespace and then a digit follow, a scan the
-                        // trie can't express: `trace()` gates it and swallows the whitespace.
-                        builder.joinnum_constrainer.mark_present();
-                        builder.get_trie_mut(rule).insert(
-                            chars,
-                            &dots.to_string(),
-                            Some(Transition::Start(vec![
-                                CharacterClass::Space,
-                                CharacterClass::Punctuation,
-                            ])),
-                            None,
-                            direction,
-                            rule.precedence(),
-                            vec![],
-                            TranslationStage::Main,
-                            rule,
-                        );
+                Rule::Joinnum { chars, dots, .. } | Rule::Joinword { chars, dots, .. } => {
+                    match direction {
+                        Direction::Forward => {
+                            // Fires only when whitespace and then a digit (`joinnum`) or a
+                            // letter (`joinword`) follow, a scan the trie can't express:
+                            // `trace()` gates it and swallows the whitespace.
+                            builder.join_constrainer.mark_present();
+                            builder.get_trie_mut(rule).insert(
+                                chars,
+                                &dots.to_string(),
+                                Some(Transition::Start(vec![
+                                    CharacterClass::Space,
+                                    CharacterClass::Punctuation,
+                                ])),
+                                None,
+                                direction,
+                                rule.precedence(),
+                                vec![],
+                                TranslationStage::Main,
+                                rule,
+                            );
+                        }
+                        Direction::Backward => {
+                            // The output puts back the space that forward translation
+                            // swallowed, as liblouis's insertSpace does. Not when a space
+                            // follows anyway.
+                            builder.get_trie_mut(rule).insert(
+                                &format!("{chars} "),
+                                &dots.to_string(),
+                                Some(Transition::BegWord),
+                                Some(Transition::ContinuesWord),
+                                direction,
+                                rule.precedence(),
+                                vec![],
+                                TranslationStage::Main,
+                                rule,
+                            );
+                        }
                     }
-                    Direction::Backward => {
-                        // The output puts back the space that forward translation
-                        // swallowed, as liblouis's insertSpace does. Not when a space
-                        // follows anyway.
-                        builder.get_trie_mut(rule).insert(
-                            &format!("{chars} "),
-                            &dots.to_string(),
-                            Some(Transition::BegWord),
-                            Some(Transition::ContinuesWord),
-                            direction,
-                            rule.precedence(),
-                            vec![],
-                            TranslationStage::Main,
-                            rule,
-                        );
-                    }
-                },
+                }
                 Rule::Match {
                     pre,
                     chars,
@@ -1768,7 +1749,15 @@ impl PrimaryTable {
         builder
             .repword_constrainer
             .letter_characters(letter_chars.clone());
-        builder.joinnum_constrainer.digit_characters(
+        // like liblouis's onlyLettersAhead, letters and literary digits but no digits
+        let litdigit_chars = ctx
+            .character_classes()
+            .get(&CharacterClass::Litdigit)
+            .unwrap_or_default();
+        builder
+            .join_constrainer
+            .letter_characters(&letter_chars | &litdigit_chars);
+        builder.join_constrainer.digit_characters(
             ctx.character_classes()
                 .get(&CharacterClass::Digit)
                 .unwrap_or_default(),
@@ -1788,7 +1777,7 @@ impl PrimaryTable {
                 .get(&CharacterClass::Space)
                 .unwrap_or_default(),
         );
-        builder.joinnum_constrainer.space_characters(
+        builder.join_constrainer.space_characters(
             ctx.character_classes()
                 .get(&CharacterClass::Space)
                 .unwrap_or_default(),
@@ -2019,9 +2008,12 @@ impl PrimaryTable {
                     // Backward, the trie gates them by where a word begins and ends.
                     Some(Rule::Prepunc { .. }) => constraints.prepunc_ok_at(char_pos),
                     Some(Rule::Postpunc { .. }) => constraints.postpunc_ok_at(char_pos),
-                    // whitespace and then a digit follow
+                    // whitespace and then a digit or a letter follow
                     Some(Rule::Joinnum { .. }) => {
                         constraints.space_before_digit_at(char_pos + t.length())
+                    }
+                    Some(Rule::Joinword { .. }) => {
+                        constraints.space_before_letter_at(char_pos + t.length())
                     }
                     // a repetition of the word that follows, see ADR-0020
                     Some(Rule::Repword { .. } | Rule::Rependword { .. }) => self
@@ -2249,9 +2241,14 @@ impl PrimaryTable {
         if self.direction != Direction::Forward {
             return t;
         }
-        if matches!(t.rule(), Some(Rule::Joinnum { .. })) {
+        let space_at: Option<fn(&PositionConstraints, usize) -> bool> = match t.rule() {
+            Some(Rule::Joinnum { .. }) => Some(PositionConstraints::space_before_digit_at),
+            Some(Rule::Joinword { .. }) => Some(PositionConstraints::space_before_letter_at),
+            _ => None,
+        };
+        if let Some(space_at) = space_at {
             let mut length = t.length();
-            while constraints.space_before_digit_at(char_pos + length) {
+            while space_at(constraints, char_pos + length) {
                 length += 1;
             }
             let input: String = rest.chars().take(length).collect();
@@ -3101,6 +3098,28 @@ mod tests {
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
                 .unwrap();
         assert_eq!(table.translate("fff"), "⠸");
+    }
+
+    #[test]
+    fn joinword_joins_the_word_that_follows() {
+        let rules = [
+            parse_rule("lowercase t 2345"),
+            parse_rule("lowercase o 135"),
+            parse_rule("lowercase b 12"),
+            parse_rule("digit 1 1"),
+            parse_rule("punctuation . 256"),
+            parse_rule("space \\s 0"),
+            parse_rule("joinword to 235"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        assert_eq!(table.translate("to  b"), "⠖⠃");
+        // no word follows
+        assert_eq!(table.translate("to"), "⠞⠕");
+        assert_eq!(table.translate("to. b"), "⠞⠕⠲⠀⠃");
+        assert_eq!(table.translate("to 1"), "⠞⠕⠀⠁");
     }
 
     #[test]

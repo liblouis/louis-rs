@@ -70,6 +70,8 @@ pub enum Constraint {
     /// This position is in a run of whitespace that a digit follows, so a `joinnum`
     /// rule just before it may fire and swallow the run, in forward translation.
     SpaceBeforeDigit,
+    /// Like [`Constraint::SpaceBeforeDigit`], but a letter follows, for `joinword`.
+    SpaceBeforeLetter,
     /// Contractions are off at this position, in forward translation: it is in a word
     /// with a `nocont` string, or, with `capsnocont`, at or after a run of capitals.
     Uncontracted,
@@ -159,6 +161,12 @@ impl PositionConstraints {
         self.0
             .get(pos)
             .is_some_and(|f| f.contains(Constraint::SpaceBeforeDigit))
+    }
+
+    pub fn space_before_letter_at(&self, pos: usize) -> bool {
+        self.0
+            .get(pos)
+            .is_some_and(|f| f.contains(Constraint::SpaceBeforeLetter))
     }
 
     pub fn repetition_at(&self, pos: usize) -> bool {
@@ -389,29 +397,34 @@ impl CapsNoContConstrainer {
     }
 }
 
-/// Marks the whitespace runs that a digit follows, so a `joinnum` rule just before one
-/// may fire and swallow it, mirroring liblouis's `CTO_JoinNum` (forward translation
-/// only). Like `prepunc`, a scan of any length that the trie's single-neighbor
-/// transitions can't express.
+/// Marks the whitespace runs that a digit or a letter follows, so a `joinnum` or a
+/// `joinword` rule just before one may fire and swallow it, mirroring liblouis's
+/// `CTO_JoinNum` and `CTO_JoinableWord` (forward translation only). Like `prepunc`, a
+/// scan of any length that the trie's single-neighbor transitions can't express.
 #[derive(Debug, Clone)]
-pub struct JoinNumConstrainer {
+pub struct JoinConstrainer {
     digit_chars: HashSet<char>,
+    letter_chars: HashSet<char>,
     space_chars: HashSet<char>,
 }
 
-impl JoinNumConstrainer {
+impl JoinConstrainer {
     fn compute(&self, input: &str) -> Vec<Constraints> {
         let chars: Vec<char> = input.chars().collect();
         let mut constraints = vec![Constraints::empty(); chars.len()];
-        // scanning backward, remember whether the next non-space is a digit
-        let mut digit_follows = false;
+        // scanning backward, remember what the next non-space is
+        let mut follows = None;
         for pos in (0..chars.len()).rev() {
             if self.space_chars.contains(&chars[pos]) {
-                if digit_follows {
-                    constraints[pos].insert(Constraint::SpaceBeforeDigit);
+                if let Some(constraint) = follows {
+                    constraints[pos].insert(constraint);
                 }
+            } else if self.digit_chars.contains(&chars[pos]) {
+                follows = Some(Constraint::SpaceBeforeDigit);
+            } else if self.letter_chars.contains(&chars[pos]) {
+                follows = Some(Constraint::SpaceBeforeLetter);
             } else {
-                digit_follows = self.digit_chars.contains(&chars[pos]);
+                follows = None;
             }
         }
         constraints
@@ -719,9 +732,9 @@ pub enum Constrainer {
     /// Detects `prepunc`/`postpunc` scan eligibility and sets
     /// [`Constraint::PrepuncOk`]/[`Constraint::PostpuncOk`].
     Punctuation(PunctuationConstrainer),
-    /// Detects whitespace runs that a digit follows and sets
-    /// [`Constraint::SpaceBeforeDigit`].
-    JoinNum(JoinNumConstrainer),
+    /// Detects whitespace runs that a digit or a letter follows and sets
+    /// [`Constraint::SpaceBeforeDigit`]/[`Constraint::SpaceBeforeLetter`].
+    Join(JoinConstrainer),
     /// Detects words containing a `nocont` string and sets
     /// [`Constraint::Uncontracted`].
     NoCont(NoContConstrainer),
@@ -742,7 +755,7 @@ impl Constrainer {
             Constrainer::BackwardNumeric(c) => c.compute(input),
             Constrainer::Hyphenation(c) => c.compute(input),
             Constrainer::Punctuation(c) => c.compute(input),
-            Constrainer::JoinNum(c) => c.compute(input),
+            Constrainer::Join(c) => c.compute(input),
             Constrainer::NoCont(c) => c.compute(input),
             Constrainer::CapsNoCont(c) => c.compute(input),
             Constrainer::Repword(c) => c.compute(input),
@@ -1068,20 +1081,21 @@ impl CapsNoContConstrainerBuilder {
     }
 }
 
-/// A builder for [`Constrainer::JoinNum`].
+/// A builder for [`Constrainer::Join`].
 #[derive(Debug, Default)]
-pub struct JoinNumConstrainerBuilder {
+pub struct JoinConstrainerBuilder {
     present: bool,
     digit_chars: HashSet<char>,
+    letter_chars: HashSet<char>,
     space_chars: HashSet<char>,
 }
 
-impl JoinNumConstrainerBuilder {
+impl JoinConstrainerBuilder {
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Marks that the table declares at least one `joinnum` rule, so `build()`
+    /// Marks that the table declares at least one `joinnum` or `joinword` rule, so `build()`
     /// produces a constrainer.
     pub fn mark_present(&mut self) {
         self.present = true;
@@ -1091,13 +1105,18 @@ impl JoinNumConstrainerBuilder {
         self.digit_chars = chars;
     }
 
+    pub fn letter_characters(&mut self, chars: HashSet<char>) {
+        self.letter_chars = chars;
+    }
+
     pub fn space_characters(&mut self, chars: HashSet<char>) {
         self.space_chars = chars;
     }
 
-    pub fn build(self) -> Option<JoinNumConstrainer> {
-        self.present.then_some(JoinNumConstrainer {
+    pub fn build(self) -> Option<JoinConstrainer> {
+        self.present.then_some(JoinConstrainer {
             digit_chars: self.digit_chars,
+            letter_chars: self.letter_chars,
             space_chars: self.space_chars,
         })
     }
@@ -1374,12 +1393,25 @@ mod tests {
     }
 
     #[test]
+    fn joinword_marks_spaces_followed_by_a_letter() {
+        let mut builder = JoinConstrainerBuilder::new();
+        builder.mark_present();
+        builder.letter_characters(HashSet::from(['a']));
+        builder.space_characters(HashSet::from([' ']));
+        let c = Constrainers::new(vec![Constrainer::Join(builder.build().unwrap())])
+            .precompute("a  a . a", &[]);
+        let marked: Vec<usize> = (0..8).filter(|&p| c.space_before_letter_at(p)).collect();
+        // not the space before the `.`
+        assert_eq!(marked, vec![1, 2, 6]);
+    }
+
+    #[test]
     fn joinnum_marks_spaces_followed_by_a_digit() {
-        let mut builder = JoinNumConstrainerBuilder::new();
+        let mut builder = JoinConstrainerBuilder::new();
         builder.mark_present();
         builder.digit_characters(HashSet::from(['1']));
         builder.space_characters(HashSet::from([' ']));
-        let c = Constrainers::new(vec![Constrainer::JoinNum(builder.build().unwrap())])
+        let c = Constrainers::new(vec![Constrainer::Join(builder.build().unwrap())])
             .precompute("$  1 a $ 1", &[]);
         let marked: Vec<bool> =
             c.0.iter()
