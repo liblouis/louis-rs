@@ -12,8 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The `seqafterexpression` opcode is now deliberately ignored rather than
   listed as not implemented: liblouis compiles it but never uses it
   (liblouis#2164).
+- A `repword` or `rependword` separator of several characters is now a
+  parse error. liblouis accepts one, but no table uses it.
 
 ### Fixed
+- The `repword` and `rependword` opcodes now work. They were parsed but
+  ignored, so reduplicated words were written out twice: with
+  `ms-my-g2.ctb`, "kata-kata" was not shortened to "kata" and the sign
+  for the repetition.
 - A `swapdd` class now matches in the passes. Its cells were filed under
   the wrong class, so `%name` matched nothing: with `no-no-g0.utb` and
   `et-6dot.utb`, the virtual dot 9 that `pass4 %cleanvirtual` should
