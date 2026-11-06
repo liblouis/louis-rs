@@ -1704,10 +1704,11 @@ impl PrimaryTable {
                 | Rule::Seqafterpattern { .. } => (),
             }
         }
-        let numeric_chars = ctx
-            .character_classes()
-            .get(&CharacterClass::Litdigit)
-            .unwrap_or_default();
+        let classes = ctx.character_classes();
+        let digits = classes.get(&CharacterClass::Digit).unwrap_or_default();
+        let litdigits = classes.get(&CharacterClass::Litdigit).unwrap_or_default();
+        // like liblouis, both `digit` and `litdigit` characters start a number
+        let numeric_chars = &digits | &litdigits;
         builder
             .numeric_indicator
             .numeric_characters(numeric_chars.clone());
@@ -2956,6 +2957,17 @@ mod tests {
         assert_eq!(table.translate("123"), "⠼⠁⠃⠉");
         assert_eq!(table.translate("123foo"), "⠼⠁⠃⠉⠰⠄⠈⠈");
         assert_eq!(table.translate("foof"), "⠄⠈⠈⠄");
+    }
+
+    #[test]
+    fn number_sign_before_a_digit() {
+        // a `digit` character starts a number, not only a `litdigit` one
+        let rules = [parse_rule("digit 1 1"), parse_rule("numsign 3456")];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        assert_eq!(table.translate("1"), "⠼⠁");
     }
 
     #[test]
