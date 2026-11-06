@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   parse error. liblouis accepts one, but no table uses it.
 
 ### Fixed
+- `lowword` now only applies with whitespace on both sides of the word.
+  Before, punctuation was enough: with `fil-g2.ctb`, the "pa" in "pa."
+  was contracted to ⠖.
 - A zero-length rule, such as a `context` rule that inserts a sign
   between two characters, no longer stays blocked after it has fired
   once: with `context $d[]$l @6`, "0f0f" got the sign only before the
