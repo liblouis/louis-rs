@@ -92,6 +92,14 @@
   "digit follows" check: with it, ~decpoint . 46~ outweighs the
   earlier ~always ख 46~ in ~hi-in-g1~ and ⠨⠔ comes out as ".ई"
   instead of "खी".
+- [ ] ~lowword~ right after a ~joinword~: liblouis does not apply it
+  there (~prevTransOpcode != CTO_JoinableWord~ in
+  ~lou_translateString.c~), louis-rs does. ~trace~ would have to know
+  the rule of the previous translation.
+- [ ] ~joinword~ before a ~compbrl~ string: liblouis does not join when
+  the next word contains one, such as a URL (~noCompbrlAhead~),
+  louis-rs does. It needs a lookahead over the ~compbrl~ matches of
+  that word.
 - [ ] Opcodes that parse but compile to nothing. They are listed in
   the "not implemented yet" arm of ~PrimaryTable::compile~, which is
   now exhaustive so a new ~Rule~ variant has to be placed. By number
