@@ -1,0 +1,136 @@
+#+options: todo:t
+#+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
+#+language: en
+
+* DRAFT ADR-0019: Split the library and the CLI into a two-crate workspace
+- Deciders :: CE
+- Date :: [2026-11-06 Fri]
+
+Technical Story: came out of a review of the public API against the
+[[https://rust-lang.github.io/api-guidelines/][Rust API Guidelines]] and chapter 3 of /Rust for Rustaceans/. Parked
+until the remaining unimplemented opcodes are done.
+
+** Context and Problem Statement
+
+The ~louis~ binary does not depend on the ~louis~ library. ~src/main.rs~
+re-declares ~mod parser; mod translator; mod hyphenation; mod test; mod
+yaml; mod metadata;~ and so compiles its own second copy of the whole
+crate. That is how it reaches internals the library does not export
+(~TranslationPipeline~, ~TranslationStage~, ~ResolvedTranslation~,
+~AnchoredRule~, ~DisplayTable~, ~RuleParser~).
+
+Because both targets share one ~[dependencies]~ list, every library user
+also compiles the CLI and test-harness dependencies: ~clap~, ~rayon~,
+~tabled~, ~env_logger~, ~saphyr-parser~. Worse, ~Direction~ derives
+~clap::ValueEnum~ (~src/parser.rs~), which makes clap part of the
+library's semver surface.
+
+Should the library and the CLI become separate crates, with the CLI
+depending on the library like any other user?
+
+** Decision Drivers
+
+- Library users should only compile what translation needs.
+- No CLI dependency may appear in the library's public API.
+- The CLI's ~parse~, ~trace~, ~check~ and ~query~ subcommands need
+  internals that ordinary users shouldn't come to rely on.
+- The library API is not stable yet. Splitting the crates first makes
+  it clear what is actually public before anything gets stabilized.
+
+** Considered Options
+
+1. Keep one package, and gate the CLI dependencies behind a ~cli~
+   feature with ~required-features~ on the ~[[bin]]~.
+2. A workspace with two crates, ~louis~ (lib) and ~louis-cli~ (bin),
+   where the CLI uses the library through ~#[doc(hidden)] pub mod
+   internals~ (or an ~unstable~ feature).
+3. Option 2, but replace the internals with a designed public tracing
+   and rule-inspection API.
+
+** Decision Outcome
+
+Tentatively option 2. It fixes the dependency leak for good and makes
+the CLI an honest user of the library. Option 3 can follow later if
+library users ask for ~trace~-style access.
+
+Sketch:
+
+#+begin_example
+louis-rs/            (workspace)
+├── louis/           lib: parser, translator, hyphenation, emphasis
+│                    deps: thiserror, search_path, enumset, smallvec, log
+└── louis-cli/       bin "louis": main, test, yaml, metadata
+                     deps: louis, clap, rayon, tabled, env_logger, saphyr-parser
+#+end_example
+
+~test.rs~, ~yaml.rs~ and ~metadata.rs~ move to the CLI crate: they make
+up the test harness and the ~query~ command, not translation.
+
+*** Positive Consequences
+
+- The library drops five dependencies, and clap leaves its public API.
+- The crate is compiled once, not twice, so builds are faster and
+  dead-code warnings mean the same thing in every target.
+- Every internal the CLI uses becomes an explicit, visible decision.
+
+*** Negative Consequences
+
+- One mechanical pass over the ~crate::~ paths in the moved modules.
+- The ~cargo install~ instructions, README and release process change.
+  The crates.io name ~louis-rs~ stays with the library, and the CLI is
+  published separately (e.g. ~louis-cli~).
+- The benches and the in-crate unit tests that use the YAML harness
+  may need to move or be split.
+
+** Pros and Cons of the Options
+
+*** Option 1: feature-gated single package
+
+- Good, because it is the smallest change.
+- Bad, because the binary still re-compiles the modules and reaches
+  internals sideways, so the public/internal line stays blurry.
+- Bad, because ~cargo test~ and the benches need the feature enabled,
+  which is easy to get wrong.
+
+*** Option 2: workspace, CLI uses hidden internals
+
+- Good, because the dependency split is enforced by Cargo, not by
+  convention.
+- Good, because ~doc(hidden)~ internals are a common, honest pattern
+  (serde, tokio).
+- Bad, because the internals are still reachable, and some user will
+  depend on them anyway.
+
+*** Option 3: workspace, designed public tracing API
+
+- Good, because table authors debugging a table could use it too.
+- Bad, because it means designing and stabilizing an API nobody has
+  asked for yet.
+
+** Related API-review findings (do alongside or after the split)
+
+From the same review. Most of these become easier once the public
+surface is explicit:
+
+- ~backwards_compatibility~ is a non-additive default feature (it changes
+  rule selection). It should be a runtime option.
+- ~parser::TableError~, ~parser::ParseError~ and
+  ~translator::TranslationError~ are pub-in-private: users can see them
+  but can't name them. Re-export them, and rename the two
+  ~TranslationError~ types (e.g. a top-level ~Error~).
+- Add ~#[non_exhaustive]~ to the public enums and to ~TranslationResult~.
+- ~TranslationResult~: ~emphasis~ is always ~None~, and the position
+  vectors are always ~Some~.
+- Document that positions and ~cursor_pos~ are char indices, not bytes.
+  Add ~# Errors~ sections, and fill in the ~-W missing_docs~ gaps (~30
+  items).
+- ~TranslationModes~: add ~PartialEq~ / ~Eq~ / ~BitOr~ / ~FromIterator~.
+  ~CompbrlAtCursor~ / ~CompbrlLeftCursor~ are accepted but silently
+  ignored.
+- Add a static assertion that ~Translator: Send + Sync~ (true today),
+  and run ~cargo-semver-checks~ in CI once the API is declared stable.
+
+** Links
+
+- [[https://rust-lang.github.io/api-guidelines/checklist.html][Rust API Guidelines checklist]]
+- Jon Gjengset, /Rust for Rustaceans/, ch. 3 "Designing Interfaces"
