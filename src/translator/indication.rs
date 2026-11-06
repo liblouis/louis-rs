@@ -20,6 +20,8 @@
 //! * [`lettersign::Indicator`]: detects contractions that require a letter sign
 //! * [`nocontract::Indicator`]: detects contractions that require a no-contract sign
 
+use std::ops::Range;
+
 use crate::emphasis::EmphasisSpan;
 use crate::translator::ResolvedTranslation;
 
@@ -86,6 +88,13 @@ pub struct PrecomputedIndications(Vec<Vec<ResolvedTranslation>>);
 impl PrecomputedIndications {
     pub fn translations_at(&self, pos: usize) -> Vec<ResolvedTranslation> {
         self.0.get(pos).cloned().unwrap_or_default()
+    }
+
+    /// Whether an indicator falls on any position in `range`
+    pub fn any_in(&self, range: Range<usize>) -> bool {
+        self.0
+            .get(range)
+            .is_some_and(|positions| positions.iter().any(|indicators| !indicators.is_empty()))
     }
 }
 

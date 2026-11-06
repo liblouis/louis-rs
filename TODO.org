@@ -96,7 +96,7 @@
   the "not implemented yet" arm of ~PrimaryTable::compile~, which is
   now exhaustive so a new ~Rule~ variant has to be placed. By number
   of liblouis tables using them:
-  - ~seqafterpattern~ (3), ~repword~, ~rependword~ (1 each)
+  - ~seqafterpattern~ (3)
   - ~exactdots~, ~grouping~ (none), and ~class~, a deprecated alias of
     ~attribute~ that no table uses
 - [ ] Two ~match~ rules of equal rank: we pick the last defined,

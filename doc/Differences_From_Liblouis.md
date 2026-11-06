@@ -120,6 +120,16 @@ upstream for `da-dk-g16`, `da-dk-g26` and their variants, `es-g2.ctb`,
 `sv-6common.uti`, `th-g1.utb`, `th-g1.uti`, `th-g2.ctb` and the `zhcn` tables.
 Until then those rules are silently dropped.
 
+## `repword` separators
+
+liblouis accepts a `repword` or `rependword` separator of several characters.
+louis-rs accepts only one character and rejects a longer separator with a parse
+error ([ADR-0020](adr/0020-repword.org)). Reduplication is written with a single
+hyphen, and the only table using these opcodes, `ms-my-g2.ctb`, uses `-`.
+
+**Migration path:** not needed for the corpus. A table using one fails to load
+with `Expected a single char, got Some("--")`.
+
 ## Opcodes not implemented
 
 `uplow`, `locale`, `backmatch`, `compdots`, `nobreak` and `macro` are not

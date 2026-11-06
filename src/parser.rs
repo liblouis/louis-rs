@@ -642,12 +642,13 @@ pub enum Rule {
         dots: BrailleChars,
         constraints: Constraints,
     },
+    // liblouis also allows a separator of several characters, but no table uses one
     Repword {
-        chars: String,
+        separator: char,
         dots: BrailleChars,
     },
     Rependword {
-        chars: String,
+        separator: char,
         dots: BrailleChars,
         other: BrailleChars,
     },
@@ -1011,9 +1012,13 @@ impl std::fmt::Display for Rule {
                 None => write!(f, "replace {}", chars),
             },
             Rule::Repeated { chars, dots, .. } => write!(f, "repeated {} {}", chars, dots),
-            Rule::Repword { chars, dots } => write!(f, "repword {} {}", chars, dots),
-            Rule::Rependword { chars, dots, other } => {
-                write!(f, "rependword {} {},{}", chars, dots, other)
+            Rule::Repword { separator, dots } => write!(f, "repword {} {}", separator, dots),
+            Rule::Rependword {
+                separator,
+                dots,
+                other,
+            } => {
+                write!(f, "rependword {} {},{}", separator, dots, other)
             }
             Rule::Syllable { chars, dots } => write!(f, "syllable {} {}", chars, dots),
             Rule::Joinword { chars, dots } => write!(f, "joinword {} {}", chars, dots),
@@ -2309,13 +2314,13 @@ impl<'a> RuleParser<'a> {
             Opcode::Repword => {
                 fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
                 Rule::Repword {
-                    chars: self.chars()?,
+                    separator: self.one_char()?,
                     dots: self.explicit_dots()?,
                 }
             }
             Opcode::Rependword => {
                 fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
-                let chars = self.chars()?;
+                let separator = self.one_char()?;
                 let many_dots = self.many_braillechars()?;
                 if many_dots.len() != 2 {
                     return Err(ParseError::DotsTupleExpected);
@@ -2323,7 +2328,11 @@ impl<'a> RuleParser<'a> {
                 let mut iterator = many_dots.into_iter();
                 let dots = iterator.next().unwrap();
                 let other = iterator.next().unwrap();
-                Rule::Rependword { chars, dots, other }
+                Rule::Rependword {
+                    separator,
+                    dots,
+                    other,
+                }
             }
             Opcode::Largesign => {
                 fail_if_invalid_constraints(Constraints::empty(), constraints, opcode)?;
@@ -2843,6 +2852,17 @@ mod tests {
         assert!(RuleParser::new("nocross nofor").nocross());
         assert!(!RuleParser::new("nofor nocross").nocross());
         assert!(!RuleParser::new("nofor").nocross());
+    }
+
+    #[test]
+    fn repword_separator_is_one_character() {
+        assert!(RuleParser::new("repword - 123456").rule().is_ok());
+        assert_eq!(
+            RuleParser::new("rependword -- 25,123456").rule(),
+            Err(ParseError::SingleCharExpected {
+                found: Some("--".to_string())
+            })
+        );
     }
 
     #[test]

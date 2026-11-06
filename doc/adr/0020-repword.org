@@ -1,0 +1,151 @@
+#+options: todo:t
+#+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
+#+language: en
+
+* ACCEPTED ADR-0020: Implement ~repword~ and ~rependword~ with a constrainer, the trie and ~trace~
+- Deciders :: CE
+- Date :: [2026-11-06 Fri]
+
+** Context and Problem Statement
+
+~repword~ and ~rependword~ shorten a reduplicated word. In Malay,
+~kata-kata~ is written as ~kata~ followed by a sign that stands for
+"and again": ~repword - 123456~ gives ~kt=~ (with ~=~ for 123456).
+~rependword~ does the same when the repeated part ends a longer word,
+and also puts its first dots before that part: with
+~rependword - 456,123456~, ~xxxabc-abc~ gives ~xxx:abc=~.
+
+What the rules look for is ~(\w+)-\1~: a run of letters, the
+separator, and the same letters again. That is a backreference, which
+neither the trie nor louis-rs's regexp VM can express. liblouis
+(~isRepeatedWord~ and the code after the replacement in
+~lou_translateString.c~) adds three more conditions:
+
+- the repeated part must not start inside a contraction that is
+  already in the output: ~aaabc-abc~ stays as it is when ~aaa~ is a
+  contraction;
+- capitals and emphasis may change only at the start of the word
+  and of each repetition:
+  ~Abc-Abc~ gives ~^abc^=~;
+- further repetitions are swallowed too: ~abc-abc-abc~ gives ~abc=~.
+
+Only ~ms-my-g2.ctb~ uses the two opcodes, with ~-~ as the separator of
+both, plus liblouis's ~tests/yaml/repword.yaml~.
+
+** Decision Drivers
+
+- Reproduce liblouis, including the conditions above, each of which a
+  case in ~repword.yaml~ tests.
+- Keep the per-position analysis precomputed and immutable, like the
+  other constrainers.
+- No new dependency for one opcode used by one table.
+
+** Considered Options
+
+1. Rewrite the input before translation with a regular expression.
+2. A constrainer finds the repetition, the trie the separator, and
+   ~trace~ checks what depends on the rules already chosen.
+3. Option 2 without the contraction and the indicator checks.
+
+** Decision Outcome
+
+Chosen option: 2, because the backreference is a plain character
+comparison that fits a constrainer, and the conditions that depend on
+earlier choices fit in ~trace~, the only place that knows them.
+
+How it works, for ~xxxabc-abc~:
+
+1. *Constrainer: the ~\1~.* ~RepwordConstrainer~ looks at every
+   separator. It walks outwards while there are letters on both sides,
+   which gives the longest possible length (here 3, limited by the
+   letters after the ~-~), then tries lengths from that down to 1, and
+   keeps the first one where the letters before equal the letters
+   after, ignoring case. It flags the positions of that word before
+   the separator with ~RepeatedWordEnd~ when a letter comes before the
+   word (the ~xxx~), with ~RepeatedWord~ otherwise. The length is not
+   stored: it is the number of flagged positions right before the
+   separator. Further repetitions after the first, the separator and
+   the word again as in ~abc-abc-abc~, are flagged with ~Repetition~.
+2. *Trie: the separator.* ~repword~ is inserted as ~-~ followed by a
+   letter, ~rependword~ as ~-~ preceded by a letter. Both always hold
+   for a real repetition, so they decide nothing. They keep the two
+   rules apart from each other and from a plain rule on ~-~ (the trie
+   holds one rule per node; ~ms-my-g2.ctb~ includes ~hyphen - 36~), and
+   the extra transition outweighs that plain rule.
+3. *~trace~: does it apply here?* ~repeated_word~ counts the flagged
+   positions before the separator; none means no repetition. The word
+   must start where one of the translations already chosen starts,
+   not inside a contraction. And no indicator may fall inside the word
+   or its repetition, since an indicator marks a change of capitals or
+   emphasis. If any
+   of this fails, the candidate is dropped and the plain rule on ~-~
+   takes over.
+4. *~trace~: the output.* The separator is pushed with no output, then
+   the indicators at the start of the repetition, then one translation
+   that takes the repetitions (~repetitions_end~ adds the ones flagged
+   ~Repetition~ as long as no indicator falls in them) and outputs the
+   rule's dots.
+   ~rependword~ also inserts its first dots before the translations of
+   the word.
+
+Both opcodes are forward only, as in liblouis, and switched off in a
+word with a ~nocont~ string. The separator is a single character,
+which the parser enforces; see "Negative Consequences".
+
+*** Positive Consequences
+
+- ~ms-my-g2.yaml~'s reduplicated words (~kata-kata~, ~barang-barang~)
+  come out right.
+- All 18 cases in ~repword.yaml~ produce the right dots, including the
+  contraction and capitals cases.
+- The input analysis is a constrainer like the others; ~trace~ holds
+  only what depends on earlier choices.
+
+*** Negative Consequences
+
+- liblouis accepts a separator of several characters; louis-rs
+  rejects one with a parse error. No table uses one, and
+  reduplication is written with a single hyphen.
+- ~repword.yaml~ itself still fails, because its expectations go
+  through display rules embedded in the test, which louis-rs ignores
+  ([[file:0013-no-inferred-display-entries.org][ADR-0013]]). Its ~inputPos~ and ~outputPos~ checks are therefore
+  untested.
+- A constrainer flag does not say which separator produced it. With
+  one separator character per table in practice, that is moot.
+
+** Pros and Cons of the Options
+
+*** Rewrite the input with a regular expression
+
+Replace ~kata-kata~ with ~kata~ and a marker character that a rule
+then translates to the repword dots.
+
+- Good, because it is short to write.
+- Bad, because Rust's ~regex~ has no backreferences; it would need a
+  new dependency such as ~fancy-regex~.
+- Bad, because a text rewrite cannot produce the capital indicator
+  before the sign, the dots ~rependword~ inserts before the word, or
+  the contraction check, and it needs a position mapping of its own.
+
+*** Constrainer, trie and ~trace~
+
+- Good, because it reproduces every case in ~repword.yaml~.
+- Good, because the backreference stays a plain character comparison
+  in a precomputed, immutable constrainer.
+- Bad, because the opcode is spread over three places, which this
+  record exists to tie together.
+
+*** Without the contraction and the indicator checks
+
+Measured: ~ms-my-g2.yaml~ passes the same with either check disabled.
+
+- Good, because about 20 lines less in ~trace~.
+- Bad, because it gives up the ~repword.yaml~ cases those checks
+  exist for, a silent difference from liblouis on such input.
+
+** Links
+
+- Code: ~RepwordConstrainer~ in ~src/translator/position_constraints.rs~,
+  ~repeated_word~ and ~repetitions_end~ in
+  ~src/translator/table/primary.rs~
+- liblouis: ~isRepeatedWord~ in ~liblouis/lou_translateString.c~

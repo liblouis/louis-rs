@@ -73,6 +73,16 @@ pub enum Constraint {
     /// Contractions are off at this position, in forward translation: it is in a word
     /// with a `nocont` string, or, with `capsnocont`, at or after a run of capitals.
     Uncontracted,
+    /// This position is in a word that the `repword` separator after it repeats, in
+    /// forward translation.
+    RepeatedWord,
+    /// Like [`Constraint::RepeatedWord`], but the word is the end of a longer one, so
+    /// `rependword` applies instead.
+    RepeatedWordEnd,
+    /// This position is in a further repetition, the separator and the word again, after
+    /// the first one that a `repword`/`rependword` separator repeats, in forward
+    /// translation.
+    Repetition,
 }
 
 pub type Constraints = EnumSet<Constraint>;
@@ -150,6 +160,26 @@ impl PositionConstraints {
             .get(pos)
             .is_some_and(|f| f.contains(Constraint::SpaceBeforeDigit))
     }
+
+    pub fn repetition_at(&self, pos: usize) -> bool {
+        self.0
+            .get(pos)
+            .is_some_and(|f| f.contains(Constraint::Repetition))
+    }
+
+    /// How many positions right before `pos` have `constraint`
+    pub fn run_before(&self, pos: usize, constraint: Constraint) -> usize {
+        self.0[..pos]
+            .iter()
+            .rev()
+            .take_while(|c| c.contains(constraint))
+            .count()
+    }
+}
+
+/// Whether two characters are the same letter, ignoring case
+fn same_letter(a: char, b: char) -> bool {
+    a.to_lowercase().eq(b.to_lowercase())
 }
 
 /// Detects numeric runs in the input and sets [`Constraint::DontContract`] at
@@ -382,6 +412,69 @@ impl JoinNumConstrainer {
                 }
             } else {
                 digit_follows = self.digit_chars.contains(&chars[pos]);
+            }
+        }
+        constraints
+    }
+}
+
+/// Marks the word before a `repword`/`rependword` separator that the letters after it
+/// repeat, mirroring liblouis's `isRepeatedWord` (forward translation only): the
+/// longest such run, ignoring case. This is the `(\w+)-\1` of the two opcodes.
+///
+/// The opcode spans three places: this constrainer finds the repetitions, the trie
+/// finds the separator, and `trace()` checks what depends on the rules chosen before
+/// (`repeated_word`, `repetitions_end`) and swallows the repetitions. See
+/// `doc/adr/0020-repword.org` for how they fit together.
+#[derive(Debug, Clone)]
+pub struct RepwordConstrainer {
+    separators: HashSet<char>,
+    letter_chars: HashSet<char>,
+}
+
+impl RepwordConstrainer {
+    /// At each separator, find the longest run of letters that comes both right before
+    /// and right after it, and flag that run before the separator, and any further
+    /// repetitions after the first one
+    fn compute(&self, input: &str) -> Vec<Constraints> {
+        let chars: Vec<char> = input.chars().collect();
+        let mut constraints = vec![Constraints::empty(); chars.len()];
+        let is_letter = |p: usize| self.letter_chars.contains(&chars[p]);
+        for pos in 0..chars.len() {
+            if !self.separators.contains(&chars[pos]) {
+                continue;
+            }
+            let after = pos + 1;
+            // as long as there are letters on both sides
+            let max_len = (1..=pos)
+                .take_while(|&len| {
+                    after + len <= chars.len() && is_letter(pos - len) && is_letter(after + len - 1)
+                })
+                .count();
+            // whether the `len` letters before the separator come again at `start`
+            let repeats = |len: usize, start: usize| {
+                start + len <= chars.len()
+                    && (0..len).all(|i| same_letter(chars[pos - len + i], chars[start + i]))
+            };
+            let repeated_len = (1..=max_len).rev().find(|&len| repeats(len, after));
+            if let Some(len) = repeated_len {
+                // a letter before the run makes it the end of a longer word: rependword
+                let constraint = if len < pos && is_letter(pos - len - 1) {
+                    Constraint::RepeatedWordEnd
+                } else {
+                    Constraint::RepeatedWord
+                };
+                for c in &mut constraints[pos - len..pos] {
+                    c.insert(constraint);
+                }
+                // the separator and the word again
+                let mut end = after + len;
+                while chars.get(end) == Some(&chars[pos]) && repeats(len, end + 1) {
+                    for c in &mut constraints[end..end + 1 + len] {
+                        c.insert(Constraint::Repetition);
+                    }
+                    end += 1 + len;
+                }
             }
         }
         constraints
@@ -634,6 +727,9 @@ pub enum Constrainer {
     NoCont(NoContConstrainer),
     /// Detects runs of capitals and sets [`Constraint::Uncontracted`].
     CapsNoCont(CapsNoContConstrainer),
+    /// Detects words that a `repword`/`rependword` separator repeats and sets
+    /// [`Constraint::RepeatedWord`]/[`Constraint::RepeatedWordEnd`].
+    Repword(RepwordConstrainer),
 }
 
 impl Constrainer {
@@ -649,6 +745,7 @@ impl Constrainer {
             Constrainer::JoinNum(c) => c.compute(input),
             Constrainer::NoCont(c) => c.compute(input),
             Constrainer::CapsNoCont(c) => c.compute(input),
+            Constrainer::Repword(c) => c.compute(input),
         }
     }
 }
@@ -1006,6 +1103,34 @@ impl JoinNumConstrainerBuilder {
     }
 }
 
+/// A builder for [`Constrainer::Repword`].
+#[derive(Debug, Default)]
+pub struct RepwordConstrainerBuilder {
+    separators: HashSet<char>,
+    letter_chars: HashSet<char>,
+}
+
+impl RepwordConstrainerBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn separator(&mut self, c: char) {
+        self.separators.insert(c);
+    }
+
+    pub fn letter_characters(&mut self, chars: HashSet<char>) {
+        self.letter_chars = chars;
+    }
+
+    pub fn build(self) -> Option<RepwordConstrainer> {
+        (!self.separators.is_empty()).then_some(RepwordConstrainer {
+            separators: self.separators,
+            letter_chars: self.letter_chars,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1211,6 +1336,41 @@ mod tests {
                 .collect();
         // a single capital is not enough
         assert_eq!(marked, vec![false, true, true, true, false, false, false]);
+    }
+
+    /// The length of the run flagged right before the `-` in `input`, for `repword` and
+    /// for `rependword`
+    fn repeated_lengths(input: &str) -> (usize, usize) {
+        let mut builder = RepwordConstrainerBuilder::new();
+        builder.separator('-');
+        builder.letter_characters("abcxABC".chars().collect());
+        let c = Constrainers::new(vec![Constrainer::Repword(builder.build().unwrap())])
+            .precompute(input, &[]);
+        let at = input.chars().position(|c| c == '-').unwrap();
+        (
+            c.run_before(at, Constraint::RepeatedWord),
+            c.run_before(at, Constraint::RepeatedWordEnd),
+        )
+    }
+
+    #[test]
+    fn repword_marks_further_repetitions() {
+        let mut builder = RepwordConstrainerBuilder::new();
+        builder.separator('-');
+        builder.letter_characters("abcx".chars().collect());
+        let c = Constrainers::new(vec![Constrainer::Repword(builder.build().unwrap())])
+            .precompute("abc-abc-abc-abx", &[]);
+        // the second `-abc`, but not `-abx`
+        let marked: Vec<usize> = (0..15).filter(|&p| c.repetition_at(p)).collect();
+        assert_eq!(marked, (7..11).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn repword_marks_the_longest_repeated_word() {
+        assert_eq!(repeated_lengths("abc-ABCxx"), (3, 0));
+        // the end of a longer word
+        assert_eq!(repeated_lengths("xabc-abc"), (0, 3));
+        assert_eq!(repeated_lengths("abc-xab"), (0, 0));
     }
 
     #[test]

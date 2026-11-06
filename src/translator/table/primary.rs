@@ -17,16 +17,17 @@ use crate::{
         effect::Environment,
         end_word::EndWordScanner,
         indication::{
-            Indicator, Indicators, computer_braille, emphasis, lettersign, mode, nocontract,
-            numeric, uppercase,
+            Indicator, Indicators, PrecomputedIndications, computer_braille, emphasis, lettersign,
+            mode, nocontract, numeric, uppercase,
         },
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
         position_constraints::{
             BackwardCapsConstrainerBuilder, BackwardNoContractConstrainerBuilder,
             BackwardNumericConstrainerBuilder, CapsNoContConstrainerBuilder,
-            ComputerBrailleConstrainer, Constrainer, Constrainers, HyphenationConstrainerBuilder,
-            JoinNumConstrainerBuilder, NoContConstrainerBuilder, NumericConstrainerBuilder,
-            PositionConstraints, PunctuationConstrainerBuilder,
+            ComputerBrailleConstrainer, Constrainer, Constrainers, Constraint,
+            HyphenationConstrainerBuilder, JoinNumConstrainerBuilder, NoContConstrainerBuilder,
+            NumericConstrainerBuilder, PositionConstraints, PunctuationConstrainerBuilder,
+            RepwordConstrainerBuilder,
         },
         table::TableContext,
         translation::TranslationSubset,
@@ -190,6 +191,7 @@ struct PrimaryTableBuilder {
     joinnum_constrainer: JoinNumConstrainerBuilder,
     nocont_constrainer: NoContConstrainerBuilder,
     capsnocont_constrainer: CapsNoContConstrainerBuilder,
+    repword_constrainer: RepwordConstrainerBuilder,
     backward_digit_overrides: HashMap<char, ResolvedTranslation>,
     compbrl_triggers: Vec<String>,
 }
@@ -245,6 +247,7 @@ impl PrimaryTableBuilder {
             joinnum_constrainer: JoinNumConstrainerBuilder::new(),
             nocont_constrainer: NoContConstrainerBuilder::new(),
             capsnocont_constrainer: CapsNoContConstrainerBuilder::new(),
+            repword_constrainer: RepwordConstrainerBuilder::new(),
             backward_digit_overrides: HashMap::new(),
             compbrl_triggers: Vec::new(),
         }
@@ -465,6 +468,10 @@ impl PrimaryTableBuilder {
                         .then(|| self.capsnocont_constrainer.build())
                         .flatten()
                         .map(Constrainer::CapsNoCont),
+                    (direction == Direction::Forward)
+                        .then(|| self.repword_constrainer.build())
+                        .flatten()
+                        .map(Constrainer::Repword),
                 ]
                 .into_iter()
                 .flatten()
@@ -1576,6 +1583,38 @@ impl PrimaryTable {
                         );
                     }
                 }
+                // Forward only, like liblouis. Fires only after a repetition of the word that
+                // follows, a comparison the trie can't express: `trace()` gates it and
+                // swallows the repetitions. A letter on either side of the separator holds for
+                // both opcodes and keeps them apart from each other and from a plain rule
+                // on the separator.
+                Rule::Repword { separator, dots }
+                | Rule::Rependword {
+                    separator,
+                    other: dots,
+                    ..
+                } => {
+                    if direction == Direction::Forward {
+                        builder.repword_constrainer.separator(*separator);
+                        let (before, after) = match rule.rule {
+                            Rule::Repword { .. } => {
+                                (None, Some(Transition::End(vec![CharacterClass::Letter])))
+                            }
+                            _ => (Some(Transition::Start(vec![CharacterClass::Letter])), None),
+                        };
+                        builder.get_trie_mut(rule).insert(
+                            &separator.to_string(),
+                            &dots.to_string(),
+                            before,
+                            after,
+                            direction,
+                            rule.precedence(),
+                            vec![],
+                            TranslationStage::Main,
+                            rule,
+                        );
+                    }
+                }
                 Rule::Joinnum { chars, dots, .. } => match direction {
                     Direction::Forward => {
                         // Fires only when whitespace and then a digit follow, a scan the
@@ -1669,8 +1708,6 @@ impl PrimaryTable {
                 Rule::Class { .. }
                 | Rule::Exactdots { .. }
                 | Rule::Grouping { .. }
-                | Rule::Rependword { .. }
-                | Rule::Repword { .. }
                 | Rule::Seqafterpattern { .. } => (),
             }
         }
@@ -1716,6 +1753,9 @@ impl PrimaryTable {
                 .copied()
                 .collect(),
         );
+        builder
+            .repword_constrainer
+            .letter_characters(letter_chars.clone());
         builder.joinnum_constrainer.digit_characters(
             ctx.character_classes()
                 .get(&CharacterClass::Digit)
@@ -1955,19 +1995,24 @@ impl PrimaryTable {
             delayed_translations = delayed;
             candidates.extend(current);
 
-            // Forward, `prepunc`/`postpunc` need a variable-length scan of the input the
-            // trie can't express (see `PunctuationConstrainer`), so they're inserted with no
-            // trie-level boundary and gated here instead. Rejected candidates are simply
-            // dropped, leaving the position to fall through to the plain punctuation
-            // character definition (`character_translations`), matching liblouis. Backward,
-            // the trie gates them by where a word begins and ends.
+            // Forward, some rules have a condition the trie can't express, so they're
+            // inserted without it and gated here, mostly against the constrainers. A
+            // rejected candidate is simply dropped, and a plainer rule or the character
+            // definition (`character_translations`) takes the position, matching liblouis.
             if self.direction == Direction::Forward {
                 candidates.retain(|t| match t.rule() {
+                    // a variable-length scan of the input (see `PunctuationConstrainer`).
+                    // Backward, the trie gates them by where a word begins and ends.
                     Some(Rule::Prepunc { .. }) => constraints.prepunc_ok_at(char_pos),
                     Some(Rule::Postpunc { .. }) => constraints.postpunc_ok_at(char_pos),
+                    // whitespace and then a digit follow
                     Some(Rule::Joinnum { .. }) => {
                         constraints.space_before_digit_at(char_pos + t.length())
                     }
+                    // a repetition of the word that follows, see ADR-0020
+                    Some(Rule::Repword { .. } | Rule::Rependword { .. }) => self
+                        .repeated_word(t, char_pos, &translations, &constraints, &indications)
+                        .is_some(),
                     _ => true,
                 });
             }
@@ -2065,6 +2110,27 @@ impl PrimaryTable {
                 char_pos += nocross.length();
                 translations.push(translation);
                 delayed_translations = self.update_offsets(delayed_translations, nocross.length());
+            } else if let Some(t) = candidate
+                && let Some((index, len)) =
+                    self.repeated_word(t, char_pos, &translations, &constraints, &indications)
+            {
+                if let Some(dots) = Self::rependword_dots(t) {
+                    translations.insert(index, dots);
+                }
+                let repetition = Self::repetition_translations(
+                    t,
+                    char_pos,
+                    len,
+                    input,
+                    &constraints,
+                    &indications,
+                );
+                let consumed = repetition.iter().map(|t| t.length()).sum();
+                translations.extend(repetition);
+                chars.nth(consumed - 1);
+                delayed_translations = self.update_offsets(delayed_translations, consumed);
+                char_pos += consumed;
+                seen.clear();
             } else if let Some(t) = candidate {
                 let t = &self.swallow_following(t.clone(), chars.as_str(), char_pos, &constraints);
                 if t.length() == 0 {
@@ -2138,6 +2204,8 @@ impl PrimaryTable {
                 Rule::Always { .. }
                     | Rule::Syllable { .. }
                     | Rule::Repeated { .. }
+                    | Rule::Repword { .. }
+                    | Rule::Rependword { .. }
                     | Rule::Largesign { .. }
                     | Rule::Word { .. }
                     | Rule::Partword { .. }
@@ -2193,6 +2261,109 @@ impl PrimaryTable {
         }
         let input = &rest[..rest.len() - consumed.len()];
         t.with_input(input)
+    }
+
+    /// The word before a `repword`/`rependword` separator at `char_pos` that the letters
+    /// after it repeat: the index of its first translation and its length. None if the
+    /// rule doesn't apply: there is no such word, it starts inside an earlier
+    /// translation (a contraction), or capitals or emphasis change inside the word or
+    /// its repetition.
+    fn repeated_word(
+        &self,
+        t: &ResolvedTranslation,
+        char_pos: usize,
+        translations: &[ResolvedTranslation],
+        constraints: &PositionConstraints,
+        indications: &PrecomputedIndications,
+    ) -> Option<(usize, usize)> {
+        let constraint = match t.rule() {
+            Some(Rule::Repword { .. }) => Constraint::RepeatedWord,
+            Some(Rule::Rependword { .. }) => Constraint::RepeatedWordEnd,
+            _ => return None,
+        };
+        let len = constraints.run_before(char_pos, constraint);
+        if len == 0 {
+            return None;
+        }
+        let separator_end = char_pos + t.length();
+        // an indicator stands for a change of capitals or emphasis, allowed only at the
+        // start of the word and of its repetition. First the word after its first
+        // character, and the separator
+        if indications.any_in(char_pos - len + 1..separator_end) {
+            return None;
+        }
+        // the repetition after its first character
+        if indications.any_in(separator_end + 1..separator_end + len) {
+            return None;
+        }
+        // the word must start where a translation starts, not inside a contraction
+        let mut index = translations.len();
+        let mut covered = 0;
+        while covered < len && index > 0 {
+            index -= 1;
+            covered += translations[index].length();
+        }
+        if covered != len {
+            return None;
+        }
+        // step back over the indicators of the first letter (zero length), so that
+        // `rependword` puts its dots before a capital sign, like liblouis
+        while index > 0 && translations[index - 1].length() == 0 {
+            index -= 1;
+        }
+        Some((index, len))
+    }
+
+    /// `rependword`'s first dots, which go before the repeated word
+    fn rependword_dots(t: &ResolvedTranslation) -> Option<ResolvedTranslation> {
+        match t.rule() {
+            Some(Rule::Rependword { dots, .. }) => {
+                Some(t.clone().with_input("").with_output(&dots.to_string()))
+            }
+            _ => None,
+        }
+    }
+
+    /// What replaces a `repword`/`rependword` separator at `char_pos` and the repetitions
+    /// of the word of `len` letters before it: the separator without output, the
+    /// indicators at the start of the repetition, then the rule's dots for all the
+    /// repetitions
+    fn repetition_translations(
+        t: &ResolvedTranslation,
+        char_pos: usize,
+        len: usize,
+        input: &str,
+        constraints: &PositionConstraints,
+        indications: &PrecomputedIndications,
+    ) -> Vec<ResolvedTranslation> {
+        let separator_end = char_pos + t.length();
+        let end = Self::repetitions_end(separator_end + len, len, constraints, indications);
+        let repetitions: String = input
+            .chars()
+            .skip(separator_end)
+            .take(end - separator_end)
+            .collect();
+        let mut translations = vec![t.clone().with_output("")];
+        translations.extend(indications.translations_at(separator_end));
+        translations.push(t.clone().with_input(&repetitions));
+        translations
+    }
+
+    /// Where the repetitions of a word of `len` letters end, the first of which ends at
+    /// `end`: further ones, the separator and the word again, count as long as no
+    /// indicator falls in them
+    fn repetitions_end(
+        mut end: usize,
+        len: usize,
+        constraints: &PositionConstraints,
+        indications: &PrecomputedIndications,
+    ) -> usize {
+        while (end..end + 1 + len).all(|p| constraints.repetition_at(p))
+            && !indications.any_in(end + 1..end + 1 + len)
+        {
+            end += 1 + len;
+        }
+        end
     }
 
     fn handle_undefined_char(&self, ch: char, options: &TranslationOptions) -> String {
@@ -2797,6 +2968,26 @@ mod tests {
         assert_eq!(table.translate("abc"), "⠁⠃⠉");
         assert_eq!(table.translate("Abc"), "⠨⠁⠃⠉");
         assert_eq!(table.translate("ABC"), "⠠⠠⠁⠃⠉");
+    }
+
+    #[test]
+    fn rependword_dots_go_before_the_capital_sign() {
+        let rules = [
+            parse_rule("lowercase x 1346"),
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 12"),
+            parse_rule("lowercase c 14"),
+            parse_rule("base uppercase A a"),
+            parse_rule("capsletter 46"),
+            parse_rule("sign - 25"),
+            parse_rule("repword - 123456"),
+            parse_rule("rependword - 456,123456"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        assert_eq!(table.translate("xAbc-Abc"), "⠭⠸⠨⠁⠃⠉⠨⠿");
     }
 
     #[test]
