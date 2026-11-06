@@ -8,7 +8,7 @@ This document says what it can do today, what it can't yet, and where the remain
 work is, so you can tell whether it's usable for your case and pick something up if
 it isn't.
 
-Measured at louis-rs `7721e7d` against liblouis `0d3be2c4`, which is `011cfb3b` plus
+Measured at louis-rs `08151f9` against liblouis `0d3be2c4`, which is `011cfb3b` plus
 [liblouis#2176](https://github.com/liblouis/liblouis/pull/2176). Without that fix four
 YAML files (`en-g3`, `en-ueb`, `it`, `de-g2-sbs`) don't parse and drop out:
 
@@ -16,7 +16,7 @@ YAML files (`en-g3`, `en-ueb`, `it`, `de-g2-sbs`) don't parse and drop out:
 |--------------------------------|-----------|
 | Assertions run                 | 2 241 029 |
 | Pass                           | **99.0%** |
-| Fail                           | 0.5%      |
+| Fail                           | 0.4%      |
 | Expected failure               | 0.5%      |
 | Table files that parse cleanly | 458 / 458 |
 
@@ -48,8 +48,10 @@ reversed for back-translation.
 **Every table under `tables/` parses** — all 458 of them.
 
 **Contractions and the word-family opcodes** — `word`, `begword`, `midword`,
-`endword`, `midendword`, `prfword`, `sufword`, `partword`, `begmidword`, with their
-`before`/`after` class constraints.
+`endword`, `midendword`, `prfword`, `sufword`, `partword`, `begmidword`, `lowword`,
+`joinword`, with their `before`/`after` class constraints.
+
+**Every opcode a liblouis table uses compiles**, except `seqafterpattern`, see below.
 
 **`match` and `context` rules** via a purpose-built regexp VM (`src/translator/regexp.rs`)
 that compiles patterns at table load time and matches in linear time.
@@ -80,7 +82,7 @@ mutate `LOUIS_TABLE_PATH`.
 through the same search path as any other table.
 
 **Position mapping.** `inputPos`, `outputPos` and `cursorPos`, composed across every
-pipeline stage in both directions. One known mismatch remains in the whole suite.
+pipeline stage in both directions. Two known mismatches remain in the whole suite.
 
 **Display tables** as a pipeline stage, renders last when translating to braille and
 first when back-translating. `--display` on `translate` and `trace`.
@@ -115,10 +117,15 @@ Honest list, no dates attached:
   undocumented in liblouis's own manual, and none appears in any table or test in
   liblouis's corpus. See
   [ADR-0012](adr/0012-unimplemented-opcodes.org).
+- **No "standing alone" check.** Tables with a `seqdelimiter` (`en-ueb-g2`, `fil-g2`,
+  `xh-za-g2`) make liblouis check more strictly whether a `word` or `contraction`
+  rule's word stands alone, skipping `seqbeforechars`, `seqafterchars` and
+  `seqafterpattern` strings. louis-rs uses its usual word boundaries, which differ
+  only on inputs like `it'x`, and compiles `seqafterpattern` to nothing.
 
 ## Where the remaining failures are
 
-Most of the failing 0.5% sits in ten files, and several of those share a root cause.
+Most of the failing 0.4% sits in ten files, and several of those share a root cause.
 Sizes are per item — *S* is up to a week, *M* about a week, *L* one to three weeks —
 and are there so you can pick work by appetite, not to add up. Failure counts are
 approximate: `check` reports a per-file percentage, so a count derived from it carries
@@ -126,16 +133,16 @@ a few hundred either way on the million-assertion files.
 
 | Area                                                | Failing | Root cause                                                                                                                                                                       | Size |
 |-----------------------------------------------------|--------:|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------|
-| `en-ueb-g2-dictionary_harness`, `afr-za-g2` forward |  ≈2 200 | Match-rule candidate selection. See [ADR-0008](adr/0008-match-rule-candidate-selection.org) and [ADR-0016](adr/0016-order-independent-rule-selection.org). | L    |
+| `en-ueb-g2-dictionary_harness`, `afr-za-g2` forward |  ≈2 300 | Match-rule candidate selection. See [ADR-0008](adr/0008-match-rule-candidate-selection.org) and [ADR-0016](adr/0016-order-independent-rule-selection.org). | L    |
 | `ta`, `ml`, `pa`, `hi` forward                      |    ≈300 | A stray ⠈ before punctuation. These tables include `en-in-g1.ctb`, whose `word , 4-2` they override with an earlier `always , 2`; that relies on rule order. See [ADR-0016](adr/0016-order-independent-rule-selection.org). | —    |
-| `th`, `fa`, `pa`                                    |    ≈800 | Not yet investigated, and unrelated to each other: Thai letters left untranslated, Persian full stop and number sign, Punjabi addak (gemination) read as a virama going backward. | M    |
+| `th`, `pa`                                          |    ≈600 | Two causes. In a forward `context` rule liblouis's `*` puts in the dots of the copied characters, louis-rs the characters themselves: most of `th`. Backward, `pa` reads the number sign ⠼ as the letter ਣ, which has the same cells; liblouis takes the number sign when a digit follows. | M    |
 | `en-ueb-computer-code`                              |  ≈1 700 | Three bugs: letter sign fires only on the first occurrence in a run; wrong word sign before hyphen or closing bracket; leading indicator dropped at the very start of the input. But the file's own header says many of its expectations are wrong and it needs review ([#590](https://github.com/liblouis/liblouis/issues/590)), so establish which are before chasing them. | M    |
 | `hu-hu-g1_dictionary_special_consonants`            |  ≈1 100 | `nocross` asks "can this hyphenate anywhere?" instead of liblouis's positional `syllableBreak()`.                                                                                | L    |
-| `sw-ke-dictionary`, `sw-ke`                         |    ≈850 | Backward lookup splices in unrelated dictionary words ("wote" → "wizaraote"); single-letter words pick up a spurious letter sign.                                                | M    |
+| `sw-ke-dictionary`, `sw-ke`                         |    ≈800 | Backward lookup splices in unrelated dictionary words ("wote" → "wizaraote"); single-letter words pick up a spurious letter sign.                                                | M    |
 | `en-g3`, `en-ueb`                                   |    ≈600 | A literal hyphen breaks per-segment contraction in compounds — "do-it-yourself" gives `do-x-y\|rself`, not `d-x-yrf`.                                                            | M    |
-| `rw-rw-g1`, `numericmode`                           |    ≈500 | Letters used as pseudo-digits still get a capital sign. Related: `endmode`/`endmodeword` don't fire across a `base` character chain.                                             | M    |
+| `rw-rw-g1`, `numericmode`                           |    ≈300 | Letters used as pseudo-digits still get a capital sign. Related: `endmode`/`endmodeword` don't fire across a `base` character chain.                                             | M    |
 | `de-g0-detailed-specs`, `de-g1-…`                   |    ≈200 | `capsletter` vs. `begcapsword` tier selection. Needs `uppercase.rs` and `emphasis.rs` unified into one tier model — a blanket engine fix was tried and disproven.                | L    |
-| all other files                                     |  ≈2 500 | Roughly 100 files, each contributing well under 350.                                                                                                                             | —    |
+| all other files                                     |  ≈2 200 | Roughly 100 files, each contributing well under 350.                                                                                                                             | —    |
 
 Two cross-cutting items have no single file behind them:
 
@@ -190,13 +197,13 @@ nothing at all, and `de-eurobrl6.yaml`, `hu-hu-g1-hyph_harness.yaml` and
 
 Good entry points, roughly easiest first:
 
-1. **Wake up the 46 blocks that don't run.** Several independent small fixes,
+1. **Wake up the 42 blocks that don't run.** Several independent small fixes,
    listed above, and nobody knows what those tests will report. *(S each)*
 2. **The three parser gaps.** Small, concrete, and each has a failing file to check
    against. *(S)*
 3. **Expose the four missing entry points.** Mechanical. *(S each)*
 4. **Survey a failure cluster.** Every row in the table above now names a cause, so
-   what's left is the ~2 500 failures spread across roughly 100 smaller files, and
+   what's left is the ~2 200 failures spread across roughly 100 smaller files, and
    the residue of the two clusters already surveyed. Reading failure output rather
    than deep engine work — and each of the three clusters that got this treatment
    turned out to be one or two root causes rather than a long tail. *(M)*
