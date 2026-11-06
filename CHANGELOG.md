@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   parse error. liblouis accepts one, but no table uses it.
 
 ### Fixed
+- `joinword` now joins the word that follows. It kept the space, and also
+  applied before punctuation: with `en-us-g2.ctb`, "to bed" gave ⠖⠀⠃⠫
+  instead of ⠖⠃⠫, and "to." gave ⠖⠲ instead of ⠞⠕⠲.
 - `lowword` now only applies with whitespace on both sides of the word.
   Before, punctuation was enough: with `fil-g2.ctb`, the "pa" in "pa."
   was contracted to ⠖.
