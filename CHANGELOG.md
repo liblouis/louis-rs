@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   parse error. liblouis accepts one, but no table uses it.
 
 ### Fixed
+- A zero-length rule, such as a `context` rule that inserts a sign
+  between two characters, no longer stays blocked after it has fired
+  once: with `context $d[]$l @6`, "0f0f" got the sign only before the
+  first "f".
 - The `repword` and `rependword` opcodes now work. They were parsed but
   ignored, so reduplicated words were written out twice: with
   `ms-my-g2.ctb`, "kata-kata" was not shortened to "kata" and the sign
