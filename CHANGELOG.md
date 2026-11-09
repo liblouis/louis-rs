@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   parse error. liblouis accepts one, but no table uses it.
 
 ### Fixed
+- Back-translation now continues a number across a `numericmodechars` or
+  `midendnumericmodechars` character, as liblouis does. With
+  `it-it-comp6.utb`, ⠼⠁⠚⠂⠑ gave "10,e" instead of "10,5".
 - In a `context` rule, `*` now puts in the dots of the characters it
   stands for. It copied the characters themselves into the braille: with
   `th-g1.utb`, "เอะ" gave อ⠋⠁ instead of ⠕⠋⠁.
