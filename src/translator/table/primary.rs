@@ -405,6 +405,11 @@ impl PrimaryTableBuilder {
             // Emphasis must be before capsletter so begemphword appears before capsletter.
             self.emphasis_indicator.build(ctx).map(Indicator::Emphasis),
             self.numeric_indicator.build().map(Indicator::Numeric),
+            // liblouis puts the nocontractsign before a contraction ahead of the letsign
+            // and the capitals, so "B" gives ⠰⠠⠃ and not ⠠⠰⠃.
+            self.nocontract_indicator
+                .build(ctx)
+                .map(Indicator::NoContract),
             self.lettersign_indicator
                 .build(ctx)
                 .map(Indicator::LetterSign),
@@ -412,9 +417,6 @@ impl PrimaryTableBuilder {
                 .build(ctx)
                 .map(Indicator::Uppercase),
             self.mode_indicator.build(ctx).map(Indicator::Mode),
-            self.nocontract_indicator
-                .build(ctx)
-                .map(Indicator::NoContract),
         ]
         .into_iter()
         .flatten()
@@ -3073,6 +3075,29 @@ mod tests {
         assert_eq!(table.translate("cd"), "⠠⠉⠙");
         assert_eq!(table.translate("abcd"), "⠁⠃⠉⠙");
         assert_eq!(table.translate("ef"), "⠑⠋");
+    }
+
+    #[test]
+    fn nocontractsign_comes_before_capsletter() {
+        // UEB writes a capitalized contraction standing alone as ⠰⠠⠃, grade 1
+        // indicator first
+        let rules = [
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 12"),
+            parse_rule("base uppercase A a"),
+            parse_rule("base uppercase B b"),
+            parse_rule("capsletter 6"),
+            parse_rule("nocontractsign 56"),
+            parse_rule("contraction b"),
+            parse_rule("contraction ab"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        assert_eq!(table.translate("b"), "⠰⠃");
+        assert_eq!(table.translate("B"), "⠰⠠⠃");
+        assert_eq!(table.translate("Ab"), "⠰⠠⠁⠃");
     }
 
     #[test]
