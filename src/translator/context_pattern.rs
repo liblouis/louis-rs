@@ -13,7 +13,9 @@ use crate::translator::table::TableContext;
 use crate::translator::translation::{
     Translation, TranslationTarget, TranslationTargets, UnresolvedTranslation,
 };
-use crate::translator::{ResolvedTranslation, TranslationError, TranslationStage};
+use crate::translator::{
+    CharacterDefinition, ResolvedTranslation, TranslationError, TranslationStage,
+};
 
 impl Regexp {
     fn from_test(test: &Test, whole_match: bool, ctx: &CharacterClasses) -> Self {
@@ -145,6 +147,7 @@ impl TranslationTarget {
     fn from_instruction(
         value: ActionInstruction,
         ctx: &SwapClasses,
+        capture_target: &TranslationTarget,
     ) -> Result<Self, TranslationError> {
         match value {
             ActionInstruction::String { s } => Ok(TranslationTarget::Literal(s)),
@@ -155,7 +158,7 @@ impl TranslationTarget {
                     .ok_or(TranslationError::SwapClassNotDefined(name))?;
                 Ok(TranslationTarget::Swap(swapper))
             }
-            ActionInstruction::Replace => Ok(TranslationTarget::Capture),
+            ActionInstruction::Replace => Ok(capture_target.clone()),
             ActionInstruction::Ignore => Ok(TranslationTarget::Literal("".to_string())),
             // ignore instructions that change the environment
             ActionInstruction::Assignment { .. }
@@ -169,11 +172,14 @@ impl TranslationTargets {
     fn from_instructions(
         values: &[ActionInstruction],
         ctx: &SwapClasses,
+        capture_target: &TranslationTarget,
     ) -> Result<Vec<TranslationTarget>, TranslationError> {
         values
             .iter()
             .cloned()
-            .map(|instruction| TranslationTarget::from_instruction(instruction, ctx))
+            .map(|instruction| {
+                TranslationTarget::from_instruction(instruction, ctx, capture_target)
+            })
             .collect()
     }
 }
@@ -219,8 +225,10 @@ impl ContextPatternsBuilder {
         origin: &AnchoredRule,
         stage: TranslationStage,
         swap_classes: &SwapClasses,
+        capture_target: &TranslationTarget,
     ) -> Result<UnresolvedTranslation, TranslationError> {
-        let targets = TranslationTargets::from_instructions(&action.actions(), swap_classes)?;
+        let targets =
+            TranslationTargets::from_instructions(&action.actions(), swap_classes, capture_target)?;
         let effects = Effects::from_instructions(&action.actions());
         Ok(UnresolvedTranslation::new(
             &targets,
@@ -231,6 +239,12 @@ impl ContextPatternsBuilder {
         ))
     }
 
+    /// Add a `context`, `correct` or pass rule: compile its `test` into a regular expression
+    /// that carries the translation made from its `action`.
+    ///
+    /// `capture_target` is what the action's `*` turns into, the characters between `[` and
+    /// `]`: as they are in the passes, translated by the character definitions in a forward
+    /// `context` rule.
     pub fn insert(
         &mut self,
         test: &Test,
@@ -238,9 +252,15 @@ impl ContextPatternsBuilder {
         origin: &AnchoredRule,
         stage: TranslationStage,
         ctx: &TableContext,
+        capture_target: &TranslationTarget,
     ) -> Result<(), TranslationError> {
-        let translation =
-            Translation::Unresolved(self.translation(action, origin, stage, ctx.swap_classes())?);
+        let translation = Translation::Unresolved(self.translation(
+            action,
+            origin,
+            stage,
+            ctx.swap_classes(),
+            capture_target,
+        )?);
         let test = test.clone().add_implicit_replace();
         // for the multipass stages where we translate from braille to braille the character classes
         // need to be the dots_classes
@@ -274,10 +294,19 @@ impl ContextPatterns {
     /// `at_start` tells whether `input` begins at position 0 of the whole string being
     /// translated — needed to honor liblouis' `` ` `` ("beginning of input") test anchor,
     /// which can appear anywhere in a compiled pattern (see [`Regexp::StartAnchor`]).
-    pub fn find(&self, input: &str, env: &Environment, at_start: bool) -> Vec<ResolvedTranslation> {
+    ///
+    /// `fallback_definitions` are the table's character definitions, which the action's `*`
+    /// uses in a forward `context` rule.
+    pub fn find(
+        &self,
+        input: &str,
+        env: &Environment,
+        at_start: bool,
+        fallback_definitions: &CharacterDefinition,
+    ) -> Vec<ResolvedTranslation> {
         self.regexps
             .iter()
-            .flat_map(|r| r.find_anchored(input, env, at_start))
+            .flat_map(|r| r.find_anchored(input, env, at_start, fallback_definitions))
             .collect()
     }
 }
@@ -675,13 +704,26 @@ mod tests {
         let stage = TranslationStage::Main;
         let mut builder = ContextPatternsBuilder::new();
         builder
-            .insert(&tests, &action, &origin, stage, &TableContext::default())
+            .insert(
+                &tests,
+                &action,
+                &origin,
+                stage,
+                &TableContext::default(),
+                &TranslationTarget::Capture,
+            )
             .unwrap();
         let translation =
             ResolvedTranslation::new("abc", "A_B_C", 3, TranslationStage::Main, origin.clone());
         let patterns = builder.build();
-        assert_eq!(patterns.find("abc", &env, true), [translation]);
-        assert_eq!(patterns.find("def", &env, true), []);
+        assert_eq!(
+            patterns.find("abc", &env, true, &CharacterDefinition::default()),
+            [translation]
+        );
+        assert_eq!(
+            patterns.find("def", &env, true, &CharacterDefinition::default()),
+            []
+        );
     }
 
     #[test]
@@ -693,13 +735,27 @@ mod tests {
         let stage = TranslationStage::Main;
         let mut builder = ContextPatternsBuilder::new();
         builder
-            .insert(&tests, &action, &origin, stage, &TableContext::default())
+            .insert(
+                &tests,
+                &action,
+                &origin,
+                stage,
+                &TableContext::default(),
+                &TranslationTarget::Capture,
+            )
             .unwrap();
         let translation =
             ResolvedTranslation::new("abc", "<abc>", 3, TranslationStage::Main, origin.clone());
         let patterns = builder.build();
-        assert_eq!(patterns.find("abc", &env, true), [translation]);
-        assert!(patterns.find("def", &env, true).is_empty());
+        assert_eq!(
+            patterns.find("abc", &env, true, &CharacterDefinition::default()),
+            [translation]
+        );
+        assert!(
+            patterns
+                .find("def", &env, true, &CharacterDefinition::default())
+                .is_empty()
+        );
     }
 
     #[test]
@@ -711,15 +767,29 @@ mod tests {
         let stage = TranslationStage::Main;
         let mut builder = ContextPatternsBuilder::new();
         builder
-            .insert(&tests, &action, &origin, stage, &TableContext::default())
+            .insert(
+                &tests,
+                &action,
+                &origin,
+                stage,
+                &TableContext::default(),
+                &TranslationTarget::Capture,
+            )
             .unwrap();
         let translation =
             ResolvedTranslation::new("a", "X", 1, TranslationStage::Main, origin.clone());
         let patterns = builder.build();
         // matches when `input` truly starts at position 0 of the whole string being translated
-        assert_eq!(patterns.find("a", &env, true), [translation]);
+        assert_eq!(
+            patterns.find("a", &env, true, &CharacterDefinition::default()),
+            [translation]
+        );
         // does not match when we are mid-string, even though the substring looks identical
-        assert!(patterns.find("a", &env, false).is_empty());
+        assert!(
+            patterns
+                .find("a", &env, false, &CharacterDefinition::default())
+                .is_empty()
+        );
     }
 
     #[test]
@@ -731,15 +801,29 @@ mod tests {
         let stage = TranslationStage::Main;
         let mut builder = ContextPatternsBuilder::new();
         builder
-            .insert(&tests, &action, &origin, stage, &TableContext::default())
+            .insert(
+                &tests,
+                &action,
+                &origin,
+                stage,
+                &TableContext::default(),
+                &TranslationTarget::Capture,
+            )
             .unwrap();
         let translation =
             ResolvedTranslation::new("a", "X", 1, TranslationStage::Main, origin.clone());
         let patterns = builder.build();
         // matches when "a" is exactly the whole remaining input
-        assert_eq!(patterns.find("a", &env, true), [translation]);
+        assert_eq!(
+            patterns.find("a", &env, true, &CharacterDefinition::default()),
+            [translation]
+        );
         // does not match when there is trailing input after "a"
-        assert!(patterns.find("ab", &env, true).is_empty());
+        assert!(
+            patterns
+                .find("ab", &env, true, &CharacterDefinition::default())
+                .is_empty()
+        );
     }
 
     #[test]
@@ -756,13 +840,27 @@ mod tests {
         let stage = TranslationStage::Main;
         let mut builder = ContextPatternsBuilder::new();
         builder
-            .insert(&tests, &action, &origin, stage, &TableContext::default())
+            .insert(
+                &tests,
+                &action,
+                &origin,
+                stage,
+                &TableContext::default(),
+                &TranslationTarget::Capture,
+            )
             .unwrap();
         let translation =
             ResolvedTranslation::new("a", "X", 1, TranslationStage::Main, origin.clone());
         let patterns = builder.build();
-        assert_eq!(patterns.find("a", &env, true), [translation]);
-        assert!(patterns.find("a", &env, false).is_empty());
+        assert_eq!(
+            patterns.find("a", &env, true, &CharacterDefinition::default()),
+            [translation]
+        );
+        assert!(
+            patterns
+                .find("a", &env, false, &CharacterDefinition::default())
+                .is_empty()
+        );
     }
 
     #[test]
@@ -774,14 +872,28 @@ mod tests {
         let stage = TranslationStage::Main;
         let mut builder = ContextPatternsBuilder::new();
         builder
-            .insert(&tests, &action, &origin, stage, &TableContext::default())
+            .insert(
+                &tests,
+                &action,
+                &origin,
+                stage,
+                &TableContext::default(),
+                &TranslationTarget::Capture,
+            )
             .unwrap();
         let translation =
             ResolvedTranslation::new("a", "X", 1, TranslationStage::Main, origin.clone());
         let patterns = builder.build();
         // "not at the beginning" -- opposite of `context_at_beginning_anchor`
-        assert!(patterns.find("a", &env, true).is_empty());
-        assert_eq!(patterns.find("a", &env, false), [translation]);
+        assert!(
+            patterns
+                .find("a", &env, true, &CharacterDefinition::default())
+                .is_empty()
+        );
+        assert_eq!(
+            patterns.find("a", &env, false, &CharacterDefinition::default()),
+            [translation]
+        );
     }
 
     #[test]
@@ -804,7 +916,14 @@ mod tests {
         );
         let mut builder = ContextPatternsBuilder::new();
         builder
-            .insert(&tests, &action, &origin, stage, &ctx)
+            .insert(
+                &tests,
+                &action,
+                &origin,
+                stage,
+                &ctx,
+                &TranslationTarget::Capture,
+            )
             .unwrap();
         let patterns = builder.build();
         // "a" is a digit here, so the rule fires on "b" once found starting at "a"; the digit
@@ -814,9 +933,16 @@ mod tests {
         // reflects the whole 2-char span that was actually checked ("a" + "b")
         let translation =
             ResolvedTranslation::new("b", "X", 2, stage, origin.clone()).with_offset(1);
-        assert_eq!(patterns.find("ab", &env, true), [translation]);
+        assert_eq!(
+            patterns.find("ab", &env, true, &CharacterDefinition::default()),
+            [translation]
+        );
         // does not fire when the preceding character isn't a digit
-        assert!(patterns.find("bb", &env, true).is_empty());
+        assert!(
+            patterns
+                .find("bb", &env, true, &CharacterDefinition::default())
+                .is_empty()
+        );
     }
 
     #[test]
@@ -839,15 +965,29 @@ mod tests {
         );
         let mut builder = ContextPatternsBuilder::new();
         builder
-            .insert(&tests, &action, &origin, stage, &ctx)
+            .insert(
+                &tests,
+                &action,
+                &origin,
+                stage,
+                &ctx,
+                &TranslationTarget::Capture,
+            )
             .unwrap();
         let patterns = builder.build();
         // matches, and only consumes "b" (`length()` 1), when followed by a non-digit; `weight()`
         // is 2, reflecting the whole "b"+"z" span that was checked
         let translation = ResolvedTranslation::new("b", "X", 2, stage, origin.clone());
-        assert_eq!(patterns.find("bz", &env, true), [translation]);
+        assert_eq!(
+            patterns.find("bz", &env, true, &CharacterDefinition::default()),
+            [translation]
+        );
         // does not fire when followed by a digit
-        assert!(patterns.find("b1", &env, true).is_empty());
+        assert!(
+            patterns
+                .find("b1", &env, true, &CharacterDefinition::default())
+                .is_empty()
+        );
     }
 
     #[test]
@@ -863,14 +1003,32 @@ mod tests {
         let stage = TranslationStage::Main;
         let mut builder = ContextPatternsBuilder::new();
         builder
-            .insert(&tests, &action, &origin, stage, &TableContext::default())
+            .insert(
+                &tests,
+                &action,
+                &origin,
+                stage,
+                &TableContext::default(),
+                &TranslationTarget::Capture,
+            )
             .unwrap();
         let translation =
             ResolvedTranslation::new("-", "-", 1, TranslationStage::Main, origin.clone());
         let patterns = builder.build();
-        assert_eq!(patterns.find("-", &env, true), [translation]);
-        assert!(patterns.find("-0", &env, true).is_empty());
-        assert!(patterns.find("-", &env, false).is_empty());
+        assert_eq!(
+            patterns.find("-", &env, true, &CharacterDefinition::default()),
+            [translation]
+        );
+        assert!(
+            patterns
+                .find("-0", &env, true, &CharacterDefinition::default())
+                .is_empty()
+        );
+        assert!(
+            patterns
+                .find("-", &env, false, &CharacterDefinition::default())
+                .is_empty()
+        );
     }
 
     #[test]
@@ -887,15 +1045,29 @@ mod tests {
         );
         let mut builder = ContextPatternsBuilder::new();
         builder
-            .insert(&tests, &action, &origin, stage, &ctx)
+            .insert(
+                &tests,
+                &action,
+                &origin,
+                stage,
+                &ctx,
+                &TranslationTarget::Capture,
+            )
             .unwrap();
         let translation =
             // `*@136` copies the bracket and advances to `endMatch`, so all three cells go
             ResolvedTranslation::new("⠐", "⠐⠥", 3, TranslationStage::Post1, origin.clone())
 	    .with_length(3);
         let patterns = builder.build();
-        assert_eq!(patterns.find("⠕⠐⠽", &env, true), [translation]);
-        assert!(patterns.find("⠕", &env, true).is_empty());
+        assert_eq!(
+            patterns.find("⠕⠐⠽", &env, true, &CharacterDefinition::default()),
+            [translation]
+        );
+        assert!(
+            patterns
+                .find("⠕", &env, true, &CharacterDefinition::default())
+                .is_empty()
+        );
     }
 
     #[test]
@@ -912,15 +1084,29 @@ mod tests {
         let stage = TranslationStage::Main;
         let mut builder = ContextPatternsBuilder::new();
         builder
-            .insert(&tests, &action, &origin, stage, &context)
+            .insert(
+                &tests,
+                &action,
+                &origin,
+                stage,
+                &context,
+                &TranslationTarget::Capture,
+            )
             .unwrap();
         let translation =
             // `"<"*">"` copies the bracket and advances to `endMatch`, eating both `$p3`s
             ResolvedTranslation::new("abc", "<abc>", 9, TranslationStage::Main, origin.clone())
                 .with_length(9);
         let patterns = builder.build();
-        assert_eq!(patterns.find("{{{abc}}}", &env, true), [translation]);
-        assert!(patterns.find("def", &env, true).is_empty());
+        assert_eq!(
+            patterns.find("{{{abc}}}", &env, true, &CharacterDefinition::default()),
+            [translation]
+        );
+        assert!(
+            patterns
+                .find("def", &env, true, &CharacterDefinition::default())
+                .is_empty()
+        );
     }
 
     #[test]
@@ -937,14 +1123,28 @@ mod tests {
         let stage = TranslationStage::Main;
         let mut builder = ContextPatternsBuilder::new();
         builder
-            .insert(&tests, &action, &origin, stage, &context)
+            .insert(
+                &tests,
+                &action,
+                &origin,
+                stage,
+                &context,
+                &TranslationTarget::Capture,
+            )
             .unwrap();
         let translation =
             ResolvedTranslation::new("abc", "<ABC>", 9, TranslationStage::Main, origin.clone())
                 .with_offset(3)
                 .with_length(3);
         let patterns = builder.build();
-        assert_eq!(patterns.find("{{{abc}}}", &env, true), [translation]);
-        assert!(patterns.find("def", &env, true).is_empty());
+        assert_eq!(
+            patterns.find("{{{abc}}}", &env, true, &CharacterDefinition::default()),
+            [translation]
+        );
+        assert!(
+            patterns
+                .find("def", &env, true, &CharacterDefinition::default())
+                .is_empty()
+        );
     }
 }

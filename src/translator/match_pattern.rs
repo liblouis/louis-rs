@@ -7,7 +7,7 @@ use crate::parser::{AnchoredRule, Attribute, CharacterClasses, Pattern, Patterns
 use crate::translator::effect::Environment;
 use crate::translator::regexp::{CompiledRegexp, Regexp};
 use crate::translator::translation::Translation;
-use crate::translator::{ResolvedTranslation, TranslationStage};
+use crate::translator::{CharacterDefinition, ResolvedTranslation, TranslationStage};
 
 /// The zero-width anchor liblouis' `^`/`$` boundary marker means on this side of a `match` rule
 /// -- see [`Pattern::Boundary`].
@@ -171,7 +171,14 @@ impl MatchPatterns {
     pub fn find(&self, input: &str, at_start: bool) -> Vec<ResolvedTranslation> {
         self.regexps
             .iter()
-            .flat_map(|r| r.find_anchored(input, &Environment::new(), at_start))
+            .flat_map(|r| {
+                r.find_anchored(
+                    input,
+                    &Environment::new(),
+                    at_start,
+                    &CharacterDefinition::default(),
+                )
+            })
             .collect()
     }
 }

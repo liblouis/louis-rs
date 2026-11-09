@@ -1,6 +1,6 @@
 use crate::{
     parser::{AnchoredRule, Precedence, Rule},
-    translator::{effect::Effect, regexp::CharacterRange, swap::Swapper},
+    translator::{CharacterDefinition, effect::Effect, regexp::CharacterRange, swap::Swapper},
 };
 
 /// A translation can have multiple stages.
@@ -52,6 +52,9 @@ pub enum TranslationTarget {
     Capture,
     /// Translate to the result of a capture but also apply the mapping defined in the [`Swapper`]
     Swap(Swapper),
+    /// Translate the captured characters one by one by their character definitions, without
+    /// any other rule or indicator
+    TranslateCapture,
 }
 
 impl std::fmt::Display for TranslationTarget {
@@ -67,11 +70,24 @@ impl std::fmt::Display for TranslationTarget {
 }
 
 impl TranslationTarget {
-    pub fn resolve(self, captured: &str) -> Self {
+    pub fn resolve(self, captured: &str, fallback_definitions: &CharacterDefinition) -> Self {
         match self {
             TranslationTarget::Literal(_) => self,
             TranslationTarget::Capture => TranslationTarget::Literal(captured.to_string()),
             TranslationTarget::Swap(swapper) => TranslationTarget::Literal(swapper.swap(captured)),
+            // FIXME: a character without a definition stays as it is, where liblouis's
+            // putCharacter uses the `undefined` rule or the `\x…/` escape
+            TranslationTarget::TranslateCapture => TranslationTarget::Literal(
+                captured
+                    .chars()
+                    .map(|c| {
+                        fallback_definitions
+                            .get(&c)
+                            .cloned()
+                            .unwrap_or_else(|| c.to_string())
+                    })
+                    .collect(),
+            ),
         }
     }
 }
@@ -88,11 +104,14 @@ impl std::fmt::Display for TranslationTargets {
 }
 
 pub trait Resolve {
+    /// `fallback_definitions` are the table's character definitions, for
+    /// [`TranslationTarget::TranslateCapture`]
     fn resolve(
         self,
         captured: &str,
         consumed: CharacterRange,
         weight: usize,
+        fallback_definitions: &CharacterDefinition,
     ) -> ResolvedTranslation;
 }
 
@@ -129,12 +148,13 @@ impl Resolve for UnresolvedTranslation {
         captured: &str,
         consumed: CharacterRange,
         weight: usize,
+        fallback_definitions: &CharacterDefinition,
     ) -> ResolvedTranslation {
         let resolved: String = self
             .output
             .iter()
             .cloned()
-            .map(|t| t.resolve(captured))
+            .map(|t| t.resolve(captured, fallback_definitions))
             .map(|t| t.to_string())
             .collect();
         ResolvedTranslation {
@@ -169,13 +189,16 @@ impl Resolve for Translation {
         captured: &str,
         consumed: CharacterRange,
         weight: usize,
+        fallback_definitions: &CharacterDefinition,
     ) -> ResolvedTranslation {
         match self {
             Translation::Resolved(translation) => translation
                 .with_weight(weight)
                 .with_length(consumed.len())
                 .with_offset(consumed.start),
-            Translation::Unresolved(unresolved) => unresolved.resolve(captured, consumed, weight),
+            Translation::Unresolved(unresolved) => {
+                unresolved.resolve(captured, consumed, weight, fallback_definitions)
+            }
         }
     }
 }
@@ -364,14 +387,16 @@ mod tests {
     #[test]
     fn resolve_literal() {
         assert_eq!(
-            TranslationTarget::Literal("foo".to_string()).resolve("bar"),
+            TranslationTarget::Literal("foo".to_string())
+                .resolve("bar", &CharacterDefinition::default()),
             TranslationTarget::Literal("foo".to_string())
         );
     }
 
     #[test]
     fn resolve_capture() {
-        let resolved = TranslationTarget::Capture.resolve("CAPTURED");
+        let resolved =
+            TranslationTarget::Capture.resolve("CAPTURED", &CharacterDefinition::default());
         assert_eq!(resolved, TranslationTarget::Literal("CAPTURED".to_string()));
     }
 
@@ -379,8 +404,20 @@ mod tests {
     fn resolve_swap() {
         let swapper = Swapper::new(&[('a', "A"), ('b', "B"), ('c', "C")]);
 
-        let resolved = TranslationTarget::Swap(swapper).resolve("abc");
+        let resolved =
+            TranslationTarget::Swap(swapper).resolve("abc", &CharacterDefinition::default());
         assert_eq!(resolved, TranslationTarget::Literal("ABC".to_string()));
+    }
+
+    #[test]
+    fn resolve_translate_capture() {
+        let mut definitions = CharacterDefinition::new();
+        definitions.insert('a', "⠁");
+        definitions.insert('b', "⠃");
+
+        let resolved = TranslationTarget::TranslateCapture.resolve("abc", &definitions);
+        // `c` has no definition and stays as it is
+        assert_eq!(resolved, TranslationTarget::Literal("⠁⠃c".to_string()));
     }
 
     #[test]
@@ -392,7 +429,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("", 0..0, 0);
+        let result = translation.resolve("", 0..0, 0, &CharacterDefinition::default());
 
         assert_eq!(result.input(), "");
         assert_eq!(result.output(), "");
@@ -407,7 +444,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("captured", 0..8, 0);
+        let result = translation.resolve("captured", 0..8, 0, &CharacterDefinition::default());
 
         assert_eq!(result.input(), "captured");
         assert_eq!(result.output(), "captured");
@@ -426,7 +463,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("MIDDLE", 0..8, 0);
+        let result = translation.resolve("MIDDLE", 0..8, 0, &CharacterDefinition::default());
 
         assert_eq!(result.input(), "MIDDLE");
         assert_eq!(result.output(), "<MIDDLE>");
@@ -447,7 +484,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("xyz", 0..8, 0);
+        let result = translation.resolve("xyz", 0..8, 0, &CharacterDefinition::default());
 
         assert_eq!(result.input(), "xyz");
         assert_eq!(result.output(), "<XYz>");
@@ -466,7 +503,7 @@ mod tests {
             &[],
             None,
         );
-        let result = translation.resolve("café🚀🚀", 0..6, 0);
+        let result = translation.resolve("café🚀🚀", 0..6, 0, &CharacterDefinition::default());
 
         assert_eq!(result.input(), "café🚀🚀");
         assert_eq!(result.length(), 6);

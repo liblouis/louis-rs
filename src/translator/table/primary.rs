@@ -30,7 +30,7 @@ use crate::{
             RepwordConstrainerBuilder,
         },
         table::TableContext,
-        translation::TranslationSubset,
+        translation::{TranslationSubset, TranslationTarget},
         trie::{Transition, Trie},
     },
 };
@@ -138,7 +138,8 @@ impl CharacterTranslation {
 pub struct PrimaryTable {
     undefined: Option<String>,
     /// Fallback character definitions that are used as a last resort to translate unknown
-    /// characters to their hex representation
+    /// characters to their hex representation. Also lent to the `context` rules, whose `*`
+    /// translates the characters between `[` and `]` by them
     fallback_definitions: CharacterDefinition,
     /// A mapping of characters and their respective [`ResolvedTranslation`]
     character_translations: CharacterTranslation,
@@ -1665,12 +1666,19 @@ impl PrimaryTable {
                     );
                 }
                 Rule::Context { test, action, .. } => {
+                    // Forward, `*` translates the characters between `[` and `]` by their
+                    // character definitions
+                    let capture_target = match direction {
+                        Direction::Forward => TranslationTarget::TranslateCapture,
+                        Direction::Backward => TranslationTarget::Capture,
+                    };
                     builder.context_patterns.insert(
                         test,
                         action,
                         rule,
                         TranslationStage::Main,
                         ctx,
+                        &capture_target,
                     )?;
                 }
                 Rule::IncludeHyphenation { table, .. } => {
@@ -1905,7 +1913,7 @@ impl PrimaryTable {
         at_start: bool,
     ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
         self.context_patterns
-            .find(input, env, at_start)
+            .find(input, env, at_start, &self.fallback_definitions)
             .into_iter()
             .partition(|t| t.offset() == 0)
     }
@@ -3240,6 +3248,21 @@ mod tests {
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
                 .unwrap();
         assert_eq!(table.translate("0i"), "⠁⠠⠠⠊");
+    }
+
+    #[test]
+    fn context_translates_the_capture() {
+        // `*` puts in the dots of the characters between `[` and `]`, not the characters
+        let rules = [
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 12"),
+            parse_rule("context [\"ab\"] *@3"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        assert_eq!(table.translate("ab"), "⠁⠃⠄");
     }
 
     #[test]

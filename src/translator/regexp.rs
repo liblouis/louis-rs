@@ -20,7 +20,7 @@ use character_set::CharacterSet;
 use smallvec::SmallVec;
 
 use crate::translator::{
-    ResolvedTranslation,
+    CharacterDefinition, ResolvedTranslation,
     effect::Environment,
     translation::{Resolve, Translation},
 };
@@ -595,26 +595,31 @@ impl CompiledRegexp {
     }
 
     /// Does the input match the regular expression in the given environment?
+    #[cfg(test)]
     pub fn is_match(&self, input: &str, env: &Environment) -> bool {
         self.find(input, env).is_some()
+    }
+
+    /// [`find_anchored`](CompiledRegexp::find_anchored) for tests: not at the start of the
+    /// input, and without character definitions
+    #[cfg(test)]
+    pub fn find(&self, input: &str, env: &Environment) -> Option<ResolvedTranslation> {
+        self.find_anchored(input, env, false, &CharacterDefinition::default())
     }
 
     /// If the input matches the regular expression in the given environment return the associated
     /// translation, otherwise return None.
     ///
-    /// Use [`find_anchored`](CompiledRegexp::find_anchored) to find matches where the input is at
-    /// the true beginning of the original string (see [`Regexp::StartAnchor`]).
-    pub fn find(&self, input: &str, env: &Environment) -> Option<ResolvedTranslation> {
-        self.find_anchored(input, env, false)
-    }
-
-    /// Like [`find`](CompiledRegexp::find), but `at_start` tells the VM whether this call's `input`
-    /// begins at the true beginning of the original string being translated.
+    /// `at_start` tells the VM whether this call's `input` begins at the true beginning of the
+    /// original string being translated (see [`Regexp::StartAnchor`]), and
+    /// `fallback_definitions` are the table's character definitions, for a `TranslateCapture`
+    /// in the translation.
     pub fn find_anchored(
         &self,
         input: &str,
         env: &Environment,
         at_start: bool,
+        fallback_definitions: &CharacterDefinition,
     ) -> Option<ResolvedTranslation> {
         let mut current_threads = ThreadList::new(self.instructions.len());
         let mut next_threads = ThreadList::new(self.instructions.len());
@@ -758,9 +763,12 @@ impl CompiledRegexp {
 
         matched.map(|(captured, consumed, length, index)| {
             let captured = &input[captured];
-            self.translations[index]
-                .clone()
-                .resolve(captured, consumed, length)
+            self.translations[index].clone().resolve(
+                captured,
+                consumed,
+                length,
+                fallback_definitions,
+            )
         })
     }
 }

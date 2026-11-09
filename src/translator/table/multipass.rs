@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 
 use crate::parser::multipass::ConsumesInput;
-use crate::translator::ResolvedTranslation;
 use crate::translator::context_pattern::{ContextPatterns, ContextPatternsBuilder};
 use crate::translator::effect::Environment;
 use crate::translator::table::TableContext;
-use crate::translator::translation::TranslationSubset;
+use crate::translator::translation::{TranslationSubset, TranslationTarget};
+use crate::translator::{CharacterDefinition, ResolvedTranslation};
 use crate::{
     Direction,
     parser::{AnchoredRule, Rule},
@@ -62,7 +62,14 @@ impl MultipassTable {
                         // translate the empty string to something)
                         continue;
                     }
-                    builder.patterns.insert(test, action, rule, stage, ctx)?;
+                    builder.patterns.insert(
+                        test,
+                        action,
+                        rule,
+                        stage,
+                        ctx,
+                        &TranslationTarget::Capture,
+                    )?;
                 }
                 _ => (),
             }
@@ -83,7 +90,7 @@ impl MultipassTable {
         at_start: bool,
     ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
         self.patterns
-            .find(input, env, at_start)
+            .find(input, env, at_start, &CharacterDefinition::default())
             .into_iter()
             .partition(|t| t.offset() == 0)
     }
