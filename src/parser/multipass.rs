@@ -1,5 +1,5 @@
 //! Parsers for the test and action operands of context and multipass opcodes
-use std::num::ParseIntError;
+use std::{iter::Peekable, num::ParseIntError, str::Chars};
 
 use super::braille;
 
@@ -46,6 +46,46 @@ pub enum ParseError {
     NegatedReplacement,
 }
 
+// The opening and closing quotes are consumed by the operand parser.
+fn string_char(c: char, chars: &mut Peekable<Chars<'_>>) -> Result<char, ParseError> {
+    if c != '\\' {
+        return Ok(c);
+    }
+    match chars.peek().copied() {
+        Some(prefix @ ('x' | 'y')) => {
+            chars.next();
+            let len = if prefix == 'x' { 4 } else { 5 };
+            let mut digits = String::new();
+            for _ in 0..len {
+                digits.push(
+                    chars
+                        .next()
+                        .ok_or(ParseError::InvalidEscapeSequence { found: None })?,
+                );
+            }
+            u32::from_str_radix(&digits, 16)
+                .ok()
+                .and_then(char::from_u32)
+                .ok_or(ParseError::InvalidEscapeSequence { found: None })
+        }
+        Some(escaped) => {
+            let decoded = if escaped == '"' {
+                Some('"')
+            } else {
+                super::simple_escape(escaped)
+            };
+            if let Some(decoded) = decoded {
+                chars.next();
+                Ok(decoded)
+            } else {
+                // Preserve unknown escapes. The next character is still part of the string.
+                Ok(c)
+            }
+        }
+        None => Err(ParseError::InvalidEscapeSequence { found: None }),
+    }
+}
+
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum ConversionError {
     #[error("Cannot convert test operand to string")]
@@ -68,4 +108,23 @@ pub trait IsLiteral {
 pub trait ConsumesInput {
     /// Returns `true` if this operand consumes any input.
     fn consumes_input(&self) -> bool;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{action, test};
+
+    #[test]
+    fn quoted_operands_decode_the_same_escapes() {
+        for (operand, expected) in [
+            (r#""a\e\f\n\r\t\vb""#, "a\u{1b}\u{c}\n\r\t\u{b}b"),
+            (r#""\s\"\\\x0061\y1f600λ""#, " \"\\a😀λ"),
+            (r#""\q\w""#, r"\q\w"),
+        ] {
+            let tests = test::Parser::new(operand).tests().unwrap();
+            let actions = action::Parser::new(operand).actions().unwrap();
+            assert_eq!(String::try_from(&tests).unwrap(), expected);
+            assert_eq!(String::try_from(&actions).unwrap(), expected);
+        }
+    }
 }

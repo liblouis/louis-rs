@@ -216,6 +216,28 @@ mod tests {
     }
 
     #[test]
+    fn correct_control_characters() {
+        for (escape, control) in [
+            (r"\e", '\u{1b}'),
+            (r"\f", '\u{c}'),
+            (r"\n", '\n'),
+            (r"\r", '\r'),
+            (r"\t", '\t'),
+            (r"\v", '\u{b}'),
+        ] {
+            let rules = [
+                parse_rule("letter a 1"),
+                parse_rule(&format!("sign {escape} 12")),
+                parse_rule(&format!(r#"noback correct "{escape}" "a""#)),
+                parse_rule(&format!(r#"noback correct "a" "{escape}""#)),
+            ];
+            let pipeline = TranslationPipeline::compile(&rules, Direction::Forward).unwrap();
+            assert_eq!(pipeline.translate(&control.to_string()), "⠁");
+            assert_eq!(pipeline.translate("a"), "⠃");
+        }
+    }
+
+    #[test]
     fn pass2() {
         let rules = [
             parse_rule("always foo 123"),
