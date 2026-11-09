@@ -39,11 +39,13 @@ impl From<&str> for CharacterClass {
         match value {
             "space" => CharacterClass::Space,
             "digit" => CharacterClass::Digit,
+            "litdigit" => CharacterClass::Litdigit,
             "letter" => CharacterClass::Letter,
             "uppercase" => CharacterClass::Uppercase,
             "lowercase" => CharacterClass::Lowercase,
             "punctuation" => CharacterClass::Punctuation,
             "sign" => CharacterClass::Sign,
+            "math" => CharacterClass::Math,
             "seqdelimiter" => CharacterClass::Seqdelimiter,
             "seqbeforechars" => CharacterClass::Seqbeforechars,
             "seqafterchars" => CharacterClass::Seqafterchars,
