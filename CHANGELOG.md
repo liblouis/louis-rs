@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   parse error. liblouis accepts one, but no table uses it.
 
 ### Fixed
+- Backward `correct` and pass rules whose action consumes nothing, such
+  as `*`, `?` or a variable assignment, are no longer dropped. Tables use
+  them to keep a word from a shorter correction: with `hu-hu-g1.ctb`,
+  ⠗⠡⠎⠱⠌⠝⠾ gave "részszínű" instead of "résszínű".
 - In a `context` rule, `*` now puts in the dots of the characters it
   stands for. It copied the characters themselves into the braille: with
   `th-g1.utb`, "เอะ" gave อ⠋⠁ instead of ⠕⠋⠁.
