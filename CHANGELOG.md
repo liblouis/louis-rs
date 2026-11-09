@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   parse error. liblouis accepts one, but no table uses it.
 
 ### Fixed
+- A `before` or `after` constraint naming the built-in `math` or
+  `litdigit` class now applies. It was dropped: with `pt-pt-g1.utb`, ⠷
+  back-translated to "[" instead of "á".
 - In a `context` rule, `*` now puts in the dots of the characters it
   stands for. It copied the characters themselves into the braille: with
   `th-g1.utb`, "เอะ" gave อ⠋⠁ instead of ⠕⠋⠁.
