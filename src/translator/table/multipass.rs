@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 
-use crate::parser::multipass::ConsumesInput;
 use crate::translator::context_pattern::{ContextPatterns, ContextPatternsBuilder};
 use crate::translator::effect::Environment;
 use crate::translator::table::TableContext;
@@ -56,12 +55,6 @@ impl MultipassTable {
                 | Rule::Pass2 { test, action, .. }
                 | Rule::Pass3 { test, action, .. }
                 | Rule::Pass4 { test, action, .. } => {
-                    if direction == Direction::Backward && !action.consumes_input() {
-                        // Correct rules can map to an empty string, i.e. to drop some
-                        // characters. Such rules cannot be used for backtranslation (you cannot
-                        // translate the empty string to something)
-                        continue;
-                    }
                     builder.patterns.insert(
                         test,
                         action,
@@ -207,6 +200,22 @@ mod tests {
         assert_eq!(transform.translate("foobar"), "foobar");
         assert_eq!(transform.translate("corect"), "correct");
         assert_eq!(transform.translate("🐂"), "🐂");
+    }
+
+    #[test]
+    fn backward_correct_keeps_copy_rules() {
+        // hu-backtranslate-word-corrections.cti guards words with a longer `*` rule so a
+        // shorter correction does not fire inside them
+        let rules = [
+            parse_rule("nofor correct \"ab\" \"xx\""),
+            parse_rule("nofor correct \"abc\" *"),
+        ];
+        let ctx = TableContext::default();
+        let transform =
+            MultipassTable::compile(&rules, Direction::Backward, TranslationStage::Pre, &ctx)
+                .unwrap();
+        assert_eq!(transform.translate("abc"), "abc");
+        assert_eq!(transform.translate("abd"), "xxd");
     }
 
     #[test]
