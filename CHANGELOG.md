@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   parse error. liblouis accepts one, but no table uses it.
 
 ### Fixed
+- In a `context` rule, `*` now puts in the dots of the characters it
+  stands for. It copied the characters themselves into the braille: with
+  `th-g1.utb`, "เอะ" gave อ⠋⠁ instead of ⠕⠋⠁.
 - Tables that define their digits with `digit` rather than `litdigit` now
   get a number sign: with `fa-ir-g1.utb`, "1" gave ⠁ instead of ⠼⠁.
 - `joinword` now joins the word that follows. It kept the space, and also
