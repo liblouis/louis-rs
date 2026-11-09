@@ -665,14 +665,6 @@ impl PrimaryTable {
                     if !litdigit_chars.contains(character) {
                         builder.insert_character(*character, &dots.to_string(), direction, rule);
                     }
-                    if direction == Direction::Backward {
-                        builder.register_backward_digit_override(
-                            *character,
-                            dots,
-                            &letter_dots,
-                            rule,
-                        );
-                    }
                 }
                 Rule::Litdigit {
                     character, dots, ..
@@ -1526,6 +1518,9 @@ impl PrimaryTable {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
+                    if direction == Direction::Backward {
+                        builder.backward_numeric_constrainer.endnum(&dots);
+                    }
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
@@ -1819,11 +1814,16 @@ impl PrimaryTable {
                 .letter_cells(letter_cells.clone());
             builder
                 .backward_nocontract_constrainer
-                .letter_cells(letter_cells);
-            let mut digit_cells = ctx
+                .letter_cells(letter_cells.clone());
+            // A `digit` cell that is also a letter reads as the letter, which a table
+            // defines first, so only a `litdigit` makes it a digit inside a number.
+            let mut digit_cells: HashSet<char> = ctx
                 .dots_classes()
                 .get(&CharacterClass::Digit)
-                .unwrap_or_default();
+                .unwrap_or_default()
+                .difference(&letter_cells)
+                .copied()
+                .collect();
             digit_cells.extend(
                 ctx.dots_classes()
                     .get(&CharacterClass::Litdigit)
@@ -1832,6 +1832,40 @@ impl PrimaryTable {
             builder
                 .backward_numeric_constrainer
                 .digit_cells(digit_cells);
+            let numeric_mode_chars: HashSet<char> = rules
+                .iter()
+                .filter_map(|rule| match &rule.rule {
+                    Rule::Numericmodechars { chars } | Rule::Midendnumericmodechars { chars } => {
+                        Some(chars)
+                    }
+                    _ => None,
+                })
+                .flat_map(|chars| chars.chars())
+                .collect();
+            // A `decpoint` or `midnum` can give its character a cell of its own, as
+            // `decpoint . 3` does in it-it-comp6.utb, where "." is otherwise 256.
+            let decpoint_dots = rules.iter().filter_map(|rule| match &rule.rule {
+                Rule::Decpoint {
+                    character, dots, ..
+                } if numeric_mode_chars.contains(character) => Some(dots.to_string()),
+                Rule::Midnum { chars, dots, .. }
+                    if chars.chars().count() == 1
+                        && chars.chars().all(|c| numeric_mode_chars.contains(&c)) =>
+                {
+                    Some(dots.to_string())
+                }
+                _ => None,
+            });
+            let numeric_mode_cells = numeric_mode_chars
+                .iter()
+                .filter_map(|c| ctx.character_definitions().get(c).cloned())
+                .chain(decpoint_dots)
+                .filter(|dots| dots.chars().count() == 1)
+                .flat_map(|dots| dots.chars().collect::<Vec<_>>())
+                .collect();
+            builder
+                .backward_numeric_constrainer
+                .numeric_mode_cells(numeric_mode_cells);
         }
         Ok(builder.build(direction, ctx))
     }
@@ -3348,6 +3382,87 @@ mod tests {
         .unwrap();
         assert_eq!(table.translate("⠼⠁"), "1");
         assert_eq!(table.translate("⠁"), "a");
+    }
+
+    #[test]
+    fn backward_number_continues_across_numeric_mode_chars() {
+        // as in it-it-comp6.utb: "." has a cell of its own as a decimal point
+        let rules = [
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase e 15"),
+            parse_rule("litdigit 1 1"),
+            parse_rule("litdigit 5 15"),
+            parse_rule("punctuation , 2"),
+            parse_rule("punctuation . 256"),
+            parse_rule("decpoint , 2"),
+            parse_rule("decpoint . 3"),
+            parse_rule("numericmodechars .,"),
+            parse_rule("numsign 3456"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table = PrimaryTable::compile(
+            &rules,
+            Direction::Backward,
+            TranslationStage::Main,
+            &context,
+        )
+        .unwrap();
+        assert_eq!(table.translate("⠼⠁⠂⠑"), "1,5");
+        assert_eq!(table.translate("⠼⠁⠄⠑"), "1.5");
+        assert_eq!(table.translate("⠁⠂⠑"), "a,e");
+    }
+
+    #[test]
+    fn backward_endnum_ends_a_number_unless_a_digit_follows() {
+        // as in bg.utb, which has both rules for each operator
+        let rules = [
+            parse_rule("space \\s 0"),
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 12"),
+            parse_rule("litdigit 1 1"),
+            parse_rule("litdigit 2 12"),
+            parse_rule("sign + 235"),
+            parse_rule("midendnumericmodechars +"),
+            parse_rule("midnum + 235"),
+            parse_rule("endnum + 235"),
+            parse_rule("numsign 3456"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table = PrimaryTable::compile(
+            &rules,
+            Direction::Backward,
+            TranslationStage::Main,
+            &context,
+        )
+        .unwrap();
+        assert_eq!(table.translate("⠼⠁⠖⠃"), "1+2");
+        assert_eq!(table.translate("⠼⠁⠖⠀⠃"), "1+ b");
+    }
+
+    #[test]
+    fn backward_digit_sharing_a_letter_cell_reads_as_the_letter() {
+        // as in hu-hu-g1.ctb, where `digit 1 16` comes after `lowercase é 16`: liblouis
+        // only prefers a `litdigit` inside a number
+        let rules = [
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase é 16"),
+            parse_rule("lowercase t 2345"),
+            parse_rule("litdigit 1 1"),
+            parse_rule("digit 1 16"),
+            parse_rule("hyphen - 36"),
+            parse_rule("midendnumericmodechars -"),
+            parse_rule("numsign 3456"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table = PrimaryTable::compile(
+            &rules,
+            Direction::Backward,
+            TranslationStage::Main,
+            &context,
+        )
+        .unwrap();
+        assert_eq!(table.translate("⠼⠁⠤⠡⠞"), "1-ét");
+        assert_eq!(table.translate("⠼⠁⠤⠁"), "1-1");
     }
 
     #[test]
