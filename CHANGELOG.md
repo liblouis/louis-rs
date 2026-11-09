@@ -42,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A `base` rule now gives its class to the base character's dots, and
   the number signs come after the capital sign, both as in liblouis.
   With `en-ueb-g2.ctb`, "1A" gave ⠼⠁⠰⠠⠁ instead of ⠼⠁⠠⠁.
+- Back-translation now drops emphasis indicators. It read their cells as
+  the characters that share their dots: with `en-ueb-g1.ctb`, ⠨⠂⠺⠕⠗⠙⠨⠄
+  gave &/,word&/' instead of "word".
 - In a `context` rule, `*` now puts in the dots of the characters it
   stands for. It copied the characters themselves into the braille: with
   `th-g1.utb`, "เอะ" gave อ⠋⠁ instead of ⠕⠋⠁.
