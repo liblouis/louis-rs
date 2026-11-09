@@ -168,6 +168,52 @@
     precomposes, and only their relative order tells them apart. The
     upstream fix is to stop the reordering rule matching what the
     precomposing rules cover.
+- [ ] Backward numeric space in ~en-ueb~: another pass-rule tie, 5 of
+  ~en-ueb.yaml~'s backward tests (e.g. ~#a"b"c"d~ should give "1 2 3 4"
+  with no-break spaces)
+  - Exposed when backward multipass rules whose action consumes nothing
+    (~*~, ~?~, assignments) stopped being dropped. ~en-ueb-g1.ctb~'s
+    numeric mode needs ~nofor pass2 $D *~ (line 77) to win over
+    ~nofor pass2 $a *#1=0~ (line 79) on a digit cell. Both match one
+    cell and tie on ~rank~, and the later one resets ~#1~, so dot 5 is
+    no longer read as a numeric space. Before, both rules were dropped
+    and the remaining two worked by luck.
+  - liblouis sorts pass rules by the length of the literal their test
+    starts with (~passFindCharacters~, ~addForwardPassRule~), then by
+    definition order, and takes the first that matches. A prototype
+    (~Test::literal_len~, a stable sort in ~MultipassTable::compile~,
+    and ~rev()~ before ~max_by_key~) fixes these 5 and also th-g0's
+    ~pass2 @⠣ ...~ against an included ~$a~ rule. It is parked in a
+    stash, to be settled together with the primary-table ranking.
+- [ ] ~_N~ lookback in a pass test is ignored: ~context_pattern.rs~
+  compiles ~TestInstruction::Lookback~ to ~Regexp::Empty~. That is
+  fine for checks before the brackets, but a lookback that rewinds
+  past the start of the input should make the rule fail.
+  ~multipass-forward.yaml~'s "lookback count" test has
+  ~correct [$d5]_6 "f"~ and ~correct [$d5]_5 "s"~: on "12345" the
+  first must fail, louis-rs matches both. Today the later rule wins
+  the tie by luck; with a first-defined tie-break both
+  ~multipass-forward.yaml~ and ~multipass-backward.yaml~ lose that
+  test.
+- [ ] A rule's pre-context is missed when the previous match consumed
+  more than one character
+  - ~match~ rules with a ~pre~ pattern, and pass/~context~ tests with
+    checks before the brackets, are only discovered at the position
+    where that check starts, then held via ~delayed_translations~
+    until the cursor gets to the match. When the previous translation
+    jumps over that position the rule is never considered. liblouis
+    evaluates the check as a look-behind at the current position.
+  - ~en-ueb-g2~: "areas" → ⠜⠑⠁⠎ instead of ⠜⠂⠎, "brainless",
+    "affinity", "linen": the contraction after ~ar~/~in~/~ful~ is
+    missed (~match %a ea %a~, ~%a less -~, ~%a ity -~, the ~en~
+    rules), while "seas", "careless", "validity" work. 9 of 12 sampled
+    ~en-ueb-g2-dictionary_harness~ failures, so on the order of 1500
+    tests.
+  - ~it-it-comp6~: ~pass2 #1=1#2=1#3=0#4=0!%brlnonumsign[@⠽]~ (the
+    closing brace) is missed in ~{[(2x+3y)]*2y}=32~ backward after
+    ~#1=1#5=0[@⠸$u] #5=1*~ consumes ⠸⠽ in one step.
+  - Needs a design: checking the ~pre~ part against the text already
+    consumed instead of discovering it early.
 - [X] Backward: lower-sign contraction cells satisfy a ~word~ rule's
   space-or-punctuation boundary
   - Fixed by the backward boundary work below: the before side (9d4d0af)
