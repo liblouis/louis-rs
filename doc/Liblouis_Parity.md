@@ -8,14 +8,14 @@ This document says what it can do today, what it can't yet, and where the remain
 work is, so you can tell whether it's usable for your case and pick something up if
 it isn't.
 
-Measured at louis-rs `ddb17e5` against liblouis `0d3be2c4`, which is `011cfb3b` plus
+Measured at louis-rs `86cce9b` against liblouis `0d3be2c4`, which is `011cfb3b` plus
 [liblouis#2176](https://github.com/liblouis/liblouis/pull/2176). Without that fix four
 YAML files (`en-g3`, `en-ueb`, `it`, `de-g2-sbs`) don't parse and drop out:
 
 |                                |           |
 |--------------------------------|-----------|
 | Assertions run                 | 2 241 029 |
-| Pass                           | **99.0%** |
+| Pass                           | **99.1%** |
 | Fail                           | 0.4%      |
 | Expected failure               | 0.5%      |
 | Table files that parse cleanly | 458 / 458 |
@@ -125,7 +125,7 @@ Honest list, no dates attached:
 
 ## Where the remaining failures are
 
-Most of the failing 0.4% sits in ten files, and several of those share a root cause.
+Most of the failing 0.4% sits in nine files, and several of those share a root cause.
 Sizes are per item — *S* is up to a week, *M* about a week, *L* one to three weeks —
 and are there so you can pick work by appetite, not to add up. Failure counts are
 approximate: `check` reports a per-file percentage, so a count derived from it carries
@@ -133,11 +133,10 @@ a few hundred either way on the million-assertion files.
 
 | Area                                                | Failing | Root cause                                                                                                                                                                       | Size |
 |-----------------------------------------------------|--------:|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------|
-| `en-ueb-g2-dictionary_harness`, `afr-za-g2` forward |  ≈2 300 | Match-rule candidate selection. See [ADR-0008](adr/0008-match-rule-candidate-selection.org) and [ADR-0016](adr/0016-order-independent-rule-selection.org). | L    |
+| `en-ueb-g2-dictionary_harness`, `afr-za-g2` forward |  ≈2 300 | Two causes. `en-ueb-g2`, most of it: a rule's `pre` check is missed when the previous match consumed more than one character, so "areas" gives ⠜⠑⠁⠎, not ⠜⠂⠎ (9 of 12 sampled failures; see `TODO.org`). `afr-za-g2`: ties between `match` rules that liblouis breaks by rule order. See [ADR-0008](adr/0008-match-rule-candidate-selection.org) and [ADR-0016](adr/0016-order-independent-rule-selection.org). | L    |
 | `ta`, `ml`, `pa`, `hi` forward                      |    ≈300 | A stray ⠈ before punctuation. These tables include `en-in-g1.ctb`, whose `word , 4-2` they override with an earlier `always , 2`; that relies on rule order. See [ADR-0016](adr/0016-order-independent-rule-selection.org). | —    |
 | `th`, `pa`                                          |    ≈430 | Unrelated to each other. `th`: tone marks and vowels come out in the wrong order (`ค่ะ` gives ⠥⠔⠁, not ⠥⠁⠔), from the table's reordering `correct` rules, plus a few `context` rules with a variable. `pa`: backward, the number sign ⠼ is read as the letter ਣ, which has the same cells; liblouis takes the number sign when a digit follows. | M    |
 | `en-ueb-computer-code`                              |  ≈1 700 | Three bugs: letter sign fires only on the first occurrence in a run; wrong word sign before hyphen or closing bracket; leading indicator dropped at the very start of the input. But the file's own header says many of its expectations are wrong and it needs review ([#590](https://github.com/liblouis/liblouis/issues/590)), so establish which are before chasing them. | M    |
-| `hu-hu-g1_dictionary_special_consonants`            |  ≈1 100 | `nocross` asks "can this hyphenate anywhere?" instead of liblouis's positional `syllableBreak()`.                                                                                | L    |
 | `sw-ke-dictionary`, `sw-ke`                         |    ≈800 | Backward lookup splices in unrelated dictionary words ("wote" → "wizaraote"); single-letter words pick up a spurious letter sign.                                                | M    |
 | `en-g3`, `en-ueb`                                   |    ≈600 | A literal hyphen breaks per-segment contraction in compounds — "do-it-yourself" gives `do-x-y\|rself`, not `d-x-yrf`.                                                            | M    |
 | `rw-rw-g1`, `numericmode`                           |    ≈300 | Letters used as pseudo-digits still get a capital sign. Related: `endmode`/`endmodeword` don't fire across a `base` character chain.                                             | M    |
