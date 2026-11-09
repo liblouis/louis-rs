@@ -100,6 +100,13 @@
   the next word contains one, such as a URL (~noCompbrlAhead~),
   louis-rs does. It needs a lookahead over the ~compbrl~ matches of
   that word.
+- [ ] A ~context~ rule's ~*~ backward: liblouis puts in the character
+  each copied cell defines (~copyCharacters~ in
+  ~lou_backTranslateString.c~), louis-rs copies the cells as they
+  are. Only ~ru-litbrl.ctb~ has such rules (three, all ~nofor~). It
+  needs a map from cells to the character that defined them; the
+  backward character definitions live in the trie, which the regexp
+  VM can't reach.
 - [ ] Opcodes that parse but compile to nothing. They are listed in
   the "not implemented yet" arm of ~PrimaryTable::compile~, which is
   now exhaustive so a new ~Rule~ variant has to be placed. By number
