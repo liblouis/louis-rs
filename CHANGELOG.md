@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   (liblouis#2164).
 - A `repword` or `rependword` separator of several characters is now a
   parse error. liblouis accepts one, but no table uses it.
+- When several rules match at the same position, the longest match that
+  checks the most context still wins, but what that leaves open is now
+  decided as in liblouis: a character definition gives way to any other
+  rule, `always` to another rule of the same length (two characters or
+  more), backward the rule producing more text wins, and after that the
+  rule defined first. Before, the outcome depended on the order in which
+  rules were stored, and of two rules with the same characters and
+  boundaries only the last one defined was kept, so nothing was left to
+  fall back on when it did not apply. With `pa.tbl`, "?" gave ⠈⠦ instead
+  of ⠦, and with `afr-za-g2.ctb`, "algemene" gave ⠫⠿⠍⠢⠑ instead of
+  ⠫⠿⠍⠑⠝⠑.
 
 ### Fixed
 - Backward `correct` and pass rules whose action consumes nothing, such
