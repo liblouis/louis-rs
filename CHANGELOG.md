@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   ⠫⠿⠍⠑⠝⠑.
 
 ### Fixed
+- In back-translation, a capitalized word now goes on across a
+  contraction of one cell inside it, as in liblouis. With
+  `en-ueb-g2.ctb`, ⠠⠠⠗⠁⠆⠊⠞ gave "RAbbit" instead of "RABBIT".
 - A `match` rule whose `pre` starts inside the previous translation now
   applies, thanks to the look-behind above: with `en-ueb-g2.ctb`,
   "areas" gave ⠜⠑⠁⠎ instead of ⠜⠂⠎, as `always ar` covered the "r" that
