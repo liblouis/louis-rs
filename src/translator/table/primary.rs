@@ -2043,6 +2043,18 @@ impl PrimaryTable {
             .partition(|t| t.offset() == 0)
     }
 
+    /// The `match` candidates found by a scan of `rest`, the input from a position the
+    /// cursor has jumped over, that land at or after the cursor, `distance` characters on,
+    /// with their offsets made relative to the cursor.
+    fn delayed_from(
+        &self,
+        rest: &str,
+        at_start: bool,
+        distance: usize,
+    ) -> Vec<ResolvedTranslation> {
+        self.update_offsets(self.match_patterns.find(rest, at_start), distance)
+    }
+
     fn partition_delayed_translations(
         &self,
         delayed: Vec<ResolvedTranslation>,
@@ -2066,6 +2078,13 @@ impl PrimaryTable {
         // emitted the first time a given position is visited, not on every re-entry, and
         // the zero-length rules applied (`seen`) are forgotten only on moving on.
         let mut last_pos: Option<usize> = None;
+        // `match` rules with a `pre` part are discovered where that part starts and held in
+        // `delayed_translations` until the cursor reaches them. A translation longer than
+        // one character jumps over positions, so those are scanned when the loop lands, to
+        // evaluate `pre` as the look-behind liblouis makes it. Not `context` rules: liblouis
+        // matches the part before their brackets forward from the cursor.
+        let mut scanned_upto: usize = 0;
+        let mut scanned_byte: usize = 0;
 
         // Enrich spans with compbrl-detected regions.
         let enriched_spans = match &self.compbrl_scanner {
@@ -2095,6 +2114,21 @@ impl PrimaryTable {
                     output.as_str()
                 }
             };
+
+            let cursor_byte = input.len() - chars.as_str().len();
+            if scanned_upto < char_pos {
+                let skipped = input[scanned_byte..cursor_byte].char_indices();
+                for (i, (byte, _)) in skipped.enumerate() {
+                    let rest = &input[scanned_byte + byte..];
+                    let at_start = scanned_byte + byte == 0;
+                    let distance = char_pos - scanned_upto - i;
+                    delayed_translations.extend(self.delayed_from(rest, at_start, distance));
+                }
+            }
+            if scanned_upto <= char_pos {
+                scanned_upto = char_pos + 1;
+                scanned_byte = cursor_byte + chars.clone().next().map_or(0, char::len_utf8);
+            }
 
             // whether we're about to match starting at the true beginning of the whole input,
             // needed by match/context rules anchored with liblouis' `^`/`` ` `` boundary markers
@@ -3029,6 +3063,24 @@ mod tests {
         assert_eq!(table.translate("foo"), "⠄⠈⠈");
         assert_eq!(table.translate("afoo"), "⠁⠄⠈⠈");
         assert_eq!(table.translate("afoob"), "⠁⠉⠂");
+    }
+
+    #[test]
+    fn match_pre_after_multi_character_translation() {
+        // "ar" is consumed in one step, jumping over the "r" where `pre` starts
+        let rules = [
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase e 15"),
+            parse_rule("lowercase r 1235"),
+            parse_rule("lowercase s 234"),
+            parse_rule("always ar 345"),
+            parse_rule("match %a ea %a 2"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        assert_eq!(table.translate("areas"), "⠜⠂⠎");
     }
 
     #[test]

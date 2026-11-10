@@ -206,25 +206,29 @@
   first must fail, louis-rs matches both. Since ~1ff7b7f~ the tie goes
   to the first-defined rule, so ~multipass-forward.yaml~ and
   ~multipass-backward.yaml~ lose that test.
-- [ ] A rule's pre-context is missed when the previous match consumed
+- [X] A ~match~ rule's ~pre~ is missed when the previous match consumed
   more than one character
-  - ~match~ rules with a ~pre~ pattern, and pass/~context~ tests with
-    checks before the brackets, are only discovered at the position
-    where that check starts, then held via ~delayed_translations~
-    until the cursor gets to the match. When the previous translation
-    jumps over that position the rule is never considered. liblouis
-    evaluates the check as a look-behind at the current position.
-  - ~en-ueb-g2~: "areas" → ⠜⠑⠁⠎ instead of ⠜⠂⠎, "brainless",
-    "affinity", "linen": the contraction after ~ar~/~in~/~ful~ is
-    missed (~match %a ea %a~, ~%a less -~, ~%a ity -~, the ~en~
-    rules), while "seas", "careless", "validity" work. 9 of 12 sampled
-    ~en-ueb-g2-dictionary_harness~ failures, so on the order of 1500
-    tests.
-  - ~it-it-comp6~: ~pass2 #1=1#2=1#3=0#4=0!%brlnonumsign[@⠽]~ (the
-    closing brace) is missed in ~{[(2x+3y)]*2y}=32~ backward after
-    ~#1=1#5=0[@⠸$u] #5=1*~ consumes ⠸⠽ in one step.
-  - Needs a design: checking the ~pre~ part against the text already
-    consumed instead of discovering it early.
+  - ~match~ rules with a ~pre~ pattern are discovered at the position
+    where ~pre~ starts and held via ~delayed_translations~. A
+    translation that jumps over that position used to hide them: in
+    ~en-ueb-g2~ "areas" gave ⠜⠑⠁⠎ instead of ⠜⠂⠎ (~always ar~ then
+    ~match %a ea %a~). ~PrimaryTable::trace~ now also scans the
+    positions it jumps over, so ~pre~ acts as the look-behind liblouis
+    makes it.
+  - Not for ~context~ rules: liblouis matches the part before their
+    brackets forward from the cursor, so they must not fire inside a
+    jumped-over span (~da-dk-g26~: ~begnum mt~ then ~context $l[]$D~ on
+    "mt1").
+  - Still open, multipass: ~it-it-comp6~'s
+    ~pass2 #1=1#2=1#3=0#4=0!%brlnonumsign[@⠽]~ (the closing brace) is
+    missed in ~{[(2x+3y)]*2y}=32~ backward after ~#1=1#5=0[@⠸$u] #5=1*~
+    consumes ⠸⠽ in one step. Check liblouis's pass semantics first, by
+    the ~context~ argument above this may be correct.
+- [ ] ~en-ueb~: the number sign goes after ~match %a . %#~ /
+  ~match %a , %#~'s output, but ~en-ueb-g1.ctb~'s ~pass2
+  @3456-256-34569 @256-3456~ cleanup expects it before, so the virtual
+  dot 9 leaks: "a.7" gives ⠁⠲\uf013c⠼⠛ instead of ⠁⠲⠼⠛. Since the
+  ~match~ fix above also "ch.7".
 - [X] Backward: lower-sign contraction cells satisfy a ~word~ rule's
   space-or-punctuation boundary
   - Fixed by the backward boundary work below: the before side (9d4d0af)
