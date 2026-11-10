@@ -3286,6 +3286,27 @@ mod tests {
     }
 
     #[test]
+    fn after_math_checks_the_math_class() {
+        // as in pt-pt-g1.utb, where ⠷ is "[" only after a math character
+        let rules = [
+            parse_rule("lowercase a 1"),
+            parse_rule("math + 235"),
+            parse_rule("lowercase á 12356"),
+            parse_rule("after math always [ 12356"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table = PrimaryTable::compile(
+            &rules,
+            Direction::Backward,
+            TranslationStage::Main,
+            &context,
+        )
+        .unwrap();
+        assert_eq!(table.translate("⠁⠷"), "aá");
+        assert_eq!(table.translate("⠖⠷"), "+[");
+    }
+
+    #[test]
     fn backward_numsign_prefers_digit_reading_of_shared_dots() {
         // `litdigit 1` shares dots with `lowercase a` (as in six-dot literary codes,
         // where digits conventionally reuse letter cells). Inside a numsign span the

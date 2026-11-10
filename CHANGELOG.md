@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   as `*`, `?` or a variable assignment, are no longer dropped. Tables use
   them to keep a word from a shorter correction: with `hu-hu-g1.ctb`,
   ⠗⠡⠎⠱⠌⠝⠾ gave "részszínű" instead of "résszínű".
+- A `before` or `after` constraint naming the built-in `math` or
+  `litdigit` class now applies. It was dropped: with `pt-pt-g1.utb`, ⠷
+  back-translated to "[" instead of "á".
 - In a `context` rule, `*` now puts in the dots of the characters it
   stands for. It copied the characters themselves into the braille: with
   `th-g1.utb`, "เอะ" gave อ⠋⠁ instead of ⠕⠋⠁.
