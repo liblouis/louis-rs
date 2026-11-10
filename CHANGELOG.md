@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   ⠫⠿⠍⠑⠝⠑.
 
 ### Fixed
+- Back-translation now reads the cells of a number as digits even where
+  their letters spell a contraction, as liblouis does. With
+  `en-ueb-g2.ctb`, ⠼⠁⠃ gave "about" instead of "12".
 - A `match` rule whose `pre` starts inside the previous translation now
   applies, thanks to the look-behind above: with `en-ueb-g2.ctb`,
   "areas" gave ⠜⠑⠁⠎ instead of ⠜⠂⠎, as `always ar` covered the "r" that
