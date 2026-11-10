@@ -2020,17 +2020,6 @@ impl PrimaryTable {
             .collect()
     }
 
-    fn match_candidates(
-        &self,
-        input: &str,
-        at_start: bool,
-    ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
-        self.match_patterns
-            .find(input, at_start)
-            .into_iter()
-            .partition(|t| t.offset() == 0)
-    }
-
     fn context_candidates(
         &self,
         input: &str,
@@ -2041,18 +2030,6 @@ impl PrimaryTable {
             .find(input, env, at_start, &self.fallback_definitions)
             .into_iter()
             .partition(|t| t.offset() == 0)
-    }
-
-    /// The `match` candidates found by a scan of `rest`, the input from a position the
-    /// cursor has jumped over, that land at or after the cursor, `distance` characters on,
-    /// with their offsets made relative to the cursor.
-    fn delayed_from(
-        &self,
-        rest: &str,
-        at_start: bool,
-        distance: usize,
-    ) -> Vec<ResolvedTranslation> {
-        self.update_offsets(self.match_patterns.find(rest, at_start), distance)
     }
 
     fn partition_delayed_translations(
@@ -2078,13 +2055,9 @@ impl PrimaryTable {
         // emitted the first time a given position is visited, not on every re-entry, and
         // the zero-length rules applied (`seen`) are forgotten only on moving on.
         let mut last_pos: Option<usize> = None;
-        // `match` rules with a `pre` part are discovered where that part starts and held in
-        // `delayed_translations` until the cursor reaches them. A translation longer than
-        // one character jumps over positions, so those are scanned when the loop lands, to
-        // evaluate `pre` as the look-behind liblouis makes it. Not `context` rules: liblouis
-        // matches the part before their brackets forward from the cursor.
-        let mut scanned_upto: usize = 0;
-        let mut scanned_byte: usize = 0;
+        // A `match` rule's `pre` is a look-behind, run over the input before the cursor
+        // read backwards: the end of this, see `MatchPatterns::find`.
+        let reversed: String = input.chars().rev().collect();
 
         // Enrich spans with compbrl-detected regions.
         let enriched_spans = match &self.compbrl_scanner {
@@ -2115,21 +2088,6 @@ impl PrimaryTable {
                 }
             };
 
-            let cursor_byte = input.len() - chars.as_str().len();
-            if scanned_upto < char_pos {
-                let skipped = input[scanned_byte..cursor_byte].char_indices();
-                for (i, (byte, _)) in skipped.enumerate() {
-                    let rest = &input[scanned_byte + byte..];
-                    let at_start = scanned_byte + byte == 0;
-                    let distance = char_pos - scanned_upto - i;
-                    delayed_translations.extend(self.delayed_from(rest, at_start, distance));
-                }
-            }
-            if scanned_upto <= char_pos {
-                scanned_upto = char_pos + 1;
-                scanned_byte = cursor_byte + chars.clone().next().map_or(0, char::len_utf8);
-            }
-
             // whether we're about to match starting at the true beginning of the whole input,
             // needed by match/context rules anchored with liblouis' `^`/`` ` `` boundary markers
             let at_start = chars.as_str().len() == input.len();
@@ -2146,12 +2104,11 @@ impl PrimaryTable {
             let (mut candidates, delayed) = self.translation_candidates(chars.as_str(), preceding);
             delayed_translations.extend(delayed);
 
-            // then search for matching match patterns. Unless they have empty pre patterns they will all have
-            // an offset. Split those off.
-            let (match_candidates, match_delayed) = self.match_candidates(chars.as_str(), at_start);
-            delayed_translations.extend(match_delayed);
-            // merge the candidates from the match patters with the candidates from the plain translations
-            candidates.extend(match_candidates);
+            // then the match patterns, which all match at the cursor: `pre` is checked
+            // backwards from it
+            let cursor_byte = input.len() - chars.as_str().len();
+            let reversed_preceding = &reversed[input.len() - cursor_byte..];
+            candidates.extend(self.match_patterns.find(chars.as_str(), reversed_preceding));
 
             // then search for context patterns. Unless they have empty pre patterns they will all
             // have an offset. Split those off.

@@ -142,6 +142,44 @@ impl Regexp {
         }
     }
 
+    /// The regexp that matches the reverse of what `self` matches, so that a look-behind
+    /// can run forward over the reversed text before the cursor, the way liblouis runs a
+    /// `match` rule's `pre` backwards (`_lou_pattern_reverse`). Sequences swap their order,
+    /// the anchors swap their ends, everything else keeps its shape.
+    pub fn reverse(self) -> Regexp {
+        let rev = |r: Box<Regexp>| Box::new(r.reverse());
+        match self {
+            Regexp::Concat(left, right) => Regexp::Concat(rev(right), rev(left)),
+            Regexp::Either(left, right) => Regexp::Either(rev(left), rev(right)),
+            Regexp::Optional(r) => Regexp::Optional(rev(r)),
+            Regexp::ZeroOrMore(r) => Regexp::ZeroOrMore(rev(r)),
+            Regexp::OneOrMore(r) => Regexp::OneOrMore(rev(r)),
+            Regexp::RepeatExactly(n, r) => Regexp::RepeatExactly(n, rev(r)),
+            Regexp::RepeatAtLeast(n, r) => Regexp::RepeatAtLeast(n, rev(r)),
+            Regexp::RepeatAtLeastAtMost(n, m, r) => Regexp::RepeatAtLeastAtMost(n, m, rev(r)),
+            Regexp::Capture(r) => Regexp::Capture(rev(r)),
+            Regexp::Consume(r) => Regexp::Consume(rev(r)),
+            Regexp::Group(r) => Regexp::Group(rev(r)),
+            Regexp::String(s) => Regexp::String(s.chars().rev().collect()),
+            Regexp::NotString(s) => Regexp::NotString(s.chars().rev().collect()),
+            Regexp::CaseInsensitiveString(s) => {
+                Regexp::CaseInsensitiveString(s.chars().rev().collect())
+            }
+            Regexp::StartAnchor => Regexp::EndAnchor,
+            Regexp::EndAnchor => Regexp::StartAnchor,
+            Regexp::NotStartAnchor => Regexp::NotEndAnchor,
+            Regexp::NotEndAnchor => Regexp::NotStartAnchor,
+            other @ (Regexp::Literal(_)
+            | Regexp::Any
+            | Regexp::CharacterClass(_)
+            | Regexp::NotCharacterClass(_)
+            | Regexp::VariableEqual(..)
+            | Regexp::NotVariableEqual(..)
+            | Regexp::Empty
+            | Regexp::Never) => other,
+        }
+    }
+
     /// Compile a regular expression and attach the given translation as a payload
     pub fn compile_with_payload(&self, payload: Translation) -> CompiledRegexp {
         let mut instructions = Vec::new();
@@ -821,6 +859,26 @@ mod tests {
         assert!(re.is_match("ab", &env));
         assert!(re.is_match("c", &env));
         assert!(!re.is_match("d", &env));
+    }
+
+    #[test]
+    fn reverse() {
+        // (ab|c)+d? reversed is d?(ba|c)+
+        let env = Environment::new();
+        let re = Regexp::Concat(
+            Box::new(Regexp::OneOrMore(Box::new(Regexp::Either(
+                Box::new(Regexp::String("ab".into())),
+                Box::new(Regexp::Literal('c')),
+            )))),
+            Box::new(Regexp::Optional(Box::new(Regexp::Literal('d')))),
+        )
+        .reverse();
+        let re = re.compile();
+        assert!(re.is_match("dbac", &env));
+        assert!(re.is_match("cba", &env));
+        assert!(!re.is_match("ab", &env));
+        // the start of the input is the end of the reversed input
+        assert!(matches!(Regexp::StartAnchor.reverse(), Regexp::EndAnchor));
     }
 
     #[test]

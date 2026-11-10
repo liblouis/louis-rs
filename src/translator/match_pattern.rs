@@ -93,8 +93,8 @@ impl Regexp {
         Regexp::CharacterClass(characters)
     }
 
-    /// Combine the pre and post patterns with the match characters into one big Regexp by joining
-    /// them with concat.
+    /// Combine the match characters with the post pattern into one Regexp, to run forward
+    /// from the cursor. `pre` is a separate, reversed program, see [`MatchPatterns::find`].
     ///
     /// `chars` is matched case-insensitively ([`Regexp::CaseInsensitiveString`]), unlike `pre`/
     /// `post`, which stay case-sensitive. This matches liblouis: a `match` rule's literal
@@ -102,19 +102,11 @@ impl Regexp {
     /// written as `match ... little ...` also fires for "Little"/"LITTLE" — but `pre`/`post`
     /// context patterns are matched case-sensitively, which is why tables sometimes spell out
     /// both cases explicitly there (e.g. `[Aa][Tt]`) when they need to.
-    fn from_match_rule(
-        pre: &Patterns,
-        chars: String,
-        post: &Patterns,
-        ctx: &CharacterClasses,
-    ) -> Self {
+    fn from_match_rule(chars: String, post: &Patterns, ctx: &CharacterClasses) -> Self {
         Regexp::Concat(
-            Box::new(Regexp::Concat(
-                Box::new(Regexp::from_patterns(pre, ctx)),
-                Box::new(Regexp::Consume(Box::new(Regexp::Capture(Box::new(
-                    Regexp::CaseInsensitiveString(chars),
-                ))))),
-            )),
+            Box::new(Regexp::Consume(Box::new(Regexp::Capture(Box::new(
+                Regexp::CaseInsensitiveString(chars),
+            ))))),
             Box::new(Regexp::from_patterns(post, ctx)),
         )
     }
@@ -122,7 +114,16 @@ impl Regexp {
 
 #[derive(Debug)]
 pub struct MatchPatternsBuilder {
-    regexps: Vec<CompiledRegexp>,
+    regexps: Vec<MatchRegexp>,
+}
+
+/// A `match` rule as two programs: `pre` reversed, to run over the reversed text before the
+/// cursor (`None` when there is no `pre`), and the characters followed by `post`, to run
+/// from the cursor.
+#[derive(Debug)]
+struct MatchRegexp {
+    pre: Option<CompiledRegexp>,
+    main: CompiledRegexp,
 }
 
 impl MatchPatternsBuilder {
@@ -148,9 +149,13 @@ impl MatchPatternsBuilder {
             TranslationStage::Main,
             origin.clone(),
         ));
-        let regexp = Regexp::from_match_rule(pre, chars.to_string(), post, ctx)
-            .compile_with_payload(translation);
-        self.regexps.push(regexp);
+        let main =
+            Regexp::from_match_rule(chars.to_string(), post, ctx).compile_with_payload(translation);
+        let pre = match Regexp::from_patterns(pre, ctx) {
+            Regexp::Empty => None,
+            pre => Some(pre.reverse().compile()),
+        };
+        self.regexps.push(MatchRegexp { pre, main });
     }
 
     pub fn build(self) -> MatchPatterns {
@@ -162,22 +167,33 @@ impl MatchPatternsBuilder {
 
 #[derive(Debug)]
 pub struct MatchPatterns {
-    regexps: Vec<CompiledRegexp>,
+    regexps: Vec<MatchRegexp>,
 }
 
 impl MatchPatterns {
-    /// `at_start` tells whether `input` begins at position 0 of the whole string being
-    /// translated — needed to honor `pre`'s [`Pattern::Boundary`] checks.
-    pub fn find(&self, input: &str, at_start: bool) -> Vec<ResolvedTranslation> {
+    /// The rules that match at the cursor: their characters and `post` match `input`, the
+    /// text from the cursor on, and their `pre` matches `preceding`, the text before the
+    /// cursor. `preceding` must be reversed, so that it reads backwards from the cursor.
+    /// This is liblouis's look-behind, and as `pre`'s [`Pattern::Boundary`] is then the end
+    /// of `preceding`, no flag for the start of the input is needed.
+    pub fn find(&self, input: &str, preceding: &str) -> Vec<ResolvedTranslation> {
+        let env = Environment::new();
+        let definitions = CharacterDefinition::default();
         self.regexps
             .iter()
-            .flat_map(|r| {
-                r.find_anchored(
-                    input,
-                    &Environment::new(),
-                    at_start,
-                    &CharacterDefinition::default(),
-                )
+            .filter_map(|r| {
+                let found = r.main.find_anchored(input, &env, false, &definitions)?;
+                match &r.pre {
+                    // the weight counts the whole match, `pre` included, as in a
+                    // single forward run
+                    Some(pre) => pre
+                        .find_anchored(preceding, &env, false, &definitions)
+                        .map(|p| {
+                            let weight = found.weight() + p.weight();
+                            found.with_weight(weight)
+                        }),
+                    None => Some(found),
+                }
             })
             .collect()
     }
@@ -363,17 +379,22 @@ mod tests {
         let mut builder = MatchPatternsBuilder::new();
         builder.insert(&pre, "foo", &post, "", &rule, &ctx);
         let translation =
-            ResolvedTranslation::new("foo", "", 5, TranslationStage::Main, rule.clone())
-                .with_offset(1);
+            ResolvedTranslation::new("foo", "", 5, TranslationStage::Main, rule.clone());
         let matcher = builder.build();
-        assert_eq!(matcher.find("afoo1", true), vec![translation.clone()]);
-        assert_eq!(matcher.find("bfoo2", true), vec![translation.clone()]);
-        let translations = vec![
-            ResolvedTranslation::new("foo", "", 9, TranslationStage::Main, rule.clone())
-                .with_offset(3),
-        ];
-        assert_eq!(matcher.find("cccfoo333", true), translations);
-        assert!(matcher.find("def", true).is_empty());
+        assert_eq!(matcher.find("foo1", "a"), vec![translation.clone()]);
+        assert_eq!(matcher.find("foo2", "b"), vec![translation.clone()]);
+        let translations = vec![ResolvedTranslation::new(
+            "foo",
+            "",
+            9,
+            TranslationStage::Main,
+            rule.clone(),
+        )];
+        assert_eq!(matcher.find("foo333", "ccc"), translations);
+        // `pre` must end right at the cursor
+        assert!(matcher.find("foo1", "xa").is_empty());
+        assert!(matcher.find("foo1", "").is_empty());
+        assert!(matcher.find("def", "").is_empty());
     }
 
     #[test]
@@ -387,18 +408,24 @@ mod tests {
         let mut builder = MatchPatternsBuilder::new();
         builder.insert(&pre, "foo", &post, "FOO", &rule, &ctx);
         builder.insert(&pre, "bar", &post, "BAR", &rule, &ctx);
-        let translation = vec![
-            ResolvedTranslation::new("foo", "FOO", 7, TranslationStage::Main, rule.clone())
-                .with_offset(3),
-        ];
+        let translation = vec![ResolvedTranslation::new(
+            "foo",
+            "FOO",
+            7,
+            TranslationStage::Main,
+            rule.clone(),
+        )];
         let matcher = builder.build();
-        assert_eq!(matcher.find("aaafoo333", true), translation);
-        let translation = vec![
-            ResolvedTranslation::new("bar", "BAR", 7, TranslationStage::Main, rule.clone())
-                .with_offset(3),
-        ];
-        assert_eq!(matcher.find("aaabar333", true), translation);
-        assert_ne!(matcher.find("aaabaz333", true), translation);
+        assert_eq!(matcher.find("foo333", "aaa"), translation);
+        let translation = vec![ResolvedTranslation::new(
+            "bar",
+            "BAR",
+            7,
+            TranslationStage::Main,
+            rule.clone(),
+        )];
+        assert_eq!(matcher.find("bar333", "aaa"), translation);
+        assert_ne!(matcher.find("baz333", "aaa"), translation);
     }
 
     #[test]
@@ -412,8 +439,8 @@ mod tests {
         let matcher = builder.build();
         let translation = ResolvedTranslation::new("a", "X", 2, TranslationStage::Main, rule);
         // "a" is preceded by nothing only when it truly begins the whole input
-        assert_eq!(matcher.find("ab", true), vec![translation]);
-        assert!(matcher.find("ab", false).is_empty());
+        assert_eq!(matcher.find("ab", ""), vec![translation]);
+        assert!(matcher.find("ab", "x").is_empty());
     }
 
     #[test]
@@ -432,13 +459,12 @@ mod tests {
         let matcher = builder.build();
         // character-class branch: preceded by an uppercase letter, mid-string
         let translation =
-            ResolvedTranslation::new("x", "X", 3, TranslationStage::Main, rule.clone())
-                .with_offset(1);
-        assert_eq!(matcher.find("Axy", false), vec![translation]);
+            ResolvedTranslation::new("x", "X", 3, TranslationStage::Main, rule.clone());
+        assert_eq!(matcher.find("xy", "A"), vec![translation]);
         // boundary branch: no preceding letter needed, at the true start of input
         let translation = ResolvedTranslation::new("x", "X", 2, TranslationStage::Main, rule);
-        assert_eq!(matcher.find("xy_", true), vec![translation]);
+        assert_eq!(matcher.find("xy_", ""), vec![translation]);
         // neither branch applies: not at the true start, and not preceded by an uppercase letter
-        assert!(matcher.find("xy_", false).is_empty());
+        assert!(matcher.find("xy_", "b").is_empty());
     }
 }
