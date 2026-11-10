@@ -599,9 +599,9 @@ impl BackwardCapsConstrainer {
 /// `numsign`'s dots are not necessarily exclusive to the indicator: some tables (e.g.
 /// Punjabi, which shares the common `3456` numsign convention with the unrelated
 /// Gurmukhi letter `ਣ`, disambiguated in liblouis via a `midendword` position
-/// constraint) also use them for an ordinary, frequently-occurring letter. A genuine
-/// numsign is never preceded by a letter cell — mid-word occurrences are excluded to
-/// avoid false positives on such tables.
+/// constraint) also use them for an ordinary, frequently-occurring letter. When the
+/// numsign's dots are a letter, a numsign right after a letter cell is read as that
+/// letter. Otherwise a number can follow a letter, as in Hungarian "A1".
 #[derive(Debug, Clone)]
 pub struct BackwardNumericConstrainer {
     /// The `numsign` dots plus any `multind` sequences naming it, e.g.
@@ -626,7 +626,9 @@ impl BackwardNumericConstrainer {
         let mut in_number = false;
         while pos < n {
             if let Some(len) = longest_match_at(&chars, pos, &self.numsign_dots)
-                && (pos == 0 || !self.letter_cells.contains(&chars[pos - 1]))
+                && (pos == 0
+                    || !self.letter_cells.contains(&chars[pos - 1])
+                    || !self.letter_cells.contains(&chars[pos]))
             {
                 pos += len;
                 in_number = true;
@@ -1488,8 +1490,20 @@ mod tests {
         let mut builder = BackwardNumericConstrainerBuilder::new();
         builder.numsign("N");
         builder.digit_cells(HashSet::from(['1', '2']));
-        builder.letter_cells(HashSet::from(['x']));
+        builder.letter_cells(HashSet::from(['x', 'N']));
         let c = backward_numeric_constrainers(builder).precompute("xN12", &[]);
         assert_eq!(prefer_digit(&c), vec![false, false, false, false]);
+    }
+
+    #[test]
+    fn numsign_after_a_letter_cell_starts_a_number_when_it_is_no_letter() {
+        // Hungarian "A1-ben": the numsign is no letter, so it starts a number even
+        // right after one.
+        let mut builder = BackwardNumericConstrainerBuilder::new();
+        builder.numsign("N");
+        builder.digit_cells(HashSet::from(['1', '2']));
+        builder.letter_cells(HashSet::from(['x']));
+        let c = backward_numeric_constrainers(builder).precompute("xN12", &[]);
+        assert_eq!(prefer_digit(&c), vec![false, false, true, true]);
     }
 }
