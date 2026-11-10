@@ -303,6 +303,31 @@ impl PrimaryTableBuilder {
         );
     }
 
+    /// Backward, an emphasis indicator's cells say where emphasis starts or stops and
+    /// stand for no text, so they are consumed rather than read as the characters that
+    /// happen to share their dots. The emphasis itself would go into the typeform, which
+    /// louis-rs does not report yet. Only meaningful for `Direction::Backward`.
+    ///
+    /// When the dots are also those of a character that isn't a letter, as with
+    /// `begemphphrase italic 56` and "¨" in the Danish 1993 tables, the indicator is
+    /// only consumed in front of a letter, like `letsign`.
+    fn insert_backward_emphasis_indicator(
+        &mut self,
+        opcode: &str,
+        dots: &str,
+        rule: &AnchoredRule,
+        ctx: &TableContext,
+        letter_dots: &HashSet<String>,
+    ) {
+        if Self::backward_indicator_dots_available(opcode, dots, letter_dots) {
+            if ctx.character_definitions().defines_dots(dots) {
+                self.insert_backward_indicator_before_letter(dots, rule);
+            } else {
+                self.insert_backward_indicator(dots, rule);
+            }
+        }
+    }
+
     /// Like [`Self::insert_backward_indicator`], but only consumes the cell when the
     /// *next* cell is a letter or sign cell.
     ///
@@ -863,21 +888,57 @@ impl PrimaryTable {
                     builder
                         .emphasis_indicator
                         .emphletter(name, &dots.to_string(), rule);
+                    if direction == Direction::Backward {
+                        builder.insert_backward_emphasis_indicator(
+                            "emphletter",
+                            &dots.to_string(),
+                            rule,
+                            ctx,
+                            &letter_dots,
+                        );
+                    }
                 }
                 Rule::Begemphword { name, dots } => {
                     builder
                         .emphasis_indicator
                         .begemphword(name, &dots.to_string(), rule);
+                    if direction == Direction::Backward {
+                        builder.insert_backward_emphasis_indicator(
+                            "begemphword",
+                            &dots.to_string(),
+                            rule,
+                            ctx,
+                            &letter_dots,
+                        );
+                    }
                 }
                 Rule::Endemphword { name, dots } => {
                     builder
                         .emphasis_indicator
                         .endemphword(name, &dots.to_string(), rule);
+                    if direction == Direction::Backward {
+                        builder.insert_backward_emphasis_indicator(
+                            "endemphword",
+                            &dots.to_string(),
+                            rule,
+                            ctx,
+                            &letter_dots,
+                        );
+                    }
                 }
                 Rule::Begemphphrase { name, dots } => {
                     builder
                         .emphasis_indicator
                         .begemphphrase(name, &dots.to_string(), rule);
+                    if direction == Direction::Backward {
+                        builder.insert_backward_emphasis_indicator(
+                            "begemphphrase",
+                            &dots.to_string(),
+                            rule,
+                            ctx,
+                            &letter_dots,
+                        );
+                    }
                 }
                 Rule::Endemphphrase {
                     name,
@@ -890,6 +951,15 @@ impl PrimaryTable {
                         position,
                         rule,
                     );
+                    if direction == Direction::Backward {
+                        builder.insert_backward_emphasis_indicator(
+                            "endemphphrase",
+                            &dots.to_string(),
+                            rule,
+                            ctx,
+                            &letter_dots,
+                        );
+                    }
                 }
                 Rule::Lenemphphrase { name, number } => {
                     builder
@@ -900,11 +970,29 @@ impl PrimaryTable {
                     builder
                         .emphasis_indicator
                         .begemph(name, &dots.to_string(), rule);
+                    if direction == Direction::Backward {
+                        builder.insert_backward_emphasis_indicator(
+                            "begemph",
+                            &dots.to_string(),
+                            rule,
+                            ctx,
+                            &letter_dots,
+                        );
+                    }
                 }
                 Rule::Endemph { name, dots, .. } => {
                     builder
                         .emphasis_indicator
                         .endemph(name, &dots.to_string(), rule);
+                    if direction == Direction::Backward {
+                        builder.insert_backward_emphasis_indicator(
+                            "endemph",
+                            &dots.to_string(),
+                            rule,
+                            ctx,
+                            &letter_dots,
+                        );
+                    }
                 }
                 Rule::Emphmodechars { name, chars } => {
                     builder.emphasis_indicator.emphmodechars(name, chars);
@@ -1827,8 +1915,9 @@ impl PrimaryTable {
                 .filter_map(|c| ctx.character_definitions().get(c))
                 .filter_map(|dots| single_cell(dots))
                 .collect();
-            let decpoint_cells: HashSet<char> =
-                decpoint_dots.filter_map(|dots| single_cell(&dots)).collect();
+            let decpoint_cells: HashSet<char> = decpoint_dots
+                .filter_map(|dots| single_cell(&dots))
+                .collect();
             builder
                 .backward_numeric_constrainer
                 .numeric_mode_cells(&char_cells | &decpoint_cells);
@@ -3292,6 +3381,38 @@ mod tests {
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
                 .unwrap();
         assert_eq!(table.translate("0i"), "⠁⠠⠠⠊");
+    }
+
+    #[test]
+    fn backward_drops_emphasis_indicators() {
+        // the indicators share their dots with `,`, `;` and `'`, as in UEB
+        let rules = [
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 12"),
+            parse_rule("punctuation , 2"),
+            parse_rule("punctuation ; 23"),
+            parse_rule("punctuation ' 3"),
+            parse_rule("emphclass italic"),
+            parse_rule("emphletter italic 46-23"),
+            parse_rule("begemphword italic 46-2"),
+            parse_rule("endemphword italic 46-3"),
+            // as in the Danish 1993 tables, where ⠰ is also "¨"
+            parse_rule("punctuation ¨ 56"),
+            parse_rule("begemphphrase italic 56"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table = PrimaryTable::compile(
+            &rules,
+            Direction::Backward,
+            TranslationStage::Main,
+            &context,
+        )
+        .unwrap();
+        assert_eq!(table.translate("⠁⠨⠆⠃"), "ab");
+        assert_eq!(table.translate("⠨⠂⠁⠃⠨⠄"), "ab");
+        assert_eq!(table.translate("⠁⠂⠃⠆"), "a,b;");
+        assert_eq!(table.translate("⠰"), "¨");
+        assert_eq!(table.translate("⠰⠁⠃"), "ab");
     }
 
     #[test]
