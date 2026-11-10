@@ -625,23 +625,15 @@ impl PrimaryTable {
             HashSet::new()
         };
 
-        // hyphen takes precedence over other character definition rules, so insert it first
-        for rule in rules {
-            match &rule.rule {
-                Rule::Hyphen {
-                    character, dots, ..
-                } => {
-                    builder.insert_character(*character, &dots.to_string(), direction, rule);
-                }
-                _ => (),
-            }
-        }
         for rule in rules {
             match &rule.rule {
                 Rule::Undefined { dots } => {
                     builder.undefined = Some(dots.to_string());
                 }
                 Rule::Space {
+                    character, dots, ..
+                }
+                | Rule::Hyphen {
                     character, dots, ..
                 } => {
                     builder.insert_character(*character, &dots.to_string(), direction, rule);
@@ -1665,8 +1657,6 @@ impl PrimaryTable {
                 | Rule::Swapcc { .. }
                 | Rule::Swapcd { .. }
                 | Rule::Swapdd { .. } => (),
-                // compiled before this loop
-                Rule::Hyphen { .. } => (),
                 // expanded by the parser
                 Rule::Include { .. } => (),
                 // a no-op in liblouis too: compiled, but its only use in pattern.c is
