@@ -1324,6 +1324,20 @@ fn unescape_unicode(chars: &mut Chars, len: u8) -> Result<char, ParseError> {
     Ok('\u{FFFD}')
 }
 
+fn simple_escape(c: char) -> Option<char> {
+    Some(match c {
+        'e' => '\u{001B}',
+        'f' => '\u{000C}',
+        'n' => '\n',
+        'r' => '\r',
+        's' => ' ',
+        't' => '\t',
+        'v' => '\u{000B}',
+        '\\' => '\\',
+        _ => return None,
+    })
+}
+
 pub fn unescape(s: &str, context: EscapingContext) -> Result<String, ParseError> {
     let mut iter = s.chars();
     let mut new = String::new();
@@ -1335,14 +1349,6 @@ pub fn unescape(s: &str, context: EscapingContext) -> Result<String, ParseError>
         }
 
         match iter.next() {
-            Some('f') => new.push('\u{000C}'),
-            Some('n') => new.push('\n'),
-            Some('r') => new.push('\r'),
-            Some('t') => new.push('\t'),
-            Some('s') => new.push(' '),
-            Some('v') => new.push('\u{000B}'),
-            Some('e') => new.push('\u{001B}'),
-            Some('\\') => new.push('\\'),
             // when unescaping a match pattern leave \(, \) and \] alone as they are needed later
             Some(c @ ('(' | ')' | ']')) if context == EscapingContext::MatchPattern => {
                 new.push('\\');
@@ -1350,7 +1356,7 @@ pub fn unescape(s: &str, context: EscapingContext) -> Result<String, ParseError>
             }
             Some('x') => new.push(unescape_unicode(&mut iter, 4)?),
             Some('y') => new.push(unescape_unicode(&mut iter, 5)?),
-            Some(c) => return Err(ParseError::InvalidEscape(Some(c))),
+            Some(c) => new.push(simple_escape(c).ok_or(ParseError::InvalidEscape(Some(c)))?),
             _ => return Err(ParseError::InvalidEscape(None)),
         };
     }

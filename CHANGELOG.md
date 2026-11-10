@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   ⠫⠿⠍⠑⠝⠑.
 
 ### Fixed
+- A quoted string in a `context`, `correct` or pass rule now decodes the
+  escapes `\e`, `\f`, `\n`, `\r`, `\t` and `\v`. They were read as a
+  backslash and a letter: `hu-hu-g2.ctb`'s `context [",\n"] @2` looked
+  for a literal `\n` instead of a newline.
 - Backward `correct` and pass rules whose action consumes nothing, such
   as `*`, `?` or a variable assignment, are no longer dropped. Tables use
   them to keep a word from a shorter correction: with `hu-hu-g1.ctb`,

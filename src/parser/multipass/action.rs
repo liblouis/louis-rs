@@ -1,10 +1,10 @@
 //! A Parser for the action operand of context and multipass opcodes
-use std::{iter::Peekable, str::Chars};
 
 use super::braille::{self, BrailleChars, is_braille_dot};
 use crate::parser::multipass::ConversionError;
 use crate::parser::multipass::IsLiteral;
 use crate::parser::multipass::ParseError;
+use crate::parser::multipass::Scanner;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Action {
@@ -95,13 +95,13 @@ fn is_action(c: &char) -> bool {
 }
 
 pub struct Parser<'a> {
-    chars: Peekable<Chars<'a>>,
+    chars: Scanner<'a>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
-            chars: source.chars().peekable(),
+            chars: Scanner::new(source),
         }
     }
 
@@ -141,58 +141,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn handle_escape_sequence(&mut self, c: char) -> Result<char, ParseError> {
-        if c != '\\' {
-            Ok(c)
-        } else {
-            match self.chars.peek() {
-                Some('s') => {
-                    self.chars.next();
-                    Ok(' ')
-                }
-                Some('"') => {
-                    self.chars.next();
-                    Ok('"')
-                }
-                Some('\\') => {
-                    self.chars.next();
-                    Ok('\\')
-                }
-                Some('x') => {
-                    self.chars.next();
-                    self.unescape_unicode(4)
-                }
-                Some('y') => {
-                    self.chars.next();
-                    self.unescape_unicode(5)
-                }
-                // pass through any other escape chars
-                Some(_) => Ok(c),
-                _ => Err(ParseError::InvalidEscapeSequence { found: None }),
-            }
-        }
-    }
-
-    fn unescape_unicode(&mut self, len: usize) -> Result<char, ParseError> {
-        let mut s = String::new();
-        for _ in 0..len {
-            match self.chars.next() {
-                Some(c) => s.push(c),
-                None => return Err(ParseError::InvalidEscapeSequence { found: None }),
-            }
-        }
-        u32::from_str_radix(&s, 16)
-            .ok()
-            .and_then(char::from_u32)
-            .ok_or(ParseError::InvalidEscapeSequence { found: None })
-    }
-
     fn string(&mut self) -> Result<ActionInstruction, ParseError> {
         self.consume('"')?;
         let mut s = String::new();
         while self.chars.peek().filter(|&c| *c != '"').is_some() {
             let raw = self.chars.next().unwrap();
-            let c = self.handle_escape_sequence(raw)?;
+            let c = self.chars.handle_escape_sequence(raw)?;
             s.push(c);
         }
         self.consume('"')?;
