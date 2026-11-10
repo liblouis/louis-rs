@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   ⠫⠿⠍⠑⠝⠑.
 
 ### Fixed
+- A `joinword` rule now wins over a `word` rule for the same characters
+  defined after it, as in liblouis. It lost on rank, as the word end it
+  needs was not counted: with `en-g3.ctb`, "the men" gave ⠮⠀⠍⠢ instead
+  of ⠮⠍⠢.
 - A `match` rule whose `pre` starts inside the previous translation now
   applies, thanks to the look-behind above: with `en-ueb-g2.ctb`,
   "areas" gave ⠜⠑⠁⠎ instead of ⠜⠂⠎, as `always ar` covered the "r" that

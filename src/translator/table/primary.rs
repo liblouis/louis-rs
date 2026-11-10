@@ -1668,7 +1668,10 @@ impl PrimaryTable {
                         Direction::Forward => {
                             // Fires only when whitespace and then a digit (`joinnum`) or a
                             // letter (`joinword`) follow, a scan the trie can't express:
-                            // `trace()` gates it and swallows the whitespace.
+                            // `trace()` gates it and swallows the whitespace. The word end
+                            // that whitespace implies is in the trie all the same, so it
+                            // weighs as much as a `word` rule for the same characters and
+                            // the one defined first wins, as in liblouis.
                             builder.join_constrainer.mark_present();
                             builder.get_trie_mut(rule).insert(
                                 chars,
@@ -1677,7 +1680,7 @@ impl PrimaryTable {
                                     CharacterClass::Space,
                                     CharacterClass::Punctuation,
                                 ])),
-                                None,
+                                Some(Self::word_end(direction)),
                                 direction,
                                 vec![],
                                 TranslationStage::Main,
