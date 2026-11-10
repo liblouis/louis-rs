@@ -206,29 +206,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn ascii_number(&mut self) -> Result<u8, ParseError> {
-        let mut s = String::new();
-        while self.chars.peek().filter(|c| c.is_ascii_digit()).is_some() {
-            s.push(self.chars.next().unwrap());
-        }
-        let number = s.parse::<u8>()?;
-        Ok(number)
-    }
-
-    fn consume(&mut self, expected: char) -> Result<(), ParseError> {
-        match self.chars.next() {
-            Some(e) if e == expected => Ok(()),
-            Some(c) => Err(ParseError::CharExpected {
-                expected,
-                found: Some(c),
-            }),
-            _ => Err(ParseError::CharExpected {
-                expected,
-                found: None,
-            }),
-        }
-    }
-
     fn maybe_quantifier(&mut self) -> Result<Option<Quantifier>, ParseError> {
         match self.chars.peek() {
             Some('.') => {
@@ -236,9 +213,9 @@ impl<'a> Parser<'a> {
                 Ok(Some(Quantifier::OneOrMore))
             }
             Some(c) if c.is_ascii_digit() => {
-                let min = self.ascii_number()?;
+                let min = self.chars.ascii_number()?;
                 if self.chars.next_if_eq(&'-').is_some() {
-                    let max = match self.ascii_number() {
+                    let max = match self.chars.ascii_number() {
                         Ok(n) => n,
                         _ => {
                             return Err(ParseError::InvalidQuantifier);
@@ -258,7 +235,7 @@ impl<'a> Parser<'a> {
     }
 
     fn class(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('%')?;
+        self.chars.consume('%')?;
         let mut name = String::new();
         // for some stupid reason classes can be just a number
         if self.chars.peek().filter(|c| is_class_digit(c)).is_some() {
@@ -289,7 +266,7 @@ impl<'a> Parser<'a> {
     }
 
     fn dots(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('@')?;
+        self.chars.consume('@')?;
         let mut dots = String::new();
         while self
             .chars
@@ -311,21 +288,21 @@ impl<'a> Parser<'a> {
     }
 
     fn string(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('"')?;
+        self.chars.consume('"')?;
         let mut s = String::new();
         while self.chars.peek().filter(|&c| *c != '"').is_some() {
             let raw = self.chars.next().unwrap();
             let c = self.chars.handle_escape_sequence(raw)?;
             s.push(c);
         }
-        self.consume('"')?;
+        self.chars.consume('"')?;
         Ok(TestInstruction::String { s })
     }
 
     fn lookback(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('_')?;
+        self.chars.consume('_')?;
         let n = match self.chars.peek() {
-            Some(c) if c.is_ascii_digit() => self.ascii_number()?,
+            Some(c) if c.is_ascii_digit() => self.chars.ascii_number()?,
             _ => 1,
         };
         Ok(TestInstruction::Lookback { len: n })
@@ -353,7 +330,7 @@ impl<'a> Parser<'a> {
     }
 
     fn attributes(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('$')?;
+        self.chars.consume('$')?;
         let mut attrs: HashSet<Attribute> = HashSet::new();
         while self.chars.peek().filter(|&c| is_attribute(c)).is_some() {
             attrs.insert(self.attribute()?);
@@ -369,9 +346,9 @@ impl<'a> Parser<'a> {
     }
 
     fn replacement(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('[')?;
+        self.chars.consume('[')?;
         let tests = self.many_tests()?;
-        self.consume(']')?;
+        self.chars.consume(']')?;
         Ok(TestInstruction::Replace { tests })
     }
 
@@ -400,18 +377,19 @@ impl<'a> Parser<'a> {
     }
 
     fn variable(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('#')?;
+        self.chars.consume('#')?;
         Ok(TestInstruction::Variable {
             var: self
+                .chars
                 .ascii_number()
                 .map_err(|_| ParseError::InvalidVariableName)?,
             op: self.operator()?,
-            operand: self.ascii_number()?,
+            operand: self.chars.ascii_number()?,
         })
     }
 
     fn negate(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('!')?;
+        self.chars.consume('!')?;
         let test = self.test()?;
         if matches!(test, TestInstruction::Negate { .. }) {
             return Err(ParseError::DoubleNegation);
@@ -425,12 +403,12 @@ impl<'a> Parser<'a> {
     }
 
     fn at_beginning(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('`')?;
+        self.chars.consume('`')?;
         Ok(TestInstruction::AtBeginning)
     }
 
     fn at_end(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('~')?;
+        self.chars.consume('~')?;
         Ok(TestInstruction::AtEnd)
     }
 
@@ -605,16 +583,6 @@ mod tests {
         assert_eq!(count("$a"), 0);
         assert_eq!(count("#1=1[@1]$d\"ab\""), 3);
         assert_eq!(count("!\"ab\"@1"), 1);
-    }
-
-    #[test]
-    fn ascii_number() {
-        assert_eq!(Parser::new("123").ascii_number(), Ok(123));
-        assert_eq!(Parser::new("1").ascii_number(), Ok(1));
-        assert_eq!(Parser::new("1 ").ascii_number(), Ok(1));
-        assert_eq!(Parser::new("1abc").ascii_number(), Ok(1));
-        assert_ne!(Parser::new(" 1").ascii_number(), Ok(1));
-        assert_ne!(Parser::new("a1").ascii_number(), Ok(1));
     }
 
     #[test]

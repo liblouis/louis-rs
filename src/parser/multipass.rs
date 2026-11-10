@@ -63,6 +63,29 @@ impl<'a> Scanner<'a> {
         self.0.next_if_eq(expected)
     }
 
+    fn consume(&mut self, expected: char) -> Result<(), ParseError> {
+        match self.0.next() {
+            Some(e) if e == expected => Ok(()),
+            Some(c) => Err(ParseError::CharExpected {
+                expected,
+                found: Some(c),
+            }),
+            _ => Err(ParseError::CharExpected {
+                expected,
+                found: None,
+            }),
+        }
+    }
+
+    fn ascii_number(&mut self) -> Result<u8, ParseError> {
+        let mut s = String::new();
+        while self.0.peek().filter(|c| c.is_ascii_digit()).is_some() {
+            s.push(self.0.next().unwrap());
+        }
+        let number = s.parse::<u8>()?;
+        Ok(number)
+    }
+
     /// Returns the character `c` stands for, reading the rest of the escape sequence
     /// when `c` is a backslash.
     fn handle_escape_sequence(&mut self, c: char) -> Result<char, ParseError> {
@@ -137,7 +160,17 @@ pub trait IsLiteral {
 }
 #[cfg(test)]
 mod tests {
-    use super::{action, test};
+    use super::{Scanner, action, test};
+
+    #[test]
+    fn ascii_number() {
+        assert_eq!(Scanner::new("123").ascii_number(), Ok(123));
+        assert_eq!(Scanner::new("1").ascii_number(), Ok(1));
+        assert_eq!(Scanner::new("1 ").ascii_number(), Ok(1));
+        assert_eq!(Scanner::new("1abc").ascii_number(), Ok(1));
+        assert_ne!(Scanner::new(" 1").ascii_number(), Ok(1));
+        assert_ne!(Scanner::new("a1").ascii_number(), Ok(1));
+    }
 
     #[test]
     fn quoted_operands_decode_the_same_escapes() {

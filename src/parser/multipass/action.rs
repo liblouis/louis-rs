@@ -105,22 +105,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn consume(&mut self, expected: char) -> Result<(), ParseError> {
-        match self.chars.next() {
-            Some(e) if e == expected => Ok(()),
-            Some(c) => Err(ParseError::CharExpected {
-                expected,
-                found: Some(c),
-            }),
-            _ => Err(ParseError::CharExpected {
-                expected,
-                found: None,
-            }),
-        }
-    }
-
     fn dots(&mut self) -> Result<ActionInstruction, ParseError> {
-        self.consume('@')?;
+        self.chars.consume('@')?;
         let mut dots = String::new();
         while self
             .chars
@@ -142,47 +128,39 @@ impl<'a> Parser<'a> {
     }
 
     fn string(&mut self) -> Result<ActionInstruction, ParseError> {
-        self.consume('"')?;
+        self.chars.consume('"')?;
         let mut s = String::new();
         while self.chars.peek().filter(|&c| *c != '"').is_some() {
             let raw = self.chars.next().unwrap();
             let c = self.chars.handle_escape_sequence(raw)?;
             s.push(c);
         }
-        self.consume('"')?;
+        self.chars.consume('"')?;
         Ok(ActionInstruction::String { s })
     }
 
     fn replace(&mut self) -> Result<ActionInstruction, ParseError> {
-        self.consume('*')?;
+        self.chars.consume('*')?;
         Ok(ActionInstruction::Replace)
     }
 
     fn ignore(&mut self) -> Result<ActionInstruction, ParseError> {
-        self.consume('?')?;
+        self.chars.consume('?')?;
         Ok(ActionInstruction::Ignore)
     }
 
-    fn ascii_number(&mut self) -> Result<u8, ParseError> {
-        let mut s = String::new();
-        while self.chars.peek().filter(|c| c.is_ascii_digit()).is_some() {
-            s.push(self.chars.next().unwrap());
-        }
-        let number = s.parse::<u8>()?;
-        Ok(number)
-    }
-
     fn variable(&mut self) -> Result<ActionInstruction, ParseError> {
-        self.consume('#')?;
+        self.chars.consume('#')?;
         let variable = self
+            .chars
             .ascii_number()
             .map_err(|_| ParseError::InvalidVariableName)?;
         match self.chars.peek() {
             Some('=') => {
-                self.consume('=')?;
+                self.chars.consume('=')?;
                 Ok(ActionInstruction::Assignment {
                     variable,
-                    value: self.ascii_number()?,
+                    value: self.chars.ascii_number()?,
                 })
             }
             Some('+') => Ok(ActionInstruction::Increment { variable }),
@@ -192,7 +170,7 @@ impl<'a> Parser<'a> {
     }
 
     fn class(&mut self) -> Result<ActionInstruction, ParseError> {
-        self.consume('%')?;
+        self.chars.consume('%')?;
         let mut name = String::new();
         while self
             .chars
