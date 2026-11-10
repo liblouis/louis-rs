@@ -8,14 +8,14 @@ This document says what it can do today, what it can't yet, and where the remain
 work is, so you can tell whether it's usable for your case and pick something up if
 it isn't.
 
-Measured at louis-rs `49f39e0` against liblouis `0d3be2c4`, which is `011cfb3b` plus
+Measured at louis-rs `3f0dddc` against liblouis `0d3be2c4`, which is `011cfb3b` plus
 [liblouis#2176](https://github.com/liblouis/liblouis/pull/2176). Without that fix four
 YAML files (`en-g3`, `en-ueb`, `it`, `de-g2-sbs`) don't parse and drop out:
 
 |                                |           |
 |--------------------------------|-----------|
 | Assertions run                 | 2 241 029 |
-| Pass                           | **99.1%** |
+| Pass                           | **99.2%** |
 | Fail                           | 0.3%      |
 | Expected failure               | 0.5%      |
 | Table files that parse cleanly | 458 / 458 |
@@ -71,7 +71,8 @@ table-defined trigger characters.
 **Backward indication** for `capsletter`, `begcapsword`/`endcapsword`,
 `numsign`/`nonumsign`, and the no-contract family `letsign`/`nocontractsign`/
 `nonumsign` — the last of these both consumes the indicator cell and suppresses the
-word-family rules in its scope.
+word-family rules in its scope. Emphasis indicators are consumed too, but the
+emphasis itself is not reported, see below.
 
 **Caller-controlled table resolution.** `Translator::with_search_path` takes the
 directories to search, so a host managing its own table locations doesn't have to
@@ -106,7 +107,8 @@ Honest list, no dates attached:
   ([#20](https://github.com/liblouis/louis-rs/issues/20)). The option flags are
   accepted; nothing reads them yet.
 - **Back-translation returns text but not typeform.** `TranslationResult::emphasis`
-  is never populated, and nothing reports whether a back-translation result could
+  is never populated, and the YAML runner doesn't compare `expected_typeform`, so
+  `backtranslation_emphasis.yaml` passes on the text alone. Nothing reports whether a back-translation result could
   still change if more cells arrive
   ([#29](https://github.com/liblouis/louis-rs/issues/29)).
 - **No Unicode normalization.** NFC was implemented and reverted — it fixed tables
@@ -133,20 +135,18 @@ a few hundred either way on the million-assertion files.
 
 | Area                                                | Failing | Root cause                                                                                                                                                                       | Size |
 |-----------------------------------------------------|--------:|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------|
-| `en-ueb-g2-dictionary_harness`                      |  ≈2 000 | Mostly a rule's `pre` check missed when the previous match consumed more than one character, so "areas" gives ⠜⠑⠁⠎, not ⠜⠂⠎ (9 of 12 sampled failures; see `TODO.org`). | L    |
+| `en-ueb-g2-dictionary_harness`                      |  ≈1 900 | Mostly a rule's `pre` check missed when the previous match consumed more than one character, so "areas" gives ⠜⠑⠁⠎, not ⠜⠂⠎ (9 of 12 sampled failures; see `TODO.org`). | L    |
 | `th`, `pa`                                          |    ≈150 | Unrelated to each other. `th`: tone marks and vowels come out in the wrong order (`ค่ะ` gives ⠥⠔⠁, not ⠥⠁⠔), from the table's reordering `correct` rules, plus a few `context` rules with a variable. `pa`: backward, the number sign ⠼ is read as the letter ਣ, which has the same cells; liblouis takes the number sign when a digit follows. | M    |
 | `en-ueb-computer-code`                              |  ≈1 700 | Three bugs: letter sign fires only on the first occurrence in a run; wrong word sign before hyphen or closing bracket; leading indicator dropped at the very start of the input. But the file's own header says many of its expectations are wrong and it needs review ([#590](https://github.com/liblouis/liblouis/issues/590)), so establish which are before chasing them. | M    |
-| `sw-ke-dictionary`, `sw-ke`                         |    ≈750 | Backward lookup splices in unrelated dictionary words ("wote" → "wizaraote"); single-letter words pick up a spurious letter sign.                                                | M    |
-| `en-g3`, `en-ueb`                                   |    ≈600 | A literal hyphen breaks per-segment contraction in compounds — "do-it-yourself" gives `do-x-y\|rself`, not `d-x-yrf`.                                                            | M    |
-| `rw-rw-g1`, `numericmode`                           |    ≈300 | Letters used as pseudo-digits still get a capital sign. Related: `endmode`/`endmodeword` don't fire across a `base` character chain.                                             | M    |
-| `de-g0-detailed-specs`, `de-g1-…`                   |    ≈200 | `capsletter` vs. `begcapsword` tier selection. Needs `uppercase.rs` and `emphasis.rs` unified into one tier model — a blanket engine fix was tried and disproven.                | L    |
-| all other files                                     |  ≈2 200 | Roughly 100 files, each contributing well under 350.                                                                                                                             | —    |
+| `en-g3`, `en-ueb`                                   |    ≈550 | A literal hyphen breaks per-segment contraction in compounds — "do-it-yourself" gives `do-x-y\|rself`, not `d-x-yrf`.                                                            | M    |
+| `de-g0-detailed-specs`, `de-g1-…`                   |    ≈170 | `capsletter` vs. `begcapsword` tier selection. Needs `uppercase.rs` and `emphasis.rs` unified into one tier model — a blanket engine fix was tried and disproven.                | L    |
+| all other files                                     |  ≈1 700 | Roughly 100 files, each contributing well under 350.                                                                                                                             | —    |
 
 Two cross-cutting items have no single file behind them:
 
 - **Backward direction, generally.** The boundary predicates (`word_start` and
-  friends) only work forward, and caps passages and emphasis have no backward path at
-  all.
+  friends) only work forward, caps passages have no backward path at all, and
+  emphasis indicators are only dropped, with no typeform.
 - **Engine debt.** Regexp negation of concatenation and alternation is wrong
   (`!(e1e2)` ≠ `(!e1!e2)`); `Attribute::ByOrder` and `Any` are no-ops in
   `match_pattern.rs` and all three are no-ops in `context_pattern.rs`; the
@@ -201,7 +201,7 @@ Good entry points, roughly easiest first:
    against. *(S)*
 3. **Expose the four missing entry points.** Mechanical. *(S each)*
 4. **Survey a failure cluster.** Every row in the table above now names a cause, so
-   what's left is the ~2 200 failures spread across roughly 100 smaller files, and
+   what's left is the ~1 700 failures spread across roughly 100 smaller files, and
    the residue of the two clusters already surveyed. Reading failure output rather
    than deep engine work — and each of the three clusters that got this treatment
    turned out to be one or two root causes rather than a long tail. *(M)*
