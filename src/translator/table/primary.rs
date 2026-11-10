@@ -1893,6 +1893,20 @@ impl PrimaryTable {
                         if matches!(rule.rule, Rule::Always { .. }) {
                             builder.backward_nocontract_constrainer.rule_dots(&dots);
                         }
+                        // and so does a rule inside a word after a letter, as UEB's ⠰⠎ for
+                        // "ness" does
+                        if matches!(
+                            rule.rule,
+                            Rule::Begmidword { .. }
+                                | Rule::Midword { .. }
+                                | Rule::Midendword { .. }
+                                | Rule::Endword { .. }
+                                | Rule::Partword { .. }
+                        ) {
+                            builder
+                                .backward_nocontract_constrainer
+                                .inword_rule_dots(&dots);
+                        }
                     }
                     // so does punctuation, as Danish `prepunc ! 56-235` does
                     Rule::Prepunc { dots, .. } | Rule::Postpunc { dots, .. } => {
