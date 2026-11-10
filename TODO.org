@@ -212,9 +212,10 @@
     where ~pre~ starts and held via ~delayed_translations~. A
     translation that jumps over that position used to hide them: in
     ~en-ueb-g2~ "areas" gave ⠜⠑⠁⠎ instead of ⠜⠂⠎ (~always ar~ then
-    ~match %a ea %a~). ~PrimaryTable::trace~ now also scans the
-    positions it jumps over, so ~pre~ acts as the look-behind liblouis
-    makes it.
+    ~match %a ea %a~). Fixed by scanning the positions it jumps over
+    (~db20177~), then replaced by checking ~pre~ as a reversed
+    look-behind from the cursor, as liblouis does (~35b92b8~), so
+    ~match~ rules are no longer delayed.
   - Not for ~context~ rules: liblouis matches the part before their
     brackets forward from the cursor, so they must not fire inside a
     jumped-over span (~da-dk-g26~: ~begnum mt~ then ~context $l[]$D~ on
@@ -224,6 +225,32 @@
     missed in ~{[(2x+3y)]*2y}=32~ backward after ~#1=1#5=0[@⠸$u] #5=1*~
     consumes ⠸⠽ in one step. Check liblouis's pass semantics first, by
     the ~context~ argument above this may be correct.
+- [ ] ~context~ and pass rules: consume the text before ~[~ at the
+  cursor, and drop ~delayed_translations~
+  - liblouis applies such a rule where the cursor stands:
+    ~passDoAction~ copies the text before ~[~ (~copyCharacters~: by
+    character definition for ~context~, verbatim for pass rules),
+    writes the replacement and moves past ~]~. louis-rs holds the rule
+    as a delayed translation until the cursor gets to the ~[~, so other
+    rules can translate the text before it. They are the last users of
+    the delayed handling, in ~PrimaryTable~ and ~MultipassTable~.
+  - A first attempt is parked on branch ~context-consume-at-cursor~
+    (~0b61374~): it fixes 28 tests and breaks 552. Two blockers:
+    - ~_N~ compiles to nothing (see the lookback entry above). In
+      liblouis it moves the match position back N characters, so what
+      follows it is a look-behind, which the delayed scheme happened to
+      give. Consuming it breaks 534 ~zh-tw-dictionary~ tests
+      (~context _1"㔠"["㔠"] ...~): the tests after ~_N~ must match the
+      N characters before the cursor instead.
+    - Filters in ~PrimaryTable::trace~ take a candidate's length to be
+      the text it replaces: ~dont_contract_at~ drops
+      ~context $d"."[]%digitletter~ (~nl-g0~) and ~context $dy[]$u~
+      (~da-dk~) as multi-character contractions; ~uncontracted_at~,
+      ~contracts()~ and comp6 mode assume the same.
+  - liblouis also lets a ~context~ rule that matches at the cursor
+    override the rule otherwise chosen (the ~findForPassRule~ call
+    after ~for_selectRule~ in ~lou_translateString.c~), which ~Rank~
+    does not model.
 - [ ] ~en-ueb~: the number sign goes after ~match %a . %#~ /
   ~match %a , %#~'s output, but ~en-ueb-g1.ctb~'s ~pass2
   @3456-256-34569 @256-3456~ cleanup expects it before, so the virtual
