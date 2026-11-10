@@ -140,7 +140,9 @@ a few hundred either way on the million-assertion files.
 | `en-ueb-computer-code`                              |  ≈1 700 | Three bugs: letter sign fires only on the first occurrence in a run; wrong word sign before hyphen or closing bracket; leading indicator dropped at the very start of the input. But the file's own header says many of its expectations are wrong and it needs review ([#590](https://github.com/liblouis/liblouis/issues/590)), so establish which are before chasing them. | M    |
 | `en-g3`, `en-ueb`                                   |    ≈550 | A literal hyphen breaks per-segment contraction in compounds — "do-it-yourself" gives `do-x-y\|rself`, not `d-x-yrf`.                                                            | M    |
 | `de-g0-detailed-specs`, `de-g1-…`                   |    ≈170 | `capsletter` vs. `begcapsword` tier selection. Needs `uppercase.rs` and `emphasis.rs` unified into one tier model — a blanket engine fix was tried and disproven.                | L    |
-| all other files                                     |  ≈1 700 | Roughly 100 files, each contributing well under 350.                                                                                                                             | —    |
+| `nl-g0_harness`                                     |    ≈110 | Emphasis tiers: a multi-word italic passage should open with ⠸⠸ once, louis-rs marks every word ⠸…⠠. Also indicator order (⠨⠰, not ⠰⠨) and a stray ⠠ after a capsletter that follows a digit ("1E" gives ⠼⠁⠨⠠⠑). | M    |
+| `ru`                                                |     ≈75 | Generic `begmode` alphabet indicators: the Latin lowercase sign ⠠ is never emitted ("x" gives ⠭, not ⠠⠭), and word tiers repeat per letter ("ABC" gives ⠨⠁⠨⠃⠨⠉, not ⠨⠁⠃⠉). Likely the same tier model as `de-g0`. | M    |
+| all other files                                     |  ≈1 500 | Roughly 100 files, each contributing well under 350.                                                                                                                             | —    |
 
 Two cross-cutting items have no single file behind them:
 
