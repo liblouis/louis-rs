@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Changed
+- `louis check` now parses YAML with saphyr-parser instead of libyaml,
+  whose underlying crate is unmaintained (RUSTSEC-2024-0449). A file that
+  is not UTF-8 is now rejected. Four of liblouis's test files (`en-g3`,
+  `en-ueb`, `it` and `de-g2-sbs`) need liblouis#2176 to parse.
+- A `match` rule's `pre` is now a real look-behind. The regexp engine
+  can reverse a pattern, and `pre` runs backwards from the current
+  position over the text before it, the way liblouis checks it. Before,
+  the whole rule ran forward from where `pre` would have to start and
+  was held until translation got to its characters, so a translation
+  covering that start hid the rule. Now any `match` rule, however long
+  or open-ended its `pre`, is decided at the position it applies to,
+  whatever translated the text before it. Translation is faster too, as
+  `pre` is only checked once the rule's characters have matched.
 - The `seqafterexpression` opcode is now deliberately ignored rather than
   listed as not implemented: liblouis compiles it but never uses it
   (liblouis#2164).
@@ -28,10 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - A `match` rule whose `pre` starts inside the previous translation now
-  applies. Its `pre` is checked backwards from the current position, as
-  in liblouis, instead of being looked for where it starts, which a
-  translation of several characters could skip: with `en-ueb-g2.ctb`,
-  "areas" gave ⠜⠑⠁⠎ instead of ⠜⠂⠎.
+  applies, thanks to the look-behind above: with `en-ueb-g2.ctb`,
+  "areas" gave ⠜⠑⠁⠎ instead of ⠜⠂⠎, as `always ar` covered the "r" that
+  `match %a ea %a` needs.
 - A `numericmodechars` character followed by a digit now starts a number,
   so the number sign goes before it: with `en-ueb-g1.ctb`, ".7" gave ⠲⠼⠛
   instead of ⠼⠲⠛. `midendnumericmodechars` still only keeps a number
