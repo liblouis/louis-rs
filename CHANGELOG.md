@@ -37,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Back-translation now continues a number across a `numericmodechars` or
   `midendnumericmodechars` character, as liblouis does. With
   `it-it-comp6.utb`, ⠼⠁⠚⠂⠑ gave "10,e" instead of "10,5".
+- The `nocontractsign` now comes before a capital sign, as in liblouis.
+  With `en-ueb-g2.ctb`, "B" gave ⠠⠰⠃ instead of ⠰⠠⠃.
+- A `base` rule now gives its class to the base character's dots, and
+  the number signs come after the capital sign, both as in liblouis.
+  With `en-ueb-g2.ctb`, "1A" gave ⠼⠁⠰⠠⠁ instead of ⠼⠁⠠⠁.
 - In a `context` rule, `*` now puts in the dots of the characters it
   stands for. It copied the characters themselves into the braille: with
   `th-g1.utb`, "เอะ" gave อ⠋⠁ instead of ⠕⠋⠁.

@@ -155,10 +155,23 @@ impl TableContext {
                     if let Some(translation) = character_definitions.get(base).cloned() {
                         character_definitions.insert(*derived, &translation);
                         character_classes.insert(CharacterClass::from(name.as_str()), *derived);
+                        // liblouis also gives a single-cell base's dots the derived
+                        // class, so with `base uppercase A a` a pass rule's `$U` matches
+                        // the cell of "a".
+                        dots_classes.insert_associated_dot(
+                            CharacterClass::from(name.as_str()),
+                            *derived,
+                            &character_definitions,
+                        );
                         // Base-derived uppercase/lowercase characters are letters too,
                         // matching what the `uppercase`/`lowercase` opcodes do directly.
                         if name == "uppercase" || name == "lowercase" {
                             character_classes.insert(CharacterClass::Letter, *derived);
+                            dots_classes.insert_associated_dot(
+                                CharacterClass::Letter,
+                                *derived,
+                                &character_definitions,
+                            );
                         }
                     } else {
                         // hm, there is no character definition for the base character.
@@ -331,6 +344,22 @@ mod tests {
                 .character_classes
                 .get(&CharacterClass::UserDefined("foo".to_string())),
             Some(HashSet::from(['a', 'b', 'c']))
+        );
+    }
+
+    #[test]
+    fn base_gives_its_class_to_the_base_dots() {
+        let rules = [
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase ύ 5-13456"),
+            parse_rule("base uppercase A a"),
+            parse_rule("base uppercase Ύ ύ"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        // a two-cell base has no single cell to carry the class, as in liblouis
+        assert_eq!(
+            context.dots_classes.get(&CharacterClass::Uppercase),
+            Some(HashSet::from(['⠁']))
         );
     }
 
