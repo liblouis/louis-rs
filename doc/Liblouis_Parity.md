@@ -8,15 +8,15 @@ This document says what it can do today, what it can't yet, and where the remain
 work is, so you can tell whether it's usable for your case and pick something up if
 it isn't.
 
-Measured at louis-rs `3f0dddc` against liblouis `0d3be2c4`, which is `011cfb3b` plus
+Measured at louis-rs `db20177` against liblouis `0d3be2c4`, which is `011cfb3b` plus
 [liblouis#2176](https://github.com/liblouis/liblouis/pull/2176). Without that fix four
 YAML files (`en-g3`, `en-ueb`, `it`, `de-g2-sbs`) don't parse and drop out:
 
 |                                |           |
 |--------------------------------|-----------|
 | Assertions run                 | 2 241 029 |
-| Pass                           | **99.2%** |
-| Fail                           | 0.3%      |
+| Pass                           | **99.3%** |
+| Fail                           | 0.2%      |
 | Expected failure               | 0.5%      |
 | Table files that parse cleanly | 458 / 458 |
 
@@ -127,22 +127,20 @@ Honest list, no dates attached:
 
 ## Where the remaining failures are
 
-Most of the failing 0.3% sits in the files below, and several of those share a root cause.
+Most of the failing 0.2% sits in the files below, and several of those share a root cause.
 Sizes are per item — *S* is up to a week, *M* about a week, *L* one to three weeks —
-and are there so you can pick work by appetite, not to add up. Failure counts are
-approximate: `check` reports a per-file percentage, so a count derived from it carries
-a few hundred either way on the million-assertion files.
+and are there so you can pick work by appetite, not to add up. Failure counts are the
+`Failure` lines `check` prints per file, rounded.
 
 | Area                                                | Failing | Root cause                                                                                                                                                                       | Size |
 |-----------------------------------------------------|--------:|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------|
-| `en-ueb-g2-dictionary_harness`                      |  ≈1 900 | Mostly a rule's `pre` check missed when the previous match consumed more than one character, so "areas" gives ⠜⠑⠁⠎, not ⠜⠂⠎ (9 of 12 sampled failures; see `TODO.org`). | L    |
-| `th`, `pa`                                          |    ≈150 | Unrelated to each other. `th`: tone marks and vowels come out in the wrong order (`ค่ะ` gives ⠥⠔⠁, not ⠥⠁⠔), from the table's reordering `correct` rules, plus a few `context` rules with a variable. `pa`: backward, the number sign ⠼ is read as the letter ਣ, which has the same cells; liblouis takes the number sign when a digit follows. | M    |
-| `en-ueb-computer-code`                              |  ≈1 700 | Three bugs: letter sign fires only on the first occurrence in a run; wrong word sign before hyphen or closing bracket; leading indicator dropped at the very start of the input. But the file's own header says many of its expectations are wrong and it needs review ([#590](https://github.com/liblouis/liblouis/issues/590)), so establish which are before chasing them. | M    |
-| `en-g3`, `en-ueb`                                   |    ≈550 | A literal hyphen breaks per-segment contraction in compounds — "do-it-yourself" gives `do-x-y\|rself`, not `d-x-yrf`.                                                            | M    |
+| `th`, `pa`                                          |    ≈140 | Unrelated to each other. `th`: tone marks and vowels come out in the wrong order (`ค่ะ` gives ⠥⠔⠁, not ⠥⠁⠔), from the table's reordering `correct` rules, plus a few `context` rules with a variable. `pa`: backward, the number sign ⠼ is read as the letter ਣ, which has the same cells; liblouis takes the number sign when a digit follows. | M    |
+| `en-ueb-computer-code`                              |  ≈1 300 | Three bugs: letter sign fires only on the first occurrence in a run; wrong word sign before hyphen or closing bracket; leading indicator dropped at the very start of the input. But the file's own header says many of its expectations are wrong and it needs review ([#590](https://github.com/liblouis/liblouis/issues/590)), so establish which are before chasing them. | M    |
+| `en-g3`, `en-ueb`                                   |    ≈440 | A literal hyphen breaks per-segment contraction in compounds — "do-it-yourself" gives `do-x-y\|rself`, not `d-x-yrf`.                                                            | M    |
 | `de-g0-detailed-specs`, `de-g1-…`                   |    ≈170 | `capsletter` vs. `begcapsword` tier selection. Needs `uppercase.rs` and `emphasis.rs` unified into one tier model — a blanket engine fix was tried and disproven.                | L    |
-| `nl-g0_harness`                                     |    ≈110 | Emphasis tiers: a multi-word italic passage should open with ⠸⠸ once, louis-rs marks every word ⠸…⠠. Also indicator order (⠨⠰, not ⠰⠨) and a stray ⠠ after a capsletter that follows a digit ("1E" gives ⠼⠁⠨⠠⠑). | M    |
-| `ru`                                                |     ≈75 | Generic `begmode` alphabet indicators: the Latin lowercase sign ⠠ is never emitted ("x" gives ⠭, not ⠠⠭), and word tiers repeat per letter ("ABC" gives ⠨⠁⠨⠃⠨⠉, not ⠨⠁⠃⠉). Likely the same tier model as `de-g0`. | M    |
-| all other files                                     |  ≈1 500 | Roughly 100 files, each contributing well under 350.                                                                                                                             | —    |
+| `nl-g0_harness`                                     |     ≈90 | Emphasis tiers: a multi-word italic passage should open with ⠸⠸ once, louis-rs marks every word ⠸…⠠. Also indicator order (⠨⠰, not ⠰⠨) and a stray ⠠ after a capsletter that follows a digit ("1E" gives ⠼⠁⠨⠠⠑). | M    |
+| `ru`                                                |     ≈70 | Generic `begmode` alphabet indicators: the Latin lowercase sign ⠠ is never emitted ("x" gives ⠭, not ⠠⠭), and word tiers repeat per letter ("ABC" gives ⠨⠁⠨⠃⠨⠉, not ⠨⠁⠃⠉). Likely the same tier model as `de-g0`. | M    |
+| all other files                                     |  ≈1 100 | Roughly 100 files, each contributing under 150.                                                                                                                                  | —    |
 
 Two cross-cutting items have no single file behind them:
 
