@@ -7,7 +7,7 @@ use crate::{
     emphasis::EmphasisSpan,
     parser::{
         AnchoredRule, Braille, BrailleChar, BrailleChars, CharacterClass, CharacterClasses,
-        HasDirection, HasNocross, HasPrecedence, WithClass,
+        HasDirection, HasNocross, WithClass, in_definition_order,
     },
     translator::{
         CharacterDefinition, ClassConstraint, ResolvedTranslation, Rule, TranslationError,
@@ -280,14 +280,8 @@ impl PrimaryTableBuilder {
                 // Backward translation is not case sensitive, so we do not need a separate case
                 // sensitive storage for translations. We can handle them like other rules via the
                 // trie
-                self.trie.insert_char(
-                    c,
-                    dots,
-                    direction,
-                    rule.precedence(),
-                    TranslationStage::Main,
-                    rule,
-                )
+                self.trie
+                    .insert_char(c, dots, direction, TranslationStage::Main, rule)
             }
         }
     }
@@ -303,7 +297,6 @@ impl PrimaryTableBuilder {
             None,
             None,
             Direction::Backward,
-            rule.precedence(),
             vec![],
             TranslationStage::Main,
             rule,
@@ -331,7 +324,6 @@ impl PrimaryTableBuilder {
                 CharacterClass::Sign,
             ])),
             Direction::Backward,
-            rule.precedence(),
             vec![],
             TranslationStage::Main,
             rule,
@@ -540,6 +532,8 @@ impl PrimaryTable {
         _stage: TranslationStage,
         ctx: &TableContext,
     ) -> Result<Self, TranslationError> {
+        // definition order is the order of `rules`, see `Rank::definition_order`
+        let rules = &in_definition_order(rules);
         // Word/number boundary checks must consult the classes of the characters they are
         // checked against. The lookahead (`Transition::End`, `ClassConstraint::End`) reads the
         // input, which is text forward and braille backward. The lookbehind
@@ -1009,7 +1003,6 @@ impl PrimaryTable {
                             None,
                             None,
                             direction,
-                            rule.precedence(),
                             vec![],
                             TranslationStage::Main,
                             rule,
@@ -1034,7 +1027,6 @@ impl PrimaryTable {
                                 CharacterClass::Punctuation,
                             ])),
                             direction,
-                            rule.precedence(),
                             vec![],
                             TranslationStage::Main,
                             rule,
@@ -1086,7 +1078,6 @@ impl PrimaryTable {
                         None,
                         None,
                         direction,
-                        rule.precedence(),
                         vec![],
                         TranslationStage::Main,
                         rule,
@@ -1105,7 +1096,6 @@ impl PrimaryTable {
                             None,
                             None,
                             direction,
-                            rule.precedence(),
                             vec![],
                             TranslationStage::Main,
                             rule,
@@ -1128,7 +1118,6 @@ impl PrimaryTable {
                         None,
                         None,
                         direction,
-                        rule.precedence(),
                         class_constraints,
                         TranslationStage::Main,
                         rule,
@@ -1149,7 +1138,6 @@ impl PrimaryTable {
                         None,
                         None,
                         direction,
-                        rule.precedence(),
                         vec![],
                         TranslationStage::Main,
                         rule,
@@ -1181,7 +1169,6 @@ impl PrimaryTable {
                         None,
                         None,
                         direction,
-                        rule.precedence(),
                         vec![],
                         TranslationStage::Main,
                         rule,
@@ -1206,7 +1193,6 @@ impl PrimaryTable {
                         ])),
                         Some(Self::word_end(direction)),
                         direction,
-                        rule.precedence(),
                         class_constraints,
                         TranslationStage::Main,
                         rule,
@@ -1231,7 +1217,6 @@ impl PrimaryTable {
                         ])),
                         Some(Self::word_continues(direction)),
                         direction,
-                        rule.precedence(),
                         class_constraints,
                         TranslationStage::Main,
                         rule,
@@ -1253,7 +1238,6 @@ impl PrimaryTable {
                         Some(Transition::Start(vec![CharacterClass::Letter])),
                         Some(Self::word_continues(direction)),
                         direction,
-                        rule.precedence(),
                         class_constraints,
                         TranslationStage::Main,
                         rule,
@@ -1279,7 +1263,6 @@ impl PrimaryTable {
                         Some(Transition::Start(vec![CharacterClass::Letter])),
                         None,
                         direction,
-                        rule.precedence(),
                         class_constraints.clone(),
                         TranslationStage::Main,
                         rule,
@@ -1290,7 +1273,6 @@ impl PrimaryTable {
                         None,
                         Some(Self::word_continues(direction)),
                         direction,
-                        rule.precedence(),
                         class_constraints,
                         TranslationStage::Main,
                         rule,
@@ -1321,7 +1303,6 @@ impl PrimaryTable {
                         Some(Transition::Start(vec![CharacterClass::Letter])),
                         after,
                         direction,
-                        rule.precedence(),
                         class_constraints,
                         TranslationStage::Main,
                         rule,
@@ -1343,7 +1324,6 @@ impl PrimaryTable {
                         Some(Transition::Start(vec![CharacterClass::Letter])),
                         Some(Self::word_end(direction)),
                         direction,
-                        rule.precedence(),
                         class_constraints,
                         TranslationStage::Main,
                         rule,
@@ -1370,7 +1350,6 @@ impl PrimaryTable {
                         ])),
                         Some(Self::word_end(direction)),
                         direction,
-                        rule.precedence(),
                         class_constraints.clone(),
                         TranslationStage::Main,
                         rule,
@@ -1381,7 +1360,6 @@ impl PrimaryTable {
                         Some(Transition::Start(vec![CharacterClass::Letter])),
                         Some(Self::word_end(direction)),
                         direction,
-                        rule.precedence(),
                         class_constraints,
                         TranslationStage::Main,
                         rule,
@@ -1419,7 +1397,6 @@ impl PrimaryTable {
                             ])),
                             after,
                             direction,
-                            rule.precedence(),
                             class_constraints.clone(),
                             TranslationStage::Main,
                             rule,
@@ -1446,7 +1423,6 @@ impl PrimaryTable {
                         ])),
                         Some(Self::word_continues(direction)),
                         direction,
-                        rule.precedence(),
                         class_constraints,
                         TranslationStage::Main,
                         rule,
@@ -1459,7 +1435,6 @@ impl PrimaryTable {
                     Some(Transition::Start(vec![CharacterClass::Space])),
                     Some(Transition::End(vec![CharacterClass::Space])),
                     direction,
-                    rule.precedence(),
                     vec![],
                     TranslationStage::Main,
                     rule,
@@ -1473,7 +1448,6 @@ impl PrimaryTable {
                     ])),
                     Some(Transition::End(vec![CharacterClass::Digit])),
                     direction,
-                    rule.precedence(),
                     vec![],
                     TranslationStage::Main,
                     rule,
@@ -1494,7 +1468,6 @@ impl PrimaryTable {
                             None,
                             Some(Transition::End(vec![CharacterClass::Digit])),
                             direction,
-                            rule.precedence(),
                             vec![],
                             TranslationStage::Main,
                             rule,
@@ -1516,7 +1489,6 @@ impl PrimaryTable {
                         Some(Transition::Start(vec![CharacterClass::Digit])),
                         Some(Transition::End(vec![CharacterClass::Digit])),
                         direction,
-                        rule.precedence(),
                         vec![],
                         TranslationStage::Main,
                         rule,
@@ -1532,7 +1504,6 @@ impl PrimaryTable {
                         Some(Transition::Start(vec![CharacterClass::Digit])),
                         None,
                         direction,
-                        rule.precedence(),
                         vec![],
                         TranslationStage::Main,
                         rule,
@@ -1567,7 +1538,6 @@ impl PrimaryTable {
                             before,
                             after,
                             direction,
-                            rule.precedence(),
                             vec![],
                             TranslationStage::Main,
                             rule,
@@ -1599,7 +1569,6 @@ impl PrimaryTable {
                             before,
                             after,
                             direction,
-                            rule.precedence(),
                             vec![],
                             TranslationStage::Main,
                             rule,
@@ -1622,7 +1591,6 @@ impl PrimaryTable {
                                 ])),
                                 None,
                                 direction,
-                                rule.precedence(),
                                 vec![],
                                 TranslationStage::Main,
                                 rule,
@@ -1638,7 +1606,6 @@ impl PrimaryTable {
                                 Some(Transition::BegWord),
                                 Some(Transition::ContinuesWord),
                                 direction,
-                                rule.precedence(),
                                 vec![],
                                 TranslationStage::Main,
                                 rule,
@@ -1980,7 +1947,7 @@ impl PrimaryTable {
                 .nocross_candidates(chars.as_str(), preceding, char_pos, &constraints)
                 .into_iter()
                 .filter(|t| !(constraints.uncontracted_at(char_pos) && Self::contracts(t)))
-                .max_by_key(|t| t.rank());
+                .max_by_key(|t| t.rank(self.direction));
 
             // given an input query the trie for matching translations. Then split off the
             // translations that are delayed, i.e. have an offset because they have a pre-pattern
@@ -2112,11 +2079,11 @@ impl PrimaryTable {
                 // drop translation candidates that we have applied already at this position in the
                 // input
                 .filter(|t| !seen.contains(&TranslationSubset::from(*t)))
-                .max_by_key(|translation| translation.rank());
+                .max_by_key(|translation| translation.rank(self.direction));
             // A nocross rule wins if there is no plain candidate to beat (many, e.g.
             // liblouis' `nocross always en`, have no plain counterpart at all).
             if let Some(nocross) = &nocross_candidate
-                && candidate.is_none_or(|t| nocross.rank() >= t.rank())
+                && candidate.is_none_or(|t| nocross.rank(self.direction) >= t.rank(self.direction))
             {
                 let translation = nocross.clone();
                 let translation = uppercase_if_needed(translation);

@@ -7,7 +7,7 @@ use crate::translator::translation::{TranslationSubset, TranslationTarget};
 use crate::translator::{CharacterDefinition, ResolvedTranslation};
 use crate::{
     Direction,
-    parser::{AnchoredRule, Rule},
+    parser::{AnchoredRule, Rule, in_definition_order},
     translator::{TranslationError, TranslationStage},
 };
 
@@ -48,6 +48,8 @@ impl MultipassTable {
         ctx: &TableContext,
     ) -> Result<Self, TranslationError> {
         let mut builder = MultipassTableBuilder::new();
+        // definition order is the order of `rules`, see `Rank::definition_order`
+        let rules = &in_definition_order(rules);
 
         for rule in rules {
             match &rule.rule {
@@ -136,7 +138,7 @@ impl MultipassTable {
                 // input
                 .filter(|&t| !seen.contains(&TranslationSubset::from(t)))
                 .cloned()
-                .max_by_key(|translation| translation.rank());
+                .max_by_key(|translation| translation.rank(self.direction));
             if let Some(t) = candidate {
                 if t.length() == 0 {
                     // if there is a zero-length translation candiate we run the risk of an infinite

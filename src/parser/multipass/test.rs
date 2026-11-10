@@ -26,6 +26,11 @@ impl Test {
             .any(|t| matches!(t, TestInstruction::Replace { .. }))
     }
 
+    /// How many characters the test spells out literally (`"..."` or `@...`), anywhere in it.
+    pub fn literal_count(&self) -> usize {
+        self.tests.iter().map(TestInstruction::literal_count).sum()
+    }
+
     pub fn add_implicit_replace(self) -> Self {
         if !self.has_replace() {
             Self {
@@ -114,6 +119,25 @@ pub enum TestInstruction {
     /// `~` (tilde): true only when there is no more input left, i.e. the match has reached the
     /// true end of the original string being translated.
     AtEnd,
+}
+
+impl TestInstruction {
+    /// How many characters this spells out literally (`"..."` or `@...`). A negated literal
+    /// does not count: it says what must *not* be there.
+    fn literal_count(&self) -> usize {
+        match self {
+            TestInstruction::String { s } => s.chars().count(),
+            TestInstruction::Dots { dots } => dots.len(),
+            TestInstruction::Replace { tests } => tests.iter().map(Self::literal_count).sum(),
+            TestInstruction::Lookback { .. }
+            | TestInstruction::Variable { .. }
+            | TestInstruction::Attributes { .. }
+            | TestInstruction::Class { .. }
+            | TestInstruction::Negate { .. }
+            | TestInstruction::AtBeginning
+            | TestInstruction::AtEnd => 0,
+        }
+    }
 }
 
 impl IsLiteral for TestInstruction {
@@ -601,6 +625,15 @@ mod tests {
 
     use super::braille::BrailleDot;
     use super::*;
+
+    #[test]
+    fn literal_count() {
+        let count = |s| Parser::new(s).tests().unwrap().literal_count();
+        assert_eq!(count("@1-2"), 2);
+        assert_eq!(count("$a"), 0);
+        assert_eq!(count("#1=1[@1]$d\"ab\""), 3);
+        assert_eq!(count("!\"ab\"@1"), 1);
+    }
 
     #[test]
     fn ascii_number() {

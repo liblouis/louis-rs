@@ -1,5 +1,8 @@
+use std::cmp::Reverse;
+
 use crate::{
-    parser::{AnchoredRule, Precedence, Rule},
+    Direction,
+    parser::{AnchoredRule, HasNocross, HasPrecedence, Precedence, Rule},
     translator::{CharacterDefinition, effect::Effect, regexp::CharacterRange, swap::Swapper},
 };
 
@@ -118,7 +121,6 @@ pub trait Resolve {
 #[derive(Debug, PartialEq, Clone)]
 pub struct UnresolvedTranslation {
     output: Vec<TranslationTarget>,
-    precedence: Precedence,
     stage: TranslationStage,
     effects: Vec<Effect>,
     origin: Option<AnchoredRule>,
@@ -127,14 +129,12 @@ pub struct UnresolvedTranslation {
 impl UnresolvedTranslation {
     pub fn new(
         output: &[TranslationTarget],
-        precedence: Precedence,
         stage: TranslationStage,
         effects: &[Effect],
         origin: impl Into<Option<AnchoredRule>>,
     ) -> Self {
         Self {
             output: output.to_vec(),
-            precedence,
             stage,
             effects: effects.to_vec(),
             origin: origin.into(),
@@ -163,7 +163,6 @@ impl Resolve for UnresolvedTranslation {
             length: consumed.len(),
             weight,
             offset: consumed.start,
-            precedence: self.precedence,
             stage: self.stage,
             effects: self.effects,
             origin: self.origin,
@@ -203,6 +202,43 @@ impl Resolve for Translation {
     }
 }
 
+/// The key used to pick between competing translation candidates at the same position: the
+/// highest wins. The fields are compared in the order they are declared, so that order is the
+/// order of precedence; each one only matters when all the fields above it tie.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Rank {
+    /// A zero-length candidate, e.g. a `context` or `match` rule that only emits an
+    /// indicator, is not competing for the same input at all: it consumes nothing and lets
+    /// the next iteration pick the rule that does. Ranking it by characters consumed would
+    /// mean it could never win, so it goes ahead of every consuming candidate instead.
+    zero_length: bool,
+    /// Characters consumed: a longer match always beats a shorter one.
+    length: usize,
+    /// The consumed characters *plus* the `before`/`after` conditions the rule checked, so
+    /// the more constrained of two equally long matches wins.
+    weight: usize,
+    /// Pass and `correct` rules: how many characters of the test are spelled out literally
+    /// rather than given by a class, so `@123` beats `$a` on the same cell. liblouis sorts
+    /// pass rules by their leading literals alone and takes the first match, never comparing
+    /// the input consumed; here [`length`](Rank::length) still comes first.
+    literals: usize,
+    /// The kind of rule: a translation rule beats `always`, which beats an indicator, which
+    /// beats a character definition. On a one-character match `always` counts as a
+    /// translation rule, as liblouis only puts it last in its multi-character chains.
+    precedence: Precedence,
+    /// Backward main stage only: the rule producing more text wins, as liblouis sorts its
+    /// backward rule chains by output length. Forward and in the passes liblouis does not look
+    /// at the output, and this is 0.
+    output_length: usize,
+    /// A `nocross` rule beats its plain twin: it only applies when no syllable break falls
+    /// inside the match, so it is the more specific of the two.
+    nocross: bool,
+    /// Definition order, the earliest-defined rule winning, as in liblouis. Only reached when
+    /// nothing in the rules themselves separates the candidates, and it keeps the outcome
+    /// deterministic and compatible with liblouis.
+    definition_order: Reverse<usize>,
+}
+
 /// The basic unit of a translation.
 ///
 /// Maps an `input` string to an `output` which is typically also a string.
@@ -224,8 +260,6 @@ pub struct ResolvedTranslation {
     /// `offset` is the length of this pre-pattern (calculated at run-time) so that the translation
     /// can be applied later in the input string, when the pre-pattern has been consumed.
     offset: usize,
-    /// The precedence of a translation based on the precedence of the originating translation rule
-    precedence: Precedence,
     /// The stage in which this translation is applied
     stage: TranslationStage,
     /// A possibly empty list of [`Effect`]s. These will be applied to the
@@ -273,7 +307,6 @@ impl ResolvedTranslation {
             length: input.chars().count(),
             weight,
             offset: 0,
-            precedence: Precedence::Default,
             stage,
             effects: Vec::default(),
             origin: origin.into(),
@@ -296,28 +329,34 @@ impl ResolvedTranslation {
         self.weight
     }
 
-    /// The key used to pick between competing translation candidates at the same position.
-    ///
-    /// Among candidates that consume input, the number of characters consumed dominates,
-    /// so a longer match always beats a shorter one. `weight` counts the consumed
-    /// characters *plus* the `before`/`after` conditions the rule carries, so comparing
-    /// it second lets the more constrained of two equally long matches win without ever
-    /// outweighing a longer match.
-    ///
-    /// A zero-length candidate is not competing for the same input at all, e.g. a `context`
-    /// or `match` rule that only emits an indicator consumes nothing and lets the next
-    /// iteration pick the rule that does. Ranking it by characters consumed would mean it
-    /// could never win, so it is ranked ahead of every consuming candidate instead.
-    pub fn rank(&self) -> (bool, usize, usize) {
-        (self.length == 0, self.length, self.weight)
+    /// This candidate's [`Rank`] when translating in `direction`.
+    pub fn rank(&self, direction: Direction) -> Rank {
+        // a translation without a rule, such as the fallback for an undefined character,
+        // ranks lowest
+        let (literals, precedence, definition_order) = match &self.origin {
+            Some(o) => (o.rule.literal_count(), o.precedence(), o.definition_order()),
+            None => (0, Precedence::CharacterDefinition, usize::MAX),
+        };
+        Rank {
+            zero_length: self.length == 0,
+            length: self.length,
+            weight: self.weight,
+            literals,
+            precedence: match precedence {
+                Precedence::Always if self.length < 2 => Precedence::Translation,
+                p => p,
+            },
+            output_length: match (direction, self.stage) {
+                (Direction::Backward, TranslationStage::Main) => self.output.chars().count(),
+                _ => 0,
+            },
+            nocross: self.origin.as_ref().is_some_and(|o| o.is_nocross()),
+            definition_order: Reverse(definition_order),
+        }
     }
 
     pub fn offset(&self) -> usize {
         self.offset
-    }
-
-    pub fn precedence(&self) -> Precedence {
-        self.precedence.clone()
     }
 
     pub fn origin(&self) -> Option<AnchoredRule> {
@@ -385,6 +424,33 @@ mod tests {
     use crate::translator::swap::Swapper;
 
     #[test]
+    fn rank_breaks_ties_by_precedence_then_definition_order() {
+        use crate::parser::RuleParser;
+        let best = |sources: &[&str], input: &str| {
+            let rules: Vec<_> = sources
+                .iter()
+                .map(|s| AnchoredRule::from(RuleParser::new(s).rule().unwrap()))
+                .collect();
+            crate::parser::in_definition_order(&rules)
+                .into_iter()
+                .map(|r| ResolvedTranslation::new(input, "x", 1, TranslationStage::Main, r))
+                .max_by_key(|t| t.rank(Direction::Forward))
+                .unwrap()
+                .origin()
+                .unwrap()
+                .definition_order()
+        };
+        // a character definition is only the fallback
+        assert_eq!(best(&["letter a 1", "always a 2"], "a"), 1);
+        // on one character `always` is just another rule: the earliest-defined wins
+        assert_eq!(best(&["always a 2", "word a 4"], "a"), 0);
+        // on several, any other rule beats `always`
+        assert_eq!(best(&["always ab 2", "word ab 4"], "ab"), 1);
+        // among equals, the earliest-defined rule wins
+        assert_eq!(best(&["always ab 2", "always ab 3"], "ab"), 0);
+    }
+
+    #[test]
     fn resolve_literal() {
         assert_eq!(
             TranslationTarget::Literal("foo".to_string())
@@ -424,7 +490,6 @@ mod tests {
     fn translation_capture_empty() {
         let translation = UnresolvedTranslation::new(
             &[TranslationTarget::Capture],
-            Precedence::Default,
             TranslationStage::Main,
             &[],
             None,
@@ -439,7 +504,6 @@ mod tests {
     fn translation_capture_literal() {
         let translation = UnresolvedTranslation::new(
             &[TranslationTarget::Capture],
-            Precedence::Default,
             TranslationStage::Main,
             &[],
             None,
@@ -458,7 +522,6 @@ mod tests {
                 TranslationTarget::Capture,
                 TranslationTarget::Literal(">".to_string()),
             ],
-            Precedence::Default,
             TranslationStage::Main,
             &[],
             None,
@@ -479,7 +542,6 @@ mod tests {
                 TranslationTarget::Swap(swapper),
                 TranslationTarget::Literal(">".to_string()),
             ],
-            Precedence::Default,
             TranslationStage::Main,
             &[],
             None,
@@ -498,7 +560,6 @@ mod tests {
                 TranslationTarget::Capture,
                 TranslationTarget::Literal(">".to_string()),
             ],
-            Precedence::Default,
             TranslationStage::Main,
             &[],
             None,

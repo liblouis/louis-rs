@@ -19,7 +19,7 @@ use crate::translator::TranslationStage;
 use crate::translator::table::TableContext;
 use crate::translator::trie::Transition;
 use crate::{
-    parser::{AnchoredRule, Direction, Precedence},
+    parser::{AnchoredRule, Direction},
     translator::{ResolvedTranslation, trie::Trie},
 };
 
@@ -63,7 +63,6 @@ impl IndicatorBuilder {
                         Some(Transition::Start(word_boundary.clone())),
                         Some(Transition::End(word_boundary.clone())),
                         Direction::Forward,
-                        Precedence::Default,
                         vec![],
                         TranslationStage::Main,
                         &origin,

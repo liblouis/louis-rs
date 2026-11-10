@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 
 use crate::parser::multipass::test::Operator;
-use crate::parser::{Action, ActionInstruction, HasPrecedence, Quantifier, Test, TestInstruction};
+use crate::parser::{Action, ActionInstruction, Quantifier, Test, TestInstruction};
 
 use crate::parser::{AnchoredRule, Attribute, CharacterClass, CharacterClasses};
 use crate::translator::effect::{Effect, Environment};
@@ -232,7 +232,6 @@ impl ContextPatternsBuilder {
         let effects = Effects::from_instructions(&action.actions());
         Ok(UnresolvedTranslation::new(
             &targets,
-            origin.precedence(),
             stage,
             &effects,
             origin.clone(),
@@ -314,7 +313,6 @@ impl ContextPatterns {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::Precedence;
     use crate::parser::RuleParser;
     use crate::parser::multipass::action;
     use crate::parser::multipass::test;
@@ -349,7 +347,6 @@ mod tests {
         let ctx = context(CharacterClass::Digit, &['1', '2', '3']);
         let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
-            Precedence::Default,
             stage,
             &[],
             None,
@@ -395,7 +392,6 @@ mod tests {
         let ctx = context(CharacterClass::Uppercase, &['A', 'B', 'C']);
         let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
-            Precedence::Default,
             stage,
             &[],
             None,
@@ -434,7 +430,6 @@ mod tests {
         }
         let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
-            Precedence::Default,
             stage,
             &[],
             None,
@@ -464,7 +459,6 @@ mod tests {
         let ctx = context(CharacterClass::Letter, &['a', 'b', 'c']);
         let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
-            Precedence::Default,
             stage,
             &[],
             None,
@@ -494,7 +488,6 @@ mod tests {
         let ctx = context(CharacterClass::Letter, &['a', 'b', 'c']);
         let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
-            Precedence::Default,
             stage,
             &[],
             None,
@@ -526,7 +519,6 @@ mod tests {
         let ctx = context(CharacterClass::Letter, &['a', 'b', 'c']);
         let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
-            Precedence::Default,
             stage,
             &[],
             None,
@@ -564,7 +556,6 @@ mod tests {
         let ctx = context(CharacterClass::Digit, &['1', '2', '3']);
         let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
-            Precedence::Default,
             TranslationStage::Main,
             &[],
             None,
@@ -600,7 +591,6 @@ mod tests {
         }
         let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
-            Precedence::Default,
             TranslationStage::Main,
             &[],
             None,
@@ -648,7 +638,6 @@ mod tests {
         }
         let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("".to_string())],
-            Precedence::Default,
             TranslationStage::Main,
             &[],
             None,

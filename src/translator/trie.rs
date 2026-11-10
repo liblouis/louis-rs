@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    parser::{AnchoredRule, CharacterClass, CharacterClasses, Direction, Precedence},
+    parser::{AnchoredRule, CharacterClass, CharacterClasses, Direction},
     translator::{TranslationStage, beg_word::BegWordScanner, end_word::EndWordScanner},
 };
 
@@ -98,15 +98,12 @@ pub enum ClassConstraint {
 
 #[derive(Default, Debug, Clone)]
 struct TrieNode {
-    translation: Option<ResolvedTranslation>,
-    // `BTreeMap` rather than `HashMap`: iteration order needs to be deterministic between runs
-    // for candidates that tie on `ResolvedTranslation::rank` in `find_translations_from_node`
-    // (see doc/adr/0016-order-independent-rule-selection.org). A tie is an ill-formed
-    // table, not a case this order is meant to resolve correctly -- it only freezes *a* winner
-    // instead of leaving it to chance. Also measured ~12% faster to compile en-ueb-g2, since
-    // an ordered compare of two keys short-circuits on the discriminant where hashing one had
-    // to hash every member of its `ResolvedClasses` (whose own layout is chosen for the same
-    // comparison -- see `ResolvedClasses::chars`).
+    translations: Vec<ResolvedTranslation>,
+    // `BTreeMap` rather than `HashMap`: measured ~12% faster to compile en-ueb-g2, since an
+    // ordered compare of two keys short-circuits on the discriminant where hashing one had to
+    // hash every member of its `ResolvedClasses` (whose own layout is chosen for the same
+    // comparison -- see `ResolvedClasses::chars`). Iteration order does not affect results:
+    // `Rank` separates candidates from different rules.
     transitions: BTreeMap<ResolvedTransition, TrieNode>,
 }
 
@@ -213,7 +210,6 @@ impl Trie {
         from: char,
         to: &str,
         direction: Direction,
-        precedence: Precedence,
         stage: TranslationStage,
         origin: &AnchoredRule,
     ) {
@@ -223,7 +219,6 @@ impl Trie {
             None,
             None,
             direction,
-            precedence,
             vec![], // char rules never carry class constraints
             stage,
             origin,
@@ -237,7 +232,6 @@ impl Trie {
         before: Option<Transition>,
         after: Option<Transition>,
         direction: Direction,
-        precedence: Precedence,
         class_constraints: Vec<ClassConstraint>,
         stage: TranslationStage,
         origin: &AnchoredRule,
@@ -306,37 +300,17 @@ impl Trie {
             }
         }
 
-        if let Some(translation) = &current_node.translation {
-            // this node already contains a translation
-            if precedence > translation.precedence() {
-                current_node.translation = Some(ResolvedTranslation::new(
-                    from,
-                    to,
-                    length,
-                    stage,
-                    origin.clone(),
-                ));
-            } else if cfg!(feature = "backwards_compatibility") {
-                // first rule wins, so nothing to insert
-            } else {
-                // last rule wins
-                current_node.translation = Some(ResolvedTranslation::new(
-                    from,
-                    to,
-                    length,
-                    stage,
-                    origin.clone(),
-                ));
-            }
-        } else {
-            current_node.translation = Some(ResolvedTranslation::new(
-                from,
-                to,
-                length,
-                stage,
-                origin.clone(),
-            ));
-        }
+        // Rules with the same input and boundaries end up here together. They are all kept:
+        // which one applies is decided by `Rank` among the candidates that pass `trace()`'s
+        // checks, so a rule that fails one (e.g. a `prepunc` mid-word) leaves the others in
+        // play, as when liblouis moves on to the next rule in its chain.
+        current_node.translations.push(ResolvedTranslation::new(
+            from,
+            to,
+            length,
+            stage,
+            origin.clone(),
+        ));
     }
 
     fn find_translations_from_node(
@@ -348,11 +322,8 @@ impl Trie {
         let mut matching_rules = Vec::new();
         let mut chars = input.chars();
 
-        // if this node has a translation add it to the list of matching rules
-        if let Some(ref translation) = node.translation {
-            let translation = translation.clone();
-            matching_rules.push(translation)
-        }
+        // add this node's translations to the list of matching rules
+        matching_rules.extend(node.translations.iter().cloned());
         let c = chars.next();
         if let Some(c) = c {
             let bytes = c.len_utf8();
@@ -417,7 +388,6 @@ mod tests {
             Some(Transition::BegWord),
             None,
             Direction::Backward,
-            Precedence::default(),
             vec![],
             TranslationStage::Main,
             &fake_rule(),
@@ -442,7 +412,6 @@ mod tests {
                 None,
                 Some(transition),
                 Direction::Backward,
-                Precedence::default(),
                 vec![],
                 TranslationStage::Main,
                 &fake_rule(),
@@ -467,6 +436,34 @@ mod tests {
     }
 
     #[test]
+    fn find_translations_keeps_rules_on_the_same_node() {
+        // both rules are candidates, so `trace()` can reject one (e.g. a `prepunc` mid-word)
+        // and still apply the other
+        let mut trie = Trie::new();
+        let prepunc: AnchoredRule = RuleParser::new("prepunc ! 235").rule().unwrap().into();
+        let always: AnchoredRule = RuleParser::new("always ! 2356").rule().unwrap().into();
+        for (rule, dots) in [(&prepunc, "⠖"), (&always, "⠷")] {
+            trie.insert(
+                "!",
+                dots,
+                None,
+                None,
+                Direction::Forward,
+                vec![],
+                TranslationStage::Main,
+                rule,
+            );
+        }
+        assert_eq!(
+            trie.find_translations("!", ""),
+            vec![
+                ResolvedTranslation::new("!", "⠖", 1, TranslationStage::Main, prepunc),
+                ResolvedTranslation::new("!", "⠷", 1, TranslationStage::Main, always),
+            ]
+        );
+    }
+
+    #[test]
     fn find_translations() {
         let mut trie = Trie::new();
         let empty = Vec::<ResolvedTranslation>::new();
@@ -483,7 +480,6 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            Precedence::Default,
             vec![],
             TranslationStage::Main,
             &rule,
@@ -494,7 +490,6 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            Precedence::Default,
             vec![],
             TranslationStage::Main,
             &rule,
@@ -505,7 +500,6 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            Precedence::Default,
             vec![],
             TranslationStage::Main,
             &rule,
@@ -516,7 +510,6 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            Precedence::Default,
             vec![],
             TranslationStage::Main,
             &rule,
@@ -527,7 +520,6 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            Precedence::Default,
             vec![],
             TranslationStage::Main,
             &rule,
@@ -572,7 +564,6 @@ mod tests {
             Some(Transition::Start(boundary.clone())),
             Some(Transition::End(boundary)),
             Direction::Forward,
-            Precedence::Default,
             vec![],
             TranslationStage::Main,
             &rule,
@@ -601,7 +592,6 @@ mod tests {
             ])),
             Some(Transition::End(vec![CharacterClass::Letter])),
             Direction::Forward,
-            Precedence::Default,
             vec![],
             TranslationStage::Main,
             &rule,
@@ -629,7 +619,6 @@ mod tests {
             Some(Transition::Start(vec![CharacterClass::Letter])),
             None,
             Direction::Forward,
-            Precedence::Default,
             vec![],
             TranslationStage::Main,
             &rule,
@@ -658,7 +647,6 @@ mod tests {
             Some(Transition::Start(boundary.clone())),
             Some(Transition::End(boundary)),
             Direction::Forward,
-            Precedence::Default,
             vec![],
             TranslationStage::Main,
             &rule,
@@ -691,7 +679,6 @@ mod tests {
             ])),
             Some(Transition::End(vec![CharacterClass::Litdigit])),
             Direction::Forward,
-            Precedence::Default,
             vec![],
             TranslationStage::Main,
             &rule,
@@ -723,7 +710,6 @@ mod tests {
                 CharacterClass::Punctuation,
             ])),
             Direction::Forward,
-            Precedence::Default,
             vec![],
             TranslationStage::Main,
             &rule,
@@ -752,7 +738,6 @@ mod tests {
             Some(Transition::Start(vec![CharacterClass::Letter])),
             None,
             Direction::Forward,
-            Precedence::Default,
             vec![],
             TranslationStage::Main,
             &rule,
@@ -780,7 +765,6 @@ mod tests {
             None,
             Some(Transition::End(vec![CharacterClass::Letter])),
             Direction::Forward,
-            Precedence::Default,
             vec![],
             TranslationStage::Main,
             &rule,
@@ -804,7 +788,6 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            Precedence::Default,
             vec![],
             TranslationStage::Main,
             &rule,
@@ -829,7 +812,6 @@ mod tests {
                 None,
                 None,
                 Direction::Forward,
-                Precedence::Default,
                 vec![],
                 TranslationStage::Main,
                 &rule,
@@ -860,7 +842,6 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            Precedence::Default,
             vec![ClassConstraint::End(CharacterClass::Letter)],
             TranslationStage::Main,
             &rule,
@@ -872,7 +853,6 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            Precedence::Default,
             vec![ClassConstraint::End(CharacterClass::Digit)],
             TranslationStage::Main,
             &rule,
@@ -905,7 +885,6 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            Precedence::Default,
             vec![ClassConstraint::Start(CharacterClass::Letter)],
             TranslationStage::Main,
             &rule,
@@ -917,7 +896,6 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            Precedence::Default,
             vec![ClassConstraint::Start(CharacterClass::Digit)],
             TranslationStage::Main,
             &rule,

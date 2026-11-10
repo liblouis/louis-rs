@@ -141,7 +141,7 @@ Executes the translation pipeline:
 - Stores character and word translations with boundaries
 - Handles case-insensitive matching while preserving case sensitivity for lookups
 - Boundary support: word starts/ends, number starts/ends, punctuation, etc.
-- Precedence-based rule selection when multiple rules match
+- Keeps every rule that lands on the same node; selection among them happens later via `Rank`
 
 **`regexp.rs`**: Virtual machine-based regex engine
 - Compiles regex ASTs to instruction sequences
@@ -194,8 +194,10 @@ Subcommands:
 - **Trie-based lookup**: Simple character/word matches found fastest
 - **Match patterns**: Regex-based rules (liblouis `match` opcode) checked after trie
 - **Context patterns**: Regex-based rules (liblouis `context` opcode) checked last
-- **Precedence values**: Rules with higher precedence override lower ones
-- **Feature flag**: `backwards_compatibility` mode affects rule selection (first rule wins vs last rule wins)
+- **`Rank`** (`translation.rs`): all candidates that pass the boundary checks compete on one
+  key, compared field by field: zero-length first, then length, weight, pass-rule literals,
+  `Precedence` (character definition < indicator < `always` < other rules), backward
+  main-stage output length, `nocross`, and finally definition order (earliest wins)
 
 ### Boundary Handling
 

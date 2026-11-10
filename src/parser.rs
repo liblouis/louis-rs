@@ -1166,19 +1166,24 @@ impl HasNocross for Rule {
     }
 }
 
-/// Defines precedence levels for [`Rules`](Rule).
-#[derive(Debug, Default, Clone, PartialEq, PartialOrd)]
+/// Precedence levels for [`Rules`](Rule): when two rules match the same input and nothing
+/// else separates them, the higher one wins, see [`Rank`](crate::translator::translation::Rank).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Precedence {
-    #[default]
-    Default,
-    /// Backward-only indicator opcodes (`capsletter`, `numsign`, ...). Ranked above plain
-    /// character-definition opcodes (`letter`, `punctuation`, `sign`, ...), whose dots
-    /// they can coincide with in some tables (e.g. `capsletter 46` vs `punctuation $ 46`
-    /// in hu-hu-g1.ctb) — but *below* [`Precedence::Translation`], since a same-dots
-    /// `always`/word-family rule (e.g. `always ഃ 6` colliding with `capsletter 6` via a
-    /// shared included subtable in Malayalam) reflects a more specific, legitimate
-    /// language rule that must still win.
+    /// `letter`, `punctuation`, `digit`, ..., plus `litdigit`, `base` and `hyphen`: only
+    /// the fallback when no other rule matches, which liblouis expresses by putting them
+    /// at the end of its rule chains.
+    CharacterDefinition,
+    /// Backward-only indicator opcodes (`capsletter`, `numsign`, ...). Above the
+    /// character definitions, whose dots they can coincide with in some tables, but below
+    /// `always`: a same-dots `always` rule is a more specific language rule that must
+    /// still win.
     Indicator,
+    /// `always`: liblouis puts it after the other translation rules of the same length, but
+    /// only in its multi-character chains, so [`Rank`](crate::translator::translation::Rank) treats a
+    /// one-character `always` match as [`Precedence::Translation`].
+    Always,
+    /// Every other rule: the word family, `match`, `context`, the passes, ...
     Translation,
 }
 
@@ -1191,26 +1196,43 @@ pub trait HasPrecedence {
 impl HasPrecedence for Rule {
     fn precedence(&self) -> Precedence {
         match self {
-            // comp6 apparently has lower precedence than the other translation rules
-            // Rule::Comp6 { .. }
-            Rule::Word { .. }
-            | Rule::Begword { .. }
-            | Rule::Sufword { .. }
-            | Rule::Midword { .. }
-            | Rule::Midendword { .. }
-            | Rule::Endword { .. }
-            | Rule::Begmidword { .. }
-            | Rule::Joinword { .. }
-            | Rule::Begnum { .. }
-            | Rule::Midnum { .. }
-            | Rule::Endnum { .. }
-            | Rule::Always { .. } => Precedence::Translation,
+            Rule::Space { .. }
+            | Rule::Digit { .. }
+            | Rule::Punctuation { .. }
+            | Rule::Math { .. }
+            | Rule::Sign { .. }
+            | Rule::Letter { .. }
+            | Rule::Uppercase { .. }
+            | Rule::Lowercase { .. }
+            | Rule::Grouping { .. }
+            // outside liblouis' character definition opcodes, but they define a character too:
+            // `base` a derived one, `hyphen` one that can break a word. `litdigit` must also
+            // not beat a `lowercase` with the same dots backward, it only applies in a number
+            | Rule::Litdigit { .. }
+            | Rule::Base { .. }
+            | Rule::Hyphen { .. } => Precedence::CharacterDefinition,
             Rule::Capsletter { .. }
             | Rule::Begcapsword { .. }
             | Rule::Endcapsword { .. }
             | Rule::Numsign { .. }
             | Rule::Nonumsign { .. } => Precedence::Indicator,
-            _ => Precedence::Default,
+            Rule::Always { .. } => Precedence::Always,
+            _ => Precedence::Translation,
+        }
+    }
+}
+
+impl Rule {
+    /// How many characters of a pass or `correct` test are spelled out literally rather than
+    /// given by a class, see [`Test::literal_count`](multipass::Test::literal_count); 0 for
+    /// every other rule.
+    pub fn literal_count(&self) -> usize {
+        match self {
+            Rule::Correct { test, .. }
+            | Rule::Pass2 { test, .. }
+            | Rule::Pass3 { test, .. }
+            | Rule::Pass4 { test, .. } => test.literal_count(),
+            _ => 0,
         }
     }
 }
@@ -2616,6 +2638,10 @@ pub struct AnchoredRule {
     pub rule: Rule,
     path: Option<PathBuf>,
     line: usize,
+    /// Position in the rule list a table was compiled from, i.e. definition order across
+    /// `include`s and table lists. Only the last resort for picking between candidates, see
+    /// [`Rank`](crate::translator::translation::Rank).
+    definition_order: usize,
 }
 
 impl std::fmt::Display for AnchoredRule {
@@ -2629,7 +2655,16 @@ impl std::fmt::Display for AnchoredRule {
 
 impl AnchoredRule {
     pub fn new(rule: Rule, path: Option<PathBuf>, line: usize) -> Self {
-        Self { rule, path, line }
+        Self {
+            rule,
+            path,
+            line,
+            definition_order: 0,
+        }
+    }
+
+    pub fn definition_order(&self) -> usize {
+        self.definition_order
     }
 }
 
@@ -2657,8 +2692,22 @@ impl From<Rule> for AnchoredRule {
             rule,
             path: None,
             line: 0,
+            definition_order: 0,
         }
     }
+}
+
+/// `rules` stamped with their position in it, which is their definition order: the last
+/// resort for picking between candidates, see [`Rank`](crate::translator::translation::Rank).
+pub fn in_definition_order(rules: &[AnchoredRule]) -> Vec<AnchoredRule> {
+    rules
+        .iter()
+        .enumerate()
+        .map(|(definition_order, r)| AnchoredRule {
+            definition_order,
+            ..r.clone()
+        })
+        .collect()
 }
 
 pub fn table(table: &str, path: Option<PathBuf>) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
@@ -2671,11 +2720,7 @@ pub fn table(table: &str, path: Option<PathBuf>) -> Result<Vec<AnchoredRule>, Ve
             // parse the line
             RuleParser::new(line)
                 .rule()
-                .map(|rule| AnchoredRule {
-                    rule,
-                    path: path.clone(),
-                    line: line_no + 1,
-                })
+                .map(|rule| AnchoredRule::new(rule, path.clone(), line_no + 1))
                 .map_err(|e| TableError::ParseError {
                     path: path.clone(),
                     line: line_no + 1,

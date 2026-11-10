@@ -775,13 +775,10 @@ impl CompiledRegexp {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        parser::Precedence,
-        translator::{
-            TranslationStage,
-            effect::Effect,
-            translation::{TranslationTarget, UnresolvedTranslation},
-        },
+    use crate::translator::{
+        TranslationStage,
+        effect::Effect,
+        translation::{TranslationTarget, UnresolvedTranslation},
     };
 
     use super::*;
@@ -1094,7 +1091,6 @@ mod tests {
         let env = Environment::new();
         let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Capture],
-            Precedence::Default,
             TranslationStage::Main,
             &[],
             None,
@@ -1143,7 +1139,6 @@ mod tests {
         let env = Environment::new();
         let translation = Translation::Unresolved(UnresolvedTranslation::new(
             &[TranslationTarget::Literal("baz".to_string())],
-            Precedence::Default,
             TranslationStage::Main,
             &[],
             None,
