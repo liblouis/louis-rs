@@ -1896,14 +1896,16 @@ impl PrimaryTable {
                 .letter_cells(letter_cells.clone());
             // liblouis carries a capitalized word on while the text it writes is
             // letters, whatever rule wrote them, so the capitals also continue across
-            // a one-cell contraction of letters inside a word, such as UEB's
-            // `nofor midword bb 23` in "RABBIT". The cell is often also punctuation, which
-            // ends the word, so a contraction that only stands as a whole word, such as
-            // Danish `word var 36` on a hyphen's cell, does not count.
+            // a one-cell contraction of letters that is part of a word, such as UEB's
+            // `nofor midword bb 23` in "RABBIT" or the U.S. grade 2 `begword com 36` in
+            // "COMPANY". The cell is often also punctuation, which ends the word, so a
+            // contraction that only stands as a whole word, such as Danish `word var 36`
+            // on a hyphen's cell, does not count.
             let mut caps_cells = letter_cells.clone();
             for rule in rules {
                 match &rule.rule {
-                    Rule::Begmidword { chars, dots, .. }
+                    Rule::Begword { chars, dots, .. }
+                    | Rule::Begmidword { chars, dots, .. }
                     | Rule::Midword { chars, dots, .. }
                     | Rule::Midendword { chars, dots, .. }
                     | Rule::Endword { chars, dots, .. }
