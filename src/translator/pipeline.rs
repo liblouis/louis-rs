@@ -212,7 +212,7 @@ mod tests {
         assert_eq!(pipeline.translate("foobaz"), "⠇⠸");
         assert_eq!(pipeline.translate("foobar"), "⠇⠸");
         assert_eq!(pipeline.translate("  "), "⠀⠀");
-        assert_eq!(pipeline.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
+        assert_eq!(pipeline.translate("🐂"), "⠄⡳⠽⠂⠋⠲⠴⠆⠄");
     }
 
     #[test]
@@ -227,7 +227,7 @@ mod tests {
         assert_eq!(pipeline.translate("foo"), "⠁");
         assert_eq!(pipeline.translate("foobar"), "⠁⠸");
         assert_eq!(pipeline.translate("  "), "⠀⠀");
-        assert_eq!(pipeline.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
+        assert_eq!(pipeline.translate("🐂"), "⠄⡳⠽⠂⠋⠲⠴⠆⠄");
     }
 
     #[test]
@@ -314,7 +314,7 @@ mod tests {
         assert_eq!(pipeline.translate("foo"), "⠁");
         assert_eq!(pipeline.translate("foobar"), "⠁⠸");
         assert_eq!(pipeline.translate("  "), "⠀⠀");
-        assert_eq!(pipeline.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
+        assert_eq!(pipeline.translate("🐂"), "⠄⡳⠽⠂⠋⠲⠴⠆⠄");
     }
 
     #[test]
@@ -331,7 +331,7 @@ mod tests {
         assert_eq!(pipeline.translate("foo"), "⠁");
         assert_eq!(pipeline.translate("foobar"), "⠁⠸");
         assert_eq!(pipeline.translate("  "), "⠀⠀");
-        assert_eq!(pipeline.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
+        assert_eq!(pipeline.translate("🐂"), "⠄⡳⠽⠂⠋⠲⠴⠆⠄");
     }
 
     #[test]
