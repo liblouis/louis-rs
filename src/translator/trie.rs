@@ -259,16 +259,22 @@ impl Trie {
         let mut length = from.chars().count();
 
         // StartClass constraints are lookbehind checks on `preceding` — inserted before char
-        // transitions
-        for constraint in &class_constraints {
-            if let ClassConstraint::Start(class) = constraint {
-                length += 1;
-                let resolved = ResolvedClasses::resolve(&self.lookbehind_classes, &[class.clone()]);
-                current_node = current_node
-                    .transitions
-                    .entry(ResolvedTransition::Start(resolved))
-                    .or_default();
-            }
+        // transitions. Like liblouis, which ORs a rule's `after` attributes into one mask,
+        // the character before the match need only be in one of the classes.
+        let start_classes: Vec<CharacterClass> = class_constraints
+            .iter()
+            .filter_map(|constraint| match constraint {
+                ClassConstraint::Start(class) => Some(class.clone()),
+                ClassConstraint::End(_) => None,
+            })
+            .collect();
+        if !start_classes.is_empty() {
+            length += 1;
+            let resolved = ResolvedClasses::resolve(&self.lookbehind_classes, &start_classes);
+            current_node = current_node
+                .transitions
+                .entry(ResolvedTransition::Start(resolved))
+                .or_default();
         }
 
         if let Some(t) = before {
@@ -288,16 +294,22 @@ impl Trie {
             current_node = current_node.transitions.entry(t).or_default();
         }
 
-        // EndClass constraints are lookahead checks on the next char — inserted after char transitions
-        for constraint in &class_constraints {
-            if let ClassConstraint::End(class) = constraint {
-                length += 1;
-                let resolved = ResolvedClasses::resolve(&self.lookahead_classes, &[class.clone()]);
-                current_node = current_node
-                    .transitions
-                    .entry(ResolvedTransition::End(resolved))
-                    .or_default();
-            }
+        // EndClass constraints are lookahead checks on the next char — inserted after char
+        // transitions, and like the lookbehind, one class of several is enough
+        let end_classes: Vec<CharacterClass> = class_constraints
+            .iter()
+            .filter_map(|constraint| match constraint {
+                ClassConstraint::End(class) => Some(class.clone()),
+                ClassConstraint::Start(_) => None,
+            })
+            .collect();
+        if !end_classes.is_empty() {
+            length += 1;
+            let resolved = ResolvedClasses::resolve(&self.lookahead_classes, &end_classes);
+            current_node = current_node
+                .transitions
+                .entry(ResolvedTransition::End(resolved))
+                .or_default();
         }
 
         // Rules with the same input and boundaries end up here together. They are all kept:

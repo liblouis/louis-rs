@@ -172,6 +172,14 @@ mod tests {
         "space \\s 0\nletter a 1\nlitdigit 4 145\nlitdigit 2 12\nnumsign 3456\n";
 
     #[test]
+    fn a_rule_after_one_of_two_classes_applies_after_either() {
+        // French `after conabr after bvoy endword ent 126`
+        let table = "space \\s 0\nlowercase a 1\nlowercase b 12\nlowercase c 14\nlowercase x 1346\nattribute one a\nattribute two b\nafter one after two always yy 1346\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠁⠭⠀⠃⠭⠀⠉⠭").unwrap(), "ayy byy cx");
+    }
+
+    #[test]
     fn positions_with_number_sign() {
         let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
         let result = translator
