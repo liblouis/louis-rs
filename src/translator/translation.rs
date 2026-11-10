@@ -256,9 +256,9 @@ pub struct ResolvedTranslation {
     /// instance for `match` opcodes where the length of the matched input often depends on regular
     /// expressions.
     weight: usize,
-    /// The `match` opcode contains a pre-pattern which is essentially a look-behind regexp. The
-    /// `offset` is the length of this pre-pattern (calculated at run-time) so that the translation
-    /// can be applied later in the input string, when the pre-pattern has been consumed.
+    /// For a `context` or pass rule, the number of characters before its `[`: where the VM's
+    /// consumed span starts, and then how many leading characters the candidate copies (see
+    /// `context_pattern::split_copied`). Zero for everything else.
     offset: usize,
     /// The stage in which this translation is applied
     stage: TranslationStage,
@@ -407,14 +407,6 @@ impl ResolvedTranslation {
     /// Set the `offset` of a translation.
     pub fn with_offset(self, offset: usize) -> Self {
         Self { offset, ..self }
-    }
-
-    /// Decrement the `offset` of a translation.
-    pub fn decrement_offset(self, decrement: usize) -> Self {
-        Self {
-            offset: self.offset - decrement,
-            ..self
-        }
     }
 }
 

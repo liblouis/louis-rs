@@ -13,7 +13,7 @@ use crate::{
         CharacterDefinition, ClassConstraint, ResolvedTranslation, Rule, TranslationError,
         TranslationMode, TranslationOptions, TranslationStage,
         beg_word::BegWordScanner,
-        context_pattern::{ContextPatterns, ContextPatternsBuilder},
+        context_pattern::{ContextPatterns, ContextPatternsBuilder, split_copied},
         effect::Environment,
         end_word::EndWordScanner,
         indication::{
@@ -1961,19 +1961,6 @@ impl PrimaryTable {
         Ok(builder.build(direction, ctx))
     }
 
-    fn update_offsets(
-        &self,
-        translations: Vec<ResolvedTranslation>,
-        decrement: usize,
-    ) -> Vec<ResolvedTranslation> {
-        translations
-            .into_iter()
-            // drop translations where the offet is smaller than the decrement
-            .filter(|t| t.offset() >= decrement)
-            .map(|t| t.decrement_offset(decrement))
-            .collect()
-    }
-
     pub fn translate(&self, input: &str) -> String {
         self.trace(input, &TranslationOptions::default())
             .iter()
@@ -1986,17 +1973,6 @@ impl PrimaryTable {
             .iter()
             .map(|t| t.output())
             .collect()
-    }
-
-    fn translation_candidates(
-        &self,
-        input: &str,
-        preceding: &str,
-    ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
-        self.trie
-            .find_translations(input, preceding)
-            .into_iter()
-            .partition(|t| t.offset() == 0)
     }
 
     /// A nocross candidate is valid only if it doesn't cross an internal
@@ -2020,28 +1996,8 @@ impl PrimaryTable {
             .collect()
     }
 
-    fn context_candidates(
-        &self,
-        input: &str,
-        env: &Environment,
-        at_start: bool,
-    ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
-        self.context_patterns
-            .find(input, env, at_start, &self.fallback_definitions)
-            .into_iter()
-            .partition(|t| t.offset() == 0)
-    }
-
-    fn partition_delayed_translations(
-        &self,
-        delayed: Vec<ResolvedTranslation>,
-    ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
-        delayed.into_iter().partition(|t| t.offset() == 0)
-    }
-
     pub fn trace(&self, input: &str, options: &TranslationOptions) -> Vec<ResolvedTranslation> {
         let mut translations: Vec<ResolvedTranslation> = Vec::new();
-        let mut delayed_translations: Vec<ResolvedTranslation> = Vec::new();
 
         let mut env = Environment::new();
         let mut chars = input.chars();
@@ -2099,10 +2055,8 @@ impl PrimaryTable {
                 .filter(|t| !(constraints.uncontracted_at(char_pos) && Self::contracts(t)))
                 .max_by_key(|t| t.rank(self.direction));
 
-            // given an input query the trie for matching translations. Then split off the
-            // translations that are delayed, i.e. have an offset because they have a pre-pattern
-            let (mut candidates, delayed) = self.translation_candidates(chars.as_str(), preceding);
-            delayed_translations.extend(delayed);
+            // every candidate matches at the cursor: first the trie
+            let mut candidates = self.trie.find_translations(chars.as_str(), preceding);
 
             // then the match patterns, which all match at the cursor: `pre` is checked
             // backwards from it
@@ -2110,18 +2064,13 @@ impl PrimaryTable {
             let reversed_preceding = &reversed[input.len() - cursor_byte..];
             candidates.extend(self.match_patterns.find(chars.as_str(), reversed_preceding));
 
-            // then search for context patterns. Unless they have empty pre patterns they will all
-            // have an offset. Split those off.
-            let (context_candidates, context_delayed) =
-                self.context_candidates(chars.as_str(), &env, at_start);
-            delayed_translations.extend(context_delayed);
-            // merge the candidates from the context patters with the candidates from the plain translations
-            candidates.extend(context_candidates);
-
-            // move delayed_translations with zero offset into candidates
-            let (current, delayed) = self.partition_delayed_translations(delayed_translations);
-            delayed_translations = delayed;
-            candidates.extend(current);
+            // then the context patterns, which consume the text before their `[` too
+            candidates.extend(self.context_patterns.find(
+                chars.as_str(),
+                &env,
+                at_start,
+                &self.fallback_definitions,
+            ));
 
             // Forward, some rules have a condition the trie can't express, so they're
             // inserted without it and gated here, mostly against the constrainers. A
@@ -2190,7 +2139,6 @@ impl PrimaryTable {
             }
 
             // In computer braille mode, discard normal candidates and use comp6 rules only.
-            // comp6 rules have no pre-pattern so offset() is always 0 — no delayed handling needed.
             if constraints.use_comp6_at(char_pos) {
                 candidates.clear();
                 candidates.extend(self.comp6_trie.find_translations(chars.as_str(), preceding));
@@ -2240,7 +2188,6 @@ impl PrimaryTable {
                 chars.nth(nocross.length() - 1);
                 char_pos += nocross.length();
                 translations.push(translation);
-                delayed_translations = self.update_offsets(delayed_translations, nocross.length());
             } else if let Some(t) = candidate
                 && let Some((index, len)) =
                     self.repeated_word(t, char_pos, &translations, &constraints, &indications)
@@ -2256,10 +2203,9 @@ impl PrimaryTable {
                     &constraints,
                     &indications,
                 );
-                let consumed = repetition.iter().map(|t| t.length()).sum();
+                let consumed: usize = repetition.iter().map(|t| t.length()).sum();
                 translations.extend(repetition);
                 chars.nth(consumed - 1);
-                delayed_translations = self.update_offsets(delayed_translations, consumed);
                 char_pos += consumed;
             } else if let Some(t) = candidate {
                 let t = &self.swallow_following(t.clone(), chars.as_str(), char_pos, &constraints);
@@ -2272,11 +2218,16 @@ impl PrimaryTable {
                     chars.nth(t.length() - 1);
                     char_pos += t.length();
                 }
-                // there is a matching translation rule
-                let translation = t.clone();
-                let translation = uppercase_if_needed(translation);
-                translations.push(translation);
-                delayed_translations = self.update_offsets(delayed_translations, t.length());
+                // there is a matching translation rule; capsletter capitalizes the first
+                // step only
+                let steps = split_copied(t.clone(), &self.fallback_definitions);
+                for (i, step) in steps.into_iter().enumerate() {
+                    translations.push(if i == 0 || uppercase_here {
+                        uppercase_if_needed(step)
+                    } else {
+                        step
+                    });
+                }
 
                 // update the environment if needed
                 if !t.effects().is_empty() {
@@ -2289,7 +2240,6 @@ impl PrimaryTable {
                 // no translation rule found
                 if let Some(translation) = self.character_translations.get(&next_char) {
                     translations.push(translation.clone());
-                    delayed_translations = self.update_offsets(delayed_translations, 1);
                 } else if let Some(ref replacement) = self.undefined {
                     // there is a rule for undefined characters
                     let translation = ResolvedTranslation::new(
@@ -2300,7 +2250,6 @@ impl PrimaryTable {
                         None, // FIXME: add the undefined rule here
                     );
                     translations.push(translation);
-                    delayed_translations = self.update_offsets(delayed_translations, 1);
                 } else {
                     // otherwise handle it as a undefined character
                     let translation = ResolvedTranslation::new(
@@ -2311,7 +2260,6 @@ impl PrimaryTable {
                         None,
                     );
                     translations.push(translation);
-                    delayed_translations = self.update_offsets(delayed_translations, 1);
                 }
             } else {
                 // the chars iterator is exhausted — slot `n` translations were

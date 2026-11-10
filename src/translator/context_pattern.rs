@@ -296,6 +296,11 @@ impl ContextPatterns {
     ///
     /// `fallback_definitions` are the table's character definitions, which the action's `*`
     /// uses in a forward `context` rule.
+    ///
+    /// A rule matches at the cursor and consumes the text before its `[` too, which comes
+    /// out by `fallback_definitions`, as in liblouis's `copyCharacters`: a forward `context`
+    /// rule puts each character's definition, a pass rule, given none, copies them. The
+    /// candidate's `offset` is the number of those characters, see [`split_copied`].
     pub fn find(
         &self,
         input: &str,
@@ -306,8 +311,71 @@ impl ContextPatterns {
         self.regexps
             .iter()
             .flat_map(|r| r.find_anchored(input, env, at_start, fallback_definitions))
+            .map(|t| {
+                let before: String = input.chars().take(t.offset()).collect();
+                if before.is_empty() {
+                    return t;
+                }
+                let copied: String = before
+                    .chars()
+                    .map(|c| copy(c, fallback_definitions))
+                    .collect();
+                let output = copied + &t.output();
+                let input = before + &t.input();
+                // the length is what the rule consumes, which can be more than its input
+                let (offset, length) = (t.offset(), t.offset() + t.length());
+                t.with_input(&input)
+                    .with_output(&output)
+                    .with_length(length)
+                    .with_offset(offset)
+            })
             .collect()
     }
+}
+
+fn copy(c: char, definitions: &CharacterDefinition) -> String {
+    definitions
+        .get(&c)
+        .cloned()
+        .unwrap_or_else(|| c.to_string())
+}
+
+/// The steps a candidate from [`ContextPatterns::find`] stands for: one per character
+/// copied from before its `[`, then the replacement, so that positions map each character
+/// to its own output.
+pub fn split_copied(
+    t: ResolvedTranslation,
+    definitions: &CharacterDefinition,
+) -> Vec<ResolvedTranslation> {
+    let copied = t.offset();
+    if copied == 0 {
+        return vec![t];
+    }
+    let input = t.input();
+    let length = t.length() - copied;
+    let mut steps: Vec<ResolvedTranslation> = input
+        .chars()
+        .take(copied)
+        .map(|c| {
+            ResolvedTranslation::new(
+                &c.to_string(),
+                &copy(c, definitions),
+                1,
+                t.stage(),
+                t.origin(),
+            )
+        })
+        .collect();
+    let copied_output: usize = steps.iter().map(|s| s.output().chars().count()).sum();
+    let output: String = t.output().chars().skip(copied_output).collect();
+    let rest: String = input.chars().skip(copied).collect();
+    steps.push(
+        t.with_input(&rest)
+            .with_output(&output)
+            .with_length(length)
+            .with_offset(0),
+    );
+    steps
 }
 
 #[cfg(test)]
@@ -890,9 +958,8 @@ mod tests {
         // liblouis' `_1$d[...]` rewinds 1, checks the preceding char is a digit, then advances
         // back to the bracket. We drop the `_1` (see the comment at
         // `TestInstruction::Lookback`'s match arm) and just check `$d` in place instead. This
-        // still requires a digit immediately before the bracket — discovered when the cursor
-        // sits at that digit, held via `offset()`/`delayed_translations` until it catches up —
-        // and the reported length only ever covers the bracket itself, never the digit.
+        // still requires a digit immediately before the bracket, matched from the cursor and
+        // consumed with the bracket, as liblouis does.
         let env = Environment::new();
         let tests = test::Parser::new(r#"_1$d["b"]"#).tests().unwrap();
         let action = action::Parser::new(r#""X""#).actions().unwrap();
@@ -915,13 +982,10 @@ mod tests {
             )
             .unwrap();
         let patterns = builder.build();
-        // "a" is a digit here, so the rule fires on "b" once found starting at "a"; the digit
-        // itself is not part of the reported match: `length()` is 1 (just "b", derived from
-        // `input`/capture below), even though `weight()` — used only to rank competing
-        // candidates, per the established convention in `context_capture_advanced` above —
-        // reflects the whole 2-char span that was actually checked ("a" + "b")
+        // "a" is a digit here, so the rule fires at "a": it copies the digit (`offset()` 1)
+        // and replaces "b"
         let translation =
-            ResolvedTranslation::new("b", "X", 2, stage, origin.clone()).with_offset(1);
+            ResolvedTranslation::new("ab", "aX", 2, stage, origin.clone()).with_offset(1);
         assert_eq!(
             patterns.find("ab", &env, true, &CharacterDefinition::default()),
             [translation]
@@ -1121,10 +1185,15 @@ mod tests {
                 &TranslationTarget::Capture,
             )
             .unwrap();
-        let translation =
-            ResolvedTranslation::new("abc", "<ABC>", 9, TranslationStage::Main, origin.clone())
-                .with_offset(3)
-                .with_length(3);
+        // the leading `$p3` is copied and consumed, the trailing one only looked at
+        let translation = ResolvedTranslation::new(
+            "{{{abc",
+            "{{{<ABC>",
+            9,
+            TranslationStage::Main,
+            origin.clone(),
+        )
+        .with_offset(3);
         let patterns = builder.build();
         assert_eq!(
             patterns.find("{{{abc}}}", &env, true, &CharacterDefinition::default()),
