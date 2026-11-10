@@ -66,11 +66,10 @@
   ~HashMap~, so a tie between candidates was decided by iteration
   order, which is randomized per process, and ~pa.yaml~,
   ~hi_harness.yaml~ and ~fr-bfu-g2.yaml~ reported different numbers
-  between runs of the same binary. Fixed with a ~BTreeMap~; see
-  [[file:doc/adr/0016-order-independent-rule-selection.org][ADR-0016]] for why we freeze an
-  arbitrary order rather than adopt liblouis's definition order, and
-  for the linter idea that would find the underlying table
-  ambiguities.
+  between runs of the same binary. First frozen with a ~BTreeMap~;
+  since ~1ff7b7f~ ~Rank~ ends with definition order, so the map's
+  order no longer affects results (two suite runs with a ~HashMap~
+  were identical).
 - [ ] Expose the library via a C ABI so it can be used from other
   languages (see [[https://github.com/mozilla/cbindgen][cbindgen]] or [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 
@@ -85,13 +84,17 @@
   ~seqafterpattern~ still compiles to nothing; the trie's word
   boundaries (space or punctuation) give the same result for the cases
   tried. Implementing it as a retain would drop the weight of the
-  boundary transitions, see the tie entry below.
-- [ ] Ties between equally long matches: liblouis takes the rule the
-  table defines first, the trie ranks by transition weight, then
-  precedence. Backward ~decpoint~ is therefore inserted without its
-  "digit follows" check: with it, ~decpoint . 46~ outweighs the
-  earlier ~always ख 46~ in ~hi-in-g1~ and ⠨⠔ comes out as ".ई"
-  instead of "खी".
+  boundary transitions, which ~Rank~ compares before precedence and
+  definition order.
+- [ ] Backward ~decpoint~ has no "digit follows" check. ~Rank~
+  compares weight before precedence and definition order, and the
+  check, as an ~End~ transition, would add weight: ~decpoint . 46~
+  would then beat the earlier ~always ख 46~ in ~hi-in-g1~, and ⠨⠔
+  would come out as ".ई" instead of "खी". Without it, ⠨ reads as "."
+  where no digit follows, now that the earlier-defined ~decpoint~
+  wins the tie: 2 of ~ml.yaml~'s backward tests (⠍⠥⠨⠰ gives "മു.ം"
+  instead of "മുഖം"). liblouis checks the digit and then falls through
+  its chain to the next rule.
 - [ ] ~lowword~ right after a ~joinword~: liblouis does not apply it
   there (~prevTransOpcode != CTO_JoinableWord~ in
   ~lou_translateString.c~), louis-rs does. ~trace~ would have to know
@@ -114,8 +117,12 @@
   - ~seqafterpattern~ (3)
   - ~exactdots~, ~grouping~ (none), and ~class~, a deprecated alias of
     ~attribute~ that no table uses
-- [ ] Two ~match~ rules of equal rank: we pick the last defined,
-  liblouis the first. *Not an engine gap any more* — see below
+- [X] Two ~match~ rules of equal rank: we pick the last defined,
+  liblouis the first
+  - Resolved by ~1ff7b7f~: ~Rank~ ends with definition order, earliest
+    wins, as in liblouis. "algemene" gives ⠫⠿⠍⠑⠝⠑, and 15 of
+    ~afr-za-g2.yaml~'s forward failures are gone. This reverses the
+    ADR-0016 position below.
   - This is the forward half of the ~afr-za-g2~ cluster — 186 of that
     file's 2663 real failures.
   - Decided against an engine-side fix:
@@ -144,8 +151,10 @@
     at all proves the two rank equally — otherwise ~max_by_key~ would
     pick the same rule either way — and on a tie it returns the last
     candidate, which follows table order.
-- [ ] Two ~correct~ rules of equal rank in ~vi~: the same tie, for the
+- [X] Two ~correct~ rules of equal rank in ~vi~: the same tie, for the
   multipass opcodes
+  - Resolved by ~1ff7b7f~: the earlier ~vi-lettersdef.uti~ rule now
+    wins, "a" with a combining acute gives ⠔⠁ again.
   - Since ~9d9bc2b~ a ~correct~ rule whose action copies with ~*~
     consumes everything its test matched, not just the brackets. That
     makes ~vi-puncsdef.uti~'s combining-mark reordering rule as long as
@@ -168,9 +177,12 @@
     precomposes, and only their relative order tells them apart. The
     upstream fix is to stop the reordering rule matching what the
     precomposing rules cover.
-- [ ] Backward numeric space in ~en-ueb~: another pass-rule tie, 5 of
+- [X] Backward numeric space in ~en-ueb~: another pass-rule tie, 5 of
   ~en-ueb.yaml~'s backward tests (e.g. ~#a"b"c"d~ should give "1 2 3 4"
   with no-break spaces)
+  - Resolved by ~1ff7b7f~: line 77 is defined first and wins the tie.
+    Instead of the prototype's ~literal_len~ and sort, ~Rank~ counts
+    the literal characters anywhere in a test (~Test::literal_count~).
   - Exposed when backward multipass rules whose action consumes nothing
     (~*~, ~?~, assignments) stopped being dropped. ~en-ueb-g1.ctb~'s
     numeric mode needs ~nofor pass2 $D *~ (line 77) to win over
@@ -191,10 +203,9 @@
   past the start of the input should make the rule fail.
   ~multipass-forward.yaml~'s "lookback count" test has
   ~correct [$d5]_6 "f"~ and ~correct [$d5]_5 "s"~: on "12345" the
-  first must fail, louis-rs matches both. Today the later rule wins
-  the tie by luck; with a first-defined tie-break both
-  ~multipass-forward.yaml~ and ~multipass-backward.yaml~ lose that
-  test.
+  first must fail, louis-rs matches both. Since ~1ff7b7f~ the tie goes
+  to the first-defined rule, so ~multipass-forward.yaml~ and
+  ~multipass-backward.yaml~ lose that test.
 - [ ] A rule's pre-context is missed when the previous match consumed
   more than one character
   - ~match~ rules with a ~pre~ pattern, and pass/~context~ tests with
