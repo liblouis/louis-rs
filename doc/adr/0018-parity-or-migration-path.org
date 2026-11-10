@@ -9,8 +9,7 @@
 ** Context and Problem Statement
 
 Several records decline to reproduce liblouis behavior because it is a
-design wart: [[file:0008-match-rule-candidate-selection.org][ADR-0008]] and [[file:0016-order-independent-rule-selection.org][ADR-0016]] (definition-order tie-breaking),
-[[file:0009-capsletter-vs-begcapsword.org][ADR-0009]] (re-entrant capsletter check), [[file:0012-unimplemented-opcodes.org][ADR-0012]] (six opcodes),
+design wart: [[file:0009-capsletter-vs-begcapsword.org][ADR-0009]] (re-entrant capsletter check), [[file:0012-unimplemented-opcodes.org][ADR-0012]] (six opcodes),
 [[file:0013-no-inferred-display-entries.org][ADR-0013]] (display table taken from the translation table) and
 [[file:0015-table-lookup.org][ADR-0015]] (~LOUIS_TABLEPATH~ and install locations).
 [[file:../Differences_From_Liblouis.md][Differences_From_Liblouis.md]] collects them as "a decision, not a to-do".
@@ -37,8 +36,8 @@ acceptable?
   of scope for now.
 - Silent divergence is the worst outcome: same table, same input,
   different braille, and no hint why.
-- The design wins in the existing records (order independence,
-  precomputed indication, Unicode braille by default) are real, and
+- The design wins in the existing records (precomputed indication,
+  Unicode braille by default) are real, and
   should not be thrown away for bug compatibility.
 - An upstream table fix fixes both engines, so it is still the best
   outcome where it is possible.
@@ -73,8 +72,8 @@ wart" is still a good reason to push an upstream change and to keep the
 default clean, but it is no longer enough to leave a behavior
 unsupported.
 
-This softens, and does not reverse, the stance in ADR-0008 and
-ADR-0016. Their decisions stand. What changes is that each one now owes
+This softens, and does not reverse, the stance in those records. Their
+decisions stand. What changes is that each one now owes
 a migration path, and that path is part of what "done" means.
 Retirement criterion: every entry in [[file:../Differences_From_Liblouis.md][Differences_From_Liblouis.md]] names
 its migration path, and none reads "none".
@@ -99,7 +98,6 @@ its migration path, and none reads "none".
 
 | Difference                                         | Record   | Migration path today                                          | Missing                                                                              |
 |----------------------------------------------------+----------+---------------------------------------------------------------+--------------------------------------------------------------------------------------|
-| Rule ties are not broken by definition order       | 0008, 16 | upstream table fixes, case by case                            | fix the ties in ADR-0016's 14 tables upstream                                        |
 | Display table not taken from the translation table | 0013     | yaml tests: #2102, sweep still open; apps: none               | diagnostic when a translation table brings display rules and none is named           |
 | ~LOUIS_TABLEPATH~ not read                         | 0015     | none                                                          | diagnostic when it is set and ~LOUIS_TABLE_PATH~ is not, or read it as a fallback    |
 | Install locations, ~dir/liblouis/tables/~          | 0015     | name the directory explicitly                                 | documented in Differences, nothing detects it                                        |
@@ -119,8 +117,8 @@ its migration path, and none reads "none".
 *** Full parity
 
 - Good, because switching is trivial.
-- Bad, because it re-imports the fragility (order-dependent ties,
-  re-entrant state) that the precomputed architecture exists to avoid.
+- Bad, because it re-imports the fragility (re-entrant state) that the
+  precomputed architecture exists to avoid.
 - Bad, because some quirks are being removed upstream (~$w~-~$z~,
   embedded display tables), so we would chase a moving target.
 

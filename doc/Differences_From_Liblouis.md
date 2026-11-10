@@ -95,18 +95,6 @@ on the fallback are being changed to name theirs (liblouis
 For an application, none yet: louis-rs does not say when a translation table
 brings display rules that it is ignoring.
 
-## Rules that tie
-
-When two rules match at the same position, consume the same characters and check
-the same amount of context, liblouis takes the one defined first in the table.
-louis-rs does not use table order. Such a tie is an ill-formed table, two rules
-with nothing to choose between them, and louis-rs resolves it arbitrarily but
-reproducibly ([ADR-0016](adr/0016-order-independent-rule-selection.org)).
-
-**Migration path:** fix the table so the rules no longer overlap, which fixes
-liblouis too. The suite reaches ties in 14 tables, listed in ADR-0016; those
-are still to be fixed upstream.
-
 ## Attributes `$w`, `$x`, `$y` and `$z`
 
 In multipass and `correct`/`context` rules, `$w` to `$z` name the first four

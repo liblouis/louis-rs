@@ -71,7 +71,10 @@ before a catch-all one; ~vi-lettersdef.uti~ is included before the
 
 ** Decision Outcome
 
-Chosen option: 3. Candidates compete on ~Rank~
+Chosen option: 3. Every matching rule stays a candidate: trie nodes
+keep all the rules that land on them, and the choice is made among the
+candidates that pass ~trace()~'s checks, so a rejected rule hands over
+to the next one, as in liblouis. Candidates then compete on ~Rank~
 (~src/translator/translation.rs~), a struct whose derived ordering
 compares its fields in declaration order, the highest winning:
 
@@ -92,9 +95,6 @@ compares its fields in declaration order, the highest winning:
 - Definition order is a rule's position in the list a table is
   compiled from, across ~include~ files and table lists, stamped by
   ~parser::in_definition_order~.
-- Trie nodes keep every rule that lands on them, and the choice is made
-  among the candidates that pass ~trace()~'s checks, so a rejected rule
-  hands over to the next one, as in liblouis.
 
 Option 2 was measured: dropping weight in favour of liblouis's order
 alone churned results (~en-g3~ lost 184 tests, ~tr~ and ~da~ gained

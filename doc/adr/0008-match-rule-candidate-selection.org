@@ -151,6 +151,17 @@ above ("abandoning") -- not a tie at all, so the nondeterminism ADR's
 reasoning does not reach it, and options 1-4 are still undecided for
 it.
 
+**** [2026-11-10] Settled: the tie-break is earliest-defined after all
+
+[[file:0016-order-independent-rule-selection.org][ADR-0016]] was revised and
+now ranks candidates by what the rules say first and by liblouis's
+chain order after that, with definition order as the last key of
+~Rank~, earliest winning. The equal-weight sub-case is therefore
+settled the way the [2026-09-03] direction above proposed: "algemene"
+gives the spell-out again, and the reversal above no longer holds. The
+*divergent*-weight case is unaffected, since weight is compared before
+definition order, and stays open here.
+
 ** Decision Drivers
 
 - For options 1–3 (the engine keeps behaving the same for a given
@@ -162,9 +173,9 @@ it.
   liblouis's current output at all
 - Whatever engine-side fix is chosen must not regress the (large) set
   of cases where weight-based selection already agrees with liblouis
-- Precedence/definition-order is already a first-class concept
-  elsewhere in the codebase (trie rule precedence, the
-  ~backwards_compatibility~ feature flag) — reusing rather than
+- Precedence and definition order are first-class keys of ~Rank~
+  ([[file:0016-order-independent-rule-selection.org][ADR-0016]]), which
+  every candidate already goes through — reusing rather than
   duplicating that mechanism would be preferable if it fits here
 - Fixing an ambiguous rule upstream is preferable to reproducing its
   ambiguity when it's genuinely a design smell (not just an engine
@@ -248,5 +259,5 @@ never be) similarly revisited.
 - ~src/translator/table/primary.rs~ — ~match_candidates~,
   ~context_candidates~, weight-based candidate selection
 - ~src/translator/match_pattern.rs~ — ~BoundaryMode::AssumeAtStart~
-- [[file:0016-order-independent-rule-selection.org][ADR: Rule selection does not depend on table order]] —
-  reverses this ADR's equal-weight tie-break direction
+- [[file:0016-order-independent-rule-selection.org][ADR-0016: Rule selection ranks by what the rules say, then by definition order]] —
+  settles this ADR's equal-weight sub-case by definition order
