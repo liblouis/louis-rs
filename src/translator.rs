@@ -38,6 +38,8 @@ pub enum TranslationError {
     BaseCharacterNotDefined { base: char, derived: char },
     #[error("Swap class {0} not defined")]
     SwapClassNotDefined(String),
+    #[error("{0} is neither a class nor a swap")]
+    ClassNotDefined(String),
 }
 
 #[derive(Debug, Default, Clone)]

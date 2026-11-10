@@ -1,7 +1,7 @@
 //! Define char to string mappings, a _swap_ in liblouis terminolgy
 //!
 //! These are used in the action part of the `context`, `correct` and multipass opcodes.
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// A mapping between characters and strings.
 ///
@@ -15,6 +15,11 @@ impl Swapper {
         Self(HashMap::from_iter(
             mappings.iter().cloned().map(|(c, s)| (c, s.to_string())),
         ))
+    }
+
+    /// The characters this Swapper maps from, which a test naming the swap matches
+    pub fn sources(&self) -> HashSet<char> {
+        self.0.keys().copied().collect()
     }
 
     /// Swap the characters in the `input` according to the mapping defined in this Swapper

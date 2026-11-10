@@ -185,7 +185,8 @@ impl TableContext {
                         }
                     }
                 }
-                Rule::Attribute { name, chars } => {
+                // `class` is liblouis' deprecated spelling of `attribute`
+                Rule::Attribute { name, chars } | Rule::Class { name, chars } => {
                     let class = CharacterClass::from(name.as_str());
                     for c in chars.chars() {
                         character_classes.insert(class.clone(), c);
