@@ -609,6 +609,11 @@ pub struct BackwardNumericConstrainer {
     numsign_dots: Vec<String>,
     nonumsign_dots: Option<String>,
     digit_cells: HashSet<char>,
+    /// The cells of the `numericmodechars` and `midendnumericmodechars` characters,
+    /// such as a decimal comma, which a number continues across.
+    numeric_mode_cells: HashSet<char>,
+    /// The dots of the `endnum` rules, which end a number unless a digit follows.
+    endnum_dots: Vec<String>,
     letter_cells: HashSet<char>,
 }
 
@@ -628,6 +633,17 @@ impl BackwardNumericConstrainer {
                 continue;
             }
             if in_number {
+                // an `endnum` sign ends the number, unless a digit follows it, in which
+                // case it is a sign within the number, as in "1+2"
+                if let Some(len) = longest_match_at(&chars, pos, &self.endnum_dots)
+                    && !chars
+                        .get(pos + len)
+                        .is_some_and(|c| self.digit_cells.contains(c))
+                {
+                    pos += len;
+                    in_number = false;
+                    continue;
+                }
                 if let Some(dots) = &self.nonumsign_dots
                     && matches_at(&chars, pos, dots)
                 {
@@ -637,6 +653,13 @@ impl BackwardNumericConstrainer {
                 }
                 if self.digit_cells.contains(&chars[pos]) {
                     constraints[pos].insert(Constraint::PreferDigit);
+                    pos += 1;
+                    continue;
+                }
+                // liblouis ends a number only after a character that is neither a digit
+                // nor a numeric mode character, so in "10,5" the cell after the decimal
+                // comma is still a digit.
+                if self.numeric_mode_cells.contains(&chars[pos]) {
                     pos += 1;
                     continue;
                 }
@@ -899,6 +922,8 @@ pub struct BackwardNumericConstrainerBuilder {
     multind_numsign_dots: Vec<String>,
     nonumsign_dots: Option<String>,
     digit_cells: HashSet<char>,
+    numeric_mode_cells: HashSet<char>,
+    endnum_dots: Vec<String>,
     letter_cells: HashSet<char>,
 }
 
@@ -923,6 +948,14 @@ impl BackwardNumericConstrainerBuilder {
         self.digit_cells = cells;
     }
 
+    pub fn numeric_mode_cells(&mut self, cells: HashSet<char>) {
+        self.numeric_mode_cells = cells;
+    }
+
+    pub fn endnum(&mut self, dots: &str) {
+        self.endnum_dots.push(dots.to_string());
+    }
+
     pub fn letter_cells(&mut self, cells: HashSet<char>) {
         self.letter_cells = cells;
     }
@@ -940,6 +973,8 @@ impl BackwardNumericConstrainerBuilder {
                 numsign_dots,
                 nonumsign_dots: self.nonumsign_dots,
                 digit_cells: self.digit_cells,
+                numeric_mode_cells: self.numeric_mode_cells,
+                endnum_dots: self.endnum_dots,
                 letter_cells: self.letter_cells,
             })
         }
