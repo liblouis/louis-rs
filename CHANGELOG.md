@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Changed
+- A `%name` test in a `context`, `correct` or pass rule that names neither
+  a class nor a swap is now a table error, as in liblouis. It compiled to
+  a test that never matched, so the rule was silently dead. `$w` to `$z`
+  and `$^` still add no characters, but now log a warning.
 - The `seqafterexpression` opcode is now deliberately ignored rather than
   listed as not implemented: liblouis compiles it but never uses it
   (liblouis#2164).
@@ -27,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   ⠫⠿⠍⠑⠝⠑.
 
 ### Fixed
+- A `%name` test can now name a swap, and matches the characters the
+  swap maps from, as in liblouis. A class defined with the deprecated
+  `class` opcode now exists: it was parsed but never registered, so a
+  test naming it never matched.
 - Backward `correct` and pass rules whose action consumes nothing, such
   as `*`, `?` or a variable assignment, are no longer dropped. Tables use
   them to keep a word from a shorter correction: with `hu-hu-g1.ctb`,
