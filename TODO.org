@@ -370,9 +370,10 @@
     ("the men" kept its space), and every digit run blocked
     contractions, where liblouis does so only in a numeric-mode table
     whose ~nocontractsign~ is its ~nonumsign~ ("12" was not ⠇).
-  - Left in ~en-g3~: a letter sign on single-letter words ("I am" gives
-    ⠰⠊⠂), a closing quote read as opening (⠦ for ⠴), and "with B"
-    missing its letter sign. In ~en-ueb~, "ing" after a hyphen ("to-ing"
+  - Left in ~en-g3~: a closing quote read as opening (⠦ for ⠴) and
+    "with B" missing its letter sign. The letter sign on single-letter
+    words ("I am" gave ⠰⠊⠂) is fixed: a letter with a ~word~ or
+    ~largesign~ rule of its own is ~noletsign~, as in liblouis. In ~en-ueb~, "ing" after a hyphen ("to-ing"
     gives ⠞⠕⠤⠬, not ⠞⠕⠤⠔⠛).
 - [ ] ~nocross~ only checks whether the matched candidate substring can
   hyphenate anywhere, not whether a break falls inside *that*

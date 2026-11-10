@@ -14,7 +14,8 @@
 //! Letters preceded by a space (word boundary) or by another letter (tail of a letter run) do not fire.
 //! The `noletsignafter` and `noletsignbefore` opcodes list characters adjacent to a letter that
 //! suppress the indicator. The `noletsign` opcode lists letters that must never themselves be
-//! preceded by a letter sign, regardless of context.
+//! preceded by a letter sign, regardless of context, and so does a letter with a `word` or
+//! `largesign` rule of its own.
 
 use std::collections::HashSet;
 
@@ -121,6 +122,14 @@ impl IndicatorBuilder {
         self.noletsign_chars.extend(s.chars());
     }
 
+    /// A letter with a `word` or `largesign` rule of its own needs no letter sign: like
+    /// liblouis, which adds it to the `noletsign` characters after compiling the table.
+    pub fn single_letter_word(&mut self, chars: &str) {
+        if chars.chars().count() == 1 {
+            self.noletsign(chars);
+        }
+    }
+
     pub fn noletsignafter(&mut self, s: &str) {
         self.noletsignafter_chars.extend(s.chars());
     }
@@ -189,11 +198,10 @@ impl Indicator {
         }
 
         // ── Contraction-based letsign ──────────────────────────────────────────
-        // Fires when a known contraction is found at a word boundary (grade 2 tables).
-        for (char_pos, (byte_pos, c)) in input.char_indices().enumerate() {
-            if !self.noletsign_chars.contains(&c)
-                && self.next(&input[byte_pos..], &input[..byte_pos]).is_some()
-            {
+        // Fires when a known contraction is found at a word boundary (grade 2 tables),
+        // whatever `noletsign` says, as in liblouis's `insertLetterSign`.
+        for (char_pos, (byte_pos, _)) in input.char_indices().enumerate() {
+            if self.next(&input[byte_pos..], &input[..byte_pos]).is_some() {
                 fire.insert(char_pos);
             }
         }
@@ -295,6 +303,27 @@ mod tests {
     }
 
     #[test]
+    fn single_letter_word_is_noletsign() {
+        // `word i` makes "i" a noletsign letter, `word ab` changes nothing
+        let mut builder = IndicatorBuilder::new();
+        builder.letsign("⠠", &rule("letsign 6"));
+        builder.single_letter_word("i");
+        builder.single_letter_word("ab");
+        let cc = CharacterClasses::new(&[
+            (CharacterClass::Letter, &['a', 'b', 'i']),
+            (CharacterClass::Space, &[' ']),
+        ]);
+        let ctx = TableContext::new(cc, CharacterClasses::default(), Default::default());
+        let indicator = builder.build(&ctx).unwrap();
+
+        assert_eq!(pairs(&indicator.precompute("2i")), vec![]);
+        assert_eq!(
+            pairs(&indicator.precompute("2a")),
+            vec![(1, "⠠".to_string())]
+        );
+    }
+
+    #[test]
     fn noletsign_suppresses_isolation_letsign() {
         let mut builder = IndicatorBuilder::new();
         builder.letsign("⠠", &rule("letsign 6"));
@@ -317,7 +346,7 @@ mod tests {
     }
 
     #[test]
-    fn noletsign_suppresses_contraction_letsign() {
+    fn noletsign_leaves_contraction_letsign() {
         let mut builder = IndicatorBuilder::new();
         builder.letsign("⠠", &rule("letsign 6"));
         builder.contraction("ab", &rule("contraction ab"));
@@ -326,8 +355,12 @@ mod tests {
         let ctx = TableContext::new(cc, CharacterClasses::default(), Default::default());
         let indicator = builder.build(&ctx).unwrap();
 
-        // "ab" is a contraction, but 'a' is listed in noletsign, so no letsign fires.
-        assert_eq!(pairs(&indicator.precompute("ab")), vec![]);
+        // "ab" is a contraction, so the letsign fires though 'a' is listed in noletsign:
+        // liblouis's `insertLetterSign` checks noletsign only for a letter on its own
+        assert_eq!(
+            pairs(&indicator.precompute("ab")),
+            vec![(0, "⠠".to_string())]
+        );
     }
 
     #[test]

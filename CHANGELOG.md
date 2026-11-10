@@ -40,6 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   ⠫⠿⠍⠑⠝⠑.
 
 ### Fixed
+- A letter with a `word` or `largesign` rule of its own no longer gets a
+  letter sign, as the liblouis manual says: with `en-g3.ctb`, "I am not"
+  gave ⠰⠊⠂⠝ instead of ⠊⠂⠝.
+- A `contraction` now gets its letter sign even when its first letter is
+  listed in `noletsign`, as in liblouis: with `da-dk-g26.ctb`, "ii" gave
+  ⠊⠊ instead of ⠠⠊⠊.
 - A `joinword` rule now wins over a `word` rule for the same characters
   defined after it, as in liblouis. It lost on rank, as the word end it
   needs was not counted: with `en-g3.ctb`, "the men" gave ⠮⠀⠍⠢ instead

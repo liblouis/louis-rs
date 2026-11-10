@@ -1243,6 +1243,7 @@ impl PrimaryTable {
                     builder.compbrl_triggers.push(chars.clone());
                 }
                 Rule::Largesign { chars, dots } => {
+                    builder.lettersign_indicator.single_letter_word(chars);
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots.to_string(),
@@ -1260,6 +1261,7 @@ impl PrimaryTable {
                     with_classes,
                     ..
                 } => {
+                    builder.lettersign_indicator.single_letter_word(chars);
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
