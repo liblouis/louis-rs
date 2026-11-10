@@ -2148,17 +2148,17 @@ impl PrimaryTable {
                 });
             }
 
-            // Backward numeric mode: prefer the digit reading of a cell shared with a
-            // letter (common in six-dot literary codes). Rather than out-weighing the
-            // trie's single-cell letter candidate, replace it outright — any genuinely
-            // longer (multi-cell) candidate at this position is left alone to compete
-            // on its own weight, same as usual.
+            // Backward numeric mode: a cell shared with a letter (common in six-dot
+            // literary codes) reads as its digit. liblouis tries no rule of more than
+            // one cell at a digit cell inside a number (`back_selectRule`), so a
+            // contraction spelled by the digits' letters, such as the shortform ⠁⠃
+            // "about" after ⠼, must not claim them either.
             if self.direction == Direction::Backward
                 && constraints.prefer_digit_at(char_pos)
                 && let Some(next_char) = chars.clone().next()
                 && let Some(digit_translation) = self.backward_digit_overrides.get(&next_char)
             {
-                candidates.retain(|t| t.length() != 1);
+                candidates.clear();
                 candidates.push(digit_translation.clone());
             }
 

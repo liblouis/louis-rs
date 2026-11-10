@@ -172,6 +172,13 @@ mod tests {
         "space \\s 0\nletter a 1\nlitdigit 4 145\nlitdigit 2 12\nnumsign 3456\n";
 
     #[test]
+    fn digits_after_a_number_sign_are_not_read_as_a_contraction() {
+        let table = "space \\s 0\nletter a 1\nletter b 12\nlitdigit 1 1\nlitdigit 2 12\nnumsign 3456\nword about 1-12\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠼⠁⠃⠀⠁⠃").unwrap(), "12 about");
+    }
+
+    #[test]
     fn positions_with_number_sign() {
         let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
         let result = translator
