@@ -126,7 +126,7 @@
   - This is the forward half of the ~afr-za-g2~ cluster — 186 of that
     file's 2663 real failures.
   - Decided against an engine-side fix:
-    [[file:doc/adr/0016-order-independent-rule-selection.org][ADR-0016]] holds that candidates which tie after
+    [[file:doc/adr/0016-rule-selection-by-rank.org][ADR-0016]] holds that candidates which tie after
     ~rank~ has spoken are an ill-formed table, so no ordering key is
     introduced, earliest-defined or otherwise. See the "[2026-09-04]
     Reversed" note under
@@ -172,7 +172,7 @@
   - Same mechanism as the ~match~ entry above: ~max_by_key~ returns the
     last candidate on a tie, and ~vi-charsdef.uti~ includes
     ~vi-lettersdef.uti~ (line 33) before ~vi-puncsdef.uti~ (line 35).
-  - By [[file:doc/adr/0016-order-independent-rule-selection.org][ADR-0016]] this is a table bug rather than louis-rs work.
+  - By [[file:doc/adr/0016-rule-selection-by-rank.org][ADR-0016]] this is a table bug rather than louis-rs work.
     The two rules overlap on every vowel that ~vi-lettersdef.uti~ already
     precomposes, and only their relative order tells them apart. The
     upstream fix is to stop the reordering rule matching what the

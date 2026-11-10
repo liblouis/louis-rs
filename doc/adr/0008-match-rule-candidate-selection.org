@@ -132,7 +132,7 @@ points the same way as two other open items:
 
 **** [2026-09-04] Reversed: the tie-break is not earliest-defined
 
-The direction above did not hold up. [[file:0016-order-independent-rule-selection.org][The nondeterminism ADR]],
+The direction above did not hold up. [[file:0016-rule-selection-by-rank.org][The nondeterminism ADR]],
 decided the same day, went the other way for the identical question on
 the trie side: a tie on ~rank~ is an *ill-formed table*, not a case
 wanting a resolution policy, so no ordering key is introduced and the
@@ -153,7 +153,7 @@ it.
 
 **** [2026-11-10] Settled: the tie-break is earliest-defined after all
 
-[[file:0016-order-independent-rule-selection.org][ADR-0016]] was revised and
+[[file:0016-rule-selection-by-rank.org][ADR-0016]] was revised and
 now ranks candidates by what the rules say first and by liblouis's
 chain order after that, with definition order as the last key of
 ~Rank~, earliest winning. The equal-weight sub-case is therefore
@@ -174,7 +174,7 @@ definition order, and stays open here.
 - Whatever engine-side fix is chosen must not regress the (large) set
   of cases where weight-based selection already agrees with liblouis
 - Precedence and definition order are first-class keys of ~Rank~
-  ([[file:0016-order-independent-rule-selection.org][ADR-0016]]), which
+  ([[file:0016-rule-selection-by-rank.org][ADR-0016]]), which
   every candidate already goes through — reusing rather than
   duplicating that mechanism would be preferable if it fits here
 - Fixing an ambiguous rule upstream is preferable to reproducing its
@@ -259,5 +259,5 @@ never be) similarly revisited.
 - ~src/translator/table/primary.rs~ — ~match_candidates~,
   ~context_candidates~, weight-based candidate selection
 - ~src/translator/match_pattern.rs~ — ~BoundaryMode::AssumeAtStart~
-- [[file:0016-order-independent-rule-selection.org][ADR-0016: Rule selection ranks by what the rules say, then by definition order]] —
+- [[file:0016-rule-selection-by-rank.org][ADR-0016: Rule selection ranks by what the rules say, then by definition order]] —
   settles this ADR's equal-weight sub-case by definition order

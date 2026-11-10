@@ -24,7 +24,7 @@ When you add a record or change its status, update its row in the table below to
 | [[file:0013-no-inferred-display-entries.org][ADR-0013]] | Don't infer ~DisplayTable~ entries from a table's own character definitions                          | ACCEPTED   |
 | [[file:0014-rule-level-coverage-tool.org][ADR-0014]] | A rule-level coverage tool for the YAML test suite                                                   | ACCEPTED   |
 | [[file:0015-table-lookup.org][ADR-0015]] | Table lookup: a distinct ~LOUIS_TABLE_PATH~, and which liblouis resolution steps we skip             | ACCEPTED   |
-| [[file:0016-order-independent-rule-selection.org][ADR-0016]] | Rule selection ranks by what the rules say, then by definition order                                 | ACCEPTED   |
+| [[file:0016-rule-selection-by-rank.org][ADR-0016]] | Rule selection ranks by what the rules say, then by definition order                                 | ACCEPTED   |
 | [[file:0017-braille-formatter.org][ADR-0017]] | A braille formatter on top of louis-rs, as a replacement for liblouisutdml                           | DRAFT      |
 | [[file:0018-parity-or-migration-path.org][ADR-0018]] | Every deliberate difference from liblouis needs parity or a migration path                           | DRAFT      |
 | [[file:0019-library-cli-workspace-split.org][ADR-0019]] | Split the library and the CLI into a two-crate workspace                                             | DRAFT      |
