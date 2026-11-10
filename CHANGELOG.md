@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Back-translation now continues a number across a `numericmodechars` or
   `midendnumericmodechars` character, as liblouis does. With
   `it-it-comp6.utb`, ⠼⠁⠚⠂⠑ gave "10,e" instead of "10,5".
+- Back-translation now reads a number sign right after a letter as one,
+  unless a rule that only applies after a letter, such as Punjabi's
+  `midendword ਣ 3456`, uses its dots. With `hu-hu-g1.ctb`, ⠨⠁⠼⠁⠤⠃⠑⠝
+  gave "Aa-ben" instead of "A1-ben".
 - The `nocontractsign` now comes before a capital sign, as in liblouis.
   With `en-ueb-g2.ctb`, "B" gave ⠠⠰⠃ instead of ⠰⠠⠃.
 - A `base` rule now gives its class to the base character's dots, and

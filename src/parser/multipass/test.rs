@@ -20,6 +20,15 @@ impl Test {
         &self.tests
     }
 
+    /// The text this test matches when it is only literals, ignoring the replacement
+    /// brackets, so `[@5-46-3456]` gives ⠐⠨⠼.
+    pub fn literal_text(&self) -> Option<String> {
+        self.tests
+            .iter()
+            .map(TestInstruction::literal_text)
+            .collect()
+    }
+
     fn has_replace(&self) -> bool {
         self.tests
             .iter()
@@ -136,6 +145,15 @@ impl TestInstruction {
             | TestInstruction::Negate { .. }
             | TestInstruction::AtBeginning
             | TestInstruction::AtEnd => 0,
+        }
+    }
+
+    /// The text this instruction matches when it is only literals, looking inside
+    /// replacement brackets.
+    pub fn literal_text(&self) -> Option<String> {
+        match self {
+            TestInstruction::Replace { tests } => tests.iter().map(Self::literal_text).collect(),
+            _ => String::try_from(self).ok(),
         }
     }
 }

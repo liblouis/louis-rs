@@ -1307,6 +1307,9 @@ impl PrimaryTable {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
+                    if direction == Direction::Backward {
+                        builder.backward_numeric_constrainer.after_letter(&dots);
+                    }
                     let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     builder.get_trie_mut(rule).insert(
                         chars,
@@ -1363,6 +1366,9 @@ impl PrimaryTable {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
+                    if direction == Direction::Backward {
+                        builder.backward_numeric_constrainer.after_letter(&dots);
+                    }
                     let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     // backward, liblouis checks nothing after a midendword
                     let after = match direction {
@@ -1393,6 +1399,9 @@ impl PrimaryTable {
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
+                    if direction == Direction::Backward {
+                        builder.backward_numeric_constrainer.after_letter(&dots);
+                    }
                     let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     builder.get_trie_mut(rule).insert(
                         chars,
@@ -1853,6 +1862,33 @@ impl PrimaryTable {
                     && chars.chars().all(|c| c.is_alphabetic())
                 {
                     letter_cells.extend(dots.to_string().chars());
+                }
+            }
+            // a numsign can be the inner part of a longer rule, see
+            // `BackwardNumericConstrainer::covered`
+            for rule in rules {
+                match &rule.rule {
+                    Rule::Always { chars, dots, .. }
+                    | Rule::Word { chars, dots, .. }
+                    | Rule::Sufword { chars, dots, .. }
+                    | Rule::Prfword { chars, dots, .. }
+                    | Rule::Begword { chars, dots, .. }
+                    | Rule::Begmidword { chars, dots, .. }
+                    | Rule::Midword { chars, dots, .. }
+                    | Rule::Midendword { chars, dots, .. }
+                    | Rule::Endword { chars, dots, .. }
+                    | Rule::Partword { chars, dots, .. } => {
+                        let dots = ctx
+                            .character_definitions()
+                            .braille_to_unicode(dots, chars)?;
+                        builder.backward_numeric_constrainer.rule_dots(&dots);
+                    }
+                    Rule::Context { test, .. } => {
+                        if let Some(dots) = test.literal_text() {
+                            builder.backward_numeric_constrainer.rule_dots(&dots);
+                        }
+                    }
+                    _ => (),
                 }
             }
             builder

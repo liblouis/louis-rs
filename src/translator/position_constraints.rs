@@ -599,9 +599,12 @@ impl BackwardCapsConstrainer {
 /// `numsign`'s dots are not necessarily exclusive to the indicator: some tables (e.g.
 /// Punjabi, which shares the common `3456` numsign convention with the unrelated
 /// Gurmukhi letter `ਣ`, disambiguated in liblouis via a `midendword` position
-/// constraint) also use them for an ordinary, frequently-occurring letter. A genuine
-/// numsign is never preceded by a letter cell — mid-word occurrences are excluded to
-/// avoid false positives on such tables.
+/// constraint) also use them for an ordinary, frequently-occurring letter. A rule
+/// that only applies after a letter (`midword`, `midendword`, `endword`) takes such
+/// dots right after a letter cell, so they don't start a number there. Otherwise a
+/// number can follow a letter, as in Hungarian "A1". Neither does a numsign that is
+/// part of a longer rule starting before it, such as sk-g1's `context [@5-46-3456]
+/// "#"`, which takes the numsign's cell as the end of "#".
 #[derive(Debug, Clone)]
 pub struct BackwardNumericConstrainer {
     /// The `numsign` dots plus any `multind` sequences naming it, e.g.
@@ -615,9 +618,22 @@ pub struct BackwardNumericConstrainer {
     /// The dots of the `endnum` rules, which end a number unless a digit follows.
     endnum_dots: Vec<String>,
     letter_cells: HashSet<char>,
+    /// The dots of the rules that only apply after a letter, such as Punjabi's
+    /// `midendword ਣ 3456`.
+    after_letter_dots: HashSet<String>,
+    /// The dots of the backward rules that contain a numsign after their first cell.
+    covering_dots: Vec<String>,
 }
 
 impl BackwardNumericConstrainer {
+    /// Whether a rule starting before `pos` takes the numsign there as part of its dots.
+    fn covered(&self, chars: &[char], pos: usize) -> bool {
+        self.covering_dots.iter().any(|dots| {
+            (1..dots.chars().count().min(pos + 1))
+                .any(|offset| matches_at(chars, pos - offset, dots))
+        })
+    }
+
     fn compute(&self, input: &str) -> Vec<Constraints> {
         let chars: Vec<char> = input.chars().collect();
         let n = chars.len();
@@ -626,7 +642,12 @@ impl BackwardNumericConstrainer {
         let mut in_number = false;
         while pos < n {
             if let Some(len) = longest_match_at(&chars, pos, &self.numsign_dots)
-                && (pos == 0 || !self.letter_cells.contains(&chars[pos - 1]))
+                && !(pos > 0
+                    && self.letter_cells.contains(&chars[pos - 1])
+                    && self
+                        .after_letter_dots
+                        .contains(&chars[pos..pos + len].iter().collect::<String>()))
+                && !self.covered(&chars, pos)
             {
                 pos += len;
                 in_number = true;
@@ -925,6 +946,8 @@ pub struct BackwardNumericConstrainerBuilder {
     numeric_mode_cells: HashSet<char>,
     endnum_dots: Vec<String>,
     letter_cells: HashSet<char>,
+    after_letter_dots: HashSet<String>,
+    rule_dots: Vec<String>,
 }
 
 impl BackwardNumericConstrainerBuilder {
@@ -960,6 +983,16 @@ impl BackwardNumericConstrainerBuilder {
         self.letter_cells = cells;
     }
 
+    /// Registers the dots of a rule that only applies after a letter.
+    pub fn after_letter(&mut self, dots: &str) {
+        self.after_letter_dots.insert(dots.to_string());
+    }
+
+    /// Registers the dots of a backward rule, see [`BackwardNumericConstrainer::covered`].
+    pub fn rule_dots(&mut self, dots: &str) {
+        self.rule_dots.push(dots.to_string());
+    }
+
     pub fn build(self) -> Option<BackwardNumericConstrainer> {
         let numsign_dots: Vec<String> = self
             .numsign_dots
@@ -969,6 +1002,15 @@ impl BackwardNumericConstrainerBuilder {
         if numsign_dots.is_empty() {
             None
         } else {
+            let covering_dots = self
+                .rule_dots
+                .into_iter()
+                .filter(|dots| {
+                    let cells: Vec<char> = dots.chars().collect();
+                    (1..cells.len())
+                        .any(|offset| numsign_dots.iter().any(|n| matches_at(&cells, offset, n)))
+                })
+                .collect();
             Some(BackwardNumericConstrainer {
                 numsign_dots,
                 nonumsign_dots: self.nonumsign_dots,
@@ -976,6 +1018,8 @@ impl BackwardNumericConstrainerBuilder {
                 numeric_mode_cells: self.numeric_mode_cells,
                 endnum_dots: self.endnum_dots,
                 letter_cells: self.letter_cells,
+                after_letter_dots: self.after_letter_dots,
+                covering_dots,
             })
         }
     }
@@ -1488,8 +1532,37 @@ mod tests {
         let mut builder = BackwardNumericConstrainerBuilder::new();
         builder.numsign("N");
         builder.digit_cells(HashSet::from(['1', '2']));
+        builder.letter_cells(HashSet::from(['x', 'N']));
+        builder.after_letter("N");
+        let constrainers = backward_numeric_constrainers(builder);
+        let c = constrainers.precompute("xN12", &[]);
+        assert_eq!(prefer_digit(&c), vec![false, false, false, false]);
+        // at the start of a word the numsign still starts a number
+        let c = constrainers.precompute(" N12", &[]);
+        assert_eq!(prefer_digit(&c), vec![false, false, true, true]);
+    }
+
+    #[test]
+    fn numsign_inside_a_longer_rule_starts_no_number() {
+        // as in sk-g1.ctb, where `context [@5-46-3456] "#"` takes the numsign
+        let mut builder = BackwardNumericConstrainerBuilder::new();
+        builder.numsign("N");
+        builder.digit_cells(HashSet::from(['1', '2']));
         builder.letter_cells(HashSet::from(['x']));
+        builder.rule_dots("xN");
         let c = backward_numeric_constrainers(builder).precompute("xN12", &[]);
         assert_eq!(prefer_digit(&c), vec![false, false, false, false]);
+    }
+
+    #[test]
+    fn numsign_after_a_letter_cell_starts_a_number_without_an_after_letter_rule() {
+        // Hungarian "A1-ben": no rule claims the numsign's dots after a letter, so it
+        // starts a number even right after one.
+        let mut builder = BackwardNumericConstrainerBuilder::new();
+        builder.numsign("N");
+        builder.digit_cells(HashSet::from(['1', '2']));
+        builder.letter_cells(HashSet::from(['x']));
+        let c = backward_numeric_constrainers(builder).precompute("xN12", &[]);
+        assert_eq!(prefer_digit(&c), vec![false, false, true, true]);
     }
 }
