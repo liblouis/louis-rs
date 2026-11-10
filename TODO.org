@@ -251,11 +251,15 @@
     override the rule otherwise chosen (the ~findForPassRule~ call
     after ~for_selectRule~ in ~lou_translateString.c~), which ~Rank~
     does not model.
-- [ ] ~en-ueb~: the number sign goes after ~match %a . %#~ /
+- [X] ~en-ueb~: the number sign went after ~match %a . %#~ /
   ~match %a , %#~'s output, but ~en-ueb-g1.ctb~'s ~pass2
   @3456-256-34569 @256-3456~ cleanup expects it before, so the virtual
-  dot 9 leaks: "a.7" gives ⠁⠲\uf013c⠼⠛ instead of ⠁⠲⠼⠛. Since the
-  ~match~ fix above also "ch.7".
+  dot 9 leaked: "a.7" gave ⠁⠲\uf013c⠼⠛ instead of ⠁⠲⠼⠛.
+  - The cause was not the ~match~ rule: ~numericmodechars~ never started
+    a number, so even ".7" gave ⠲⠼⠛ instead of ⠼⠲⠛. In liblouis
+    (~checkNumericMode~) a run of them followed by a digit starts
+    numeric mode, the number sign going before the run.
+    ~midendnumericmodechars~ still only keeps a number going.
 - [X] Backward: lower-sign contraction cells satisfy a ~word~ rule's
   space-or-punctuation boundary
   - Fixed by the backward boundary work below: the before side (9d4d0af)

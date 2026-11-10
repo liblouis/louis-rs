@@ -763,7 +763,7 @@ impl PrimaryTable {
                 Rule::Midendnumericmodechars { chars } => {
                     // Only the number signs, not the numeric constrainer: liblouis's
                     // numeric mode doesn't block contractions.
-                    builder.numeric_indicator.numericmodechars(chars);
+                    builder.numeric_indicator.midendnumericmodechars(chars);
                 }
                 Rule::Capsletter { dots, .. } => {
                     builder

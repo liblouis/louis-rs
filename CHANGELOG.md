@@ -27,6 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   ⠫⠿⠍⠑⠝⠑.
 
 ### Fixed
+- A `match` rule whose `pre` starts inside the previous translation now
+  applies. Its `pre` is checked backwards from the current position, as
+  in liblouis, instead of being looked for where it starts, which a
+  translation of several characters could skip: with `en-ueb-g2.ctb`,
+  "areas" gave ⠜⠑⠁⠎ instead of ⠜⠂⠎.
+- A `numericmodechars` character followed by a digit now starts a number,
+  so the number sign goes before it: with `en-ueb-g1.ctb`, ".7" gave ⠲⠼⠛
+  instead of ⠼⠲⠛. `midendnumericmodechars` still only keeps a number
+  going.
 - A quoted string in a `context`, `correct` or pass rule now decodes the
   escapes `\e`, `\f`, `\n`, `\r`, `\t` and `\v`. They were read as a
   backslash and a letter: `hu-hu-g2.ctb`'s `context [",\n"] @2` looked
