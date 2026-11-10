@@ -172,6 +172,14 @@ mod tests {
         "space \\s 0\nletter a 1\nlitdigit 4 145\nlitdigit 2 12\nnumsign 3456\n";
 
     #[test]
+    fn a_capitalized_word_goes_on_across_a_contraction_inside_it() {
+        // UEB's "bb" shares its cell with the semicolon
+        let table = "space \\s 0\nlowercase a 1\nlowercase b 12\nlowercase i 24\nlowercase r 1235\nlowercase t 2345\nbase uppercase A a\nbase uppercase B b\nbase uppercase I i\nbase uppercase R r\nbase uppercase T t\npunctuation ; 23\nbegcapsword 6-6\nmidword bb 23\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠠⠠⠗⠁⠆⠊⠞").unwrap(), "RABBIT");
+    }
+
+    #[test]
     fn positions_with_number_sign() {
         let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
         let result = translator

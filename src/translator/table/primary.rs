@@ -1894,9 +1894,36 @@ impl PrimaryTable {
             builder
                 .backward_numeric_constrainer
                 .letter_cells(letter_cells.clone());
-            builder
-                .backward_caps_constrainer
-                .letter_cells(letter_cells.clone());
+            // liblouis carries a capitalized word on while the text it writes is
+            // letters, whatever rule wrote them, so the capitals also continue across
+            // a one-cell contraction of letters inside a word, such as UEB's
+            // `nofor midword bb 23` in "RABBIT". The cell is often also punctuation, which
+            // ends the word, so a contraction that only stands as a whole word, such as
+            // Danish `word var 36` on a hyphen's cell, does not count.
+            let mut caps_cells = letter_cells.clone();
+            for rule in rules {
+                match &rule.rule {
+                    Rule::Begmidword { chars, dots, .. }
+                    | Rule::Midword { chars, dots, .. }
+                    | Rule::Midendword { chars, dots, .. }
+                    | Rule::Endword { chars, dots, .. }
+                    | Rule::Partword { chars, dots, .. }
+                    | Rule::Match { chars, dots, .. }
+                        if chars.chars().all(char::is_alphabetic) =>
+                    {
+                        let dots = ctx
+                            .character_definitions()
+                            .braille_to_unicode(dots, chars)?;
+                        // a cell of a longer contraction can be a sign, such as a hyphen,
+                        // that ends a capitalized word on its own
+                        if dots.chars().count() == 1 {
+                            caps_cells.extend(dots.chars());
+                        }
+                    }
+                    _ => (),
+                }
+            }
+            builder.backward_caps_constrainer.letter_cells(caps_cells);
             builder
                 .backward_nocontract_constrainer
                 .letter_cells(letter_cells.clone());
