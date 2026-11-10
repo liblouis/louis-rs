@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   ⠫⠿⠍⠑⠝⠑.
 
 ### Fixed
+- An undefined character is now escaped as liblouis does: between
+  quotes, with at least four hex digits after `\x` and `\y` or `\z` for
+  longer code points, and in the table's dots only where a character
+  takes one cell. With `en-ueb-g1.ctb`, "a中b" gave ⠁⠸⠡⠭⠲⠑⠆⠙⠃ instead
+  of ⠁⠄⡳⠭⠲⠑⠆⠙⠄⠃.
 - Backward `correct` and pass rules whose action consumes nothing, such
   as `*`, `?` or a variable assignment, are no longer dropped. Tables use
   them to keep a word from a shorter correction: with `hu-hu-g1.ctb`,
