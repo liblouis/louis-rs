@@ -737,6 +737,7 @@ impl PrimaryTable {
                 }
                 Rule::Nonumsign { dots, .. } => {
                     builder.numeric_indicator.nonumsign(&dots.to_string(), rule);
+                    builder.numeric_constrainer.nonumsign(&dots.to_string());
                     if direction == Direction::Backward
                         && PrimaryTableBuilder::backward_indicator_dots_available(
                             "nonumsign",
@@ -755,15 +756,15 @@ impl PrimaryTable {
                 }
                 Rule::Numericnocontchars { chars } => {
                     builder.numeric_indicator.numericnocontchars(chars);
+                    builder.numeric_constrainer.numeric_mode();
                 }
                 Rule::Numericmodechars { chars } => {
                     builder.numeric_indicator.numericmodechars(chars);
-                    builder.numeric_constrainer.numericmodechars(chars);
+                    builder.numeric_constrainer.numeric_mode();
                 }
                 Rule::Midendnumericmodechars { chars } => {
-                    // Only the number signs, not the numeric constrainer: liblouis's
-                    // numeric mode doesn't block contractions.
                     builder.numeric_indicator.midendnumericmodechars(chars);
+                    builder.numeric_constrainer.numeric_mode();
                 }
                 Rule::Capsletter { dots, .. } => {
                     builder
@@ -1115,6 +1116,9 @@ impl PrimaryTable {
                     builder
                         .nocontract_indicator
                         .nocontractsign(&dots.to_string(), rule);
+                    builder
+                        .numeric_constrainer
+                        .nocontractsign(&dots.to_string());
                     if direction == Direction::Backward
                         && PrimaryTableBuilder::backward_indicator_dots_available(
                             "nocontractsign",
@@ -1545,7 +1549,6 @@ impl PrimaryTable {
                     // must not get a second numsign.
                     let s = character.to_string();
                     builder.numeric_indicator.midnum(&s);
-                    builder.numeric_constrainer.midnum(&s);
                     match direction {
                         Direction::Forward => builder.get_trie_mut(rule).insert(
                             &s,
@@ -1567,7 +1570,6 @@ impl PrimaryTable {
                 }
                 Rule::Midnum { chars, dots, .. } => {
                     builder.numeric_indicator.midnum(chars);
-                    builder.numeric_constrainer.midnum(chars);
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots.to_string(),
@@ -1779,6 +1781,13 @@ impl PrimaryTable {
         builder
             .numeric_constrainer
             .numeric_characters(numeric_chars);
+        let classes = ctx.character_classes();
+        builder.numeric_constrainer.word_ends(
+            &classes.get(&CharacterClass::Space).unwrap_or_default()
+                | &classes
+                    .get(&CharacterClass::Seqdelimiter)
+                    .unwrap_or_default(),
+        );
         builder.uppercase_indicator.uppercase_characters(
             ctx.character_classes()
                 .get(&CharacterClass::Uppercase)
@@ -2169,7 +2178,7 @@ impl PrimaryTable {
                 candidates.retain(|t| !Self::contracts(t));
             }
 
-            // inside a numeric run, suppress multi-character contractions
+            // from a number to the next space, suppress multi-character contractions
             if constraints.dont_contract_at(char_pos) {
                 candidates.retain(|t| t.length() <= 1);
             }

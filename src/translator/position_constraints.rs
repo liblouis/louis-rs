@@ -190,50 +190,34 @@ fn same_letter(a: char, b: char) -> bool {
     a.to_lowercase().eq(b.to_lowercase())
 }
 
-/// Detects numeric runs in the input and sets [`Constraint::DontContract`] at
-/// every character position that falls inside one.
+/// Sets [`Constraint::DontContract`] from the first digit of a number to the next space
+/// or `seqdelimiter`, the letters after the number included. liblouis does this only in a
+/// table with numeric mode whose `nocontractsign` is the `nonumsign` (`checkNumericMode`),
+/// see [`NumericConstrainerBuilder::build`].
 #[derive(Debug, Clone)]
 pub struct NumericConstrainer {
     numeric_chars: HashSet<char>,
-    extra_numeric_chars: HashSet<char>,
-    mid_numeric_chars: HashSet<char>,
+    word_ends: HashSet<char>,
 }
 
 impl NumericConstrainer {
     fn compute(&self, input: &str) -> Vec<Constraints> {
-        let chars: Vec<char> = input.chars().collect();
-        let mut constraints: Vec<Constraints> = vec![Constraints::empty(); chars.len()];
-        let mut in_numeric = false;
-
-        for (pos, &c) in chars.iter().enumerate() {
-            let is_numeric = self.numeric_chars.contains(&c);
-            match (is_numeric, in_numeric) {
-                (false, false) => {}
-                (true, false) => {
-                    in_numeric = true;
-                    constraints[pos].insert(Constraint::DontContract);
+        let mut active = false;
+        input
+            .chars()
+            .map(|c| {
+                if self.word_ends.contains(&c) {
+                    active = false;
+                } else if self.numeric_chars.contains(&c) {
+                    active = true;
                 }
-                (true, true) => {
-                    constraints[pos].insert(Constraint::DontContract);
+                if active {
+                    Constraints::from(Constraint::DontContract)
+                } else {
+                    Constraints::empty()
                 }
-                (false, true) if self.extra_numeric_chars.contains(&c) => {
-                    constraints[pos].insert(Constraint::DontContract);
-                }
-                (false, true)
-                    if self.extra_numeric_chars.is_empty()
-                        && self.mid_numeric_chars.contains(&c)
-                        && chars
-                            .get(pos + 1)
-                            .is_some_and(|nc| self.numeric_chars.contains(nc)) =>
-                {
-                    constraints[pos].insert(Constraint::DontContract);
-                }
-                (false, true) => {
-                    in_numeric = false;
-                }
-            }
-        }
-        constraints
+            })
+            .collect()
     }
 }
 
@@ -835,8 +819,10 @@ impl Constrainers {
 #[derive(Debug, Default)]
 pub struct NumericConstrainerBuilder {
     numeric_chars: HashSet<char>,
-    extra_numeric_chars: HashSet<char>,
-    mid_numeric_chars: HashSet<char>,
+    word_ends: HashSet<char>,
+    numeric_mode: bool,
+    nocontractsign: Option<String>,
+    nonumsign: Option<String>,
 }
 
 impl NumericConstrainerBuilder {
@@ -848,24 +834,33 @@ impl NumericConstrainerBuilder {
         self.numeric_chars = chars;
     }
 
-    pub fn numericmodechars(&mut self, s: &str) {
-        self.extra_numeric_chars.extend(s.chars());
+    /// The space and `seqdelimiter` characters, which end the uncontracted stretch
+    pub fn word_ends(&mut self, chars: HashSet<char>) {
+        self.word_ends = chars;
     }
 
-    pub fn midnum(&mut self, s: &str) {
-        self.mid_numeric_chars.extend(s.chars());
+    /// The table has `numericmodechars`, `midendnumericmodechars` or
+    /// `numericnocontchars` (liblouis's `usesNumericMode`)
+    pub fn numeric_mode(&mut self) {
+        self.numeric_mode = true;
+    }
+
+    pub fn nocontractsign(&mut self, dots: &str) {
+        self.nocontractsign = Some(dots.to_string());
+    }
+
+    pub fn nonumsign(&mut self, dots: &str) {
+        self.nonumsign = Some(dots.to_string());
     }
 
     pub fn build(self) -> Option<NumericConstrainer> {
-        if self.numeric_chars.is_empty() {
-            None
-        } else {
-            Some(NumericConstrainer {
+        let same_signs = self.nocontractsign.is_some() && self.nocontractsign == self.nonumsign;
+        (self.numeric_mode && same_signs && !self.numeric_chars.is_empty()).then_some(
+            NumericConstrainer {
                 numeric_chars: self.numeric_chars,
-                extra_numeric_chars: self.extra_numeric_chars,
-                mid_numeric_chars: self.mid_numeric_chars,
-            })
-        }
+                word_ends: self.word_ends,
+            },
+        )
     }
 }
 
@@ -1250,24 +1245,34 @@ mod tests {
         Constrainers::new(vec![Constrainer::Numeric(builder.build().unwrap())])
     }
 
-    #[test]
-    fn numeric_run() {
+    fn numeric_mode_builder() -> NumericConstrainerBuilder {
         let mut builder = NumericConstrainerBuilder::new();
         builder.numeric_characters(HashSet::from(['1', '2', '3']));
-        let c = numeric_constrainers(builder).precompute("ab12 a", &[]);
+        builder.word_ends(HashSet::from([' ']));
+        builder.numeric_mode();
+        builder.nocontractsign("⠰");
+        builder.nonumsign("⠰");
+        builder
+    }
+
+    #[test]
+    fn numeric_run() {
+        // from the first digit to the next space, the letters after the number included
+        let c = numeric_constrainers(numeric_mode_builder()).precompute("ab12a a", &[]);
         assert_eq!(
             dont_contract(&c),
-            vec![false, false, true, true, false, false]
+            vec![false, false, true, true, true, false, false]
         );
     }
 
     #[test]
-    fn midnum_extends_run() {
-        let mut builder = NumericConstrainerBuilder::new();
-        builder.numeric_characters(HashSet::from(['1', '2', '3']));
-        builder.midnum(".");
-        let c = numeric_constrainers(builder).precompute("1.2", &[]);
-        assert_eq!(dont_contract(&c), vec![true, true, true]);
+    fn numeric_run_needs_numeric_mode_and_equal_signs() {
+        let mut builder = numeric_mode_builder();
+        builder.nonumsign("⠠");
+        assert!(builder.build().is_none());
+        let mut builder = numeric_mode_builder();
+        builder.numeric_mode = false;
+        assert!(builder.build().is_none());
     }
 
     #[test]

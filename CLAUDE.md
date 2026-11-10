@@ -222,7 +222,6 @@ This order is crucial for correct braille generation and must be reversed for ba
 
 Tests use YAML files from the liblouis project. Current gaps:
 - Emphasis indication (partial support)
-- Compound-word contraction across a nocross hyphen (see `TODO.org`'s "Known gaps")
 - Some backward translation rules
 - Computer braille cursor modes (`compbrlAtCursor`/`compbrlLeftCursor` not implemented)
 - Typeform output (`TranslationResult::emphasis` is never populated)
@@ -239,7 +238,7 @@ See `TODO.org` for detailed tracking.
 ### Known Limitations (from TODO.org)
 
 - Emphasis indication not fully implemented
-- nocross-driven hyphenation dictionary lookup works natively (`src/hyphenation.rs`), but compound-word contraction across a hyphen still has a known gap
+- nocross-driven hyphenation dictionary lookup works natively (`src/hyphenation.rs`)
 - Some backward translation modes missing
 - Computer braille is implemented as a full pipeline feature; only `compbrlAtCursor`/`compbrlLeftCursor` modes are missing
 

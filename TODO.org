@@ -362,15 +362,18 @@
     alphabetic contraction to the letter class to approximate the scan;
     it is gone. With it went its ceiling: ~always n't 12356~ next to
     ~partword ed 1246~ now back-translates ~⠉⠁⠷⠫~ to "can'ted".
-- [ ] Literal hyphen character breaks per-segment contraction in compounds
-  - e.g. en-ueb.yaml: "do-it-yourself" -> expected "d-x-yrf", actual
-    "do-x-y|rself" ("do" and "yourself" fail to contract on their own
-    side of the hyphen); same for "out-and-out"
-  - cause: ~Rule::Hyphen~ (~src/translator/table.rs~) files the hyphen
-    under generic ~CharacterClass::Punctuation~ instead of whatever
-    classification word-boundary detection needs to treat each side as
-    its own word. Unrelated to ~src/hyphenation.rs~/dictionary-based
-    hyphenation.
+- [X] Literal hyphen character breaks per-segment contraction in compounds
+  - "do-it-yourself" now gives the expected ⠙⠤⠭⠤⠽⠗⠋ ("d-x-yrf") with
+    ~en-ueb-g2~. Most ~en-g3~ failures blamed on this were two other
+    bugs: ~joinword~ lost to a ~word~ rule for the same characters, as
+    its word end was checked outside the trie and so added no weight
+    ("the men" kept its space), and every digit run blocked
+    contractions, where liblouis does so only in a numeric-mode table
+    whose ~nocontractsign~ is its ~nonumsign~ ("12" was not ⠇).
+  - Left in ~en-g3~: a letter sign on single-letter words ("I am" gives
+    ⠰⠊⠂), a closing quote read as opening (⠦ for ⠴), and "with B"
+    missing its letter sign. In ~en-ueb~, "ing" after a hyphen ("to-ing"
+    gives ⠞⠕⠤⠬, not ⠞⠕⠤⠔⠛).
 - [ ] ~nocross~ only checks whether the matched candidate substring can
   hyphenate anywhere, not whether a break falls inside *that*
   candidate's span within the enclosing word (liblouis's real,
