@@ -53,18 +53,21 @@ Tentatively option 2. It fixes the dependency leak for good and makes
 the CLI an honest user of the library. Option 3 can follow later if
 library users ask for ~trace~-style access.
 
-Sketch:
+Sketch. The library stays at the repository root, so ~src/~, the fuzz
+crate's ~path = ".."~, the doc links and the git history of the
+library files do not move. Only the CLI moves into a member crate:
 
 #+begin_example
-louis-rs/            (workspace)
-├── louis/           lib: parser, translator, hyphenation, emphasis
+louis-rs/            (workspace root) package louis-rs, lib "louis"
 │                    deps: thiserror, search_path, enumset, smallvec, log
-└── louis-cli/       bin "louis": main, test, yaml, metadata
-                     deps: louis, clap, rayon, tabled, env_logger, saphyr-parser
+└── louis-cli/       package louis-cli, bin "louis": main, test, yaml, metadata
+                     deps: louis-rs, clap, rayon, tabled, env_logger, saphyr-parser
 #+end_example
 
 ~test.rs~, ~yaml.rs~ and ~metadata.rs~ move to the CLI crate: they make
-up the test harness and the ~query~ command, not translation.
+up the test harness and the ~query~ command, not translation. Nothing
+in the library uses them, and the benches and fuzz targets already use
+only ~louis::{Translator, Direction}~.
 
 *** Positive Consequences
 
@@ -106,6 +109,64 @@ up the test harness and the ~query~ command, not translation.
 - Good, because table authors debugging a table could use it too.
 - Bad, because it means designing and stabilizing an API nobody has
   asked for yet.
+
+** Implementation plan
+
+Checked against the code on [2026-11-11 Wed] (~597cab9~).
+
+*** Internals the CLI uses today
+
+| Caller              | Uses                                                                                                                                                                                                      |
+|---------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ~main.rs~ (parse, trace) | ~parser::{table_expanded_in, RuleParser, AnchoredRule, TableError}~, ~TranslationPipeline::{compile, with_display, trace}~, ~TranslationStage~, ~ResolvedTranslation~, ~DisplayTable~, ~translator::TranslationError~ |
+| ~test.rs~ (check)   | ~parser::{table, expand_includes, table_expanded_in}~, ~TranslationPipeline~, ~DisplayTable~, ~PositionMap~                                                                                                 |
+| ~yaml.rs~           | ~parser::{unescape, EscapingContext, ParseError}~, ~TranslationMode(s)~                                                                                                                                    |
+
+The only CLI dependency in library code is the ~clap::ValueEnum~ derive
+on ~Direction~ (~src/parser.rs~).
+
+*** Steps
+
+1. *Workspace.* Add ~[workspace] members = ["louis-cli"]~ and
+   ~default-members = [".", "louis-cli"]~ to the root ~Cargo.toml~, so
+   that a plain ~cargo run~ / ~cargo test~ keep working (verify this).
+2. *Drop clap from the library.* Remove the ~clap::ValueEnum~ derive
+   from ~Direction~; the CLI gets a small enum of its own that maps
+   onto it.
+3. *Hidden internals.* Add ~#[doc(hidden)] pub mod internals~ to
+   ~lib.rs~, re-exporting exactly the items in the table above and
+   nothing more. In the moved modules, ~crate::parser::…~ becomes
+   ~louis::internals::…~.
+4. *Move and split.* ~git mv~ ~main.rs~, ~test.rs~, ~yaml.rs~ and
+   ~metadata.rs~ to ~louis-cli/src/~; their unit tests move with them,
+   the tests in ~lib.rs~ stay. Move ~clap~, ~rayon~, ~tabled~,
+   ~env_logger~ and ~saphyr-parser~ to the CLI's ~Cargo.toml~.
+5. *Tooling and docs.* CI (~rust.yml~) runs ~cargo test --workspace~;
+   adapt ~release.toml~ (cargo-release) to the workspace; check
+   ~deny.toml~ and the sbom workflow. README: ~cargo install louis-rs~
+   becomes ~cargo install louis-cli~. Update the commands in
+   ~CLAUDE.md~. The CHANGELOG notes that ~louis-rs~ is library-only
+   from the next release on.
+6. *Verify.* ~cargo tree -p louis-rs -e normal~ lists only the five
+   library dependencies; the full YAML suite gives identical results;
+   the benches and the fuzz crate still build.
+
+*** Follow-up: shrink the internals
+
+Most of what the ~check~ harness needs is reasonable public API
+anyway: a display table on ~Translator~, inline table source with
+includes resolved against a search path, and the positions (already
+public). Once those are public, ~internals~ only has to cover ~parse~
+and ~trace~ (~RuleParser~, ~AnchoredRule~, ~trace~,
+~ResolvedTranslation~, ~TranslationStage~).
+
+*** Open questions
+
+- ~metadata.rs~ needs no extra dependencies, and liblouis exposes the
+  same feature publicly (~lou_findTable~). It moves to the CLI for now
+  and can be promoted when a library user asks for it.
+- The API-review findings below are separate work and are not part of
+  the split.
 
 ** Related API-review findings (do alongside or after the split)
 
