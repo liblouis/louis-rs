@@ -48,6 +48,9 @@ pub enum Constraint {
     /// class) that the word's hyphenation dictionary marks as a valid break point.
     /// Consulted to decide whether a `nocross` rule may cross this gap.
     HyphenationBreak,
+    /// A `syllable` rule's syllable starts at this character, in forward translation. A
+    /// rule starting before it can't take it.
+    SyllableStart,
     /// Suppress the word-family rules at this position, in backward translation.
     ///
     /// Set for the run of letter cells following a `letsign`/`nocontractsign`/
@@ -133,6 +136,12 @@ impl PositionConstraints {
         self.0
             .get(pos)
             .is_some_and(|f| f.contains(Constraint::PreferDigit))
+    }
+
+    pub fn syllable_start_at(&self, pos: usize) -> bool {
+        self.0
+            .get(pos)
+            .is_some_and(|f| f.contains(Constraint::SyllableStart))
     }
 
     pub fn hyphenation_break_at(&self, pos: usize) -> bool {
@@ -260,6 +269,39 @@ impl HyphenationConstrainer {
                 constraints[start + i].insert(Constraint::HyphenationBreak);
             }
         }
+    }
+}
+
+/// Detects the syllables of the `syllable` rules and sets [`Constraint::SyllableStart`]
+/// where each one starts, as liblouis's `markSyllables` does: going through the text, it
+/// takes the longest syllable at each position and goes on after it.
+#[derive(Debug, Clone)]
+pub struct SyllableConstrainer {
+    /// Lowercased.
+    syllables: Vec<Vec<char>>,
+}
+
+impl SyllableConstrainer {
+    fn compute(&self, input: &str) -> Vec<Constraints> {
+        let chars: Vec<char> = input.chars().map(lowercase).collect();
+        let mut constraints: Vec<Constraints> = vec![Constraints::empty(); chars.len()];
+        let mut pos = 0;
+        while pos < chars.len() {
+            match self
+                .syllables
+                .iter()
+                .filter(|s| chars[pos..].starts_with(s))
+                .map(Vec::len)
+                .max()
+            {
+                Some(len) => {
+                    constraints[pos].insert(Constraint::SyllableStart);
+                    pos += len;
+                }
+                None => pos += 1,
+            }
+        }
+        constraints
     }
 }
 
@@ -824,6 +866,9 @@ pub enum Constrainer {
     BackwardNoContract(BackwardNoContractConstrainer),
     /// Detects hyphenation-dictionary breaks and sets [`Constraint::HyphenationBreak`].
     Hyphenation(HyphenationConstrainer),
+    /// Detects where the `syllable` rules' syllables start and sets
+    /// [`Constraint::SyllableStart`].
+    Syllable(SyllableConstrainer),
     /// Detects `prepunc`/`postpunc` scan eligibility and sets
     /// [`Constraint::PrepuncOk`]/[`Constraint::PostpuncOk`].
     Punctuation(PunctuationConstrainer),
@@ -849,6 +894,7 @@ impl Constrainer {
             Constrainer::BackwardNoContract(c) => c.compute(input),
             Constrainer::BackwardNumeric(c) => c.compute(input),
             Constrainer::Hyphenation(c) => c.compute(input),
+            Constrainer::Syllable(c) => c.compute(input),
             Constrainer::Punctuation(c) => c.compute(input),
             Constrainer::Join(c) => c.compute(input),
             Constrainer::NoCont(c) => c.compute(input),
@@ -1099,6 +1145,34 @@ impl HyphenationConstrainerBuilder {
         Some(HyphenationConstrainer {
             hyphenator: self.hyphenator?,
             letter_chars: self.letter_chars,
+        })
+    }
+}
+
+/// `c` lowercased, keeping one character per character so positions stay those of the
+/// input.
+fn lowercase(c: char) -> char {
+    c.to_lowercase().next().unwrap_or(c)
+}
+
+/// A builder for [`Constrainer::Syllable`].
+#[derive(Debug, Default)]
+pub struct SyllableConstrainerBuilder {
+    syllables: Vec<Vec<char>>,
+}
+
+impl SyllableConstrainerBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn syllable(&mut self, chars: &str) {
+        self.syllables.push(chars.chars().map(lowercase).collect());
+    }
+
+    pub fn build(self) -> Option<SyllableConstrainer> {
+        (!self.syllables.is_empty()).then_some(SyllableConstrainer {
+            syllables: self.syllables,
         })
     }
 }
@@ -1510,6 +1584,24 @@ mod tests {
         builder.multind_capsletter("CL");
         let c = backward_caps_constrainers(builder).precompute("CLab", &[]);
         assert_eq!(titlecase(&c), vec![false, false, true, false]);
+    }
+
+    #[test]
+    fn syllables_are_marked_where_they_start() {
+        let mut builder = SyllableConstrainerBuilder::new();
+        builder.syllable("hood");
+        builder.syllable("ho");
+        let c = Constrainers::new(vec![Constrainer::Syllable(builder.build().unwrap())])
+            .precompute("tHoodho", &[]);
+        let marked: Vec<bool> =
+            c.0.iter()
+                .map(|f| f.contains(Constraint::SyllableStart))
+                .collect();
+        // the longest syllable, case-insensitively, and on after it
+        assert_eq!(
+            marked,
+            vec![false, true, false, false, false, true, false]
+        );
     }
 
     #[test]

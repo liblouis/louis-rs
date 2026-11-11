@@ -142,8 +142,7 @@ Two cross-cutting items have no single file behind them:
   emphasis indicators are only dropped, with no typeform.
 - **Engine debt.** Regexp negation of concatenation and alternation is wrong
   (`!(e1e2)` ≠ `(!e1!e2)`); `Attribute::ByOrder` and `Any` are no-ops in
-  `match_pattern.rs` and all three are no-ops in `context_pattern.rs`; the
-  `syllable` opcode's cross-boundary restriction is unimplemented. *(M)*
+  `match_pattern.rs` and all three are no-ops in `context_pattern.rs`. *(M)*
 
 ## Forty-two blocks that never run
 

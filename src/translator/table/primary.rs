@@ -28,7 +28,7 @@ use crate::{
             ComputerBrailleConstrainer, Constrainer, Constrainers, Constraint,
             HyphenationConstrainerBuilder, JoinConstrainerBuilder, NoContConstrainerBuilder,
             NumericConstrainerBuilder, PositionConstraints, PunctuationConstrainerBuilder,
-            RepwordConstrainerBuilder,
+            RepwordConstrainerBuilder, SyllableConstrainerBuilder,
         },
         standing_alone::StandingAloneScanner,
         table::TableContext,
@@ -193,6 +193,7 @@ struct PrimaryTableBuilder {
     backward_numeric_constrainer: BackwardNumericConstrainerBuilder,
     backward_nocontract_constrainer: BackwardNoContractConstrainerBuilder,
     hyphenation_constrainer: HyphenationConstrainerBuilder,
+    syllable_constrainer: SyllableConstrainerBuilder,
     punctuation_constrainer: PunctuationConstrainerBuilder,
     join_constrainer: JoinConstrainerBuilder,
     nocont_constrainer: NoContConstrainerBuilder,
@@ -254,6 +255,7 @@ impl PrimaryTableBuilder {
             backward_numeric_constrainer: BackwardNumericConstrainerBuilder::new(),
             backward_nocontract_constrainer: BackwardNoContractConstrainerBuilder::new(),
             hyphenation_constrainer: HyphenationConstrainerBuilder::new(),
+            syllable_constrainer: SyllableConstrainerBuilder::new(),
             punctuation_constrainer: PunctuationConstrainerBuilder::new(),
             join_constrainer: JoinConstrainerBuilder::new(),
             nocont_constrainer: NoContConstrainerBuilder::new(),
@@ -501,6 +503,10 @@ impl PrimaryTableBuilder {
                         .then(|| self.hyphenation_constrainer.build())
                         .flatten()
                         .map(Constrainer::Hyphenation),
+                    (direction == Direction::Forward)
+                        .then(|| self.syllable_constrainer.build())
+                        .flatten()
+                        .map(Constrainer::Syllable),
                     // backward, `prepunc` and `postpunc` are gated in the trie by where a
                     // word begins and ends instead (see the `Rule::Prepunc` arm)
                     (direction == Direction::Forward)
@@ -1276,12 +1282,10 @@ impl PrimaryTable {
                         rule,
                     );
                 }
-                // A syllable is an unconditional substitution, like `always`. However it also
-                // restricts other contractions from crossing a syllable's boundaries, which is
-                // not implemented here.
-                //
-                // TODO: Implement the cross-boundary restriction.
+                // A syllable is an unconditional substitution, like `always`, and other rules
+                // can't run into it (see `PrimaryTable::crosses_syllable`).
                 Rule::Syllable { chars, dots } => {
+                    builder.syllable_constrainer.syllable(chars);
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars)?;
@@ -2133,8 +2137,24 @@ impl PrimaryTable {
             .filter(|t| {
                 !(char_pos..char_pos + t.length().saturating_sub(1))
                     .any(|pos| constraints.hyphenation_break_at(pos))
+                    && !Self::crosses_syllable(t, input, char_pos, constraints)
             })
             .collect()
+    }
+
+    /// Whether `t`, starting at `char_pos` of the `input` that's left, would take the start
+    /// of a `syllable` rule's syllable after its own first character, which liblouis doesn't
+    /// allow (`validMatch`), unless that character is a capital. `context` rules are tested
+    /// their own way.
+    fn crosses_syllable(
+        t: &ResolvedTranslation,
+        input: &str,
+        char_pos: usize,
+        constraints: &PositionConstraints,
+    ) -> bool {
+        !matches!(t.rule(), Some(Rule::Context { .. }))
+            && !input.chars().next().is_some_and(char::is_uppercase)
+            && (char_pos + 1..char_pos + t.length()).any(|pos| constraints.syllable_start_at(pos))
     }
 
     fn context_candidates(
@@ -2283,6 +2303,10 @@ impl PrimaryTable {
             if constraints.uncontracted_at(char_pos) {
                 candidates.retain(|t| !Self::contracts(t));
             }
+
+            // a rule can't run into a `syllable` rule's syllable
+            candidates
+                .retain(|t| !Self::crosses_syllable(t, chars.as_str(), char_pos, &constraints));
 
             // from a number to the next space, suppress multi-character contractions
             if constraints.dont_contract_at(char_pos) {

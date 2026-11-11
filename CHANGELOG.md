@@ -48,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `context` rule that starts with a single character.
 
 ### Fixed
+- A rule no longer runs into the syllable of a `syllable` rule, as in
+  liblouis: with `en-us-g2.ctb`, "adulthood" gave ⠁⠙⠥⠇⠹⠕⠕⠙ instead of
+  ⠁⠙⠥⠇⠞⠓⠕⠕⠙, the `th` taking the "h" of `syllable hood`.
 - In a table with a `seqdelimiter`, such as `en-ueb-g2.ctb`, a `word` or
   `contraction` rule now applies only where it stands alone as liblouis
   defines it: going back over `seqbeforechars` characters and on over
