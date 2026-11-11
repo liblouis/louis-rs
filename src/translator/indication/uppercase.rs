@@ -17,7 +17,7 @@
 //! the next tier down, ultimately to marking each letter individually with `capsletter`.
 
 use crate::{
-    parser::{AnchoredRule, Position},
+    parser::{AnchoredRule, CharacterClass, Position, Rule},
     translator::{ResolvedTranslation, table::TableContext},
 };
 
@@ -97,6 +97,113 @@ impl Indicator {
     pub fn precompute(&self, input: &str) -> Vec<(usize, ResolvedTranslation)> {
         let chars: Vec<char> = input.chars().collect();
         self.0.precompute(&chars)
+    }
+}
+
+/// Backward, the capitalized word a `begcapsword` starts, decided from the text written.
+///
+/// As in liblouis, the characters written after the indicator are uppercased, whatever
+/// rule wrote them, until one that is neither a letter nor a `capsmodechars` character,
+/// which ends the word, possibly partway through a rule's output (`'s`). `endcapsword`,
+/// `capsletter` and a space end it too. Until the first uppercase letter is written, a
+/// character that isn't a letter, as the hyphen of UEB's ⠠⠠⠤⠏⠁⠝⠽ "-PANY", doesn't end it.
+///
+/// Capitalizing changes no rule's choice, so it runs over the translations once they are
+/// chosen, rather than guessing the word's extent from the cells beforehand.
+#[derive(Debug, Clone)]
+pub struct BackwardCapsWord {
+    /// The letters and `capsmodechars` characters, which go on a capitalized word.
+    word_chars: HashSet<char>,
+    space_chars: HashSet<char>,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum CapsWord {
+    Off,
+    /// After the indicator, before any uppercase letter is written.
+    Started,
+    Running,
+}
+
+/// A builder for [`BackwardCapsWord`]
+#[derive(Debug, Default)]
+pub struct BackwardCapsWordBuilder {
+    capsmodechars: HashSet<char>,
+}
+
+impl BackwardCapsWordBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn capsmodechars(&mut self, s: &str) {
+        self.capsmodechars.extend(s.chars());
+    }
+
+    pub fn build(self, ctx: &TableContext) -> BackwardCapsWord {
+        let classes = ctx.character_classes();
+        let letters = classes.get(&CharacterClass::Letter).unwrap_or_default();
+        BackwardCapsWord {
+            word_chars: letters.into_iter().chain(self.capsmodechars).collect(),
+            space_chars: classes.get(&CharacterClass::Space).unwrap_or_default(),
+        }
+    }
+}
+
+impl BackwardCapsWord {
+    /// Uppercases the output of `translations` inside capitalized words.
+    pub fn apply(&self, translations: Vec<ResolvedTranslation>) -> Vec<ResolvedTranslation> {
+        let mut state = CapsWord::Off;
+        let mut last: Option<char> = None;
+        let mut result = Vec::with_capacity(translations.len());
+        for translation in translations {
+            // liblouis checks the last character written before each rule
+            state = match (state, last) {
+                (CapsWord::Started, Some(c)) if c.is_uppercase() => CapsWord::Running,
+                (CapsWord::Running, Some(c))
+                    if !c.is_uppercase() && !self.word_chars.contains(&c) =>
+                {
+                    CapsWord::Off
+                }
+                (state, _) => state,
+            };
+            state = match translation.rule() {
+                Some(Rule::Begcapsword { .. }) => CapsWord::Started,
+                Some(Rule::Endcapsword { .. } | Rule::Capsletter { .. }) => CapsWord::Off,
+                Some(Rule::Multind { names, .. }) if names.iter().any(|n| n == "begcapsword") => {
+                    CapsWord::Started
+                }
+                Some(Rule::Multind { names, .. })
+                    if names
+                        .iter()
+                        .any(|n| n == "endcapsword" || n == "capsletter") =>
+                {
+                    CapsWord::Off
+                }
+                _ => state,
+            };
+            let translation = if state == CapsWord::Off {
+                translation
+            } else {
+                let mut output = String::new();
+                for c in translation.output().chars() {
+                    if self.space_chars.contains(&c)
+                        || state == CapsWord::Running && !self.word_chars.contains(&c)
+                    {
+                        state = CapsWord::Off;
+                    }
+                    if state == CapsWord::Off {
+                        output.push(c);
+                    } else {
+                        output.extend(c.to_uppercase());
+                    }
+                }
+                translation.with_output(&output)
+            };
+            last = translation.output().chars().last().or(last);
+            result.push(translation);
+        }
+        result
     }
 }
 

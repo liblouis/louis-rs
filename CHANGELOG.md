@@ -77,6 +77,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   that isn't a letter: as in liblouis, it lapses, and keeps `word`,
   `sufword` and `prfword` off the rest of the word. With
   `en-ueb-g2.ctb`, ⠰⠉⠲⠆ gave "c.be" instead of "c.;".
+- In back-translation, a capitalized word now goes on while letters are
+  written, whatever rule wrote them, and ends at the first character
+  that isn't a letter or a `capsmodechars` character, as in liblouis.
+  It used to end at the first cell that wasn't a letter's: with
+  `en-ueb-g2.ctb`, ⠠⠠⠗⠁⠆⠊⠞ gave "RAbbit" instead of "RABBIT", and with
+  `mao-nz-g1.ctb`, ⠠⠠⠅⠸⠁⠏⠸⠕ gave "Kāpō" instead of "KĀPŌ".
+- In back-translation, a `letsign` or `nonumsign` no longer applies right
+  after a letter, as in liblouis, so the same dots can be another
+  indicator there: with `da-dk-g16.ctb`, ⠸⠋⠕⠕⠰⠃⠁⠗ is "FOObar", ⠰ ending
+  the capitals.
+- In back-translation, an emphasis indicator gives way to any other rule
+  with the same dots: with `fr-bfu-comp6.utb`, ⠨⠨⠓⠉⠠⠄⠇ is "HCl", ⠠⠄
+  ending the capitals rather than italics.
 - A `match` rule whose `pre` starts inside the previous translation now
   applies, thanks to the look-behind above: with `en-ueb-g2.ctb`,
   "areas" gave ⠜⠑⠁⠎ instead of ⠜⠂⠎, as `always ar` covered the "r" that

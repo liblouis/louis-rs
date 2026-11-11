@@ -58,6 +58,9 @@ pub enum Transition {
     /// Non-consuming lookbehind: the preceding character must be in one of these classes.
     /// Inserted at the start of the path (before character transitions).
     Start(Vec<CharacterClass>),
+    /// The negation of [`Transition::Start`]: the preceding character must be in none of
+    /// these classes. The start of the input counts as a space.
+    NotStart(Vec<CharacterClass>),
     /// Non-consuming lookahead: the character immediately after the match must be in one of
     /// these classes. Inserted at the end of the path (after character transitions).
     End(Vec<CharacterClass>),
@@ -81,6 +84,7 @@ pub enum Transition {
 enum ResolvedTransition {
     Character(char),
     Start(ResolvedClasses),
+    NotStart(ResolvedClasses),
     End(ResolvedClasses),
     BegWord,
     EndWord,
@@ -207,6 +211,9 @@ impl Trie {
                 &self.lookbehind_classes,
                 &classes,
             )),
+            Transition::NotStart(classes) => ResolvedTransition::NotStart(
+                ResolvedClasses::resolve(&self.lookbehind_classes, &classes),
+            ),
             Transition::End(classes) => {
                 ResolvedTransition::End(ResolvedClasses::resolve(&self.lookahead_classes, &classes))
             }
@@ -348,6 +355,9 @@ impl Trie {
         for (transition, child_node) in &node.transitions {
             let context_matches = match transition {
                 ResolvedTransition::Start(resolved) => resolved.matches(preceding.chars().last()),
+                ResolvedTransition::NotStart(resolved) => {
+                    !resolved.matches(preceding.chars().last())
+                }
                 ResolvedTransition::End(resolved) => resolved.matches(c),
                 ResolvedTransition::BegWord => self.beg_word.is_beg_word(preceding),
                 ResolvedTransition::EndWord => self.end_word.is_end_word(input),
@@ -923,5 +933,32 @@ mod tests {
         assert_eq!(trie.find_translations("foo", "1"), vec![foo_after_digit]);
         assert_eq!(trie.find_translations("foo", " "), empty);
         assert_eq!(trie.find_translations("foo", ""), empty);
+    }
+
+    #[test]
+    fn find_translations_with_not_start_class() {
+        let ctx = CharacterClasses::new(&[
+            (CharacterClass::Letter, &['a', 'b']),
+            (CharacterClass::Space, &[' ']),
+        ]);
+        let mut trie = Trie::new().with_context(ctx);
+        let rule = fake_rule();
+        let foo = ResolvedTranslation::new("foo", "F", 4, TranslationStage::Main, rule.clone());
+        // the preceding character must not be a letter
+        trie.insert(
+            "foo",
+            "F",
+            Some(Transition::NotStart(vec![CharacterClass::Letter])),
+            None,
+            Direction::Forward,
+            ClassConstraints::default(),
+            TranslationStage::Main,
+            &rule,
+        );
+        assert_eq!(trie.find_translations("foo", "a"), vec![]);
+        assert_eq!(trie.find_translations("foo", " "), vec![foo.clone()]);
+        assert_eq!(trie.find_translations("foo", "-"), vec![foo.clone()]);
+        // the start of the input counts as a space
+        assert_eq!(trie.find_translations("foo", ""), vec![foo]);
     }
 }

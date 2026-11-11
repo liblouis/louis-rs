@@ -171,6 +171,23 @@ mod tests {
     const NUMBER_TABLE: &str =
         "space \\s 0\nletter a 1\nlitdigit 4 145\nlitdigit 2 12\nnumsign 3456\n";
 
+    const CAPS_WORD_TABLE: &str = "space \\s 0\nlowercase a 1\nlowercase b 12\nlowercase c 14\nlowercase i 24\nlowercase m 134\nlowercase n 1345\nlowercase r 1235\nlowercase s 234\nlowercase t 2345\nbase uppercase A a\nbase uppercase B b\nbase uppercase C c\nbase uppercase I i\nbase uppercase M m\nbase uppercase N n\nbase uppercase R r\nbase uppercase S s\nbase uppercase T t\npunctuation ; 23\npunctuation - 36\npunctuation ' 3\nletsign 56\nbegcapsword 6-6\nendcapsword 56\nmidword bb 23\nalways 's 3-234\n";
+
+    #[test]
+    fn a_capitalized_word_goes_on_while_letters_are_written() {
+        let translator =
+            Translator::from_table_source(CAPS_WORD_TABLE, Direction::Backward).unwrap();
+        // whatever rule writes them: ⠆ is the semicolon and the contraction "bb"
+        assert_eq!(translator.translate("⠠⠠⠗⠁⠆⠊⠞").unwrap(), "RABBIT");
+        // a hyphen after a letter ends the word, but not one before the first letter
+        assert_eq!(translator.translate("⠠⠠⠁⠃⠤⠍⠁⠝").unwrap(), "AB-man");
+        assert_eq!(translator.translate("⠠⠠⠤⠍⠁⠝").unwrap(), "-MAN");
+        // it can end partway through what a rule writes
+        assert_eq!(translator.translate("⠠⠠⠍⠁⠝⠄⠎").unwrap(), "MAN's");
+        // after a letter, ⠰ is `endcapsword`, not `letsign`
+        assert_eq!(translator.translate("⠠⠠⠁⠃⠰⠉").unwrap(), "ABc");
+    }
+
     #[test]
     fn a_rule_after_one_of_two_classes_applies_after_either() {
         // French `after conabr after bvoy endword ent 126`

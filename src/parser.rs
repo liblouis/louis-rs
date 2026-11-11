@@ -1174,6 +1174,10 @@ pub enum Precedence {
     /// the fallback when no other rule matches, which liblouis expresses by putting them
     /// at the end of its rule chains.
     CharacterDefinition,
+    /// Backward-only emphasis indicators (`begemphword`, `endemphphrase`, ...). Any other
+    /// rule with the same dots wins over them, as `endcapsword 6-3` does over
+    /// `endemphword italic 6-3` in `fr-bfu-comp6.utb`.
+    Emphasis,
     /// Backward-only indicator opcodes (`capsletter`, `numsign`, ...). Above the
     /// character definitions, whose dots they can coincide with in some tables, but below
     /// `always`: a same-dots `always` rule is a more specific language rule that must
@@ -1216,6 +1220,13 @@ impl HasPrecedence for Rule {
             | Rule::Endcapsword { .. }
             | Rule::Numsign { .. }
             | Rule::Nonumsign { .. } => Precedence::Indicator,
+            Rule::Begemph { .. }
+            | Rule::Endemph { .. }
+            | Rule::Emphletter { .. }
+            | Rule::Begemphword { .. }
+            | Rule::Endemphword { .. }
+            | Rule::Begemphphrase { .. }
+            | Rule::Endemphphrase { .. } => Precedence::Emphasis,
             Rule::Always { .. } => Precedence::Always,
             _ => Precedence::Translation,
         }

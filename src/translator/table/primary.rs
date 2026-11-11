@@ -18,7 +18,8 @@ use crate::{
         end_word::EndWordScanner,
         indication::{
             Indicator, Indicators, PrecomputedIndications, computer_braille, emphasis, lettersign,
-            mode, nocontract, numeric, uppercase,
+            mode, nocontract, numeric,
+            uppercase::{self, BackwardCapsWord, BackwardCapsWordBuilder},
         },
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
         position_constraints::{
@@ -164,6 +165,8 @@ pub struct PrimaryTable {
     ///
     /// [`Constraint::PreferDigit`]: crate::translator::position_constraints::Constraint::PreferDigit
     backward_digit_overrides: HashMap<char, ResolvedTranslation>,
+    /// Backward-only: capitalizes the words a `begcapsword` starts, once translated.
+    backward_caps_word: Option<BackwardCapsWord>,
 }
 
 /// A builder for [`PrimaryTable`]
@@ -185,6 +188,7 @@ struct PrimaryTableBuilder {
     computer_braille_indicator: computer_braille::IndicatorBuilder,
     numeric_constrainer: NumericConstrainerBuilder,
     backward_caps_constrainer: BackwardCapsConstrainerBuilder,
+    backward_caps_word: BackwardCapsWordBuilder,
     backward_numeric_constrainer: BackwardNumericConstrainerBuilder,
     backward_nocontract_constrainer: BackwardNoContractConstrainerBuilder,
     hyphenation_constrainer: HyphenationConstrainerBuilder,
@@ -241,6 +245,7 @@ impl PrimaryTableBuilder {
             computer_braille_indicator: computer_braille::IndicatorBuilder::new(),
             numeric_constrainer: NumericConstrainerBuilder::new(),
             backward_caps_constrainer: BackwardCapsConstrainerBuilder::new(),
+            backward_caps_word: BackwardCapsWordBuilder::new(),
             backward_numeric_constrainer: BackwardNumericConstrainerBuilder::new(),
             backward_nocontract_constrainer: BackwardNoContractConstrainerBuilder::new(),
             hyphenation_constrainer: HyphenationConstrainerBuilder::new(),
@@ -291,11 +296,23 @@ impl PrimaryTableBuilder {
     /// translation instead of falling through to a coincidentally-identical
     /// character definition. Only meaningful for `Direction::Backward`.
     fn insert_backward_indicator(&mut self, dots: &str, rule: &AnchoredRule) {
+        self.insert_backward_indicator_between(dots, None, None, rule);
+    }
+
+    /// [`Self::insert_backward_indicator`], with checks on the text before the indicator
+    /// and on the cells after it.
+    fn insert_backward_indicator_between(
+        &mut self,
+        dots: &str,
+        before: Option<Transition>,
+        after: Option<Transition>,
+        rule: &AnchoredRule,
+    ) {
         self.trie.insert(
             "",
             dots,
-            None,
-            None,
+            before,
+            after,
             Direction::Backward,
             ClassConstraints::default(),
             TranslationStage::Main,
@@ -335,24 +352,29 @@ impl PrimaryTableBuilder {
     /// (English defines both `letsign 56` and `punctuation ; 56`), so an unguarded
     /// backward indicator would swallow every `;`.
     fn insert_backward_indicator_before_letter(&mut self, dots: &str, rule: &AnchoredRule) {
-        self.trie.insert(
-            "",
+        self.insert_backward_indicator_between(dots, None, Some(Self::before_letter()), rule);
+    }
+
+    /// Like [`Self::insert_backward_indicator_before_letter`], but also not right after
+    /// a letter, as liblouis takes a `letsign`. After one, the dots are something else:
+    /// Danish ⠰ is also `endcapsword`.
+    fn insert_backward_letsign(&mut self, dots: &str, rule: &AnchoredRule) {
+        self.insert_backward_indicator_between(
             dots,
-            None,
-            // liblouis resolves the same ambiguity with `!(beforeAttributes &
-            // CTC_Letter) && (afterAttributes & (CTC_Letter | CTC_Sign))`
-            // (lou_backTranslateString.c), which it labels "just a heuristic test".
-            // Only the lookahead half is reproduced here: there is no negated
-            // `CharacterClass`, so the lookbehind has no `Transition` counterpart.
-            Some(Transition::End(vec![
-                CharacterClass::Letter,
-                CharacterClass::Sign,
-            ])),
-            Direction::Backward,
-            ClassConstraints::default(),
-            TranslationStage::Main,
+            Some(Self::not_after_letter()),
+            Some(Self::before_letter()),
             rule,
         );
+    }
+
+    /// A letter or sign cell follows.
+    fn before_letter() -> Transition {
+        Transition::End(vec![CharacterClass::Letter, CharacterClass::Sign])
+    }
+
+    /// The text written so far doesn't end in a letter.
+    fn not_after_letter() -> Transition {
+        Transition::NotStart(vec![CharacterClass::Letter])
     }
 
     /// Returns whether `opcode`'s `dots` are safe to register as a backward indicator:
@@ -441,6 +463,8 @@ impl PrimaryTableBuilder {
         .flatten()
         .collect();
         PrimaryTable {
+            backward_caps_word: (direction == Direction::Backward)
+                .then(|| self.backward_caps_word.build(ctx)),
             undefined: self.undefined,
             character_translations: self.character_translations,
             direction,
@@ -749,7 +773,13 @@ impl PrimaryTable {
                             &letter_dots,
                         )
                     {
-                        builder.insert_backward_indicator(&dots.to_string(), rule);
+                        // not right after a letter, as liblouis takes it
+                        builder.insert_backward_indicator_between(
+                            &dots.to_string(),
+                            Some(PrimaryTableBuilder::not_after_letter()),
+                            None,
+                            rule,
+                        );
                         builder
                             .backward_numeric_constrainer
                             .nonumsign(&dots.to_string());
@@ -824,9 +854,6 @@ impl PrimaryTable {
                     {
                         builder.insert_backward_indicator(&dots.to_string(), rule);
                         builder
-                            .backward_caps_constrainer
-                            .endcapsword(&dots.to_string());
-                        builder
                             .backward_nocontract_constrainer
                             .caps_indicator(&dots.to_string());
                     }
@@ -845,6 +872,7 @@ impl PrimaryTable {
                 }
                 Rule::Capsmodechars { chars } => {
                     builder.uppercase_indicator.capsmodechars(chars);
+                    builder.backward_caps_word.capsmodechars(chars);
                 }
                 Rule::Begcapsphrase { dots } => {
                     builder
@@ -1031,7 +1059,7 @@ impl PrimaryTable {
                             &letter_dots,
                         )
                     {
-                        builder.insert_backward_indicator_before_letter(&dots.to_string(), rule);
+                        builder.insert_backward_letsign(&dots.to_string(), rule);
                         builder
                             .backward_nocontract_constrainer
                             .indicator(&dots.to_string());
@@ -1953,9 +1981,6 @@ impl PrimaryTable {
                 .backward_numeric_constrainer
                 .letter_cells(letter_cells.clone());
             builder
-                .backward_caps_constrainer
-                .letter_cells(letter_cells.clone());
-            builder
                 .backward_nocontract_constrainer
                 .letter_cells(letter_cells.clone());
             // a character of several cells can start with an indicator's dots, as Danish
@@ -2276,20 +2301,15 @@ impl PrimaryTable {
                 candidates.extend(self.comp6_trie.find_translations(chars.as_str(), preceding));
             }
 
-            // Backward caps mode: capitalize the output of whichever candidate wins below.
-            // `Uppercase` (begcapsword span) capitalizes every character a cell resolves
-            // to; `TitleCase` (capsletter) capitalizes only the first — a cell can
-            // resolve to more than one character (e.g. a digraph rule), and capsletter
-            // marks a single capitalized letter, not a whole capitalized word.
-            let is_backward = self.direction == Direction::Backward;
-            let uppercase_here = is_backward && constraints.uppercase_at(char_pos);
-            let titlecase_here = is_backward && constraints.titlecase_at(char_pos);
+            // Backward `capsletter`: capitalize the first character of whichever candidate
+            // wins below — a cell can resolve to more than one character (e.g. a digraph
+            // rule), and capsletter marks a single capitalized letter. A capitalized word
+            // is done once translated (`BackwardCapsWord`).
+            let titlecase_here =
+                self.direction == Direction::Backward && constraints.titlecase_at(char_pos);
             let uppercase_if_needed =
                 move |translation: ResolvedTranslation| -> ResolvedTranslation {
-                    if uppercase_here {
-                        let upper = translation.output().to_uppercase();
-                        translation.with_output(&upper)
-                    } else if titlecase_here {
+                    if titlecase_here {
                         let output = translation.output();
                         let mut chars = output.chars();
                         let titled = match chars.next() {
@@ -2400,7 +2420,10 @@ impl PrimaryTable {
                 break;
             }
         }
-        translations
+        match &self.backward_caps_word {
+            Some(caps_word) => caps_word.apply(translations),
+            None => translations,
+        }
     }
 
     /// Whether `t` comes from an opcode that liblouis switches off in a word with a

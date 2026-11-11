@@ -27,12 +27,6 @@ pub enum Constraint {
     /// Set for every character inside a computer-braille span so that comp6
     /// mappings are used instead of the regular translation rules.
     UseComp6,
-    /// Uppercase every character produced at this position, in backward translation.
-    ///
-    /// Set for every letter cell of a `begcapsword`/`endcapsword` span. A single cell can
-    /// resolve to more than one character (e.g. a digraph rule), and inside a whole-word
-    /// caps span every character of it is capitalized — unlike [`Constraint::TitleCase`].
-    Uppercase,
     /// Uppercase only the first character produced at this position, in backward
     /// translation.
     ///
@@ -127,12 +121,6 @@ impl PositionConstraints {
         self.0
             .get(pos)
             .is_some_and(|f| f.contains(Constraint::UseComp6))
-    }
-
-    pub fn uppercase_at(&self, pos: usize) -> bool {
-        self.0
-            .get(pos)
-            .is_some_and(|f| f.contains(Constraint::Uppercase))
     }
 
     pub fn titlecase_at(&self, pos: usize) -> bool {
@@ -526,23 +514,21 @@ fn longest_match_at(chars: &[char], pos: usize, patterns: &[String]) -> Option<u
         .max()
 }
 
-/// Detects `capsletter`/`begcapsword`/`endcapsword` indicator dots in backward
-/// (braille → text) input and sets [`Constraint::TitleCase`]/[`Constraint::Uppercase`]
-/// at every position whose decoded character(s) should be capitalized.
+/// Detects `capsletter` indicator dots in backward (braille → text) input and sets
+/// [`Constraint::TitleCase`] on the following cell (a cell can resolve to more than one
+/// character, e.g. a digraph rule — only the first is capitalized).
 ///
-/// `capsletter` title-cases just the following cell (a cell can resolve to more than one
-/// character, e.g. a digraph rule — only the first is capitalized). `begcapsword`
-/// uppercases every character of every subsequent letter cell until `endcapsword` (if
-/// defined) or the first non-letter cell, mirroring the forward word-boundary
-/// auto-termination rule.
+/// `begcapsword` dots are recognized only so that a `capsletter` whose dots are a prefix
+/// of them isn't matched instead: the capitalized word itself is decided after
+/// translation, from the text written ([`BackwardCapsWord`]).
+///
+/// [`BackwardCapsWord`]: crate::translator::indication::uppercase::BackwardCapsWord
 #[derive(Debug, Clone)]
 pub struct BackwardCapsConstrainer {
     /// The indicator's own dots plus any `multind` sequences naming it (e.g.
     /// `56-6 letsign capsletter`), which act like it, just spelled with more cells.
     capsletter_dots: Vec<String>,
     begcapsword_dots: Vec<String>,
-    endcapsword_dots: Option<String>,
-    letter_cells: HashSet<char>,
 }
 
 impl BackwardCapsConstrainer {
@@ -561,20 +547,6 @@ impl BackwardCapsConstrainer {
                 && len >= capsletter.unwrap_or(0)
             {
                 pos += len;
-                loop {
-                    if let Some(end_dots) = &self.endcapsword_dots
-                        && matches_at(&chars, pos, end_dots)
-                    {
-                        pos += end_dots.chars().count();
-                        break;
-                    }
-                    if pos < n && self.letter_cells.contains(&chars[pos]) {
-                        constraints[pos].insert(Constraint::Uppercase);
-                        pos += 1;
-                    } else {
-                        break;
-                    }
-                }
                 continue;
             }
             if let Some(len) = capsletter {
@@ -843,8 +815,7 @@ pub enum Constrainer {
     Numeric(NumericConstrainer),
     /// Maps `computer_braille` emphasis spans to [`Constraint::UseComp6`].
     ComputerBraille(ComputerBrailleConstrainer),
-    /// Detects backward `capsletter`/`begcapsword`/`endcapsword` dots and sets
-    /// [`Constraint::Uppercase`].
+    /// Detects backward `capsletter` dots and sets [`Constraint::TitleCase`].
     BackwardCaps(BackwardCapsConstrainer),
     /// Detects backward `numsign`/`nonumsign` dots and sets [`Constraint::PreferDigit`].
     BackwardNumeric(BackwardNumericConstrainer),
@@ -965,12 +936,10 @@ impl NumericConstrainerBuilder {
 pub struct BackwardCapsConstrainerBuilder {
     capsletter_dots: Option<String>,
     begcapsword_dots: Option<String>,
-    endcapsword_dots: Option<String>,
     /// `multind` sequences that end in (or contain) a `capsletter`/`begcapsword`:
     /// they act like that indicator, just spelled with more cells.
     multind_capsletter_dots: Vec<String>,
     multind_begcapsword_dots: Vec<String>,
-    letter_cells: HashSet<char>,
 }
 
 impl BackwardCapsConstrainerBuilder {
@@ -986,20 +955,12 @@ impl BackwardCapsConstrainerBuilder {
         self.begcapsword_dots = Some(dots.to_string());
     }
 
-    pub fn endcapsword(&mut self, dots: &str) {
-        self.endcapsword_dots = Some(dots.to_string());
-    }
-
     pub fn multind_capsletter(&mut self, dots: &str) {
         self.multind_capsletter_dots.push(dots.to_string());
     }
 
     pub fn multind_begcapsword(&mut self, dots: &str) {
         self.multind_begcapsword_dots.push(dots.to_string());
-    }
-
-    pub fn letter_cells(&mut self, cells: HashSet<char>) {
-        self.letter_cells = cells;
     }
 
     pub fn build(self) -> Option<BackwardCapsConstrainer> {
@@ -1019,8 +980,6 @@ impl BackwardCapsConstrainerBuilder {
             Some(BackwardCapsConstrainer {
                 capsletter_dots,
                 begcapsword_dots,
-                endcapsword_dots: self.endcapsword_dots,
-                letter_cells: self.letter_cells,
             })
         }
     }
@@ -1395,12 +1354,6 @@ mod tests {
             .collect()
     }
 
-    fn uppercase(c: &PositionConstraints) -> Vec<bool> {
-        c.0.iter()
-            .map(|f| f.contains(Constraint::Uppercase))
-            .collect()
-    }
-
     fn prefer_digit(c: &PositionConstraints) -> Vec<bool> {
         c.0.iter()
             .map(|f| f.contains(Constraint::PreferDigit))
@@ -1538,34 +1491,13 @@ mod tests {
     }
 
     #[test]
-    fn begcapsword_marks_letters_until_non_letter_cell() {
-        let mut builder = BackwardCapsConstrainerBuilder::new();
-        builder.begcapsword("W");
-        builder.letter_cells(HashSet::from(['a', 'b', 'c']));
-        let c = backward_caps_constrainers(builder).precompute("Wabc ", &[]);
-        assert_eq!(uppercase(&c), vec![false, true, true, true, false]);
-    }
-
-    #[test]
-    fn begcapsword_stops_at_endcapsword() {
-        let mut builder = BackwardCapsConstrainerBuilder::new();
-        builder.begcapsword("W");
-        builder.endcapsword("E");
-        builder.letter_cells(HashSet::from(['a', 'b', 'c']));
-        let c = backward_caps_constrainers(builder).precompute("WabEc", &[]);
-        assert_eq!(uppercase(&c), vec![false, true, true, false, false]);
-    }
-
-    #[test]
     fn begcapsword_checked_before_capsletter_when_dots_share_a_prefix() {
         // Regression: capsletter's dots ("C") are a prefix of begcapsword's ("CC").
         // Checking capsletter first would match it twice instead of begcapsword once.
         let mut builder = BackwardCapsConstrainerBuilder::new();
         builder.capsletter("C");
         builder.begcapsword("CC");
-        builder.letter_cells(HashSet::from(['a', 'b']));
         let c = backward_caps_constrainers(builder).precompute("CCab ", &[]);
-        assert_eq!(uppercase(&c), vec![false, false, true, true, false]);
         assert_eq!(titlecase(&c), vec![false, false, false, false, false]);
     }
 
