@@ -61,6 +61,14 @@ pub enum Constraint {
     /// following cells as letters, not as a contraction", so the `word`, `sufword`,
     /// `prfword` and `begword` rules must not fire inside their scope.
     NoContract,
+    /// Suppress the whole-word rules at this position, in backward translation.
+    ///
+    /// Set from where a [`Constraint::NoContract`] run of letters ends to the next
+    /// space: liblouis lets a `letsign`/`nocontractsign`/`nonumsign` lapse rather than
+    /// end at a cell that is not a letter, and until the word ends it keeps `word`,
+    /// `sufword` and `prfword` off, though not `begword`. So in UEB the ⠆ of ⠰⠉⠲⠆ is
+    /// the semicolon of "c.;", not the wordsign "be".
+    NoWholeWord,
     /// A `prepunc` rule may fire on the punctuation character at this position, in
     /// forward translation.
     PrepuncOk,
@@ -107,6 +115,12 @@ impl PositionConstraints {
         self.0
             .get(pos)
             .is_some_and(|f| f.contains(Constraint::NoContract))
+    }
+
+    pub fn no_whole_word_at(&self, pos: usize) -> bool {
+        self.0
+            .get(pos)
+            .is_some_and(|f| f.contains(Constraint::NoWholeWord))
     }
 
     pub fn use_comp6_at(&self, pos: usize) -> bool {
@@ -689,6 +703,19 @@ pub struct BackwardNoContractConstrainer {
     indicator_dots: Vec<String>,
     caps_dots: Vec<String>,
     letter_cells: HashSet<char>,
+    space_cells: HashSet<char>,
+    /// The dots of the backward `always`, `prepunc` and `postpunc` rules and character
+    /// definitions that start with an indicator's dots and go on, such as Danish
+    /// `always j 56-245`, which take the cells as their own.
+    ///
+    /// This is a heuristic. Whether the indicator's dots are an indicator or the start
+    /// of a longer rule is guessed here, before translation, from the rules' dots alone,
+    /// ignoring their boundary and class checks. The real solution is to decide from
+    /// which candidate translation picks at that position.
+    claiming_dots: Vec<String>,
+    /// Like `claiming_dots`, but of the rules that only apply after a letter, such as
+    /// UEB's ⠰⠎ for "ness", which take the cells only there.
+    inword_claiming_dots: Vec<String>,
 }
 
 impl BackwardNoContractConstrainer {
@@ -698,8 +725,17 @@ impl BackwardNoContractConstrainer {
         let mut constraints: Vec<Constraints> = vec![Constraints::empty(); n];
         let mut pos = 0;
         while pos < n {
-            // Longest first: one indicator's dots are often a prefix of another's.
-            if let Some(len) = longest_match_at(&chars, pos, &self.indicator_dots) {
+            // Longest first: one indicator's dots are often a prefix of another's. A
+            // longer rule spelling the indicator's dots and the cells after it wins
+            // over the indicator, as in liblouis, which tries the longest rules first.
+            let after_letter = pos > 0 && self.letter_cells.contains(&chars[pos - 1]);
+            if let Some(len) = longest_match_at(&chars, pos, &self.indicator_dots)
+                && longest_match_at(&chars, pos, &self.claiming_dots)
+                    .is_none_or(|claim| claim <= len)
+                && !(after_letter
+                    && longest_match_at(&chars, pos, &self.inword_claiming_dots)
+                        .is_some_and(|claim| claim > len))
+            {
                 pos += len;
                 while pos < n {
                     if let Some(len) = longest_match_at(&chars, pos, &self.caps_dots) {
@@ -710,6 +746,13 @@ impl BackwardNoContractConstrainer {
                     } else {
                         break;
                     }
+                }
+                while pos < n
+                    && !self.space_cells.contains(&chars[pos])
+                    && longest_match_at(&chars, pos, &self.indicator_dots).is_none()
+                {
+                    constraints[pos].insert(Constraint::NoWholeWord);
+                    pos += 1;
                 }
                 continue;
             }
@@ -725,6 +768,9 @@ pub struct BackwardNoContractConstrainerBuilder {
     indicator_dots: Vec<String>,
     caps_dots: Vec<String>,
     letter_cells: HashSet<char>,
+    space_cells: HashSet<char>,
+    rule_dots: Vec<String>,
+    inword_rule_dots: Vec<String>,
 }
 
 impl BackwardNoContractConstrainerBuilder {
@@ -745,17 +791,49 @@ impl BackwardNoContractConstrainerBuilder {
         self.letter_cells = cells;
     }
 
+    /// The cells that end a word, and with it a lapsed indicator's scope.
+    pub fn space_cells(&mut self, cells: HashSet<char>) {
+        self.space_cells = cells;
+    }
+
+    /// Registers the dots of a backward rule that takes its cells whatever surrounds them, see
+    /// [`BackwardNoContractConstrainer::claiming_dots`].
+    pub fn rule_dots(&mut self, dots: &str) {
+        self.rule_dots.push(dots.to_string());
+    }
+
+    /// Registers the dots of a backward rule that applies only after a letter, see
+    /// [`BackwardNoContractConstrainer::inword_claiming_dots`].
+    pub fn inword_rule_dots(&mut self, dots: &str) {
+        self.inword_rule_dots.push(dots.to_string());
+    }
+
     pub fn build(self) -> Option<BackwardNoContractConstrainer> {
         if self.indicator_dots.is_empty() {
             None
         } else {
             Some(BackwardNoContractConstrainer {
+                claiming_dots: claiming(self.rule_dots, &self.indicator_dots),
+                inword_claiming_dots: claiming(self.inword_rule_dots, &self.indicator_dots),
                 indicator_dots: self.indicator_dots,
                 caps_dots: self.caps_dots,
                 letter_cells: self.letter_cells,
+                space_cells: self.space_cells,
             })
         }
     }
+}
+
+/// The rule dots that start with one of the indicators' dots and go on.
+fn claiming(rule_dots: Vec<String>, indicator_dots: &[String]) -> Vec<String> {
+    rule_dots
+        .into_iter()
+        .filter(|dots| {
+            indicator_dots.iter().any(|indicator| {
+                dots.starts_with(indicator.as_str()) && dots.len() > indicator.len()
+            })
+        })
+        .collect()
 }
 
 /// A single analysis pass that contributes to [`PositionConstraints`].
@@ -1361,6 +1439,66 @@ mod tests {
             no_contract(&c),
             vec![false, true, true, false, false, false, true]
         );
+    }
+
+    fn no_whole_word(c: &PositionConstraints) -> Vec<bool> {
+        c.0.iter()
+            .map(|f| f.contains(Constraint::NoWholeWord))
+            .collect()
+    }
+
+    #[test]
+    fn letsign_lapses_until_the_next_space() {
+        // UEB "c.;" is ⠰⠉⠲⠆: past the full stop the letter sign has lapsed, which still
+        // keeps the wordsign "be" off the ⠆ until the word ends
+        let mut builder = BackwardNoContractConstrainerBuilder::new();
+        builder.indicator("L");
+        builder.letter_cells(HashSet::from(['a', 'b']));
+        builder.space_cells(HashSet::from([' ']));
+        let c = backward_nocontract_constrainers(builder).precompute("La.b b", &[]);
+        assert_eq!(
+            no_contract(&c),
+            vec![false, true, false, false, false, false]
+        );
+        assert_eq!(
+            no_whole_word(&c),
+            vec![false, false, true, true, false, false]
+        );
+    }
+
+    #[test]
+    fn a_longer_rule_takes_the_indicator_dots() {
+        // Danish `always j 56-245`: ⠰⠚ is the letter, not a letter sign and "jeg"
+        let mut builder = BackwardNoContractConstrainerBuilder::new();
+        builder.indicator("L");
+        builder.rule_dots("Lb");
+        builder.letter_cells(HashSet::from(['a', 'b']));
+        builder.space_cells(HashSet::from([' ']));
+        let c = backward_nocontract_constrainers(builder).precompute("Lb-b La-b", &[]);
+        assert_eq!(
+            no_contract(&c),
+            vec![false, false, false, false, false, false, true, false, false]
+        );
+        assert_eq!(
+            no_whole_word(&c),
+            vec![false, false, false, false, false, false, false, true, true]
+        );
+    }
+
+    #[test]
+    fn a_rule_inside_a_word_takes_the_indicator_dots_only_after_a_letter() {
+        // UEB "ness" is ⠰⠎ after a letter, but ⠰⠎ on its own is the letter s
+        let mut builder = BackwardNoContractConstrainerBuilder::new();
+        builder.indicator("L");
+        builder.inword_rule_dots("Lb");
+        builder.letter_cells(HashSet::from(['a', 'b']));
+        builder.space_cells(HashSet::from([' ']));
+        let c = backward_nocontract_constrainers(builder).precompute("aLb-a Lb", &[]);
+        assert_eq!(
+            no_contract(&c),
+            vec![false, false, false, false, false, false, false, true]
+        );
+        assert_eq!(no_whole_word(&c), vec![false; 8]);
     }
 
     #[test]

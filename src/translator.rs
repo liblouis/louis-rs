@@ -62,6 +62,11 @@ impl CharacterDefinition {
         self.0.get(from)
     }
 
+    /// The dots of every definition.
+    pub fn dots(&self) -> impl Iterator<Item = &str> {
+        self.0.values().map(String::as_str)
+    }
+
     /// Whether some character is defined with exactly these dots.
     pub fn defines_dots(&self, dots: &str) -> bool {
         self.0.values().any(|d| d == dots)

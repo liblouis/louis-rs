@@ -73,6 +73,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - In back-translation, a letter sign now keeps contractions off the
   letters after it across capital indicators, as in liblouis. With
   `en-ueb-g2.ctb`, ⠰⠠⠠⠠⠅⠲ gave "KNOWLEDGE." instead of "K.".
+- In back-translation, a letter sign no longer ends at the first cell
+  that isn't a letter: as in liblouis, it lapses, and keeps `word`,
+  `sufword` and `prfword` off the rest of the word. With
+  `en-ueb-g2.ctb`, ⠰⠉⠲⠆ gave "c.be" instead of "c.;".
 - A `match` rule whose `pre` starts inside the previous translation now
   applies, thanks to the look-behind above: with `en-ueb-g2.ctb`,
   "areas" gave ⠜⠑⠁⠎ instead of ⠜⠂⠎, as `always ar` covered the "r" that
