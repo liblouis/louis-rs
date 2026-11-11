@@ -786,6 +786,9 @@ impl PrimaryTable {
                         builder
                             .backward_caps_constrainer
                             .capsletter(&dots.to_string());
+                        builder
+                            .backward_nocontract_constrainer
+                            .caps_indicator(&dots.to_string());
                     }
                 }
                 Rule::Begcapsword { dots, .. } => {
@@ -803,6 +806,9 @@ impl PrimaryTable {
                         builder
                             .backward_caps_constrainer
                             .begcapsword(&dots.to_string());
+                        builder
+                            .backward_nocontract_constrainer
+                            .caps_indicator(&dots.to_string());
                     }
                 }
                 Rule::Endcapsword { dots, .. } => {
@@ -820,13 +826,22 @@ impl PrimaryTable {
                         builder
                             .backward_caps_constrainer
                             .endcapsword(&dots.to_string());
+                        builder
+                            .backward_nocontract_constrainer
+                            .caps_indicator(&dots.to_string());
                     }
                 }
                 Rule::Begcaps { dots } => {
                     builder.uppercase_indicator.begcaps(&dots.to_string(), rule);
+                    builder
+                        .backward_nocontract_constrainer
+                        .caps_indicator(&dots.to_string());
                 }
                 Rule::Endcaps { dots } => {
                     builder.uppercase_indicator.endcaps(&dots.to_string(), rule);
+                    builder
+                        .backward_nocontract_constrainer
+                        .caps_indicator(&dots.to_string());
                 }
                 Rule::Capsmodechars { chars } => {
                     builder.uppercase_indicator.capsmodechars(chars);

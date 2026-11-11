@@ -680,9 +680,14 @@ impl BackwardNumericConstrainer {
 /// (braille -> text) input and sets [`Constraint::NoContract`] on the run of letter
 /// cells that follows, so the word-family rules cannot claim cells the indicator has
 /// declared to be plain letters.
+///
+/// Capital indicators between the letters don't end the run: liblouis consumes them
+/// without leaving its no-contract mode, so in UEB ⠰⠠⠠⠠⠅ is the capital letter "K",
+/// not the shortform "KNOWLEDGE".
 #[derive(Debug, Clone)]
 pub struct BackwardNoContractConstrainer {
     indicator_dots: Vec<String>,
+    caps_dots: Vec<String>,
     letter_cells: HashSet<char>,
 }
 
@@ -696,9 +701,15 @@ impl BackwardNoContractConstrainer {
             // Longest first: one indicator's dots are often a prefix of another's.
             if let Some(len) = longest_match_at(&chars, pos, &self.indicator_dots) {
                 pos += len;
-                while pos < n && self.letter_cells.contains(&chars[pos]) {
-                    constraints[pos].insert(Constraint::NoContract);
-                    pos += 1;
+                while pos < n {
+                    if let Some(len) = longest_match_at(&chars, pos, &self.caps_dots) {
+                        pos += len;
+                    } else if self.letter_cells.contains(&chars[pos]) {
+                        constraints[pos].insert(Constraint::NoContract);
+                        pos += 1;
+                    } else {
+                        break;
+                    }
                 }
                 continue;
             }
@@ -712,6 +723,7 @@ impl BackwardNoContractConstrainer {
 #[derive(Debug, Default)]
 pub struct BackwardNoContractConstrainerBuilder {
     indicator_dots: Vec<String>,
+    caps_dots: Vec<String>,
     letter_cells: HashSet<char>,
 }
 
@@ -724,6 +736,11 @@ impl BackwardNoContractConstrainerBuilder {
         self.indicator_dots.push(dots.to_string());
     }
 
+    /// The dots of a capital indicator, which a run of plain letters continues across.
+    pub fn caps_indicator(&mut self, dots: &str) {
+        self.caps_dots.push(dots.to_string());
+    }
+
     pub fn letter_cells(&mut self, cells: HashSet<char>) {
         self.letter_cells = cells;
     }
@@ -734,6 +751,7 @@ impl BackwardNoContractConstrainerBuilder {
         } else {
             Some(BackwardNoContractConstrainer {
                 indicator_dots: self.indicator_dots,
+                caps_dots: self.caps_dots,
                 letter_cells: self.letter_cells,
             })
         }
@@ -1342,6 +1360,22 @@ mod tests {
         assert_eq!(
             no_contract(&c),
             vec![false, true, true, false, false, false, true]
+        );
+    }
+
+    #[test]
+    fn letsign_carries_across_capital_indicators() {
+        // UEB writes a capital letter standing alone in capitals as ⠰⠠⠠⠠⠅ ("K."), with
+        // the grade 1 sign before the capitals passage indicator
+        let mut builder = BackwardNoContractConstrainerBuilder::new();
+        builder.indicator("L");
+        builder.caps_indicator("C");
+        builder.caps_indicator("CC");
+        builder.letter_cells(HashSet::from(['a', 'b']));
+        let c = backward_nocontract_constrainers(builder).precompute("LCCCa b", &[]);
+        assert_eq!(
+            no_contract(&c),
+            vec![false, false, false, false, true, false, false]
         );
     }
 
