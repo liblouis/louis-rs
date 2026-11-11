@@ -1598,10 +1598,7 @@ mod tests {
                 .map(|f| f.contains(Constraint::SyllableStart))
                 .collect();
         // the longest syllable, case-insensitively, and on after it
-        assert_eq!(
-            marked,
-            vec![false, true, false, false, false, true, false]
-        );
+        assert_eq!(marked, vec![false, true, false, false, false, true, false]);
     }
 
     #[test]

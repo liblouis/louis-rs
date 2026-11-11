@@ -48,6 +48,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `context` rule that starts with a single character.
 
 ### Fixed
+- A `contraction` now gets its letter sign and `nocontractsign` only
+  where it is the rule applied, as in liblouis. Where another rule for
+  the same letters applied instead, it got them anyway: with
+  `en-us-g2.ctb`, "as" gave ⠰⠵ instead of ⠵, the earlier `word as`
+  applying, and with `fr-bfu-g2.ctb` "d'abord" gave ⠰⠙⠄⠁ instead of ⠙⠄⠁.
 - A rule no longer runs into the syllable of a `syllable` rule, as in
   liblouis: with `en-us-g2.ctb`, "adulthood" gave ⠁⠙⠥⠇⠹⠕⠕⠙ instead of
   ⠁⠙⠥⠇⠞⠓⠕⠕⠙, the `th` taking the "h" of `syllable hood`.

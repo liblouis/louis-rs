@@ -152,9 +152,16 @@ Executes the translation pipeline:
 **`indication/` submodules**: Special rule handling
 - `numeric.rs`: Number indication (inserting number signs)
 - `uppercase.rs`: Capital indication (capitalization markers)
-- `lettersign.rs`: Letter sign insertion for certain contexts
-- `nocontract.rs`: Contraction prevention
-- Each indicator builds during compilation and applies during translation
+- `lettersign.rs`: Letter sign insertion for an isolated letter
+- Each indicator builds during compilation and applies during translation. It sees only
+  the input text, before any rule is chosen
+- **Amenders** run over the chosen translations at the end of the main stage,
+  for indication that depends on which rule was chosen: `contraction.rs`
+  (`ContractionSigns`, the `nocontractsign` and letter sign before a `contraction`,
+  forward) and `uppercase::BackwardCapsWord` (backward). Put such logic here rather than
+  guessing the choice from the text in an indicator. They are not pipeline stages: they
+  are built in and see each translation's rule. `PrimaryTable` holds them as `Amenders`
+  (an `Amender` enum in `indication.rs`), like `Constrainers`, and `trace` applies them in turn
 
 **`effect.rs`**: Rule effects and context environment
 - Manages "effects" that rules can apply (numeric, uppercase context)

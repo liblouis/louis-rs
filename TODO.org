@@ -41,13 +41,6 @@
     somewhere else instead; two different search paths in one process
     cannot both be served by it either. Either call ~Index::build~ with
     the caller's search path and pay the walk, or cache per search path.
-- [ ] A ~contraction~ gets its letter sign even where an earlier
-  ~word~ rule for the same characters is the one applied: with
-  ~en-us-g2.ctb~, "as" gives ⠰⠵ (~word as 1356~, then ~contraction
-  as~). liblouis inserts the letter sign only when the rule it chose
-  is the ~contraction~ (~insertLetterSign~); the letter sign
-  indicator decides before translation, so it should follow the
-  chosen translation instead, like ~BackwardCapsWord~.
 - [ ] Cursor handling
 - [ ] The boundary functions (~word_start~, etc) only work in forward
   translation — confirmed ~uppercase.rs~ has no backward-direction

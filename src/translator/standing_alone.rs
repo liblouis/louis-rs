@@ -9,10 +9,7 @@
 
 use std::collections::HashSet;
 
-use crate::{
-    parser::{CharacterClass, CharacterClasses},
-    translator::trie::{Transition, Trie},
-};
+use crate::parser::{CharacterClass, CharacterClasses};
 
 #[derive(Default, Debug, Clone)]
 pub struct StandingAloneScanner {
@@ -68,30 +65,6 @@ impl StandingAloneScanner {
                 Some(c) if self.after_chars.contains(&c) => rest = &rest[c.len_utf8()..],
                 Some(c) => return self.delimiters.contains(&c),
             }
-        }
-    }
-}
-
-/// The forward boundary transitions of a rule that must stand alone, a `contraction` say:
-/// the sequence check with a scanner, and a space or punctuation on either side without
-/// one, as in liblouis. Also hands the scanner to the `trie` that will check them.
-pub fn stand_alone(
-    scanner: Option<StandingAloneScanner>,
-    trie: Trie,
-) -> (Trie, Transition, Transition) {
-    match scanner {
-        Some(scanner) => (
-            trie.with_standing_alone_scanner(scanner),
-            Transition::StandsAloneBefore,
-            Transition::StandsAloneAfter,
-        ),
-        None => {
-            let boundary = vec![CharacterClass::Space, CharacterClass::Punctuation];
-            (
-                trie,
-                Transition::Start(boundary.clone()),
-                Transition::End(boundary),
-            )
         }
     }
 }

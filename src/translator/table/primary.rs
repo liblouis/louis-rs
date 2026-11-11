@@ -17,9 +17,10 @@ use crate::{
         effect::Environment,
         end_word::EndWordScanner,
         indication::{
-            Indicator, Indicators, PrecomputedIndications, computer_braille, emphasis, lettersign,
-            mode, nocontract, numeric,
-            uppercase::{self, BackwardCapsWord, BackwardCapsWordBuilder},
+            Amender, Amenders, Indicator, Indicators, PrecomputedIndications, computer_braille,
+            contraction::ContractionSignsBuilder,
+            emphasis, lettersign, mode, numeric,
+            uppercase::{self, BackwardCapsWordBuilder},
         },
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
         position_constraints::{
@@ -166,8 +167,8 @@ pub struct PrimaryTable {
     ///
     /// [`Constraint::PreferDigit`]: crate::translator::position_constraints::Constraint::PreferDigit
     backward_digit_overrides: HashMap<char, ResolvedTranslation>,
-    /// Backward-only: capitalizes the words a `begcapsword` starts, once translated.
-    backward_caps_word: Option<BackwardCapsWord>,
+    /// Amend the translations chosen, see [`Amenders`].
+    amenders: Amenders,
 }
 
 /// A builder for [`PrimaryTable`]
@@ -184,7 +185,7 @@ struct PrimaryTableBuilder {
     uppercase_indicator: uppercase::IndicatorBuilder,
     mode_indicator: mode::IndicatorBuilder,
     lettersign_indicator: lettersign::IndicatorBuilder,
-    nocontract_indicator: nocontract::IndicatorBuilder,
+    contraction_signs: ContractionSignsBuilder,
     emphasis_indicator: emphasis::IndicatorBuilder,
     computer_braille_indicator: computer_braille::IndicatorBuilder,
     numeric_constrainer: NumericConstrainerBuilder,
@@ -246,7 +247,7 @@ impl PrimaryTableBuilder {
             uppercase_indicator: uppercase::IndicatorBuilder::new(),
             mode_indicator: mode::IndicatorBuilder::new(),
             lettersign_indicator: lettersign::IndicatorBuilder::new(),
-            nocontract_indicator: nocontract::IndicatorBuilder::new(),
+            contraction_signs: ContractionSignsBuilder::new(),
             emphasis_indicator: emphasis::IndicatorBuilder::new(),
             computer_braille_indicator: computer_braille::IndicatorBuilder::new(),
             numeric_constrainer: NumericConstrainerBuilder::new(),
@@ -450,11 +451,7 @@ impl PrimaryTableBuilder {
                 .map(Indicator::ComputerBraille),
             // Emphasis must be before capsletter so begemphword appears before capsletter.
             self.emphasis_indicator.build(ctx).map(Indicator::Emphasis),
-            // liblouis puts the nocontractsign before a contraction ahead of the letsign
-            // and the capitals, so "B" gives ⠰⠠⠃ and not ⠠⠰⠃.
-            self.nocontract_indicator
-                .build(ctx)
-                .map(Indicator::NoContract),
+            // the letter sign goes before the capitals, so "B" gives ⠰⠠⠃ and not ⠠⠰⠃
             self.lettersign_indicator
                 .build(ctx)
                 .map(Indicator::LetterSign),
@@ -470,8 +467,19 @@ impl PrimaryTableBuilder {
         .flatten()
         .collect();
         PrimaryTable {
-            backward_caps_word: (direction == Direction::Backward)
-                .then(|| self.backward_caps_word.build(ctx)),
+            amenders: Amenders::new(match direction {
+                Direction::Forward => self
+                    .contraction_signs
+                    .build()
+                    .map(Amender::ContractionSigns)
+                    .into_iter()
+                    .collect(),
+                Direction::Backward => {
+                    vec![Amender::BackwardCapsWord(
+                        self.backward_caps_word.build(ctx),
+                    )]
+                }
+            }),
             undefined: self.undefined,
             character_translations: self.character_translations,
             direction,
@@ -666,10 +674,6 @@ impl PrimaryTable {
             end_word,
             standing_alone.clone().unwrap_or_default(),
         );
-        if let Some(scanner) = standing_alone {
-            builder.lettersign_indicator.standing_alone(scanner.clone());
-            builder.nocontract_indicator.standing_alone(scanner);
-        }
 
         // In literary braille tables, digit and litdigit serve distinct roles:
         //
@@ -1090,6 +1094,9 @@ impl PrimaryTable {
                     builder
                         .lettersign_indicator
                         .letsign(&dots.to_string(), rule);
+                    builder
+                        .contraction_signs
+                        .letsign(&dots.to_string(), rule);
                     if direction == Direction::Backward
                         && PrimaryTableBuilder::backward_indicator_dots_available(
                             "letsign",
@@ -1188,12 +1195,10 @@ impl PrimaryTable {
                             rule,
                         );
                     }
-                    builder.lettersign_indicator.contraction(chars, rule);
-                    builder.nocontract_indicator.contraction(chars, rule);
                 }
                 Rule::Nocontractsign { dots, .. } => {
                     builder
-                        .nocontract_indicator
+                        .contraction_signs
                         .nocontractsign(&dots.to_string(), rule);
                     builder
                         .numeric_constrainer
@@ -2468,10 +2473,7 @@ impl PrimaryTable {
                 break;
             }
         }
-        match &self.backward_caps_word {
-            Some(caps_word) => caps_word.apply(translations),
-            None => translations,
-        }
+        self.amenders.apply(translations)
     }
 
     /// Whether `t` comes from an opcode that liblouis switches off in a word with a

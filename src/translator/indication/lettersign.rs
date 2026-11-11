@@ -1,14 +1,7 @@
 //! Lettersign braille indication
 //!
-//! Sometimes a sequence of letters happens to be the same as a braille contraction. In that case an
-//! indication is needed to clarify the meaning. The lettersign indicator signals that the following
-//! braille cells are not a contraction.
-//!
-//! [`Indicator`] analyses the full input text in a single pass before translation begins. At each
-//! position it checks whether the remaining input matches a known contraction and, if so, emits the
-//! lettersign translation at that position.
-//!
-//! In addition, the indicator fires for any isolated letter (not followed by another letter)
+//! [`Indicator`] analyses the full input text in a single pass before translation begins. It
+//! fires for any isolated letter (not followed by another letter)
 //! whose preceding character is neither a space nor a letter — for example, a letter at string
 //! start before punctuation (`b:`), or a Tamil consonant followed by a vowel sign or virama.
 //! Letters preceded by a space (word boundary) or by another letter (tail of a letter run) do not fire.
@@ -16,29 +9,19 @@
 //! suppress the indicator. The `noletsign` opcode lists letters that must never themselves be
 //! preceded by a letter sign, regardless of context, and so does a letter with a `word` or
 //! `largesign` rule of its own.
+//!
+//! The letter sign in front of a `contraction` depends on the rule translation picks, not on
+//! the text, so it is added after translation ([`ContractionSigns`](super::contraction::ContractionSigns)).
 
 use std::collections::HashSet;
 
-use crate::parser::CharacterClass;
-use crate::translator::TranslationStage;
-use crate::translator::standing_alone::{StandingAloneScanner, stand_alone};
-use crate::translator::table::TableContext;
-use crate::translator::trie::ClassConstraints;
-use crate::{
-    parser::{AnchoredRule, Direction},
-    translator::{ResolvedTranslation, trie::Trie},
-};
-
-use log::warn;
-
-use std::collections::HashMap;
+use crate::parser::{AnchoredRule, CharacterClass};
+use crate::translator::{ResolvedTranslation, TranslationStage, table::TableContext};
 
 /// A builder for [`Indicator`]
 #[derive(Debug)]
 pub struct IndicatorBuilder {
     lettersign: Option<(String, AnchoredRule)>,
-    contractions: HashMap<String, AnchoredRule>,
-    standing_alone: Option<StandingAloneScanner>,
     noletsign_chars: HashSet<char>,
     noletsignafter_chars: HashSet<char>,
     noletsignbefore_chars: HashSet<char>,
@@ -48,8 +31,6 @@ impl IndicatorBuilder {
     pub fn new() -> Self {
         Self {
             lettersign: None,
-            contractions: HashMap::new(),
-            standing_alone: None,
             noletsign_chars: HashSet::new(),
             noletsignafter_chars: HashSet::new(),
             noletsignbefore_chars: HashSet::new(),
@@ -58,32 +39,11 @@ impl IndicatorBuilder {
 
     /// Build an [`Indicator`]
     pub fn build(self, ctx: &TableContext) -> Option<Indicator> {
-        if self.lettersign.is_none() {
-            if !self.contractions.is_empty() {
-                warn!("Table contains contractions but no letsign");
-            }
-            return None;
-        }
-
-        let (lettersign, origin) = self.lettersign.unwrap();
+        let (lettersign, origin) = self.lettersign?;
         let start_translation =
-            ResolvedTranslation::new("", &lettersign, 1, TranslationStage::Main, origin.clone());
+            ResolvedTranslation::new("", &lettersign, 1, TranslationStage::Main, origin);
 
         let cc = ctx.character_classes();
-        let (mut trie, before, after) =
-            stand_alone(self.standing_alone, Trie::new().with_context(cc.clone()));
-        for (contraction, _origin) in self.contractions {
-            trie.insert(
-                &contraction,
-                &lettersign,
-                Some(before.clone()),
-                Some(after.clone()),
-                Direction::Forward,
-                ClassConstraints::default(),
-                TranslationStage::Main,
-                &origin,
-            );
-        }
 
         // Collect letter and numeric character sets from the character class context.
         let letter_chars: HashSet<char> = [
@@ -103,7 +63,6 @@ impl IndicatorBuilder {
             .collect();
 
         Some(Indicator {
-            contractions: trie,
             start_translation,
             letter_chars,
             space_chars,
@@ -115,15 +74,6 @@ impl IndicatorBuilder {
 
     pub fn letsign(&mut self, s: &str, origin: &AnchoredRule) {
         self.lettersign = Some((s.to_string(), origin.clone()));
-    }
-
-    /// Checks that a contraction stands alone the way a table with a `seqdelimiter` does.
-    pub fn standing_alone(&mut self, scanner: StandingAloneScanner) {
-        self.standing_alone = Some(scanner);
-    }
-
-    pub fn contraction(&mut self, s: &str, origin: &AnchoredRule) {
-        self.contractions.insert(s.to_string(), origin.clone());
     }
 
     pub fn noletsign(&mut self, s: &str) {
@@ -149,7 +99,6 @@ impl IndicatorBuilder {
 
 #[derive(Debug, Clone)]
 pub struct Indicator {
-    contractions: Trie,
     start_translation: ResolvedTranslation,
     /// Characters that are considered letters (Letter + Uppercase + Lowercase classes).
     letter_chars: HashSet<char>,
@@ -169,8 +118,7 @@ impl Indicator {
         let chars: Vec<char> = input.chars().collect();
         let n = chars.len();
 
-        // Collect positions where letsign should fire (deduplicated via HashSet).
-        let mut fire: HashSet<usize> = HashSet::new();
+        let mut fire: Vec<usize> = Vec::new();
 
         // ── Isolation-based letsign ───────────────────────────────────────────
         // Fires for a letter that is isolated (not followed by another letter)
@@ -201,45 +149,20 @@ impl Indicator {
             let prev_is_space_or_letter = prev
                 .is_some_and(|p| self.space_chars.contains(&p) || self.letter_chars.contains(&p));
             if isolated && !prev_is_space_or_letter {
-                fire.insert(i);
+                fire.push(i);
             }
         }
 
-        // ── Contraction-based letsign ──────────────────────────────────────────
-        // Fires when a known contraction is found at a word boundary (grade 2 tables),
-        // whatever `noletsign` says, as in liblouis's `insertLetterSign`.
-        for (char_pos, (byte_pos, _)) in input.char_indices().enumerate() {
-            if self.next(&input[byte_pos..], &input[..byte_pos]).is_some() {
-                fire.insert(char_pos);
-            }
-        }
-
-        let mut result: Vec<(usize, ResolvedTranslation)> = fire
-            .into_iter()
+        fire.into_iter()
             .map(|pos| (pos, self.start_translation.clone()))
-            .collect();
-        result.sort_by_key(|(pos, _)| *pos);
-        result
-    }
-
-    pub fn next(&self, s: &str, preceding: &str) -> Option<ResolvedTranslation> {
-        let translations = self.contractions.find_translations(s, preceding);
-        if !translations.is_empty() {
-            let translation = translations.first().unwrap();
-            Some(translation.clone().with_input("").with_weight(1))
-        } else {
-            None
-        }
+            .collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        parser::{CharacterClass, CharacterClasses, RuleParser},
-        translator::{TranslationStage, table::TableContext},
-    };
+    use crate::parser::{CharacterClasses, RuleParser};
 
     fn rule(rule: &str) -> AnchoredRule {
         let rule = RuleParser::new(rule).rule().unwrap();
@@ -252,18 +175,11 @@ mod tests {
             .collect()
     }
 
-    fn build_indicator(
-        letter_chars: &[char],
-        noletsignbefore: &[char],
-        contraction: Option<&str>,
-    ) -> Indicator {
+    fn build_indicator(letter_chars: &[char], noletsignbefore: &[char]) -> Indicator {
         let mut builder = IndicatorBuilder::new();
         builder.letsign("⠠", &rule("letsign 6"));
         let noletsignbefore_str: String = noletsignbefore.iter().collect();
         builder.noletsignbefore(&noletsignbefore_str);
-        if let Some(c) = contraction {
-            builder.contraction(c, &rule(&format!("contraction {}", c)));
-        }
         let cc = CharacterClasses::new(&[
             (CharacterClass::Letter, letter_chars),
             (CharacterClass::Space, &[' ']),
@@ -273,24 +189,8 @@ mod tests {
     }
 
     #[test]
-    fn contraction_indicator() {
-        let indicator = build_indicator(&['a', 'b', 'c', 'd'], &[], Some("ab"));
-        assert_eq!(indicator.next("aa", ""), None);
-        assert_eq!(
-            indicator.next("ab", ""),
-            Some(ResolvedTranslation::new(
-                "",
-                "⠠",
-                1,
-                TranslationStage::Main,
-                rule("letsign 6")
-            ))
-        );
-    }
-
-    #[test]
     fn isolated_letter_fires_when_not_preceded_by_space() {
-        let indicator = build_indicator(&['a', 'b', 'c'], &[], None);
+        let indicator = build_indicator(&['a', 'b', 'c'], &[]);
         // isolated letter at string start (prev=None): fires
         assert_eq!(
             pairs(&indicator.precompute("b:")),
@@ -354,26 +254,8 @@ mod tests {
     }
 
     #[test]
-    fn noletsign_leaves_contraction_letsign() {
-        let mut builder = IndicatorBuilder::new();
-        builder.letsign("⠠", &rule("letsign 6"));
-        builder.contraction("ab", &rule("contraction ab"));
-        builder.noletsign("a");
-        let cc = CharacterClasses::new(&[(CharacterClass::Letter, &['a', 'b'])]);
-        let ctx = TableContext::new(cc, CharacterClasses::default(), Default::default());
-        let indicator = builder.build(&ctx).unwrap();
-
-        // "ab" is a contraction, so the letsign fires though 'a' is listed in noletsign:
-        // liblouis's `insertLetterSign` checks noletsign only for a letter on its own
-        assert_eq!(
-            pairs(&indicator.precompute("ab")),
-            vec![(0, "⠠".to_string())]
-        );
-    }
-
-    #[test]
     fn noletsignbefore_suppresses_isolation_letsign() {
-        let indicator = build_indicator(&['a', 'b', 'c'], &['2'], None);
+        let indicator = build_indicator(&['a', 'b', 'c'], &['2']);
         // noletsignbefore '2' suppresses the letsign for "2b" -- '2' precedes the letter
         assert_eq!(pairs(&indicator.precompute("2b")), vec![]);
         // other non-space, non-letter chars still trigger it
@@ -401,23 +283,6 @@ mod tests {
         assert_eq!(
             pairs(&indicator.precompute("3b3")),
             vec![(1, "⠠".to_string())]
-        );
-    }
-
-    #[test]
-    fn precompute_contraction() {
-        let mut builder = IndicatorBuilder::new();
-        builder.letsign("⠠", &rule("letsign 6"));
-        builder.contraction("ab", &rule("contraction ab"));
-        builder.contraction("cd", &rule("contraction cd"));
-        let cc = CharacterClasses::new(&[(CharacterClass::Letter, &['a', 'b', 'c', 'd'])]);
-        let ctx = TableContext::new(cc, CharacterClasses::default(), Default::default());
-        let indicator = builder.build(&ctx).unwrap();
-
-        assert_eq!(pairs(&indicator.precompute("aa")), vec![]);
-        assert_eq!(
-            pairs(&indicator.precompute("ab")),
-            vec![(0, "⠠".to_string())]
         );
     }
 }
