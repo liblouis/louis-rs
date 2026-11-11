@@ -13,7 +13,8 @@ Use the Linux kernel's coding-assistants trailer format (https://docs.kernel.org
 **Current Status**: Alpha stage
 - Translation: ~99.4% compatibility with the liblouis test suite (forward and
   backward combined)
-- Table parsing: all 458 table files under `tables/` parse cleanly. 3 that used
+- Table parsing: every table file under `tables/` that liblouis compiles, louis-rs
+  compiles too (`louis check-table`, like `lou_checktable`). 3 that used
   to fail were table-authoring bugs, not louis-rs gaps, and have since been fixed
   upstream (liblouis/liblouis#2070, #2071, #2072); the last one was ours, an
   escaped `"\\"` multipass operand in `it-it-comp6.utb:248`, fixed in 4980ced
@@ -56,8 +57,8 @@ cargo run -- check ~/src/liblouis/tests/braille-specs/*.yaml --summary
 ### Key Commands for Development
 
 ```bash
-# Parse a braille table and print debug info
-cargo run -- parse path/to/table.ctb
+# Check that a braille table compiles, like liblouis's lou_checktable
+cargo run -- check-table path/to/table.ctb
 
 # Translate text to braille
 cargo run -- translate de-comp6.utb
@@ -110,9 +111,17 @@ The short version:
 - Logic that depends on which rule was chosen goes in an amender, never in an indicator or
   constrainer guessing from the text
 
-Other modules: `src/test.rs` and `src/yaml.rs` run liblouis's YAML tests; `src/main.rs`
-is the `louis` CLI (`parse`, `translate`, `trace`, `check`, `query`); `src/hyphenation.rs`
-reads `.dic` files; `src/emphasis.rs` turns a typeform into emphasis spans.
+Other modules: `src/hyphenation.rs` reads `.dic` files; `src/emphasis.rs` turns a
+typeform into emphasis spans.
+
+The repository is a workspace (ADR-0019). The root package `louis-rs` is the library;
+`louis-cli/` is the `louis` CLI (`check-table`, `translate`, `trace`, `check`, `query`), with
+`louis-cli/src/test.rs` and `louis-cli/src/yaml.rs` running liblouis's YAML tests and
+`louis-cli/src/metadata.rs` the table index. The CLI depends on the library like any other
+user; what it needs beyond the public API comes from `louis::internals` (`#[doc(hidden)]`,
+not semver-covered), which re-exports exactly those items. CLI-only dependencies (clap,
+rayon, tabled, env_logger, saphyr-parser) belong in `louis-cli/Cargo.toml`, never in the
+library's.
 
 ## Key Implementation Notes
 
@@ -146,7 +155,7 @@ See `TODO.org` for detailed tracking.
 |------|-------|
 | Add new opcode support | `src/parser.rs` (parsing) + `src/translator/table/primary.rs` (compilation) |
 | Fix translation bug | `src/translator/trie.rs` or `src/translator/regexp.rs` depending on rule type |
-| Add test harness | `src/yaml.rs`, `src/test.rs` |
+| Add test harness | `louis-cli/src/yaml.rs`, `louis-cli/src/test.rs` |
 | Improve regex engine | `src/translator/regexp.rs` |
 | Optimize performance | `src/translator/trie.rs`, `src/translator/table/primary.rs` |
 | Handle new character class | `src/parser/character_class.rs`, `src/translator/table.rs` |

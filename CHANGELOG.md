@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - ReleaseDate
 
+### Changed
+- The `louis` command line tool is now its own crate, `louis-cli`; install
+  it with `cargo install louis-cli`. `louis-rs` is the library only and no
+  longer pulls in clap, rayon, tabled, env_logger or saphyr-parser.
+- `Direction` no longer implements `clap::ValueEnum`.
+- `louis parse` is replaced by `louis check-table`, which compiles a table
+  in both directions and reports its errors, like liblouis's
+  `lou_checktable`. It prints "No errors found." unless given `--quiet`.
+  The rule dump and the rule-parsing REPL are gone.
+
 ## [0.3.1] - 2026-11-11
 
 ### Changed

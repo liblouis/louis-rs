@@ -1,35 +1,10 @@
-* Todo [1/9]
-- [ ] Have the ~louis~ binary depend on the ~louis~ library instead of
-  compiling the same sources again
-  - ~src/main.rs~ declares its own ~mod parser~, ~mod translator~,
-    ~mod metadata~, ~mod test~ and ~mod yaml~; ~src/lib.rs~ declares an
-    overlapping ~mod parser~, ~mod translator~, ~mod emphasis~ and
-    ~mod hyphenation~. Both targets therefore compile the same sources,
-    and to the compiler the resulting types are unrelated: the
-    binary's ~parser::TableError~ is not the library's.
-  - Consequences visible today:
-    - ~main.rs~'s ~TableLoadError~ is a variant-for-variant copy of
-      ~lib.rs~'s public ~TranslationError~, and cannot simply use it
-    - dead-code warnings differ between the two builds, so the same
-      function is "never used" in one target and used in the other,
-      which makes the warnings hard to act on (see
-      ~with_display~/~DisplayTable::compile~)
-    - anything the CLI needs has to exist twice or be duplicated
-  - The blocker is deciding what becomes public API. The CLI reaches
-    for ~parser::table_expanded_in~, ~TranslationPipeline~,
-    ~ResolvedTranslation~, ~AnchoredRule~ and ~TranslationStage~, none
-    of which ~lib.rs~ exports today, and the library API is explicitly
-    not stable yet. Same question as exposing a display table on
-    ~Translator~.
-  - Blocks translating from a metadata query: ~metadata~ is a module of
-    the binary only, so ~Translator~ cannot reach the index at all. See
-    the entry below.
+* Todo [1/8]
 - [ ] Let a ~Translator~ be built from a metadata query, as liblouis
   allows
   - ~metadata::Index~ exists and the ~query~ subcommand and the YAML
-    test harness both use it, but it is declared in ~main.rs~, not in
-    ~lib.rs~, so nothing in the library API can reach it. Moving it is
-    part of the binary/library split above.
+    test harness both use it, but it lives in the CLI crate
+    (~louis-cli/src/metadata.rs~), so nothing in the library API can
+    reach it. Moving it into the library is the first step.
   - ~Index::build~ takes the ~SearchPath~ to walk, so the index itself
     carries no assumption about where tables live. What does is
     ~metadata::index()~, the convenience the CLI and the harness use: a

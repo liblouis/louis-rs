@@ -2,13 +2,13 @@
 #+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
 #+language: en
 
-* DRAFT ADR-0019: Split the library and the CLI into a two-crate workspace
+* ACCEPTED ADR-0019: Split the library and the CLI into a two-crate workspace
 - Deciders :: CE
 - Date :: [2026-11-06 Fri]
 
 Technical Story: came out of a review of the public API against the
-[[https://rust-lang.github.io/api-guidelines/][Rust API Guidelines]] and chapter 3 of /Rust for Rustaceans/. Parked
-until the remaining unimplemented opcodes are done.
+[[https://rust-lang.github.io/api-guidelines/][Rust API Guidelines]] and chapter 3 of /Rust for Rustaceans/.
+Implemented on [2026-11-11 Wed], after the 0.3.1 release.
 
 ** Context and Problem Statement
 
@@ -49,7 +49,7 @@ depending on the library like any other user?
 
 ** Decision Outcome
 
-Tentatively option 2. It fixes the dependency leak for good and makes
+Option 2. It fixes the dependency leak for good and makes
 the CLI an honest user of the library. Option 3 can follow later if
 library users ask for ~trace~-style access.
 
@@ -118,7 +118,7 @@ Checked against the code on [2026-11-11 Wed] (~597cab9~).
 
 | Caller              | Uses                                                                                                                                                                                                      |
 |---------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| ~main.rs~ (parse, trace) | ~parser::{table_expanded_in, RuleParser, AnchoredRule, TableError}~, ~TranslationPipeline::{compile, with_display, trace}~, ~TranslationStage~, ~ResolvedTranslation~, ~DisplayTable~, ~translator::TranslationError~ |
+| ~main.rs~ (check-table, translate, trace) | ~parser::{table_expanded_in, AnchoredRule, TableError}~, ~TranslationPipeline::{compile, with_display, trace}~, ~TranslationStage~, ~ResolvedTranslation~, ~DisplayTable~, ~translator::TranslationError~ |
 | ~test.rs~ (check)   | ~parser::{table, expand_includes, table_expanded_in}~, ~TranslationPipeline~, ~DisplayTable~, ~PositionMap~                                                                                                 |
 | ~yaml.rs~           | ~parser::{unescape, EscapingContext, ParseError}~, ~TranslationMode(s)~                                                                                                                                    |
 
@@ -156,9 +156,13 @@ on ~Direction~ (~src/parser.rs~).
 Most of what the ~check~ harness needs is reasonable public API
 anyway: a display table on ~Translator~, inline table source with
 includes resolved against a search path, and the positions (already
-public). Once those are public, ~internals~ only has to cover ~parse~
-and ~trace~ (~RuleParser~, ~AnchoredRule~, ~trace~,
-~ResolvedTranslation~, ~TranslationStage~).
+public). Once those are public, ~internals~ only has to cover ~trace~
+(~AnchoredRule~, ~trace~, ~ResolvedTranslation~, ~TranslationStage~).
+
+The ~parse~ subcommand, which dumped the parsed rules and had a REPL
+that parsed each line typed, was only ever a way to test the parser.
+It was replaced by ~check-table~, which does what liblouis's
+~lou_checktable~ does, so ~RuleParser~ left the internals.
 
 *** Open questions
 

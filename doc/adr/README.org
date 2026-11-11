@@ -27,5 +27,5 @@ When you add a record or change its status, update its row in the table below to
 | [[file:0016-rule-selection-by-rank.org][ADR-0016]] | Rule selection ranks by what the rules say, then by definition order                                 | ACCEPTED   |
 | [[file:0017-braille-formatter.org][ADR-0017]] | A braille formatter on top of louis-rs, as a replacement for liblouisutdml                           | DRAFT      |
 | [[file:0018-parity-or-migration-path.org][ADR-0018]] | Every deliberate difference from liblouis needs parity or a migration path                           | DRAFT      |
-| [[file:0019-library-cli-workspace-split.org][ADR-0019]] | Split the library and the CLI into a two-crate workspace                                             | DRAFT      |
+| [[file:0019-library-cli-workspace-split.org][ADR-0019]] | Split the library and the CLI into a two-crate workspace                                             | ACCEPTED   |
 | [[file:0020-repword.org][ADR-0020]] | Implement ~repword~ and ~rependword~ with a constrainer, the trie and ~trace~                         | ACCEPTED   |

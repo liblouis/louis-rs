@@ -5,17 +5,17 @@ use std::{
     vec,
 };
 
-use crate::{parser, parser::EscapingContext, parser::unescape};
+use louis::internals::{parser, parser::EscapingContext, parser::unescape};
 
 use saphyr_parser::{BufferedInput, Event, Parser, ScalarStyle, ScanError, Span};
 
-use crate::emphasis::EmphasisSpan;
-use crate::parser::Direction;
 use crate::test::{
     CursorPosition, Directions, Display, ExpectedFailure, Table, TableQuery, Test, TestError,
     TestMatrix, TestMode, TestResult,
 };
-use crate::translator::{TranslationMode, TranslationModes};
+use louis::Direction;
+use louis::EmphasisSpan;
+use louis::{TranslationMode, TranslationModes};
 
 #[derive(thiserror::Error, Debug)]
 pub enum ParseError {

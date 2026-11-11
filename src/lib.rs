@@ -38,6 +38,25 @@ use search_path::SearchPath;
 use translator::TranslationPipeline;
 pub use translator::{TranslationMode, TranslationModes, TranslationOptions};
 
+/// What the `louis` command line tool needs beyond the public API: rule tracing for `trace`,
+/// and the pipeline and display tables for `check-table` and the YAML test harness.
+/// Not part of the public API and not covered by semver; it changes whenever the CLI does.
+#[doc(hidden)]
+pub mod internals {
+    pub mod parser {
+        pub use crate::parser::{
+            AnchoredRule, Direction, EscapingContext, ParseError, TableError, expand_includes,
+            table, table_expanded_in, unescape,
+        };
+    }
+    pub mod translator {
+        pub use crate::translator::{
+            DisplayTable, PositionMap, ResolvedTranslation, TranslationError, TranslationMode,
+            TranslationModes, TranslationOptions, TranslationPipeline, TranslationStage,
+        };
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum TranslationError {
     #[error(transparent)]

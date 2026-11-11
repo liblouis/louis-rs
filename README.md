@@ -18,15 +18,15 @@ $ louis translate en-us-g2.ctb "It's about the blind"
 
 ## What is here
 
--   a hand-rolled two-pass parser for liblouis tables; all 458 table files under
-    `tables/` parse cleanly
+-   a hand-rolled two-pass parser for liblouis tables; every table under
+    `tables/` that liblouis compiles, louis-rs compiles too
 -   forward and backward translation through the full pipeline: correct rules,
     the main stage, and pass2/pass3/pass4
 -   a virtual-machine regexp engine behind the `match` and `context` opcodes, and
     a trie for everything else
 -   hyphenation straight from liblouis's `.dic` files, with no external crate and
     no build step
--   the `louis` binary: `translate`, `trace`, `parse`, `check` and `query`; see
+-   the `louis` binary: `translate`, `trace`, `check-table`, `check` and `query`; see
     `louis help`
 -   [doc/Architecture.md](doc/Architecture.md) — the concepts and how a
     translation goes through them
@@ -42,7 +42,10 @@ $ louis translate en-us-g2.ctb "It's about the blind"
 
 You need the [Rust tool chain](https://www.rust-lang.org/). Then:
 
-    $ cargo install louis-rs
+    $ cargo install louis-cli
+
+This installs the `louis` command. The library itself is the `louis-rs`
+crate.
 
 Point `LOUIS_TABLE_PATH` at a set of tables and translate something:
 

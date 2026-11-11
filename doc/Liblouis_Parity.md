@@ -18,7 +18,7 @@ YAML files (`en-g3`, `en-ueb`, `it`, `de-g2-sbs`) don't parse and drop out:
 | Pass                           | **99.4%** |
 | Fail                           | 0.1%      |
 | Expected failure               | 0.5%      |
-| Table files that parse cleanly | 458 / 458 |
+| Tables that compile            | all       |
 
 Forward and backward combined. Reproduce the assertion figures with:
 
@@ -29,15 +29,19 @@ cargo run --release -- check \
     ~/src/liblouis/tests/yaml/*.yaml --summary
 ```
 
-and the parse figure with:
+and the table figure, which compiles each table on its own in both directions as
+liblouis's `lou_checktable` does, with:
 
 ```sh
 cargo build --release
 export LOUIS_TABLE_PATH=~/src/liblouis/tables
 for f in ~/src/liblouis/tables/*.{ctb,utb,uti,tbl,cti,dis}; do
-    ./target/release/louis parse "$f" > /dev/null
+    ./target/release/louis check-table -q "$f" || echo "$f"
 done
 ```
+
+The few files it lists are fragments that only work when included; liblouis can't
+compile them on their own either.
 
 ## What works today
 
@@ -45,7 +49,7 @@ done
 before the main stage, character and pattern rules in it, `pass2`–`pass4` after —
 reversed for back-translation.
 
-**Every table under `tables/` parses** — all 458 of them.
+**Every table under `tables/` compiles.**
 
 **Contractions and the word-family opcodes** — `word`, `begword`, `midword`,
 `endword`, `midendword`, `prfword`, `sufword`, `partword`, `begmidword`, `lowword`,
@@ -90,7 +94,7 @@ first when back-translating. `--display` on `translate` and `trace`.
 
 **Table metadata queries** — find tables by language, contraction grade and the rest.
 
-**A CLI** with `parse`, `translate`, `trace` (shows every rule that fired), `check`
+**A CLI** with `check-table`, `translate`, `trace` (shows every rule that fired), `check`
 (runs YAML suites) and `query`.
 
 ## What doesn't work yet
@@ -167,7 +171,7 @@ a reason above: `multipass-vs-match.yaml`, `macro.yaml`, `grc-international-es.y
 `hyphenation_nocross_harness.yaml`.
 
 The other three are a separate problem: the `hyphenate`, `hyphenateBraille` and
-`display` test modes fall through a catch-all arm in `src/test.rs` and silently report
+`display` test modes fall through a catch-all arm in `louis-cli/src/test.rs` and silently report
 nothing at all, and `de-eurobrl6.yaml`, `hu-hu-g1-hyph_harness.yaml` and
 `no_8dot_harness.yaml` consist only of such tests. `issue-332.yaml` has its
 `hyphenate` block skipped the same way while its remaining 19 tests all fail. *(S)*

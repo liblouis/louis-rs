@@ -32,7 +32,7 @@ table can include one sitting next to it without that directory being on
 `LOUIS_TABLE_PATH`:
 
 ```shell
-$ louis parse /some/where/top.utb   # finds an "include base.utb" next to it
+$ louis check-table /some/where/top.utb   # finds an "include base.utb" next to it
 ```
 
 That first step belongs to the command line tool. The library resolves names

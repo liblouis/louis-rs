@@ -7,14 +7,15 @@ use rayon::prelude::*;
 
 use search_path::SearchPath;
 
-use crate::{
-    emphasis::EmphasisSpan,
-    metadata,
+use louis::EmphasisSpan;
+use louis::internals::{
     parser::{self, Direction, TableError},
     translator::{
         self, DisplayTable, PositionMap, TranslationModes, TranslationOptions, TranslationPipeline,
     },
 };
+
+use crate::metadata;
 
 #[derive(thiserror::Error, Debug)]
 pub enum TestError {
