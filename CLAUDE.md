@@ -158,10 +158,11 @@ Executes the translation pipeline:
 - **Amenders** run over the chosen translations at the end of the main stage,
   for indication that depends on which rule was chosen: `contraction.rs`
   (`ContractionSigns`, the `nocontractsign` and letter sign before a `contraction`,
-  forward) and `uppercase::BackwardCapsWord` (backward). Put such logic here rather than
-  guessing the choice from the text in an indicator. They are not pipeline stages: they
-  are built in and see each translation's rule. `PrimaryTable` holds them as `Amenders`
-  (an `Amender` enum in `indication.rs`), like `Constrainers`, and `trace` applies them in turn
+  forward) and `uppercase::BackwardCaps` (the capitals, backward). Put such logic here
+  rather than guessing the choice from the text in an indicator. They are not pipeline
+  stages: they are built in and see each translation's rule. `PrimaryTable` holds them as
+  `Amenders` (an `Amender` enum in `indication.rs`), like `Constrainers`, and `trace`
+  applies them in turn
 
 **`effect.rs`**: Rule effects and context environment
 - Manages "effects" that rules can apply (numeric, uppercase context)

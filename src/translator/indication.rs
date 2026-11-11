@@ -29,8 +29,8 @@
 //! translation's rule. They are:
 //! * [`contraction::ContractionSigns`]: puts the `nocontractsign` and letter sign in
 //!   front of a `contraction` rule chosen (forward)
-//! * [`uppercase::BackwardCapsWord`]: capitalizes the words a `begcapsword` starts, as
-//!   written (backward)
+//! * [`uppercase::BackwardCaps`]: capitalizes after a `capsletter` and in the words a
+//!   `begcapsword` starts, as written, with the table's `base uppercase` (backward)
 //!
 //! A table holds its amenders as [`Amenders`], applied in turn.
 
@@ -143,15 +143,16 @@ impl Indicators {
 pub enum Amender {
     /// Puts the `nocontractsign` and letter sign in front of a `contraction` (forward).
     ContractionSigns(contraction::ContractionSigns),
-    /// Capitalizes the words a `begcapsword` starts, as written (backward).
-    BackwardCapsWord(uppercase::BackwardCapsWord),
+    /// Capitalizes after a `capsletter` and in the words a `begcapsword` starts, as
+    /// written (backward).
+    BackwardCaps(uppercase::BackwardCaps),
 }
 
 impl Amender {
     fn apply(&self, translations: Vec<ResolvedTranslation>) -> Vec<ResolvedTranslation> {
         match self {
             Amender::ContractionSigns(a) => a.apply(translations),
-            Amender::BackwardCapsWord(a) => a.apply(translations),
+            Amender::BackwardCaps(a) => a.apply(translations),
         }
     }
 }

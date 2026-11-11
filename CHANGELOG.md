@@ -53,6 +53,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   rather than Unicode's uppercase, as in liblouis: with `tr-g1.ctb`,
   "⠊" gave "İ" instead of "i", and "⠠⠊" "I" instead of "İ"; with
   `sv-g2.ctb`, "gå" came out as "gÅ".
+- Backward, a `capsletter` capitalizes the next character written, as
+  in liblouis, not the next cell: with `fr-bfu-g2.ctb`, whose passes
+  put the letter sign after the capital sign, "⠰⠨⠊⠲" gave "i." instead
+  of "I.".
 - Backward, a `litdigit` is read only inside a number, as in liblouis:
   with `tr-g2.tbl`, "⠰⠁" gave "1" instead of "a", and "Zekice" came
   out as "Z5kic5".

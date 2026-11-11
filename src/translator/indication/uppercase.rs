@@ -100,18 +100,22 @@ impl Indicator {
     }
 }
 
-/// Backward, the capitalized word a `begcapsword` starts, decided from the text written.
+/// Backward capitals, decided from the text written once the rules are chosen.
 ///
-/// As in liblouis, the characters written after the indicator are uppercased, whatever
+/// After a `capsletter`, the next character written is uppercased (liblouis's
+/// `nextUpper`), the first of a rule's output if it writes several. After a
+/// `begcapsword`, as in liblouis, the characters written are uppercased, whatever
 /// rule wrote them, until one that is neither a letter nor a `capsmodechars` character,
 /// which ends the word, possibly partway through a rule's output (`'s`). `endcapsword`,
 /// `capsletter` and a space end it too. Until the first uppercase letter is written, a
 /// character that isn't a letter, as the hyphen of UEB's ⠠⠠⠤⠏⠁⠝⠽ "-PANY", doesn't end it.
 ///
-/// Capitalizing changes no rule's choice, so it runs over the translations once they are
-/// chosen, rather than guessing the word's extent from the cells beforehand.
+/// A letter is uppercased with the table's `base uppercase` rules, as in liblouis, not
+/// with Unicode's: in Turkish the capital of "i" is "İ". Capitalizing changes no rule's
+/// choice, so it runs over the translations once they are chosen, rather than guessing
+/// from the cells beforehand.
 #[derive(Debug, Clone)]
-pub struct BackwardCapsWord {
+pub struct BackwardCaps {
     /// The letters and `capsmodechars` characters, which go on a capitalized word.
     word_chars: HashSet<char>,
     space_chars: HashSet<char>,
@@ -127,13 +131,13 @@ enum CapsWord {
     Running,
 }
 
-/// A builder for [`BackwardCapsWord`]
+/// A builder for [`BackwardCaps`]
 #[derive(Debug, Default)]
-pub struct BackwardCapsWordBuilder {
+pub struct BackwardCapsBuilder {
     capsmodechars: HashSet<char>,
 }
 
-impl BackwardCapsWordBuilder {
+impl BackwardCapsBuilder {
     pub fn new() -> Self {
         Self::default()
     }
@@ -142,14 +146,10 @@ impl BackwardCapsWordBuilder {
         self.capsmodechars.extend(s.chars());
     }
 
-    pub fn build(
-        self,
-        ctx: &TableContext,
-        uppercase_letters: HashMap<char, char>,
-    ) -> BackwardCapsWord {
+    pub fn build(self, ctx: &TableContext, uppercase_letters: HashMap<char, char>) -> BackwardCaps {
         let classes = ctx.character_classes();
         let letters = classes.get(&CharacterClass::Letter).unwrap_or_default();
-        BackwardCapsWord {
+        BackwardCaps {
             word_chars: letters.into_iter().chain(self.capsmodechars).collect(),
             space_chars: classes.get(&CharacterClass::Space).unwrap_or_default(),
             uppercase_letters,
@@ -157,9 +157,23 @@ impl BackwardCapsWordBuilder {
     }
 }
 
-impl BackwardCapsWord {
-    /// Uppercases the output of `translations` inside capitalized words.
+impl BackwardCaps {
+    fn uppercase(&self, c: char) -> char {
+        self.uppercase_letters.get(&c).copied().unwrap_or(c)
+    }
+
+    fn is_capsletter(rule: Option<&Rule>) -> bool {
+        match rule {
+            Some(Rule::Capsletter { .. }) => true,
+            Some(Rule::Multind { names, .. }) => names.iter().any(|n| n == "capsletter"),
+            _ => false,
+        }
+    }
+
+    /// Uppercases the output of `translations` after a capital sign and inside
+    /// capitalized words.
     pub fn apply(&self, translations: Vec<ResolvedTranslation>) -> Vec<ResolvedTranslation> {
+        let mut next_upper = false;
         let mut state = CapsWord::Off;
         let mut last: Option<char> = None;
         let mut result = Vec::with_capacity(translations.len());
@@ -174,6 +188,9 @@ impl BackwardCapsWord {
                 }
                 (state, _) => state,
             };
+            if Self::is_capsletter(translation.rule()) {
+                next_upper = true;
+            }
             state = match translation.rule() {
                 Some(Rule::Begcapsword { .. }) => CapsWord::Started,
                 Some(Rule::Endcapsword { .. } | Rule::Capsletter { .. }) => CapsWord::Off,
@@ -189,7 +206,7 @@ impl BackwardCapsWord {
                 }
                 _ => state,
             };
-            let translation = if state == CapsWord::Off {
+            let translation = if state == CapsWord::Off && !next_upper {
                 translation
             } else {
                 let mut output = String::new();
@@ -199,12 +216,12 @@ impl BackwardCapsWord {
                     {
                         state = CapsWord::Off;
                     }
-                    if state == CapsWord::Off {
-                        output.push(c);
+                    if next_upper || state != CapsWord::Off {
+                        output.push(self.uppercase(c));
                     } else {
-                        // as liblouis, only a letter with a `base uppercase` changes
-                        output.push(self.uppercase_letters.get(&c).copied().unwrap_or(c));
+                        output.push(c);
                     }
+                    next_upper = false;
                 }
                 translation.with_output(&output)
             };
@@ -219,6 +236,7 @@ impl BackwardCapsWord {
 mod tests {
     use super::*;
     use crate::parser::{CharacterClass, CharacterClasses, RuleParser};
+    use crate::translator::TranslationStage;
 
     fn rule(s: &str) -> AnchoredRule {
         AnchoredRule::new(RuleParser::new(s).rule().unwrap(), None, 0)
@@ -383,5 +401,48 @@ mod tests {
             pairs(&indicator.precompute("AB CD EF")),
             vec![(0, "⠠⠠⠠".to_string()), (8, "⠄".to_string())]
         );
+    }
+
+    fn written(caps: &BackwardCaps, translations: Vec<ResolvedTranslation>) -> String {
+        caps.apply(translations)
+            .iter()
+            .map(|t| t.output().to_string())
+            .collect()
+    }
+
+    /// A backward indicator: it reads its cells and writes nothing.
+    fn sign(cells: &str, r: &str) -> ResolvedTranslation {
+        ResolvedTranslation::new(cells, "", 1, TranslationStage::Main, rule(r))
+    }
+
+    fn text(cells: &str, output: &str) -> ResolvedTranslation {
+        ResolvedTranslation::new(cells, output, 1, TranslationStage::Main, None)
+    }
+
+    #[test]
+    fn capsletter_uppercases_the_next_character_written() {
+        let caps = BackwardCapsBuilder::new().build(
+            &space_ctx(),
+            HashMap::from([('s', 'S'), ('a', 'A'), ('i', 'İ')]),
+        );
+        // only the first of a digraph rule's output, as in Hungarian "Sz"
+        let capsletter = || sign("⠠", "capsletter 6");
+        assert_eq!(
+            written(&caps, vec![capsletter(), text("⠱", "sz"), text("⠁", "a")]),
+            "Sza"
+        );
+        // a `multind` that includes a capsletter acts like one
+        assert_eq!(
+            written(
+                &caps,
+                vec![
+                    sign("⠰⠠", "multind 56-6 letsign capsletter"),
+                    text("⠁", "a")
+                ]
+            ),
+            "A"
+        );
+        // the table's capital, not Unicode's
+        assert_eq!(written(&caps, vec![capsletter(), text("⠊", "i")]), "İ");
     }
 }

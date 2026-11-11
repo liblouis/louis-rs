@@ -20,16 +20,15 @@ use crate::{
             Amender, Amenders, Indicator, Indicators, PrecomputedIndications, computer_braille,
             contraction::ContractionSignsBuilder,
             emphasis, lettersign, mode, numeric,
-            uppercase::{self, BackwardCapsWordBuilder},
+            uppercase::{self, BackwardCapsBuilder},
         },
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
         position_constraints::{
-            BackwardCapsConstrainerBuilder, BackwardNoContractConstrainerBuilder,
-            BackwardNumericConstrainerBuilder, CapsNoContConstrainerBuilder,
-            ComputerBrailleConstrainer, Constrainer, Constrainers, Constraint,
-            HyphenationConstrainerBuilder, JoinConstrainerBuilder, NoContConstrainerBuilder,
-            NumericConstrainerBuilder, PositionConstraints, PunctuationConstrainerBuilder,
-            RepwordConstrainerBuilder, SyllableConstrainerBuilder,
+            BackwardNoContractConstrainerBuilder, BackwardNumericConstrainerBuilder,
+            CapsNoContConstrainerBuilder, ComputerBrailleConstrainer, Constrainer, Constrainers,
+            Constraint, HyphenationConstrainerBuilder, JoinConstrainerBuilder,
+            NoContConstrainerBuilder, NumericConstrainerBuilder, PositionConstraints,
+            PunctuationConstrainerBuilder, RepwordConstrainerBuilder, SyllableConstrainerBuilder,
         },
         standing_alone::StandingAloneScanner,
         table::TableContext,
@@ -167,8 +166,6 @@ pub struct PrimaryTable {
     ///
     /// [`Constraint::PreferDigit`]: crate::translator::position_constraints::Constraint::PreferDigit
     backward_digit_overrides: HashMap<char, ResolvedTranslation>,
-    /// Backward, the uppercase letter of a lowercase one, from the `base uppercase` rules.
-    uppercase_letters: HashMap<char, char>,
     /// Amend the translations chosen, see [`Amenders`].
     amenders: Amenders,
 }
@@ -191,8 +188,7 @@ struct PrimaryTableBuilder {
     emphasis_indicator: emphasis::IndicatorBuilder,
     computer_braille_indicator: computer_braille::IndicatorBuilder,
     numeric_constrainer: NumericConstrainerBuilder,
-    backward_caps_constrainer: BackwardCapsConstrainerBuilder,
-    backward_caps_word: BackwardCapsWordBuilder,
+    backward_caps: BackwardCapsBuilder,
     backward_numeric_constrainer: BackwardNumericConstrainerBuilder,
     backward_nocontract_constrainer: BackwardNoContractConstrainerBuilder,
     hyphenation_constrainer: HyphenationConstrainerBuilder,
@@ -254,8 +250,7 @@ impl PrimaryTableBuilder {
             emphasis_indicator: emphasis::IndicatorBuilder::new(),
             computer_braille_indicator: computer_braille::IndicatorBuilder::new(),
             numeric_constrainer: NumericConstrainerBuilder::new(),
-            backward_caps_constrainer: BackwardCapsConstrainerBuilder::new(),
-            backward_caps_word: BackwardCapsWordBuilder::new(),
+            backward_caps: BackwardCapsBuilder::new(),
             backward_numeric_constrainer: BackwardNumericConstrainerBuilder::new(),
             backward_nocontract_constrainer: BackwardNoContractConstrainerBuilder::new(),
             hyphenation_constrainer: HyphenationConstrainerBuilder::new(),
@@ -474,10 +469,11 @@ impl PrimaryTableBuilder {
                     .map(Amender::ContractionSigns)
                     .into_iter()
                     .collect(),
-                Direction::Backward => vec![Amender::BackwardCapsWord(
-                    self.backward_caps_word
-                        .build(ctx, self.uppercase_letters.clone()),
-                )],
+                Direction::Backward => {
+                    vec![Amender::BackwardCaps(
+                        self.backward_caps.build(ctx, self.uppercase_letters),
+                    )]
+                }
             }),
             undefined: self.undefined,
             character_translations: self.character_translations,
@@ -493,9 +489,6 @@ impl PrimaryTableBuilder {
                 [
                     Some(Constrainer::ComputerBraille(ComputerBrailleConstrainer {})),
                     self.numeric_constrainer.build().map(Constrainer::Numeric),
-                    self.backward_caps_constrainer
-                        .build()
-                        .map(Constrainer::BackwardCaps),
                     self.backward_numeric_constrainer
                         .build()
                         .map(Constrainer::BackwardNumeric),
@@ -546,7 +539,6 @@ impl PrimaryTableBuilder {
                 character_classes: ctx.character_classes.clone(),
             }),
             backward_digit_overrides: self.backward_digit_overrides,
-            uppercase_letters: self.uppercase_letters,
         }
     }
 }
@@ -854,9 +846,6 @@ impl PrimaryTable {
                     {
                         builder.insert_backward_indicator(&dots.to_string(), rule);
                         builder
-                            .backward_caps_constrainer
-                            .capsletter(&dots.to_string());
-                        builder
                             .backward_nocontract_constrainer
                             .caps_indicator(&dots.to_string());
                     }
@@ -873,9 +862,6 @@ impl PrimaryTable {
                         )
                     {
                         builder.insert_backward_indicator(&dots.to_string(), rule);
-                        builder
-                            .backward_caps_constrainer
-                            .begcapsword(&dots.to_string());
                         builder
                             .backward_nocontract_constrainer
                             .caps_indicator(&dots.to_string());
@@ -912,7 +898,7 @@ impl PrimaryTable {
                 }
                 Rule::Capsmodechars { chars } => {
                     builder.uppercase_indicator.capsmodechars(chars);
-                    builder.backward_caps_word.capsmodechars(chars);
+                    builder.backward_caps.capsmodechars(chars);
                 }
                 Rule::Begcapsphrase { dots } => {
                     builder
@@ -1127,12 +1113,6 @@ impl PrimaryTable {
                             match name.as_str() {
                                 "letsign" | "nocontractsign" | "nonumsign" => {
                                     builder.backward_nocontract_constrainer.indicator(&dots)
-                                }
-                                "capsletter" => {
-                                    builder.backward_caps_constrainer.multind_capsletter(&dots)
-                                }
-                                "begcapsword" => {
-                                    builder.backward_caps_constrainer.multind_begcapsword(&dots)
                                 }
                                 "numsign" => {
                                     builder.backward_numeric_constrainer.multind_numsign(&dots)
@@ -2373,30 +2353,6 @@ impl PrimaryTable {
                 candidates.extend(self.comp6_trie.find_translations(chars.as_str(), preceding));
             }
 
-            // Backward `capsletter`: capitalize the first character of whichever candidate
-            // wins below — a cell can resolve to more than one character (e.g. a digraph
-            // rule), and capsletter marks a single capitalized letter. A capitalized word
-            // is done once translated (`BackwardCapsWord`).
-            let titlecase_here =
-                self.direction == Direction::Backward && constraints.titlecase_at(char_pos);
-            let uppercase_if_needed =
-                move |translation: ResolvedTranslation| -> ResolvedTranslation {
-                    if titlecase_here {
-                        let output = translation.output();
-                        let mut chars = output.chars();
-                        let titled = match chars.next() {
-                            Some(c) => {
-                                let upper = self.uppercase_letters.get(&c).copied().unwrap_or(c);
-                                std::iter::once(upper).chain(chars).collect::<String>()
-                            }
-                            None => String::new(),
-                        };
-                        translation.with_output(&titled)
-                    } else {
-                        translation
-                    }
-                };
-
             // use the longest translation
             let candidate = candidates
                 .iter()
@@ -2410,7 +2366,6 @@ impl PrimaryTable {
                 && candidate.is_none_or(|t| nocross.rank(self.direction) >= t.rank(self.direction))
             {
                 let translation = nocross.clone();
-                let translation = uppercase_if_needed(translation);
                 // move the iterator forward by the number of characters in the translation
                 chars.nth(nocross.length() - 1);
                 char_pos += nocross.length();
@@ -2449,7 +2404,6 @@ impl PrimaryTable {
                 }
                 // there is a matching translation rule
                 let translation = t.clone();
-                let translation = uppercase_if_needed(translation);
                 translations.push(translation);
                 delayed_translations = self.update_offsets(delayed_translations, t.length());
 
