@@ -3001,6 +3001,24 @@ mod tests {
     }
 
     #[test]
+    fn postpunc_before_word_rule_defined_after_it() {
+        // liblouis takes the first rule that applies, not the one checking more context:
+        // the closing quote is the postpunc, as in en-g3.ctb
+        let rules = [
+            parse_rule("lowercase a 1"),
+            parse_rule("punctuation \" 5"),
+            parse_rule("prepunc \" 236"),
+            parse_rule("postpunc \" 356"),
+            parse_rule("word \" 2356"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        assert_eq!(table.translate("\"a\""), "⠦⠁⠴");
+    }
+
+    #[test]
     fn base() {
         let rules = [
             parse_rule("lowercase a 1"),

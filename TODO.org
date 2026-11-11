@@ -83,14 +83,15 @@
   louis-rs collects the ~seq*~ classes but uses none of them, and
   ~seqafterpattern~ still compiles to nothing; the trie's word
   boundaries (space or punctuation) give the same result for the cases
-  tried. Implementing it as a retain would drop the weight of the
-  boundary transitions, which ~Rank~ compares before precedence and
-  definition order.
-- [ ] Backward ~decpoint~ has no "digit follows" check. ~Rank~
-  compares weight before precedence and definition order, and the
-  check, as an ~End~ transition, would add weight: ~decpoint . 46~
-  would then beat the earlier ~always ख 46~ in ~hi-in-g1~, and ⠨⠔
-  would come out as ".ई" instead of "खी". Without it, ⠨ reads as "."
+  tried. (Implementing it as a retain used to be blocked by ~Rank~
+  comparing the boundary transitions' weight; weight is gone from
+  ~Rank~ outside ~context~ rules, so that blocker is too.)
+- [ ] Backward ~decpoint~ has no "digit follows" check. It used to be
+  blocked by ~Rank~ comparing weight before definition order: the
+  check, as an ~End~ transition, added weight, so ~decpoint . 46~
+  beat the earlier ~always ख 46~ in ~hi-in-g1~, and ⠨⠔ came out as
+  ".ई" instead of "खी". Weight no longer ranks these rules, so worth
+  retrying. Without it, ⠨ reads as "."
   where no digit follows, now that the earlier-defined ~decpoint~
   wins the tie: 2 of ~ml.yaml~'s backward tests (⠍⠥⠨⠰ gives "മു.ം"
   instead of "മുഖം"). liblouis checks the digit and then falls through
@@ -471,8 +472,8 @@
 - [ ] Back-translation of a lone cell carrying both a ~prepunc~ and a
   ~postpunc~ rule (e.g. ~⠠⠦~, ~⠠⠴~, ~⠰⠦~ in the yaml tests) is
   ambiguous: the cell both begins and ends a word, so both rules apply.
-  liblouis takes whichever comes first in the table; we pick by the
-  transitions' weight. Rule-order dependent per ADR-0016, so a
+  liblouis takes whichever comes first in the table, and so do we now
+  that weight no longer ranks them. Rule-order dependent per ADR-0016, so a
   candidate for a table fix rather than for copying liblouis.
 - [ ] Malayalam conjunct/reph rule: a specific virama/conjunct
   sequence consistently produces ⠗ instead of the expected ⠻

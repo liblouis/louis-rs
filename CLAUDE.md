@@ -195,9 +195,11 @@ Subcommands:
 - **Match patterns**: Regex-based rules (liblouis `match` opcode) checked after trie
 - **Context patterns**: Regex-based rules (liblouis `context` opcode) checked last
 - **`Rank`** (`translation.rs`): all candidates that pass the boundary checks compete on one
-  key, compared field by field: zero-length first, then length, weight, pass-rule literals,
-  `Precedence` (character definition < indicator < `always` < other rules), backward
-  main-stage output length, `nocross`, and finally definition order (earliest wins)
+  key, compared field by field: a forward `context` rule with no leading literal first
+  (liblouis's `findForPassRule` override), then zero-length, length (for a forward `context`
+  rule, its leading literal), pass-rule literals, `Precedence` (character definition <
+  indicator < `always` < other rules), backward main-stage output length, `nocross`, the
+  weight of a forward `context` rule's test, and finally definition order (earliest wins)
 
 ### Boundary Handling
 

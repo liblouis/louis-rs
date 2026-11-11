@@ -35,6 +35,20 @@ impl Test {
             .any(|t| matches!(t, TestInstruction::Replace { .. }))
     }
 
+    /// The length of the literal a forward `context` rule's test starts with at the rule's
+    /// position. liblouis indexes the rule by these characters (`passFindCharacters`), and
+    /// it competes as a rule of that length. It is the first literal reaching past what `_N`
+    /// steps back, skipping variable tests, `!`, the brackets and anchors, and stepping over
+    /// fixed-width classes inside the look-back. Anything else first, such as a class, gives
+    /// 0, and the rule is then tried at every position, ahead of the rule chosen there.
+    pub fn leading_literal_len(&self) -> usize {
+        let mut lookback = 0;
+        self.tests
+            .iter()
+            .find_map(|t| t.leading_literal_len(&mut lookback))
+            .unwrap_or(0)
+    }
+
     /// How many characters the test spells out literally (`"..."` or `@...`), anywhere in it.
     pub fn literal_count(&self) -> usize {
         self.tests.iter().map(TestInstruction::literal_count).sum()
@@ -146,6 +160,47 @@ impl TestInstruction {
             | TestInstruction::AtBeginning
             | TestInstruction::AtEnd => 0,
         }
+    }
+
+    /// [`Test::leading_literal_len`] for this instruction, `lookback` being how much of
+    /// the `_N` look-back the instructions before it left uncovered: `Some` once the
+    /// length is decided, `None` to go on with the next instruction.
+    fn leading_literal_len(&self, lookback: &mut usize) -> Option<usize> {
+        let n = match self {
+            TestInstruction::String { .. } | TestInstruction::Dots { .. } => {
+                let n = self.literal_count();
+                if n > *lookback {
+                    return Some(n - *lookback);
+                }
+                n
+            }
+            TestInstruction::Attributes { quantifier, .. }
+            | TestInstruction::Class { quantifier, .. } => {
+                let n = match quantifier {
+                    None => 1,
+                    Some(Quantifier::Number(n)) => *n as usize,
+                    Some(Quantifier::Range(min, max)) if min == max => *min as usize,
+                    Some(_) => return Some(0),
+                };
+                if n > *lookback {
+                    return Some(0);
+                }
+                n
+            }
+            TestInstruction::Lookback { len } => {
+                *lookback += *len as usize;
+                return None;
+            }
+            TestInstruction::Negate { test } => return test.leading_literal_len(lookback),
+            TestInstruction::Replace { tests } => {
+                return tests.iter().find_map(|t| t.leading_literal_len(lookback));
+            }
+            TestInstruction::Variable { .. }
+            | TestInstruction::AtBeginning
+            | TestInstruction::AtEnd => 0,
+        };
+        *lookback -= n;
+        None
     }
 
     /// The text this instruction matches when it is only literals, looking inside
@@ -575,6 +630,19 @@ mod tests {
 
     use super::braille::BrailleDot;
     use super::*;
+
+    #[test]
+    fn leading_literal_len() {
+        let chars = |s| Parser::new(s).tests().unwrap().leading_literal_len();
+        // the first literal, skipping variable tests and brackets
+        assert_eq!(chars(r#""เ"[$l]"าะ""#), 1);
+        assert_eq!(chars(r#"#1=1["ab"]"#), 2);
+        // a class first: tried at every position instead
+        assert_eq!(chars(r#"[$l"z"]$s"lesz""#), 0);
+        // `_2` steps back over a fixed-width class and part of the string
+        assert_eq!(chars(r#"_2$l"abc""#), 2);
+        assert_eq!(chars(r#"_1$l."abc""#), 0);
+    }
 
     #[test]
     fn literal_count() {

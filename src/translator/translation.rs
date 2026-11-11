@@ -207,16 +207,21 @@ impl Resolve for Translation {
 /// order of precedence; each one only matters when all the fields above it tie.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Rank {
+    /// A forward main-stage `context` rule whose test starts with no literal characters wins
+    /// over everything else. liblouis files rules under their leading characters; having
+    /// none, these go on a separate list, which it checks after choosing a rule from its
+    /// chains, and the first one that matches overrides that choice (`findForPassRule`).
+    /// An artifact of liblouis's indexing rather than a priority anyone chose, but tables
+    /// depend on it.
+    context_no_leading_literal: bool,
     /// A zero-length candidate, e.g. a `context` or `match` rule that only emits an
     /// indicator, is not competing for the same input at all: it consumes nothing and lets
     /// the next iteration pick the rule that does. Ranking it by characters consumed would
     /// mean it could never win, so it goes ahead of every consuming candidate instead.
     zero_length: bool,
-    /// Characters consumed: a longer match always beats a shorter one.
+    /// Characters consumed: a longer match always beats a shorter one. For a forward
+    /// `context` rule, the characters liblouis files it under (`Test::leading_literal_len`).
     length: usize,
-    /// The consumed characters *plus* the `before`/`after` conditions the rule checked, so
-    /// the more constrained of two equally long matches wins.
-    weight: usize,
     /// Pass and `correct` rules: how many characters of the test are spelled out literally
     /// rather than given by a class, so `@123` beats `$a` on the same cell. liblouis sorts
     /// pass rules by their leading literals alone and takes the first match, never comparing
@@ -233,6 +238,12 @@ pub struct Rank {
     /// A `nocross` rule beats its plain twin: it only applies when no syllable break falls
     /// inside the match, so it is the more specific of the two.
     nocross: bool,
+    /// Between two forward `context` rules only, how much of the input their tests checked,
+    /// the longer test winning. liblouis has no such measure: it takes the first rule in its
+    /// chain that applies, and tries a `context` rule's test where it starts. louis-rs gets
+    /// to such a rule only once the cursor reaches its `[`, and this stands in for having
+    /// tried it earlier. Every other rule has 0, so definition order decides between them.
+    context_weight: usize,
     /// Definition order, the earliest-defined rule winning, as in liblouis. Only reached when
     /// nothing in the rules themselves separates the candidates, and it keeps the outcome
     /// deterministic and compatible with liblouis.
@@ -337,10 +348,21 @@ impl ResolvedTranslation {
             Some(o) => (o.rule.literal_count(), o.precedence(), o.definition_order()),
             None => (0, Precedence::CharacterDefinition, usize::MAX),
         };
+        // A main-stage `context` rule with literal characters is in liblouis's rule chain
+        // under those characters, and competes by their number, not by what it consumes.
+        // Forward only: backward, liblouis chooses rules its own way (`back_selectRule`).
+        let leading_literal_len = match (direction, self.stage, self.rule()) {
+            (Direction::Forward, TranslationStage::Main, Some(Rule::Context { test, .. })) => {
+                Some(test.leading_literal_len())
+            }
+            _ => None,
+        };
         Rank {
+            context_no_leading_literal: leading_literal_len == Some(0),
             zero_length: self.length == 0,
-            length: self.length,
-            weight: self.weight,
+            length: leading_literal_len
+                .filter(|&n| n > 0)
+                .unwrap_or(self.length),
             literals,
             precedence: match precedence {
                 Precedence::Always if self.length < 2 => Precedence::Translation,
@@ -351,6 +373,11 @@ impl ResolvedTranslation {
                 _ => 0,
             },
             nocross: self.origin.as_ref().is_some_and(|o| o.is_nocross()),
+            context_weight: if leading_literal_len.is_some() {
+                self.weight
+            } else {
+                0
+            },
             definition_order: Reverse(definition_order),
         }
     }

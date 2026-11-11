@@ -38,6 +38,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   fall back on when it did not apply. With `pa.tbl`, "?" gave ⠈⠦ instead
   of ⠦, and with `afr-za-g2.ctb`, "algemene" gave ⠫⠿⠍⠢⠑ instead of
   ⠫⠿⠍⠑⠝⠑.
+- How much context a rule checked no longer decides between rules
+  ahead of liblouis's order, and `context` rules are now chosen as
+  liblouis chooses them: one whose test starts with a literal competes
+  as a rule of that literal's length, and one that starts otherwise,
+  with a class say, overrides any other rule that applies. With
+  `en-g3.ctb`, a closing quote is now ⠴ instead of the ⠦ of a later
+  `word` rule, and with `th.ctb` a longer `always` rule now beats a
+  `context` rule that starts with a single character.
 
 ### Fixed
 - A letter with a `word` or `largesign` rule of its own no longer gets a
