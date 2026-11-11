@@ -21,8 +21,9 @@ use std::collections::HashSet;
 
 use crate::parser::CharacterClass;
 use crate::translator::TranslationStage;
+use crate::translator::standing_alone::{StandingAloneScanner, stand_alone};
 use crate::translator::table::TableContext;
-use crate::translator::trie::{ClassConstraints, Transition};
+use crate::translator::trie::ClassConstraints;
 use crate::{
     parser::{AnchoredRule, Direction},
     translator::{ResolvedTranslation, trie::Trie},
@@ -37,6 +38,7 @@ use std::collections::HashMap;
 pub struct IndicatorBuilder {
     lettersign: Option<(String, AnchoredRule)>,
     contractions: HashMap<String, AnchoredRule>,
+    standing_alone: Option<StandingAloneScanner>,
     noletsign_chars: HashSet<char>,
     noletsignafter_chars: HashSet<char>,
     noletsignbefore_chars: HashSet<char>,
@@ -47,6 +49,7 @@ impl IndicatorBuilder {
         Self {
             lettersign: None,
             contractions: HashMap::new(),
+            standing_alone: None,
             noletsign_chars: HashSet::new(),
             noletsignafter_chars: HashSet::new(),
             noletsignbefore_chars: HashSet::new(),
@@ -67,14 +70,14 @@ impl IndicatorBuilder {
             ResolvedTranslation::new("", &lettersign, 1, TranslationStage::Main, origin.clone());
 
         let cc = ctx.character_classes();
-        let mut trie = Trie::new().with_context(cc.clone());
-        let word_boundary = vec![CharacterClass::Space, CharacterClass::Punctuation];
+        let (mut trie, before, after) =
+            stand_alone(self.standing_alone, Trie::new().with_context(cc.clone()));
         for (contraction, _origin) in self.contractions {
             trie.insert(
                 &contraction,
                 &lettersign,
-                Some(Transition::Start(word_boundary.clone())),
-                Some(Transition::End(word_boundary.clone())),
+                Some(before.clone()),
+                Some(after.clone()),
                 Direction::Forward,
                 ClassConstraints::default(),
                 TranslationStage::Main,
@@ -112,6 +115,11 @@ impl IndicatorBuilder {
 
     pub fn letsign(&mut self, s: &str, origin: &AnchoredRule) {
         self.lettersign = Some((s.to_string(), origin.clone()));
+    }
+
+    /// Checks that a contraction stands alone the way a table with a `seqdelimiter` does.
+    pub fn standing_alone(&mut self, scanner: StandingAloneScanner) {
+        self.standing_alone = Some(scanner);
     }
 
     pub fn contraction(&mut self, s: &str, origin: &AnchoredRule) {

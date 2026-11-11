@@ -14,10 +14,10 @@
 //! indicator](crate::translator::indication::lettersign::Indicator). In liblouis they do not seem
 //! to have exactly the same behaviour. Find a way to merge them.
 
-use crate::parser::CharacterClass;
 use crate::translator::TranslationStage;
+use crate::translator::standing_alone::{StandingAloneScanner, stand_alone};
 use crate::translator::table::TableContext;
-use crate::translator::trie::{ClassConstraints, Transition};
+use crate::translator::trie::ClassConstraints;
 use crate::{
     parser::{AnchoredRule, Direction},
     translator::{ResolvedTranslation, trie::Trie},
@@ -32,6 +32,7 @@ use std::collections::HashMap;
 pub struct IndicatorBuilder {
     nocontractsign: Option<(String, AnchoredRule)>,
     contractions: HashMap<String, AnchoredRule>,
+    standing_alone: Option<StandingAloneScanner>,
 }
 
 impl IndicatorBuilder {
@@ -39,6 +40,7 @@ impl IndicatorBuilder {
         Self {
             nocontractsign: None,
             contractions: HashMap::new(),
+            standing_alone: None,
         }
     }
 
@@ -54,14 +56,16 @@ impl IndicatorBuilder {
                     TranslationStage::Main,
                     origin.clone(),
                 );
-                let mut trie = Trie::new().with_context(ctx.character_classes().clone());
-                let word_boundary = vec![CharacterClass::Space, CharacterClass::Punctuation];
+                let (mut trie, before, after) = stand_alone(
+                    self.standing_alone,
+                    Trie::new().with_context(ctx.character_classes().clone()),
+                );
                 for (contraction, _origin) in self.contractions {
                     trie.insert(
                         &contraction,
                         &nocontractsign,
-                        Some(Transition::Start(word_boundary.clone())),
-                        Some(Transition::End(word_boundary.clone())),
+                        Some(before.clone()),
+                        Some(after.clone()),
                         Direction::Forward,
                         ClassConstraints::default(),
                         TranslationStage::Main,
@@ -87,6 +91,11 @@ impl IndicatorBuilder {
 
     pub fn nocontractsign(&mut self, s: &str, origin: &AnchoredRule) {
         self.nocontractsign = Some((s.to_string(), origin.clone()));
+    }
+
+    /// Checks that a contraction stands alone the way a table with a `seqdelimiter` does.
+    pub fn standing_alone(&mut self, scanner: StandingAloneScanner) {
+        self.standing_alone = Some(scanner);
     }
 
     pub fn contraction(&mut self, s: &str, origin: &AnchoredRule) {

@@ -4,7 +4,10 @@ use std::collections::BTreeMap;
 
 use crate::{
     parser::{AnchoredRule, CharacterClass, CharacterClasses, Direction},
-    translator::{TranslationStage, beg_word::BegWordScanner, end_word::EndWordScanner},
+    translator::{
+        TranslationStage, beg_word::BegWordScanner, end_word::EndWordScanner,
+        standing_alone::StandingAloneScanner,
+    },
 };
 
 use super::ResolvedTranslation;
@@ -76,6 +79,12 @@ pub enum Transition {
     EndWord,
     /// The negation of [`Transition::EndWord`]: the word must continue after the match.
     ContinuesWord,
+    /// Forward, in a table with a `seqdelimiter`: the text before the match lets it stand
+    /// alone (see [`StandingAloneScanner`]).
+    StandsAloneBefore,
+    /// Forward, in a table with a `seqdelimiter`: the text after the match lets it stand
+    /// alone.
+    StandsAloneAfter,
 }
 
 /// The resolved, trie-internal counterpart of [`Transition`] plus the character transitions
@@ -89,6 +98,8 @@ enum ResolvedTransition {
     BegWord,
     EndWord,
     ContinuesWord,
+    StandsAloneBefore,
+    StandsAloneAfter,
 }
 
 /// The class constraints a rule gets from the liblouis `before`/`after` keywords. A side with
@@ -159,6 +170,9 @@ pub struct Trie {
     /// Resolves [`Transition::EndWord`] and [`Transition::ContinuesWord`]. Empty for forward
     /// tries, which never insert them.
     end_word: EndWordScanner,
+    /// Resolves [`Transition::StandsAloneBefore`] and [`Transition::StandsAloneAfter`],
+    /// which only tries for a table with a `seqdelimiter` insert.
+    standing_alone: StandingAloneScanner,
 }
 
 impl Trie {
@@ -170,6 +184,7 @@ impl Trie {
             case_sensitive: false,
             beg_word: BegWordScanner::default(),
             end_word: EndWordScanner::default(),
+            standing_alone: StandingAloneScanner::default(),
         }
     }
 
@@ -198,6 +213,13 @@ impl Trie {
         Trie { end_word, ..self }
     }
 
+    pub fn with_standing_alone_scanner(self, standing_alone: StandingAloneScanner) -> Self {
+        Trie {
+            standing_alone,
+            ..self
+        }
+    }
+
     pub fn case_sensitive(self) -> Self {
         Trie {
             case_sensitive: true,
@@ -220,6 +242,8 @@ impl Trie {
             Transition::BegWord => ResolvedTransition::BegWord,
             Transition::EndWord => ResolvedTransition::EndWord,
             Transition::ContinuesWord => ResolvedTransition::ContinuesWord,
+            Transition::StandsAloneBefore => ResolvedTransition::StandsAloneBefore,
+            Transition::StandsAloneAfter => ResolvedTransition::StandsAloneAfter,
         }
     }
     pub fn insert_char(
@@ -362,6 +386,12 @@ impl Trie {
                 ResolvedTransition::BegWord => self.beg_word.is_beg_word(preceding),
                 ResolvedTransition::EndWord => self.end_word.is_end_word(input),
                 ResolvedTransition::ContinuesWord => !self.end_word.is_end_word(input),
+                ResolvedTransition::StandsAloneBefore => {
+                    self.standing_alone.stands_alone_before(preceding)
+                }
+                ResolvedTransition::StandsAloneAfter => {
+                    self.standing_alone.stands_alone_after(input)
+                }
                 // Character transitions have been dealt with above
                 ResolvedTransition::Character(_) => false,
             };

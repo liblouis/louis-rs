@@ -51,7 +51,7 @@ reversed for back-translation.
 `endword`, `midendword`, `prfword`, `sufword`, `partword`, `begmidword`, `lowword`,
 `joinword`, with their `before`/`after` class constraints.
 
-**Every opcode a liblouis table uses compiles**, except `seqafterpattern`, see below.
+**Every opcode a liblouis table uses compiles.**
 
 **`match` and `context` rules** via a purpose-built regexp VM (`src/translator/regexp.rs`)
 that compiles patterns at table load time and matches in linear time.
@@ -119,11 +119,6 @@ Honest list, no dates attached:
   undocumented in liblouis's own manual, and none appears in any table or test in
   liblouis's corpus. See
   [ADR-0012](adr/0012-unimplemented-opcodes.org).
-- **No "standing alone" check.** Tables with a `seqdelimiter` (`en-ueb-g2`, `fil-g2`,
-  `xh-za-g2`) make liblouis check more strictly whether a `word` or `contraction`
-  rule's word stands alone, skipping `seqbeforechars`, `seqafterchars` and
-  `seqafterpattern` strings. louis-rs uses its usual word boundaries, which differ
-  only on inputs like `it'x`, and compiles `seqafterpattern` to nothing.
 
 ## Where the remaining failures are
 

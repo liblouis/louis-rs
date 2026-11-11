@@ -48,6 +48,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `context` rule that starts with a single character.
 
 ### Fixed
+- In a table with a `seqdelimiter`, such as `en-ueb-g2.ctb`, a `word` or
+  `contraction` rule now applies only where it stands alone as liblouis
+  defines it: going back over `seqbeforechars` characters and on over
+  `seqafterchars` characters and `seqafterpattern` strings must reach a
+  space, a `seqdelimiter` or the end of the text. Any punctuation used
+  to do. With `en-ueb-g2.ctb`, "!about" gave the shortform ⠖⠁⠃ instead
+  of ⠖⠁⠃⠳⠞, and ";b" gave ⠰⠆⠰⠃ instead of ⠰⠆⠃.
 - A letter with a `word` or `largesign` rule of its own no longer gets a
   letter sign, as the liblouis manual says: with `en-g3.ctb`, "I am not"
   gave ⠰⠊⠂⠝ instead of ⠊⠂⠝.

@@ -74,18 +74,6 @@
   languages (see [[https://github.com/mozilla/cbindgen][cbindgen]] or [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 
 * Known gaps
-- [ ] The "standing alone" check for ~word~ and ~contraction~ rules
-  (liblouis's ~inSequence~), used by tables with a ~seqdelimiter~
-  (~en-ueb-g2~, ~fil-g2~, ~xh-za-g2~). Before the word, skip
-  ~seqbeforechars~, then require a space, a ~seqdelimiter~ or the
-  start; after it, skip ~seqafterchars~ and ~seqafterpattern~ strings
-  (case-sensitive), then require a space, a ~seqdelimiter~ or the end.
-  louis-rs collects the ~seq*~ classes but uses none of them, and
-  ~seqafterpattern~ still compiles to nothing; the trie's word
-  boundaries (space or punctuation) give the same result for the cases
-  tried. (Implementing it as a retain used to be blocked by ~Rank~
-  comparing the boundary transitions' weight; weight is gone from
-  ~Rank~ outside ~context~ rules, so that blocker is too.)
 - [ ] Backward ~decpoint~ has no "digit follows" check. It used to be
   blocked by ~Rank~ comparing weight before definition order: the
   check, as an ~End~ transition, added weight, so ~decpoint . 46~
@@ -115,7 +103,6 @@
   the "not implemented yet" arm of ~PrimaryTable::compile~, which is
   now exhaustive so a new ~Rule~ variant has to be placed. By number
   of liblouis tables using them:
-  - ~seqafterpattern~ (3)
   - ~exactdots~, ~grouping~ (none), and ~class~, a deprecated alias of
     ~attribute~ that no table uses
 - [X] Two ~match~ rules of equal rank: we pick the last defined,

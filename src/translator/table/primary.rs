@@ -30,6 +30,7 @@ use crate::{
             NumericConstrainerBuilder, PositionConstraints, PunctuationConstrainerBuilder,
             RepwordConstrainerBuilder,
         },
+        standing_alone::StandingAloneScanner,
         table::TableContext,
         translation::{TranslationSubset, TranslationTarget},
         trie::{Transition, Trie},
@@ -210,12 +211,14 @@ impl PrimaryTableBuilder {
     /// [`PrimaryTable::trace`]). The tries need both from construction on, since
     /// `Trie::insert` resolves those checks against them immediately rather than deferring
     /// to match time. `beg_word` resolves `Transition::BegWord`, `end_word` resolves
-    /// `Transition::EndWord` and `Transition::ContinuesWord`.
+    /// `Transition::EndWord` and `Transition::ContinuesWord`, `standing_alone` resolves
+    /// `Transition::StandsAloneBefore` and `Transition::StandsAloneAfter`.
     fn new(
         lookahead_classes: CharacterClasses,
         lookbehind_classes: CharacterClasses,
         beg_word: BegWordScanner,
         end_word: EndWordScanner,
+        standing_alone: StandingAloneScanner,
     ) -> Self {
         Self {
             undefined: None,
@@ -224,7 +227,8 @@ impl PrimaryTableBuilder {
                 .with_context(lookahead_classes.clone())
                 .with_lookbehind_classes(lookbehind_classes.clone())
                 .with_beg_word_scanner(beg_word.clone())
-                .with_end_word_scanner(end_word.clone()),
+                .with_end_word_scanner(end_word.clone())
+                .with_standing_alone_scanner(standing_alone.clone()),
             comp6_trie: Trie::new()
                 .with_context(lookahead_classes.clone())
                 .with_lookbehind_classes(lookbehind_classes.clone())
@@ -233,7 +237,8 @@ impl PrimaryTableBuilder {
                 .with_context(lookahead_classes)
                 .with_lookbehind_classes(lookbehind_classes)
                 .with_beg_word_scanner(beg_word)
-                .with_end_word_scanner(end_word),
+                .with_end_word_scanner(end_word)
+                .with_standing_alone_scanner(standing_alone),
             match_patterns: MatchPatternsBuilder::new(),
             context_patterns: ContextPatternsBuilder::new(),
             numeric_indicator: numeric::IndicatorBuilder::new(),
@@ -626,12 +631,39 @@ impl PrimaryTable {
                 _ => None,
             })
             .collect();
+        // forward, a table with a `seqdelimiter` checks whether a `word` or `contraction`
+        // rule stands alone rather than for a space or punctuation on either side
+        let standing_alone = match direction {
+            Direction::Forward => StandingAloneScanner::new(
+                &ctx.character_classes,
+                rules
+                    .iter()
+                    .filter_map(|rule| match &rule.rule {
+                        Rule::Seqafterpattern { chars } => Some(chars.clone()),
+                        _ => None,
+                    })
+                    .collect(),
+            ),
+            Direction::Backward => None,
+        };
+        let (stands_alone_before, stands_alone_after) = match standing_alone {
+            Some(_) => (Transition::StandsAloneBefore, Transition::StandsAloneAfter),
+            None => (
+                Transition::Start(vec![CharacterClass::Space, CharacterClass::Punctuation]),
+                Self::word_end(direction),
+            ),
+        };
         let mut builder = PrimaryTableBuilder::new(
             lookahead_classes,
             ctx.character_classes.clone(),
             beg_word,
             end_word,
+            standing_alone.clone().unwrap_or_default(),
         );
+        if let Some(scanner) = standing_alone {
+            builder.lettersign_indicator.standing_alone(scanner.clone());
+            builder.nocontract_indicator.standing_alone(scanner);
+        }
 
         // In literary braille tables, digit and litdigit serve distinct roles:
         //
@@ -1142,14 +1174,8 @@ impl PrimaryTable {
                         builder.get_trie_mut(rule).insert(
                             chars,
                             &dots,
-                            Some(Transition::Start(vec![
-                                CharacterClass::Space,
-                                CharacterClass::Punctuation,
-                            ])),
-                            Some(Transition::End(vec![
-                                CharacterClass::Space,
-                                CharacterClass::Punctuation,
-                            ])),
+                            Some(stands_alone_before.clone()),
+                            Some(stands_alone_after.clone()),
                             direction,
                             ClassConstraints::default(),
                             TranslationStage::Main,
@@ -1316,11 +1342,8 @@ impl PrimaryTable {
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
-                        Some(Transition::Start(vec![
-                            CharacterClass::Space,
-                            CharacterClass::Punctuation,
-                        ])),
-                        Some(Self::word_end(direction)),
+                        Some(stands_alone_before.clone()),
+                        Some(stands_alone_after.clone()),
                         direction,
                         class_constraints,
                         TranslationStage::Main,
@@ -1801,6 +1824,8 @@ impl PrimaryTable {
                 | Rule::Display { .. } => (),
                 // collected into the table context (see `TableContext::compile`)
                 Rule::Attribute { .. }
+                // read into the `StandingAloneScanner` before this loop
+                | Rule::Seqafterpattern { .. }
                 | Rule::Seqafterchars { .. }
                 | Rule::Seqbeforechars { .. }
                 | Rule::Seqdelimiter { .. }
@@ -1815,8 +1840,7 @@ impl PrimaryTable {
                 // FIXME: not implemented yet, see TODO.org
                 Rule::Class { .. }
                 | Rule::Exactdots { .. }
-                | Rule::Grouping { .. }
-                | Rule::Seqafterpattern { .. } => (),
+                | Rule::Grouping { .. } => (),
             }
         }
         let classes = ctx.character_classes();
