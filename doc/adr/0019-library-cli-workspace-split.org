@@ -169,6 +169,12 @@ It was replaced by ~check-table~, which does what liblouis's
 - ~metadata.rs~ needs no extra dependencies, and liblouis exposes the
   same feature publicly (~lou_findTable~). It moves to the CLI for now
   and can be promoted when a library user asks for it.
+  - Settled [2026-11-11 Wed]: it is public library API
+    (~louis::metadata~), as liblouis means to move away from table file
+    names towards metadata queries in the long run. The API stays;
+    only the matching is to improve, ranking tables by how well they
+    match like ~lou_findTables~ rather than requiring every pair. The
+    process-wide cache over ~LOUIS_TABLE_PATH~ stays in the CLI.
 - The API-review findings below are separate work and are not part of
   the split.
 

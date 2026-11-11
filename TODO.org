@@ -1,20 +1,20 @@
 * Todo [1/8]
 - [ ] Let a ~Translator~ be built from a metadata query, as liblouis
   allows
-  - ~metadata::Index~ exists and the ~query~ subcommand and the YAML
-    test harness both use it, but it lives in the CLI crate
-    (~louis-cli/src/metadata.rs~), so nothing in the library API can
-    reach it. Moving it into the library is the first step.
-  - ~Index::build~ takes the ~SearchPath~ to walk, so the index itself
-    carries no assumption about where tables live. What does is
-    ~metadata::index()~, the convenience the CLI and the harness use: a
-    process-wide ~LazyLock~ over ~LOUIS_TABLE_PATH~, built once from
-    whatever the environment said the first time anybody asked.
-  - That accessor must not become the way a ~Translator~ resolves a
+  - ~louis::metadata::Index~ is public library API now, built from
+    ~LOUIS_TABLE_PATH~ (~Index::new~) or from the caller's directories
+    (~Index::with_search_path~).
+  - ~Index::find~ should match like ~lou_findTables~: liblouis ranks
+    the tables by how well they match the query and returns the best,
+    where we only return tables that carry every pair. liblouis means to replace table file names with
+    such queries in the long run.
+  - The CLI caches one index in a process-wide ~LazyLock~ over
+    ~LOUIS_TABLE_PATH~ (~louis-cli/src/main.rs~, ~index()~). That cache
+    must not become the way a ~Translator~ resolves a
     query. A host using ~Translator::with_search_path~ supplies its own
     directories, and the ambient index would quietly answer from
     somewhere else instead; two different search paths in one process
-    cannot both be served by it either. Either call ~Index::build~ with
+    cannot both be served by it either. Either build an ~Index~ from
     the caller's search path and pay the walk, or cache per search path.
 - [ ] Cursor handling
 - [ ] The boundary functions (~word_start~, etc) only work in forward

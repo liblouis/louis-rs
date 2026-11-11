@@ -72,7 +72,7 @@ cargo run -- trace en-us-g2.ctb
 cargo run -- check path/to/test.yaml
 
 # Query tables by metadata
-cargo run -- query language=de,contraction=full
+cargo run -- query language:de contraction:full
 ```
 
 ### Linting
@@ -116,8 +116,12 @@ typeform into emphasis spans.
 
 The repository is a workspace (ADR-0019). The root package `louis-rs` is the library;
 `louis-cli/` is the `louis` CLI (`check-table`, `translate`, `trace`, `check`, `query`), with
-`louis-cli/src/test.rs` and `louis-cli/src/yaml.rs` running liblouis's YAML tests and
-`louis-cli/src/metadata.rs` the table index. The CLI depends on the library like any other
+`louis-cli/src/test.rs` and `louis-cli/src/yaml.rs` running liblouis's YAML tests. The
+table index (`src/metadata.rs`, finding tables by their `#+key: value` metadata) is public
+library API (`louis::metadata`), as liblouis means to move from table file names to metadata
+queries. Its API is meant to stay; only its matching is to improve, ranking tables like
+`lou_findTables`.
+The CLI depends on the library like any other
 user; what it needs beyond the public API comes from `louis::internals` (`#[doc(hidden)]`,
 not semver-covered), which re-exports exactly those items. CLI-only dependencies (clap,
 rayon, tabled, env_logger, saphyr-parser) belong in `louis-cli/Cargo.toml`, never in the

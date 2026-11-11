@@ -27,6 +27,7 @@ assert_eq!(braille, "⠓⠑⠇⠇⠕⠀⠺⠕⠗⠇⠙");
 
 mod emphasis;
 mod hyphenation;
+pub mod metadata;
 mod parser;
 mod translator;
 

@@ -160,10 +160,10 @@ cheapest work in it.
 |-------------------------------------------|-------:|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------|
 | `multipass-vs-match_common.uti` not found |     25 | The include sits next to the YAML file rather than on `LOUIS_TABLE_PATH`. One missing fixture takes out every block of `multipass-vs-match.yaml`. | S    |
 | Parser gaps                               |      6 | An `InvalidAction` and an `EmptyTest` in each of `multipass-forward.yaml` and `multipass-backward.yaml`, plus an `OpcodeExpected` and a surrogate-pair escape.                                          | S    |
-| Ambiguous metadata queries                |      7 | `language=grc,region=en` matches two tables and `system=cmn-traditional` three. `lou_findTable` scores its candidates and always lands on one; we intersect and insist on exactly one.                  | M    |
+| Ambiguous metadata queries                |      7 | `language:grc region:en` matches two tables and `system:cmn-traditional` three. `lou_findTable` scores its candidates and always lands on one; we intersect and insist on exactly one.                  | M    |
 | Hyphenation dictionaries                  |      2 | `hyph_en_US.dic` rejected for its ISO-8859-1 encoding; `hyphenation.dic` not found.                                                                                                                     | S    |
 | `macro.utb` not found                     |      1 | Deliberate non-goal.                                                                                                                                                                                    | —    |
-| A query matching no table at all          |      1 | `language=grc,region=es` finds nothing on the search path. Possibly a bug in the spec rather than in us.                                                                                                | S    |
+| A query matching no table at all          |      1 | `language:grc region:es` finds nothing on the search path. Possibly a bug in the spec rather than in us.                                                                                                | S    |
 
 Ten files report zero tests. Seven because every one of their blocks is skipped for
 a reason above: `multipass-vs-match.yaml`, `macro.yaml`, `grc-international-es.yaml`,

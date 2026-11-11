@@ -86,7 +86,7 @@ Point `LOUIS_TABLE_PATH` at a set of tables and translate something:
 
 and `query` finds tables by their metadata:
 
-    $ louis query language=de,contraction=full
+    $ louis query language:de contraction:full
     {"[...]/liblouis/tables/de-g2-detailed.ctb", "[...]/liblouis/tables/de-g2.ctb"}
 
 ## Project status

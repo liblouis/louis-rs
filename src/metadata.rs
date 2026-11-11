@@ -1,33 +1,36 @@
+//! Find tables by the `#+key: value` metadata they carry, instead of by file name.
+
 use std::{
     collections::{HashMap, HashSet},
     fmt, fs,
-    path::PathBuf,
-    sync::LazyLock,
+    path::{Path, PathBuf},
 };
 
 #[derive(thiserror::Error, Debug)]
 pub enum MetaDataError {
     #[error(transparent)]
     IoError(#[from] std::io::Error),
-    #[error("{0:?} is not a key=value pair")]
+    #[error("{0:?} is not a key:value pair")]
     InvalidQuery(String),
 }
 
 use search_path::SearchPath;
 
-/// A query into the metadata, i.e. a set of `key=value` pairs
+/// A query into the metadata, i.e. a list of `key:value` pairs
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Query(Vec<(String, String)>);
 
 impl Query {
-    /// Parse the `key=value,key=value` form the `query` subcommand takes.
+    /// Parse a query in liblouis's syntax, `key:value` pairs separated by whitespace, such
+    /// as `language:de grade:2`.
     pub fn parse(query: &str) -> Result<Self, MetaDataError> {
         query
-            .split(',')
-            .map(|pair| {
-                pair.split_once('=')
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .ok_or_else(|| MetaDataError::InvalidQuery(pair.to_string()))
+            .split_whitespace()
+            .map(|pair| match pair.split_once(':') {
+                Some((k, v)) if !k.is_empty() && !v.is_empty() => {
+                    Ok((k.to_string(), v.to_string()))
+                }
+                _ => Err(MetaDataError::InvalidQuery(pair.to_string())),
             })
             .collect::<Result<Vec<_>, _>>()
             .map(Self)
@@ -48,29 +51,44 @@ impl fmt::Display for Query {
     /// Sorted, so that an error message naming a query does not depend on the order
     /// the pairs happened to be collected in.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut pairs: Vec<_> = self.0.iter().map(|(k, v)| format!("{k}={v}")).collect();
+        let mut pairs: Vec<_> = self.0.iter().map(|(k, v)| format!("{k}:{v}")).collect();
         pairs.sort();
-        write!(f, "{}", pairs.join(","))
+        write!(f, "{}", pairs.join(" "))
     }
 }
 
 /// Maps each `#+key: value` metadata pair found on the search path to the tables
 /// that carry it.
+#[derive(Debug)]
 pub struct Index(HashMap<(String, String), HashSet<PathBuf>>);
 
-static INDEX: LazyLock<Result<Index, MetaDataError>> =
-    LazyLock::new(|| Index::build(&SearchPath::new_or("LOUIS_TABLE_PATH", ".")));
-
-/// The index of the tables, built once on first use.
-pub fn index() -> Result<&'static Index, &'static MetaDataError> {
-    INDEX.as_ref()
-}
-
 impl Index {
-    /// The tables carrying every one of the query's metadata pairs.
-    pub fn find(&self, query: Query) -> HashSet<&PathBuf> {
+    /// Index the tables in the `LOUIS_TABLE_PATH` search path. Use [`Self::with_search_path`]
+    /// to supply the directories instead.
+    ///
+    /// # Errors
+    ///
+    /// If a directory on the search path cannot be read.
+    pub fn new() -> Result<Self, MetaDataError> {
+        Self::build(&SearchPath::new_or("LOUIS_TABLE_PATH", "."))
+    }
+
+    /// Like [`Self::new`], but indexing the tables in `search_path` instead.
+    ///
+    /// # Errors
+    ///
+    /// If a directory on the search path cannot be read.
+    pub fn with_search_path(search_path: Vec<PathBuf>) -> Result<Self, MetaDataError> {
+        Self::build(&SearchPath::from(search_path))
+    }
+
+    /// The tables matching the query, best match first, like liblouis's `lou_findTables`.
+    ///
+    /// Today only a table carrying every one of the query's pairs matches, and the matches
+    /// come sorted by path. liblouis also ranks partial matches; that is still to come.
+    pub fn find(&self, query: Query) -> Vec<&Path> {
         if query.is_empty() {
-            return HashSet::new();
+            return Vec::new();
         }
         let candidates: Vec<_> = query
             .0
@@ -79,20 +97,23 @@ impl Index {
             .collect();
         // if any of the queries was not found in the index then the whole query is empty
         if candidates.iter().any(|c| c.is_none()) {
-            HashSet::new()
+            Vec::new()
         } else {
             let candidates: Vec<_> = candidates.iter().flatten().collect();
             // get the intersection of all sets
-            candidates[0]
+            let mut found: Vec<&Path> = candidates[0]
                 .iter()
                 .filter(|c| candidates[1..].iter().all(|s| s.contains(*c)))
-                .collect()
+                .map(PathBuf::as_path)
+                .collect();
+            found.sort();
+            found
         }
     }
 
     /// Derive the index by walking the whole of `search_path` and reading the
     /// metadata out of every table on it.
-    pub fn build(search_path: &SearchPath) -> Result<Self, MetaDataError> {
+    fn build(search_path: &SearchPath) -> Result<Self, MetaDataError> {
         let mut index: HashMap<(String, String), HashSet<PathBuf>> = HashMap::new();
 
         for dir in search_path.iter() {
@@ -122,5 +143,26 @@ impl Index {
             }
         }
         Ok(Self(index))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn find_returns_the_tables_carrying_every_pair_sorted() {
+        let dir = std::env::temp_dir().join(format!("louis-metadata-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("b.utb"), "#+language: de\n#+grade: 2\n").unwrap();
+        fs::write(dir.join("a.utb"), "#+language: de\n#+grade: 2\n").unwrap();
+        fs::write(dir.join("c.utb"), "#+language: de\n#+grade: 1\n").unwrap();
+        let index = Index::with_search_path(vec![dir.clone()]).unwrap();
+        let found = index.find(Query::parse("language:de grade:2").unwrap());
+        assert_eq!(found, [dir.join("a.utb"), dir.join("b.utb")]);
+        assert!(index.find(Query::parse("language:fr").unwrap()).is_empty());
+        assert!(Query::parse("language=de").is_err());
+        assert!(Query::parse("language:").is_err());
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

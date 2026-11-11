@@ -5,6 +5,7 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::{ExitCode, exit};
+use std::sync::LazyLock;
 
 use clap::{Parser, Subcommand};
 use rayon::prelude::*;
@@ -15,10 +16,10 @@ use louis::internals::parser::{self, AnchoredRule, Direction, TableError};
 use louis::internals::translator::{
     DisplayTable, ResolvedTranslation, TranslationPipeline, TranslationStage,
 };
+use louis::metadata;
 
 use crate::test::TestResult;
 
-mod metadata;
 mod test;
 mod yaml;
 
@@ -114,8 +115,10 @@ enum Commands {
     /// Find braille tables based on a metadata query. The tables are
     /// searched in the the search path `LOUIS_TABLE_PATH`.
     Query {
-        /// Metadata search query <key=value,...>
-        query: String,
+        /// Metadata search query in liblouis's syntax, e.g. `language:de grade:2`, either as
+        /// one argument or as one argument per pair
+        #[arg(required = true)]
+        query: Vec<String>,
     },
 }
 
@@ -472,6 +475,15 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool) -> ExitCode {
     }
 }
 
+static INDEX: LazyLock<Result<metadata::Index, metadata::MetaDataError>> =
+    LazyLock::new(metadata::Index::new);
+
+/// The index of the tables on `LOUIS_TABLE_PATH`, built once on first use: the YAML files
+/// run in parallel and many query their tables, so they share one walk of the search path.
+fn index() -> Result<&'static metadata::Index, &'static metadata::MetaDataError> {
+    INDEX.as_ref()
+}
+
 fn main() -> ExitCode {
     env_logger::init();
 
@@ -519,7 +531,7 @@ fn main() -> ExitCode {
             yaml_files,
             summary,
         } => check_yaml(yaml_files, summary),
-        Commands::Query { query } => match (metadata::Query::parse(&query), metadata::index()) {
+        Commands::Query { query } => match (metadata::Query::parse(&query.join(" ")), index()) {
             (Ok(query), Ok(index)) => {
                 println!("{:?}", index.find(query));
                 ExitCode::SUCCESS

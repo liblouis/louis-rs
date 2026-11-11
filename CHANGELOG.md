@@ -8,7 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+- `louis::metadata` finds tables by their `#+key: value` metadata, like
+  liblouis's `lou_findTables`: `Index::new()` indexes the tables on
+  `LOUIS_TABLE_PATH`, `Index::with_search_path` those in the given
+  directories, and `Index::find` returns the tables matching a `Query`,
+  best match first. For now only tables carrying every pair of the query
+  match.
+
 ### Changed
+- `louis query` takes liblouis's query syntax, `language:de grade:2`,
+  instead of `language=de,grade=2`, either as one argument or as one
+  argument per pair.
 - The `louis` command line tool is now its own crate, `louis-cli`; install
   it with `cargo install louis-cli`. `louis-rs` is the library only and no
   longer pulls in clap, rayon, tabled, env_logger or saphyr-parser.
