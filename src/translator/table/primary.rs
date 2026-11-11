@@ -10,7 +10,7 @@ use crate::{
         HasDirection, HasNocross, WithClass, in_definition_order,
     },
     translator::{
-        CharacterDefinition, ClassConstraint, ResolvedTranslation, Rule, TranslationError,
+        CharacterDefinition, ClassConstraints, ResolvedTranslation, Rule, TranslationError,
         TranslationMode, TranslationOptions, TranslationStage,
         beg_word::BegWordScanner,
         context_pattern::{ContextPatterns, ContextPatternsBuilder},
@@ -199,7 +199,7 @@ struct PrimaryTableBuilder {
 
 impl PrimaryTableBuilder {
     /// `lookahead_classes` must be the character classes to resolve the lookahead
-    /// (`Transition::End`, `ClassConstraint::End`) boundary checks against: text classes for
+    /// (`Transition::End`, `ClassConstraints::following`) boundary checks against: text classes for
     /// forward translation, dots classes for backward. `lookbehind_classes` is the same for the
     /// lookbehind checks, and is the text classes in both directions, since the lookbehind
     /// reads the output produced so far when translating backward (see
@@ -297,7 +297,7 @@ impl PrimaryTableBuilder {
             None,
             None,
             Direction::Backward,
-            vec![],
+            ClassConstraints::default(),
             TranslationStage::Main,
             rule,
         );
@@ -349,7 +349,7 @@ impl PrimaryTableBuilder {
                 CharacterClass::Sign,
             ])),
             Direction::Backward,
-            vec![],
+            ClassConstraints::default(),
             TranslationStage::Main,
             rule,
         );
@@ -510,28 +510,32 @@ impl PrimaryTableBuilder {
 
 impl PrimaryTable {
     /// Resolves `before CLASS`/`after CLASS` rule modifiers into the trie's
-    /// `ClassConstraint`s. `before` is a lookahead (the character *after* the match must be
+    /// [`ClassConstraints`]. `before` is a lookahead (the character *after* the match must be
     /// in the class); `after` is a lookbehind (the character *before* the match must be in
-    /// the class).
+    /// the class). A class the table doesn't define is left out.
     fn resolve_class_constraints(
         ctx: &TableContext,
         with_classes: &[WithClass],
-    ) -> Vec<ClassConstraint> {
-        with_classes
+    ) -> ClassConstraints {
+        let defined = |class: &str| {
+            let key = CharacterClass::from(class);
+            ctx.character_classes.get(&key).map(|_| key)
+        };
+        let preceding = with_classes
             .iter()
             .filter_map(|wc| match wc {
-                WithClass::Before { class } => {
-                    let key = CharacterClass::from(class.as_str());
-                    ctx.character_classes.get(&key)?;
-                    Some(ClassConstraint::End(key))
-                }
-                WithClass::After { class } => {
-                    let key = CharacterClass::from(class.as_str());
-                    ctx.character_classes.get(&key)?;
-                    Some(ClassConstraint::Start(key))
-                }
+                WithClass::After { class } => defined(class),
+                WithClass::Before { .. } => None,
             })
-            .collect()
+            .collect();
+        let following = with_classes
+            .iter()
+            .filter_map(|wc| match wc {
+                WithClass::Before { class } => defined(class),
+                WithClass::After { .. } => None,
+            })
+            .collect();
+        ClassConstraints::new(preceding, following)
     }
 
     /// The after-side boundary check for a rule that must end a word: a class test on the
@@ -564,9 +568,9 @@ impl PrimaryTable {
         // definition order is the order of `rules`, see `Rank::definition_order`
         let rules = &in_definition_order(rules);
         // Word/number boundary checks must consult the classes of the characters they are
-        // checked against. The lookahead (`Transition::End`, `ClassConstraint::End`) reads the
-        // input, which is text forward and braille backward. The lookbehind
-        // (`Transition::Start`, `ClassConstraint::Start`) reads text in both directions:
+        // checked against. The lookahead (`Transition::End`, `ClassConstraints::following`)
+        // reads the input, which is text forward and braille backward. The lookbehind
+        // (`Transition::Start`, `ClassConstraints::preceding`) reads text in both directions:
         // backward it reads the output produced so far, as liblouis's `back_setBefore` and
         // `isBegWord` do, because a braille cell does not say how it was translated.
         let lookahead_classes = match direction {
@@ -1080,7 +1084,7 @@ impl PrimaryTable {
                             None,
                             None,
                             direction,
-                            vec![],
+                            ClassConstraints::default(),
                             TranslationStage::Main,
                             rule,
                         );
@@ -1104,7 +1108,7 @@ impl PrimaryTable {
                                 CharacterClass::Punctuation,
                             ])),
                             direction,
-                            vec![],
+                            ClassConstraints::default(),
                             TranslationStage::Main,
                             rule,
                         );
@@ -1158,7 +1162,7 @@ impl PrimaryTable {
                         None,
                         None,
                         direction,
-                        vec![],
+                        ClassConstraints::default(),
                         TranslationStage::Main,
                         rule,
                     );
@@ -1176,7 +1180,7 @@ impl PrimaryTable {
                             None,
                             None,
                             direction,
-                            vec![],
+                            ClassConstraints::default(),
                             TranslationStage::Main,
                             rule,
                         );
@@ -1218,7 +1222,7 @@ impl PrimaryTable {
                         None,
                         None,
                         direction,
-                        vec![],
+                        ClassConstraints::default(),
                         TranslationStage::Main,
                         rule,
                     );
@@ -1250,7 +1254,7 @@ impl PrimaryTable {
                         None,
                         None,
                         direction,
-                        vec![],
+                        ClassConstraints::default(),
                         TranslationStage::Main,
                         rule,
                     );
@@ -1526,7 +1530,7 @@ impl PrimaryTable {
                     Some(Transition::Start(vec![CharacterClass::Space])),
                     Some(Transition::End(vec![CharacterClass::Space])),
                     direction,
-                    vec![],
+                    ClassConstraints::default(),
                     TranslationStage::Main,
                     rule,
                 ),
@@ -1539,7 +1543,7 @@ impl PrimaryTable {
                     ])),
                     Some(Transition::End(vec![CharacterClass::Digit])),
                     direction,
-                    vec![],
+                    ClassConstraints::default(),
                     TranslationStage::Main,
                     rule,
                 ),
@@ -1558,7 +1562,7 @@ impl PrimaryTable {
                             None,
                             Some(Transition::End(vec![CharacterClass::Digit])),
                             direction,
-                            vec![],
+                            ClassConstraints::default(),
                             TranslationStage::Main,
                             rule,
                         ),
@@ -1578,7 +1582,7 @@ impl PrimaryTable {
                         Some(Transition::Start(vec![CharacterClass::Digit])),
                         Some(Transition::End(vec![CharacterClass::Digit])),
                         direction,
-                        vec![],
+                        ClassConstraints::default(),
                         TranslationStage::Main,
                         rule,
                     );
@@ -1596,7 +1600,7 @@ impl PrimaryTable {
                         Some(Transition::Start(vec![CharacterClass::Digit])),
                         None,
                         direction,
-                        vec![],
+                        ClassConstraints::default(),
                         TranslationStage::Main,
                         rule,
                     );
@@ -1630,7 +1634,7 @@ impl PrimaryTable {
                             before,
                             after,
                             direction,
-                            vec![],
+                            ClassConstraints::default(),
                             TranslationStage::Main,
                             rule,
                         );
@@ -1661,7 +1665,7 @@ impl PrimaryTable {
                             before,
                             after,
                             direction,
-                            vec![],
+                            ClassConstraints::default(),
                             TranslationStage::Main,
                             rule,
                         );
@@ -1686,7 +1690,7 @@ impl PrimaryTable {
                                 ])),
                                 Some(Self::word_end(direction)),
                                 direction,
-                                vec![],
+                                ClassConstraints::default(),
                                 TranslationStage::Main,
                                 rule,
                             );
@@ -1701,7 +1705,7 @@ impl PrimaryTable {
                                 Some(Transition::BegWord),
                                 Some(Transition::ContinuesWord),
                                 direction,
-                                vec![],
+                                ClassConstraints::default(),
                                 TranslationStage::Main,
                                 rule,
                             );

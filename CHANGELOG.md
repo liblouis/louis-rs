@@ -64,6 +64,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `nocontractsign` is its `nonumsign`, and then from the number to the
   next space, letters after it included. With `en-g3.ctb`, "12" gave
   ⠼⠁⠃ instead of ⠼⠇.
+- A rule with several `before` or several `after` classes now applies
+  when any one of them matches, as in liblouis, rather than never. With
+  `fr-bfu-g2.ctb`, ⠨⠖⠿⠎⠊⠙⠣ gave "Présidê" instead of "Président".
 - A `match` rule whose `pre` starts inside the previous translation now
   applies, thanks to the look-behind above: with `en-ueb-g2.ctb`,
   "areas" gave ⠜⠑⠁⠎ instead of ⠜⠂⠎, as `always ar` covered the "r" that

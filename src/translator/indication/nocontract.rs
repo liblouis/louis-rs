@@ -17,7 +17,7 @@
 use crate::parser::CharacterClass;
 use crate::translator::TranslationStage;
 use crate::translator::table::TableContext;
-use crate::translator::trie::Transition;
+use crate::translator::trie::{ClassConstraints, Transition};
 use crate::{
     parser::{AnchoredRule, Direction},
     translator::{ResolvedTranslation, trie::Trie},
@@ -63,7 +63,7 @@ impl IndicatorBuilder {
                         Some(Transition::Start(word_boundary.clone())),
                         Some(Transition::End(word_boundary.clone())),
                         Direction::Forward,
-                        vec![],
+                        ClassConstraints::default(),
                         TranslationStage::Main,
                         &origin,
                     );

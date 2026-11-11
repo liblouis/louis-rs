@@ -7,7 +7,7 @@ pub use pipeline::TranslationPipeline;
 pub use positions::PositionMap;
 pub use table::display::DisplayTable;
 pub use translation::{ResolvedTranslation, TranslationStage};
-pub use trie::ClassConstraint;
+pub use trie::ClassConstraints;
 
 use crate::{
     Direction,
