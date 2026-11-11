@@ -8,7 +8,7 @@ This document says what it can do today, what it can't yet, and where the remain
 work is, so you can tell whether it's usable for your case and pick something up if
 it isn't.
 
-Measured at louis-rs `51729e1` against liblouis `0d3be2c4`, which is `011cfb3b` plus
+Measured at louis-rs `8e1fbad` against liblouis `0d3be2c4`, which is `011cfb3b` plus
 [liblouis#2176](https://github.com/liblouis/liblouis/pull/2176). Without that fix four
 YAML files (`en-g3`, `en-ueb`, `it`, `de-g2-sbs`) don't parse and drop out:
 
@@ -134,7 +134,7 @@ and are there so you can pick work by appetite, not to add up. Failure counts ar
 
 | Area                                                | Failing | Root cause                                                                                                                                                                       | Size |
 |-----------------------------------------------------|--------:|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------|
-| `th`, `pa`                                          |    ≈140 | Unrelated to each other. `th`: tone marks and vowels come out in the wrong order (`ค่ะ` gives ⠥⠔⠁, not ⠥⠁⠔), from the table's reordering `correct` rules, plus a few `context` rules with a variable. `pa`: backward, the number sign ⠼ is read as the letter ਣ, which has the same cells; liblouis takes the number sign when a digit follows. | M    |
+| `th`, `pa`                                          |    ≈150 | Unrelated to each other. `th`: tone marks and vowels come out in the wrong order (`ค่ะ` gives ⠥⠔⠁, not ⠥⠁⠔), from the table's reordering `correct` rules, plus a few `context` rules with a variable. `pa`: backward, the number sign ⠼ is read as the letter ਣ, which has the same cells; liblouis takes the number sign when a digit follows. | M    |
 | `en-ueb-computer-code`                              |  ≈1 300 | Three bugs: letter sign fires only on the first occurrence in a run; wrong word sign before hyphen or closing bracket; leading indicator dropped at the very start of the input. But the file's own header says many of its expectations are wrong and it needs review ([#590](https://github.com/liblouis/liblouis/issues/590)), so establish which are before chasing them. | M    |
 | `de-g0-detailed-specs`, `de-g1-…`                   |    ≈170 | `capsletter` vs. `begcapsword` tier selection. Needs `uppercase.rs` and `emphasis.rs` unified into one tier model — a blanket engine fix was tried and disproven.                | L    |
 | `nl-g0_harness`                                     |     ≈90 | Emphasis tiers: a multi-word italic passage should open with ⠸⠸ once, louis-rs marks every word ⠸…⠠. Also indicator order (⠨⠰, not ⠰⠨) and a stray ⠠ after a capsletter that follows a digit ("1E" gives ⠼⠁⠨⠠⠑). | M    |
