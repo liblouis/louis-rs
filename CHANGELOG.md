@@ -48,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `context` rule that starts with a single character.
 
 ### Fixed
+- Backward, a `litdigit` is read only inside a number, as in liblouis:
+  with `tr-g2.tbl`, "⠰⠁" gave "1" instead of "a", and "Zekice" came
+  out as "Z5kic5".
 - A `contraction` now gets its letter sign and `nocontractsign` only
   where it is the rule applied, as in liblouis. Where another rule for
   the same letters applied instead, it got them anyway: with

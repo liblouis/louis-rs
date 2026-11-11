@@ -410,24 +410,20 @@ impl PrimaryTableBuilder {
         }
     }
 
-    /// If `dots` is shared with a letter definition (common in six-dot literary codes,
-    /// where digits 1-9,0 conventionally reuse letter cells a-j), records the digit
-    /// reading as a backward override for that cell — consulted only inside a
-    /// `numsign` span (see `Constraint::PreferDigit`). Only meaningful for
-    /// `Direction::Backward`.
+    /// Backward, a `litdigit` is read only inside a number, as in liblouis: records it
+    /// as the reading of its cell there (see `Constraint::PreferDigit`), and nowhere
+    /// else. Six-dot literary codes reuse the letter cells a-j for the digits.
     ///
-    /// A digit is always a single braille cell, so `dots` normally has length 1; this
-    /// is skipped (rather than assumed) for any rule where that doesn't hold, mirroring
-    /// `CharacterClasses::insert_dots`.
+    /// A digit is always a single braille cell; a rule where that doesn't hold is
+    /// skipped, mirroring `CharacterClasses::insert_dots`.
     fn register_backward_digit_override(
         &mut self,
         character: char,
         dots: &BrailleChars,
-        letter_dots: &HashSet<String>,
         rule: &AnchoredRule,
     ) {
         let dots_str = dots.to_string();
-        if dots.len() == 1 && letter_dots.contains(&dots_str) {
+        if dots.len() == 1 {
             let cell = dots.iter().next().unwrap().to_unicode();
             self.backward_digit_overrides.insert(
                 cell,
@@ -704,12 +700,8 @@ impl PrimaryTable {
             HashSet::new()
         };
 
-        // Backward-only: digit dots can coincide with a letter's dots (six-dot literary
-        // codes conventionally reuse letter cells a-j for digits 1-9,0). Collect the set
-        // of dots used by letter definitions so digit/litdigit rules below can detect the
-        // collision and register a numsign-scoped override (see
-        // `register_backward_digit_override`), without disturbing the trie's normal
-        // (letter) reading used outside a numeric run.
+        // Backward-only: the dots of the letter definitions, which an indicator's dots
+        // can coincide with (see `backward_indicator_dots_available`).
         let letter_dots: HashSet<String> = if direction == Direction::Backward {
             rules
                 .iter()
@@ -754,14 +746,16 @@ impl PrimaryTable {
                 Rule::Litdigit {
                     character, dots, ..
                 } => {
-                    builder.insert_character(*character, &dots.to_string(), direction, rule);
-                    if direction == Direction::Backward {
-                        builder.register_backward_digit_override(
+                    match direction {
+                        Direction::Forward => builder.insert_character(
                             *character,
-                            dots,
-                            &letter_dots,
+                            &dots.to_string(),
+                            direction,
                             rule,
-                        );
+                        ),
+                        Direction::Backward => {
+                            builder.register_backward_digit_override(*character, dots, rule)
+                        }
                     }
                 }
                 Rule::Letter {
@@ -3707,6 +3701,26 @@ mod tests {
         )
         .unwrap();
         assert_eq!(table.translate("⠨⠃"), "B");
+    }
+
+    #[test]
+    fn backward_litdigit_only_inside_a_number() {
+        // as in tr-g2.ctb, which includes litdigits6Dots.uti before its letters
+        let rules = [
+            parse_rule("litdigit 1 1"),
+            parse_rule("lowercase a 1"),
+            parse_rule("numsign 3456"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table = PrimaryTable::compile(
+            &rules,
+            Direction::Backward,
+            TranslationStage::Main,
+            &context,
+        )
+        .unwrap();
+        assert_eq!(table.translate("⠁"), "a");
+        assert_eq!(table.translate("⠼⠁"), "1");
     }
 
     #[test]
