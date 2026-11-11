@@ -28,6 +28,8 @@ $ louis translate en-us-g2.ctb "It's about the blind"
     no build step
 -   the `louis` binary: `translate`, `trace`, `parse`, `check` and `query`; see
     `louis help`
+-   [doc/Architecture.md](doc/Architecture.md) — the concepts and how a
+    translation goes through them
 -   [doc/Liblouis_Parity.md](doc/Liblouis_Parity.md) — what works, what doesn't,
     and where the remaining failures are
 -   [doc/Differences_From_Liblouis.md](doc/Differences_From_Liblouis.md) — where
