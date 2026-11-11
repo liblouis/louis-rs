@@ -18,8 +18,8 @@ $ louis translate en-us-g2.ctb "It's about the blind"
 
 ## What is here
 
--   a hand-rolled two-pass parser for liblouis tables; every table under
-    `tables/` that liblouis compiles, louis-rs compiles too
+-   a hand-rolled parser and a two-pass compiler for liblouis tables; every
+    table under `tables/` that liblouis compiles, louis-rs compiles too
 -   forward and backward translation through the full pipeline: correct rules,
     the main stage, and pass2/pass3/pass4
 -   a virtual-machine regexp engine behind the `match` and `context` opcodes, and
