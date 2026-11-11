@@ -8,7 +8,7 @@ This document says what it can do today, what it can't yet, and where the remain
 work is, so you can tell whether it's usable for your case and pick something up if
 it isn't.
 
-Measured at louis-rs `559a755` against liblouis `0d3be2c4`, which is `011cfb3b` plus
+Measured at louis-rs `52e8ae5` against liblouis `0d3be2c4`, which is `011cfb3b` plus
 [liblouis#2176](https://github.com/liblouis/liblouis/pull/2176). Without that fix four
 YAML files (`en-g3`, `en-ueb`, `it`, `de-g2-sbs`) don't parse and drop out:
 
@@ -133,7 +133,7 @@ and are there so you can pick work by appetite, not to add up. Failure counts ar
 | `de-g0-detailed-specs`, `de-g1-…`                   |    ≈140 | `capsletter` vs. `begcapsword` tier selection. Needs `uppercase.rs` and `emphasis.rs` unified into one tier model — a blanket engine fix was tried and disproven.                | L    |
 | `nl-g0_harness`                                     |    ≈110 | Emphasis tiers: a multi-word italic passage should open with ⠸⠸ once, louis-rs marks every word ⠸…⠠. Also indicator order (⠨⠰, not ⠰⠨) and a stray ⠠ after a capsletter that follows a digit ("1E" gives ⠼⠁⠨⠠⠑). | M    |
 | `ru`                                                |     ≈70 | Generic `begmode` alphabet indicators: the Latin lowercase sign ⠠ is never emitted ("x" gives ⠭, not ⠠⠭), and word tiers repeat per letter ("ABC" gives ⠨⠁⠨⠃⠨⠉, not ⠨⠁⠃⠉). Likely the same tier model as `de-g0`. | M    |
-| all other files                                     |  ≈1 150 | Roughly 90 files, each contributing under 150.                                                                                                                                   | —    |
+| all other files                                     |  ≈1 000 | Roughly 90 files, each contributing under 150.                                                                                                                                   | —    |
 
 Two cross-cutting items have no single file behind them:
 
