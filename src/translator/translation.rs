@@ -301,6 +301,12 @@ impl From<&ResolvedTranslation> for TranslationSubset {
 }
 
 impl ResolvedTranslation {
+    /// An indication: dots from an indicator `rule`, such as a `capsletter` or `numsign`,
+    /// that consume no input.
+    pub fn indication(dots: &str, rule: &AnchoredRule) -> Self {
+        Self::new("", dots, 1, TranslationStage::Main, rule.clone())
+    }
+
     pub fn new(
         input: &str,
         output: &str,

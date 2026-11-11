@@ -12,12 +12,8 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     emphasis::EmphasisSpan,
     parser::{AnchoredRule, CharacterClasses, Position},
-    translator::{ResolvedTranslation, TranslationStage, table::TableContext},
+    translator::{ResolvedTranslation, table::TableContext},
 };
-
-fn make_translation(dots: &str, origin: &AnchoredRule) -> ResolvedTranslation {
-    ResolvedTranslation::new("", dots, 1, TranslationStage::Main, origin.clone())
-}
 
 /// Ordering tag attached to each emitted event.
 ///
@@ -356,19 +352,19 @@ impl IndicatorBuilder {
     }
 
     pub fn emphletter(&mut self, name: &str, dots: &str, origin: &AnchoredRule) {
-        self.class_mut(name).emphletter = Some(make_translation(dots, origin));
+        self.class_mut(name).emphletter = Some(ResolvedTranslation::indication(dots, origin));
     }
 
     pub fn begemphword(&mut self, name: &str, dots: &str, origin: &AnchoredRule) {
-        self.class_mut(name).begemphword = Some(make_translation(dots, origin));
+        self.class_mut(name).begemphword = Some(ResolvedTranslation::indication(dots, origin));
     }
 
     pub fn endemphword(&mut self, name: &str, dots: &str, origin: &AnchoredRule) {
-        self.class_mut(name).endemphword = Some(make_translation(dots, origin));
+        self.class_mut(name).endemphword = Some(ResolvedTranslation::indication(dots, origin));
     }
 
     pub fn begemphphrase(&mut self, name: &str, dots: &str, origin: &AnchoredRule) {
-        self.class_mut(name).begemphphrase = Some(make_translation(dots, origin));
+        self.class_mut(name).begemphphrase = Some(ResolvedTranslation::indication(dots, origin));
     }
 
     pub fn endemphphrase(
@@ -379,7 +375,7 @@ impl IndicatorBuilder {
         origin: &AnchoredRule,
     ) {
         let class = self.class_mut(name);
-        class.endemphphrase = Some(make_translation(dots, origin));
+        class.endemphphrase = Some(ResolvedTranslation::indication(dots, origin));
         class.endemphphrase_before = matches!(position, Position::Before);
     }
 
@@ -388,11 +384,11 @@ impl IndicatorBuilder {
     }
 
     pub fn begemph(&mut self, name: &str, dots: &str, origin: &AnchoredRule) {
-        self.class_mut(name).begemph = Some(make_translation(dots, origin));
+        self.class_mut(name).begemph = Some(ResolvedTranslation::indication(dots, origin));
     }
 
     pub fn endemph(&mut self, name: &str, dots: &str, origin: &AnchoredRule) {
-        self.class_mut(name).endemph = Some(make_translation(dots, origin));
+        self.class_mut(name).endemph = Some(ResolvedTranslation::indication(dots, origin));
     }
 
     pub fn emphmodechars(&mut self, name: &str, chars: &str) {

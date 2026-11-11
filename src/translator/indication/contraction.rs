@@ -7,7 +7,7 @@
 //! [`Indicator`]: super::Indicator
 
 use crate::parser::{AnchoredRule, Rule};
-use crate::translator::{ResolvedTranslation, TranslationStage};
+use crate::translator::ResolvedTranslation;
 
 /// A builder for [`ContractionSigns`]
 #[derive(Debug, Default)]
@@ -36,9 +36,7 @@ impl ContractionSignsBuilder {
             .nocontractsign
             .into_iter()
             .chain(self.letsign)
-            .map(|(dots, origin)| {
-                ResolvedTranslation::new("", &dots, 1, TranslationStage::Main, origin)
-            })
+            .map(|(dots, origin)| ResolvedTranslation::indication(&dots, &origin))
             .collect();
         (!signs.is_empty()).then_some(ContractionSigns(signs))
     }

@@ -16,7 +16,7 @@
 use std::collections::HashSet;
 
 use crate::parser::{AnchoredRule, CharacterClass};
-use crate::translator::{ResolvedTranslation, TranslationStage, table::TableContext};
+use crate::translator::{ResolvedTranslation, table::TableContext};
 
 /// A builder for [`Indicator`]
 #[derive(Debug)]
@@ -40,8 +40,7 @@ impl IndicatorBuilder {
     /// Build an [`Indicator`]
     pub fn build(self, ctx: &TableContext) -> Option<Indicator> {
         let (lettersign, origin) = self.lettersign?;
-        let start_translation =
-            ResolvedTranslation::new("", &lettersign, 1, TranslationStage::Main, origin);
+        let start_translation = ResolvedTranslation::indication(&lettersign, &origin);
 
         let cc = ctx.character_classes();
 
