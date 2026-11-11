@@ -167,6 +167,8 @@ pub struct PrimaryTable {
     ///
     /// [`Constraint::PreferDigit`]: crate::translator::position_constraints::Constraint::PreferDigit
     backward_digit_overrides: HashMap<char, ResolvedTranslation>,
+    /// Backward, the uppercase letter of a lowercase one, from the `base uppercase` rules.
+    uppercase_letters: HashMap<char, char>,
     /// Amend the translations chosen, see [`Amenders`].
     amenders: Amenders,
 }
@@ -200,6 +202,7 @@ struct PrimaryTableBuilder {
     nocont_constrainer: NoContConstrainerBuilder,
     capsnocont_constrainer: CapsNoContConstrainerBuilder,
     repword_constrainer: RepwordConstrainerBuilder,
+    uppercase_letters: HashMap<char, char>,
     backward_digit_overrides: HashMap<char, ResolvedTranslation>,
     compbrl_triggers: Vec<String>,
 }
@@ -263,6 +266,7 @@ impl PrimaryTableBuilder {
             capsnocont_constrainer: CapsNoContConstrainerBuilder::new(),
             repword_constrainer: RepwordConstrainerBuilder::new(),
             backward_digit_overrides: HashMap::new(),
+            uppercase_letters: HashMap::new(),
             compbrl_triggers: Vec::new(),
         }
     }
@@ -470,11 +474,10 @@ impl PrimaryTableBuilder {
                     .map(Amender::ContractionSigns)
                     .into_iter()
                     .collect(),
-                Direction::Backward => {
-                    vec![Amender::BackwardCapsWord(
-                        self.backward_caps_word.build(ctx),
-                    )]
-                }
+                Direction::Backward => vec![Amender::BackwardCapsWord(
+                    self.backward_caps_word
+                        .build(ctx, self.uppercase_letters.clone()),
+                )],
             }),
             undefined: self.undefined,
             character_translations: self.character_translations,
@@ -543,6 +546,7 @@ impl PrimaryTableBuilder {
                 character_classes: ctx.character_classes.clone(),
             }),
             backward_digit_overrides: self.backward_digit_overrides,
+            uppercase_letters: self.uppercase_letters,
         }
     }
 }
@@ -1210,9 +1214,30 @@ impl PrimaryTable {
                             .indicator(&dots.to_string());
                     }
                 }
-                Rule::Base { derived, base, .. } => {
+                Rule::Base {
+                    name,
+                    derived,
+                    base,
+                } => {
                     if let Some(translation) = ctx.character_definitions().get(base).cloned() {
-                        builder.insert_character(*derived, &translation, direction, rule);
+                        // Backward, as in liblouis, the derived character has no dots of
+                        // its own: the dots give the base, which a capital sign uppercases.
+                        match direction {
+                            Direction::Forward => builder.insert_character(
+                                *derived,
+                                &translation,
+                                direction,
+                                rule,
+                            ),
+                            // a character's first `base` rule wins, as in liblouis
+                            Direction::Backward
+                                if name == "uppercase"
+                                    && !builder.uppercase_letters.values().any(|d| d == derived) =>
+                            {
+                                builder.uppercase_letters.entry(*base).or_insert(*derived);
+                            }
+                            Direction::Backward => {}
+                        }
                     } else {
                         // hm, there is no character definition for the base character.
                         // If we are backwards compatible ignore the problem, otherwise
@@ -2360,7 +2385,10 @@ impl PrimaryTable {
                         let output = translation.output();
                         let mut chars = output.chars();
                         let titled = match chars.next() {
-                            Some(c) => c.to_uppercase().chain(chars).collect::<String>(),
+                            Some(c) => {
+                                let upper = self.uppercase_letters.get(&c).copied().unwrap_or(c);
+                                std::iter::once(upper).chain(chars).collect::<String>()
+                            }
                             None => String::new(),
                         };
                         translation.with_output(&titled)
@@ -3689,6 +3717,7 @@ mod tests {
         let rules = [
             parse_rule("lowercase a 1"),
             parse_rule("lowercase b 12"),
+            parse_rule("base uppercase B b"),
             parse_rule("capsletter 46"),
             parse_rule("punctuation $ 46"),
         ];
@@ -3701,6 +3730,32 @@ mod tests {
         )
         .unwrap();
         assert_eq!(table.translate("⠨⠃"), "B");
+    }
+
+    #[test]
+    fn backward_capitals_come_from_the_base_rules() {
+        // as in tr-g1.ctb, where `base uppercase İ i` comes before `lowercase i`: the dots
+        // give the lowercase letter, never a `base` character,
+        // and a capital sign gives the letter's first `base uppercase`, not Unicode's
+        let rules = [
+            parse_rule("lowercase \\x0131 35"),
+            parse_rule("base uppercase I \\x0131"),
+            parse_rule("base uppercase \\x0130 i"),
+            parse_rule("lowercase i 24"),
+            parse_rule("base uppercase I i"),
+            parse_rule("capsletter 6"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table = PrimaryTable::compile(
+            &rules,
+            Direction::Backward,
+            TranslationStage::Main,
+            &context,
+        )
+        .unwrap();
+        assert_eq!(table.translate("⠊"), "i");
+        assert_eq!(table.translate("⠠⠊"), "İ");
+        assert_eq!(table.translate("⠠⠔"), "I");
     }
 
     #[test]
@@ -3852,6 +3907,8 @@ mod tests {
         let rules = [
             parse_rule("lowercase a 1"),
             parse_rule("lowercase b 12"),
+            parse_rule("base uppercase A a"),
+            parse_rule("base uppercase B b"),
             parse_rule("begcapsword 46-46"),
         ];
         let context = TableContext::compile(&rules).unwrap();

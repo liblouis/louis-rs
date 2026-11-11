@@ -21,7 +21,7 @@ use crate::{
     translator::{ResolvedTranslation, table::TableContext},
 };
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use super::class_indicator::ClassIndicator;
 
@@ -115,6 +115,8 @@ pub struct BackwardCapsWord {
     /// The letters and `capsmodechars` characters, which go on a capitalized word.
     word_chars: HashSet<char>,
     space_chars: HashSet<char>,
+    /// The uppercase letter of a lowercase one, from the `base uppercase` rules.
+    uppercase_letters: HashMap<char, char>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -140,12 +142,17 @@ impl BackwardCapsWordBuilder {
         self.capsmodechars.extend(s.chars());
     }
 
-    pub fn build(self, ctx: &TableContext) -> BackwardCapsWord {
+    pub fn build(
+        self,
+        ctx: &TableContext,
+        uppercase_letters: HashMap<char, char>,
+    ) -> BackwardCapsWord {
         let classes = ctx.character_classes();
         let letters = classes.get(&CharacterClass::Letter).unwrap_or_default();
         BackwardCapsWord {
             word_chars: letters.into_iter().chain(self.capsmodechars).collect(),
             space_chars: classes.get(&CharacterClass::Space).unwrap_or_default(),
+            uppercase_letters,
         }
     }
 }
@@ -195,7 +202,8 @@ impl BackwardCapsWord {
                     if state == CapsWord::Off {
                         output.push(c);
                     } else {
-                        output.extend(c.to_uppercase());
+                        // as liblouis, only a letter with a `base uppercase` changes
+                        output.push(self.uppercase_letters.get(&c).copied().unwrap_or(c));
                     }
                 }
                 translation.with_output(&output)

@@ -48,6 +48,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `context` rule that starts with a single character.
 
 ### Fixed
+- Backward, a `base` character is no longer read from its base's dots,
+  and a capital sign gives a letter's first `base uppercase` character
+  rather than Unicode's uppercase, as in liblouis: with `tr-g1.ctb`,
+  "⠊" gave "İ" instead of "i", and "⠠⠊" "I" instead of "İ"; with
+  `sv-g2.ctb`, "gå" came out as "gÅ".
 - Backward, a `litdigit` is read only inside a number, as in liblouis:
   with `tr-g2.tbl`, "⠰⠁" gave "1" instead of "a", and "Zekice" came
   out as "Z5kic5".
