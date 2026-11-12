@@ -2060,6 +2060,25 @@ impl PrimaryTable {
                     _ => (),
                 }
             }
+            for rule in rules {
+                if let Rule::Sign {
+                    character, dots, ..
+                }
+                | Rule::Punctuation {
+                    character, dots, ..
+                }
+                | Rule::Math {
+                    character, dots, ..
+                } = &rule.rule
+                    && dots.len() > 1
+                    && !character.is_alphabetic()
+                    && rule.rule.is_direction(Direction::Backward)
+                {
+                    builder
+                        .backward_numeric_constrainer
+                        .sign_dots(&dots.to_string());
+                }
+            }
             builder
                 .backward_numeric_constrainer
                 .letter_cells(letter_cells.clone());
