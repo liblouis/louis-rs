@@ -105,6 +105,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   variable matched nothing.
 - `louis trace` prints the attributes of a `match` rule in match syntax,
   `%[_~]`, not in the multipass letters without brackets (`s~`).
+- A back-translated number continues across a cell only when the cell
+  comes back as a `numericmodechars` or `midendnumericmodechars`
+  character. Swedish lists the no-break space, which shares the blank cell
+  with the space, so before, a number went on across every space after it
+  and "16 och" came back as "16 3".
 
 ## [0.3.1] - 2026-11-11
 
