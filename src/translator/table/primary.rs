@@ -1665,7 +1665,18 @@ impl PrimaryTable {
                         CharacterClass::Space,
                         CharacterClass::Punctuation,
                     ])),
-                    Some(Transition::End(vec![CharacterClass::Digit])),
+                    // Backward, liblouis asks for a litdigit or a sign cell after it, such as
+                    // the numsign in German "⠬⠼⠙", "§ 4". A digit cell is one too where the
+                    // table includes braille-patterns.cti, whose forward-only `sign` rules
+                    // give every cell the sign attribute in liblouis, as in Danish "⣐⢉".
+                    Some(Transition::End(match direction {
+                        Direction::Forward => vec![CharacterClass::Digit],
+                        Direction::Backward => vec![
+                            CharacterClass::Digit,
+                            CharacterClass::Litdigit,
+                            CharacterClass::Sign,
+                        ],
+                    })),
                     direction,
                     ClassConstraints::default(),
                     TranslationStage::Main,
@@ -1822,12 +1833,13 @@ impl PrimaryTable {
                         Direction::Backward => {
                             // The output puts back the space that forward translation
                             // swallowed, as liblouis's insertSpace does. Not when a space
-                            // follows anyway.
+                            // follows anyway: liblouis asks only that the next cell isn't a
+                            // space, so "to" joins "com" in "⠖⠤⠑" although ⠤ is also a hyphen.
                             builder.get_trie_mut(rule).insert(
                                 &format!("{chars} "),
                                 &dots.to_string(),
                                 Some(Transition::BegWord),
-                                Some(Transition::ContinuesWord),
+                                Some(Transition::NotEnd(vec![CharacterClass::Space])),
                                 direction,
                                 ClassConstraints::default(),
                                 TranslationStage::Main,
