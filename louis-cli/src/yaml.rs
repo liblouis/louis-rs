@@ -227,21 +227,22 @@ impl YAMLParser {
     }
 
     fn xfail_mapping_value(&mut self) -> Result<ExpectedFailure, ParseError> {
-        let mut xfail = ExpectedFailure::default();
+        let mut forward = Expectation::Pass;
+        let mut backward = Expectation::Pass;
         self.mapping_start()?;
         while let Some(Ok((Event::Scalar(..), _))) = self.events.peek() {
             let direction = self.scalar()?;
             let value = self.xfail_value()?;
             match &*direction {
-                "forward" => xfail.forward = value,
-                "backward" => xfail.backward = value,
+                "forward" => forward = value,
+                "backward" => backward = value,
                 _ => {
                     return Err(ParseError::InvalidXFail);
                 }
             }
         }
         self.mapping_end()?;
-        Ok(xfail)
+        Ok(ExpectedFailure::new(forward, backward))
     }
 
     fn xfail(&mut self) -> Result<ExpectedFailure, ParseError> {

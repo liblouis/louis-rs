@@ -109,6 +109,8 @@ pub struct PositionMismatch {
     diffs: Vec<PositionDiff>,
 }
 
+// only the tests read a mismatch field by field
+#[cfg(test)]
 impl PositionMismatch {
     pub fn input(&self) -> &str {
         &self.input
@@ -333,17 +335,18 @@ pub enum Expectation {
 /// What a test is expected to do in each direction (its `xfail`)
 #[derive(Debug, Clone, Default)]
 pub struct ExpectedFailure {
-    pub forward: Expectation,
-    pub backward: Expectation,
+    forward: Expectation,
+    backward: Expectation,
 }
 
 impl ExpectedFailure {
+    pub fn new(forward: Expectation, backward: Expectation) -> Self {
+        Self { forward, backward }
+    }
+
     /// The same expectation in both directions
     pub fn both(expectation: Expectation) -> Self {
-        Self {
-            forward: expectation.clone(),
-            backward: expectation,
-        }
+        Self::new(expectation.clone(), expectation)
     }
 
     fn get(&self, direction: Direction) -> &Expectation {
