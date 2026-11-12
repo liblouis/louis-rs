@@ -77,10 +77,11 @@ enum Commands {
         /// Direction of translation
         #[arg(value_enum, short, long, default_value_t=DirectionArg::Forward)]
         direction: DirectionArg,
-        /// Display table mapping braille cells to the characters they are shown as. Without
-        /// it braille is read and written as Unicode braille (U+2800).
-        #[arg(long)]
-        display: Option<PathBuf>,
+        /// Braille encoding: a liblouis display table (`.dis`) saying which characters stand
+        /// for the braille cells, e.g. en-us-brf.dis for ASCII braille. Without it braille is
+        /// read and written as Unicode braille (U+2800).
+        #[arg(long, visible_alias = "display")]
+        braille_encoding: Option<PathBuf>,
     },
     /// List all the rules that were applied for the translation of `input` using the specified
     /// braille `table`.
@@ -98,10 +99,11 @@ enum Commands {
         direction: DirectionArg,
         #[arg(value_enum, short, long, default_value_t=TraceStyle::Table)]
         style: TraceStyle,
-        /// Display table mapping braille cells to the characters they are shown as. Without
-        /// it braille is read and written as Unicode braille (U+2800).
-        #[arg(long)]
-        display: Option<PathBuf>,
+        /// Braille encoding: a liblouis display table (`.dis`) saying which characters stand
+        /// for the braille cells, e.g. en-us-brf.dis for ASCII braille. Without it braille is
+        /// read and written as Unicode braille (U+2800).
+        #[arg(long, visible_alias = "display")]
+        braille_encoding: Option<PathBuf>,
     },
     /// Test braille translations from given YAML file(s).
     Check {
@@ -477,7 +479,7 @@ fn main() -> ExitCode {
             table,
             input,
             direction,
-            display,
+            braille_encoding: display,
         } => match input {
             Some(input) => translate(&table, display.as_deref(), direction.into(), &input),
             None => match pipeline(&table, display.as_deref(), direction.into()) {
@@ -495,7 +497,7 @@ fn main() -> ExitCode {
             input,
             direction,
             style,
-            display,
+            braille_encoding: display,
         } => match input {
             Some(input) => trace(&table, display.as_deref(), direction.into(), &input, &style),
             None => match pipeline(&table, display.as_deref(), direction.into()) {

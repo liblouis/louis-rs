@@ -109,11 +109,10 @@ impl std::fmt::Display for Constraints {
 /// A set of [`Constraints`](Constraint) that contains both directions
 const ANY_DIRECTION: Constraints = constraint_set!(Constraint::Nofor | Constraint::Noback);
 
-/// A direction for a `Rule`.
+/// Which way a translation goes: from text to braille, or from braille back to text.
 ///
-/// Rules always have at least one direction. They are used for
-/// forward translation, for backward translation or for both
-/// directions. The concept of direction is related to `Constraint`.
+/// A [`Translator`](crate::Translator) translates in one direction. A table's rules apply in
+/// both unless they are restricted with `nofor` or `noback`.
 // no_ops: no `|` that would return an `EnumSet` and put enumset in the API
 #[derive(EnumSetType, Debug, Default, Hash)]
 #[enumset(no_ops)]
@@ -2630,12 +2629,21 @@ enum SyntaxErrorKind {
     Hyphenation(hyphenation::ParseError),
 }
 
+/// The start of a syntax error's message: the table and a colon, or `line ` for table
+/// source given in memory
+fn location(path: &Option<PathBuf>) -> String {
+    match path {
+        Some(path) => format!("{}:", path.display()),
+        None => "line ".to_string(),
+    }
+}
+
 /// An error that occurred during reading of a [liblouis](https://liblouis.io) braille table
 #[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
 pub enum TableError {
     /// A line of a table could not be parsed
-    #[error("line {line}: {error}")]
+    #[error("{}{line}: {error}", location(.path))]
     Syntax {
         /// The table, or `None` for table source given in memory
         path: Option<PathBuf>,

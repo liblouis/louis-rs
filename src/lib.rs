@@ -38,11 +38,26 @@ assert_eq!(backward.translate("⠁⠃⠀⠃⠁"), "ab ba");
 # Ok::<(), louis::Error>(())
 ```
 
+Braille is read and written as Unicode braille. A [`BrailleEncoding`] writes the cells
+as other characters instead, such as ASCII braille. It is loaded from a liblouis display
+table (`.dis`):
+
+```no_run
+use louis::{BrailleEncoding, Direction, Translator};
+
+let brf = BrailleEncoding::new("en-us-brf.dis")?;
+let translator =
+    Translator::new(&["en-us-g2.ctb"], Direction::Forward)?.with_braille_encoding(&brf);
+assert_eq!(translator.translate("the"), "!");
+# Ok::<(), louis::Error>(())
+```
+
 [`Translator::translate_with_options`] also maps positions between input and output,
 and [`metadata`] finds tables by their metadata instead of their file name.
 
 */
 
+mod braille_encoding;
 mod emphasis;
 mod hyphenation;
 pub mod metadata;
@@ -51,6 +66,7 @@ mod translator;
 
 use std::path::{Path, PathBuf};
 
+pub use braille_encoding::BrailleEncoding;
 pub use emphasis::{Emphasis, EmphasisSpan};
 pub use parser::{Direction, SyntaxError, TableError};
 use search_path::SearchPath;
@@ -84,11 +100,20 @@ pub mod internals {
 pub enum Error {
     /// The tables could not be read: each error names its table and, for a syntax error,
     /// its line.
-    #[error("errors when reading the braille table(s)")]
+    #[error("{}", table_errors(.0))]
     Table(Vec<TableError>),
     /// The tables were read, but a rule refers to something that no rule defines.
     #[error(transparent)]
     Compile(#[from] CompileError),
+}
+
+/// The first of `errors`, and how many more there are
+fn table_errors(errors: &[TableError]) -> String {
+    match errors {
+        [] => "cannot read the tables".to_string(),
+        [error] => error.to_string(),
+        [error, rest @ ..] => format!("{error} (and {} more)", rest.len()),
+    }
 }
 
 /// The result of [`Translator::translate_with_options`].
@@ -208,6 +233,16 @@ impl Translator {
         Ok(Self(TranslationPipeline::compile(&rules, direction)?))
     }
 
+    /// Read and write braille in `encoding` rather than as Unicode braille. An encoding
+    /// given before is replaced.
+    ///
+    /// This is what liblouis does with the display table at the start of a table list;
+    /// louis-rs takes it explicitly instead.
+    pub fn with_braille_encoding(self, encoding: &BrailleEncoding) -> Self {
+        let direction = self.0.direction();
+        Self(self.0.with_display(encoding.compile(direction)))
+    }
+
     /// Translate `input`.
     pub fn translate(&self, input: &str) -> String {
         self.0.translate(input)
@@ -311,6 +346,38 @@ mod tests {
         for direction in [Direction::Forward, Direction::Backward] {
             assert!(Translator::from_table_source(table, direction).is_ok());
         }
+    }
+
+    #[test]
+    fn a_braille_encoding_writes_the_cells_both_ways() {
+        let table = "space \\s 0\nlowercase a 1\nlowercase b 12\n";
+        let encoding = BrailleEncoding::from_table_source("display a 1\ndisplay b 12\n").unwrap();
+        let forward = Translator::from_table_source(table, Direction::Forward)
+            .unwrap()
+            .with_braille_encoding(&encoding);
+        assert_eq!(forward.translate("ab ba"), "ab⠀ba");
+        let backward = Translator::from_table_source(table, Direction::Backward)
+            .unwrap()
+            .with_braille_encoding(&encoding);
+        assert_eq!(backward.translate("ab⠀ba"), "ab ba");
+        // a second encoding replaces the first, in either direction
+        let other = BrailleEncoding::from_table_source("display x 1\ndisplay y 12\n").unwrap();
+        assert_eq!(forward.with_braille_encoding(&other).translate("ab"), "xy");
+        assert_eq!(backward.with_braille_encoding(&other).translate("xy"), "ab");
+        // and without one, Unicode braille
+        let plain = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(plain.translate("ab"), "⠁⠃");
+    }
+
+    #[test]
+    fn a_table_error_says_what_and_where() {
+        let error =
+            Translator::from_table_source("letter a 1\nfoo b 2\nbar c 3\n", Direction::Forward)
+                .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "line 2: opcode expected, got Some(\"foo\") (and 1 more)"
+        );
     }
 
     #[test]

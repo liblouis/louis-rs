@@ -138,7 +138,14 @@ impl TranslationPipeline {
     /// The display table is supplied rather than compiled from the same rules because the
     /// caller chooses it independently of the translation table: the YAML harness takes it
     /// from a test's `display:` key, `louis translate` from `--display`.
+    pub fn direction(&self) -> Direction {
+        self.direction
+    }
+
+    /// Show the braille as `display` says, replacing any display stage there already was
     pub fn with_display(mut self, display: DisplayTable) -> Self {
+        self.steps
+            .retain(|step| !matches!(step, Transformation::Display(_)));
         let step = Transformation::Display(display);
         match self.direction {
             // translating to braille, so the display table maps what we produced: it runs last

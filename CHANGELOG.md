@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   merged, so that two compare equal when they emphasize the same.
   `TranslationOptions::with_emphasis` takes one instead of a
   `Vec<EmphasisSpan>`, and `TranslationResult::emphasis()` returns one.
+- `BrailleEncoding` and `Translator::with_braille_encoding`: braille can
+  be read and written as other characters than Unicode braille, such as
+  ASCII braille. An encoding is loaded from a liblouis display table,
+  like a translation table (`new`, `with_search_path`,
+  `from_table_source`), e.g. `en-us-brf.dis`.
+- `louis translate` and `louis trace` call their `--display` option
+  `--braille-encoding`; `--display` still works.
 
 ### Changed
 - louis-rs is in beta: translation matches liblouis closely, and the
@@ -48,6 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   - `TranslationResult` implements `Clone`, `PartialEq` and `Eq`, and so
     does `TranslationOptions` for the latter two.
   - Error messages start in lowercase and end without a full stop.
+    `Error::Table` shows the first error and how many more there are,
+    instead of only "errors when reading the braille table(s)", and a
+    syntax error names its table.
   - `TranslationModes` implements `PartialEq`, `Eq`, `Copy` and
     `FromIterator`.
   - `TranslationMode` and `Direction` lose the `|` that returned an

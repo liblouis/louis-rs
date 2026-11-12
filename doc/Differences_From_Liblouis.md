@@ -44,35 +44,37 @@ replace its commas with colons, and name the install directory explicitly if you
 relied on it. louis-rs does not yet notice a `LOUIS_TABLEPATH` it is ignoring;
 a diagnostic for that is the missing piece.
 
-## Display tables
+## Display tables, or braille encodings
 
-A display table maps braille cells to the characters they are shown as. liblouis
+A display table maps braille cells to the characters they are shown as: a braille
+encoding, as louis-rs calls it (`BrailleEncoding`), such as ASCII braille. liblouis
 takes it from the first table of a table list, so a table that includes one of
 its own sets it: `da-dk-g28.ctb` includes `da-dk-octobraille.dis`, and liblouis
 therefore renders Danish braille in that CP1252 encoding.
 
 louis-rs does not. Braille is read and written as Unicode braille (U+2800) unless
-a display table is named explicitly, whether or not the translation table
-includes one:
+an encoding is named explicitly, whether or not the translation table includes a
+display table:
 
 ```shell
 $ louis translate da-dk-g28.ctb "ørene"
 ⠪⠷⠫
-$ louis translate --display da-dk-octobraille.dis da-dk-g28.ctb "ørene"
+$ louis translate --braille-encoding da-dk-octobraille.dis da-dk-g28.ctb "ørene"
 øàë
 ```
 
 Unicode braille is the more useful default for reading dot patterns off a
 terminal, and coupling the display table to the translation table is a liblouis
-design wart rather than something worth reproducing. The library takes one
-through `TranslationPipeline::with_display`, and the YAML test harness through a
-test's `display:` key.
+design wart rather than something worth reproducing. The library takes the
+encoding through `Translator::with_braille_encoding`, `louis` through
+`--braille-encoding` (or `--display`), and the YAML test harness through a test's
+`display:` key.
 
 The mapping is a stage of the pipeline like any other, so `trace` names the
 `display` rule behind each character:
 
 ```shell
-$ louis trace --display da-dk-octobraille.dis da-dk-g28.ctb "ørene"
+$ louis trace --braille-encoding da-dk-octobraille.dis da-dk-g28.ctb "ørene"
 øàë
 ┌───┬──────┬────┬───────────────┬─────────┐
 │   │ From │ To │ Rule          │ Stage   │
@@ -86,10 +88,11 @@ $ louis trace --display da-dk-octobraille.dis da-dk-g28.ctb "ørene"
 └───┴──────┴────┴───────────────┴─────────┘
 ```
 
-Without `--display` there is no such stage, so the trace is unchanged and the
+Without an encoding there is no such stage, so the trace is unchanged and the
 output stays Unicode braille.
 
-**Migration path:** name the display table. The liblouis YAML tests that relied
+**Migration path:** name the display table, as a `BrailleEncoding`. The liblouis
+YAML tests that relied
 on the fallback are being changed to name theirs (liblouis
 [#2102](https://github.com/liblouis/liblouis/pull/2102) fixed three; more remain).
 For an application, none yet: louis-rs does not say when a translation table

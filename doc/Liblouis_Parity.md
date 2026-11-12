@@ -91,8 +91,10 @@ through the same search path as any other table.
 **Position mapping.** `inputPos`, `outputPos` and `cursorPos`, composed across every
 pipeline stage in both directions. Three known mismatches remain in the whole suite.
 
-**Display tables** as a pipeline stage, renders last when translating to braille and
-first when back-translating. `--display` on `translate` and `trace`.
+**Braille encodings (display tables)** as a pipeline stage, applied last when
+translating to braille and first when back-translating: `BrailleEncoding` and
+`Translator::with_braille_encoding` in the library, `--braille-encoding` on `translate`
+and `trace`.
 
 **Table metadata queries** — find tables by language, contraction grade and the rest.
 
@@ -180,7 +182,6 @@ nothing at all, and `de-eurobrl6.yaml`, `hu-hu-g1-hyph_harness.yaml` and
 | `partialTrans` ([#19](https://github.com/liblouis/louis-rs/issues/19))                          | Flag accepted, nothing reads it. A screen reader sets it on every keystroke of contracted input; without it, word-final rules fire on an unfinished word. | M      |
 | `compbrlAtCursor` / `compbrlLeftCursor` ([#20](https://github.com/liblouis/louis-rs/issues/20)) | Flags accepted, nothing reads them. Computer-braille rendering already works, so this is cursor plumbing.                                                 | M      |
 | Back-translation finality ([#29](https://github.com/liblouis/louis-rs/issues/29))               | Nothing says whether more cells could change the characters already produced.                                                                             | M      |
-| Display tables for library callers                                                              | `TranslationPipeline::with_display` and `louis translate/trace --display` exist; `Translator` doesn't expose it yet.                                       | S      |
 | `hyphenate`, `charToDots`, `dotsToChar`, `getEmphClasses`                                       | Working internals, nothing exposed on `Translator`.                                                                                                       | S each |
 | C ABI                                                                                           | Not started. cbindgen or Diplomat.                                                                                                                        | M–L    |
 
