@@ -105,6 +105,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   variable matched nothing.
 - `louis trace` prints the attributes of a `match` rule in match syntax,
   `%[_~]`, not in the multipass letters without brackets (`s~`).
+- Back-translating, a `joinword` or `joinnum` applies whenever no space
+  follows, as in liblouis. Before, it had to be followed by more of the
+  same word, so en-us-g2's "to" was lost before a cell that is also
+  punctuation: "⠖⠤⠑" came back as "!come", not "to come". It now ranks by
+  its characters, not counting the space it puts back, and a backward
+  `begnum` also applies before a litdigit or sign cell, such as German's
+  "§ " before the numsign.
 
 ## [0.3.1] - 2026-11-11
 
