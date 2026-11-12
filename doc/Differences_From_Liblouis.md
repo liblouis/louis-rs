@@ -114,7 +114,8 @@ Back-translating, an emphasis indicator for a word without an end indicator emph
 the word up to the next space. liblouis also emphasizes that space, since it ends the word
 only after writing it: for `⠨⠂⠮ ⠯` it gives italic over "the ", and for `⠨⠂ ⠨⠄` an
 italic space. louis-rs leaves the space plain, as the forward translation would read it.
-Eight cases in liblouis's `backtranslation_emphasis.yaml` expect the space emphasized.
+Eight cases in liblouis's `backtranslation_emphasis.yaml` expect the space emphasized
+([liblouis#2191](https://github.com/liblouis/liblouis/issues/2191)).
 
 **Migration path:** where liblouis's typeform is needed, extend each emphasis span of a
 word that ends right before a space by that space.
