@@ -21,7 +21,7 @@ use crate::hyphenation::{self, HyphenationTable};
 pub use attribute::Attribute;
 pub use braille::{BrailleChar, BrailleChars};
 pub use character_class::{CharacterClass, CharacterClasses};
-pub use match_rule::{Pattern, PatternParser, Patterns, Side};
+pub use match_rule::{Pattern, Patterns, Side};
 pub use multipass::action::ActionInstruction;
 pub use multipass::test::{Quantifier, TestInstruction};
 pub use multipass::{Action, Test};
@@ -29,7 +29,8 @@ pub use multipass::{Action, Test};
 mod attribute;
 mod braille;
 mod character_class;
-mod match_rule;
+// pub(crate) so that the match pattern tests can build patterns with its `PatternParser`
+pub(crate) mod match_rule;
 pub mod multipass;
 
 /// A restriction that applies to a [`Rule`].
@@ -2694,7 +2695,7 @@ pub enum TableError {
 /// (but acyclic) chain of includes -- cyclic ones are caught earlier, by [`TableError::CircularInclude`].
 const MAX_INCLUDE_DEPTH: usize = 64;
 
-/// A [`Rule`] combined with information about which table file it originated from.
+/// A `Rule` combined with information about which table file it originated from.
 #[derive(PartialEq, Debug, Clone)]
 pub struct AnchoredRule {
     pub rule: Rule,
@@ -2924,7 +2925,7 @@ fn check_conflicting_rules(rules: &[AnchoredRule]) -> Result<(), Vec<TableError>
     Ok(())
 }
 
-/// See [`table_expanded_with`] for what `chain` tracks. Callers expanding a rule set that isn't
+/// See `table_expanded_with` for what `chain` tracks. Callers expanding a rule set that isn't
 /// itself nested inside another include expansion (e.g. an inline/in-memory table) should pass
 /// `&[]`.
 pub fn expand_includes(

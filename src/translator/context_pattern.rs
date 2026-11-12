@@ -7,7 +7,7 @@ use crate::parser::{Action, ActionInstruction, Quantifier, Test, TestInstruction
 
 use crate::parser::{AnchoredRule, Attribute, CharacterClass, CharacterClasses};
 use crate::translator::effect::{Effect, Environment};
-use crate::translator::regexp::{self, CompiledRegexp, Regexp};
+use crate::translator::regexp::{CompiledRegexp, Regexp};
 use crate::translator::swap::SwapClasses;
 use crate::translator::table::TableContext;
 use crate::translator::translation::{

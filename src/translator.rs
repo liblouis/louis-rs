@@ -9,10 +9,7 @@ pub use table::display::DisplayTable;
 pub use translation::{ResolvedTranslation, TranslationStage};
 pub use trie::ClassConstraints;
 
-use crate::{
-    Direction,
-    parser::{AnchoredRule, Braille, HasDirection, Rule},
-};
+use crate::parser::{Braille, Rule};
 
 mod beg_word;
 mod context_pattern;
@@ -115,15 +112,6 @@ impl CharacterDefinition {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use crate::{
-        parser::RuleParser, translator::table::TableContext,
-        translator::table::primary::PrimaryTable,
-    };
-
-    fn parse_rule(source: &str) -> AnchoredRule {
-        RuleParser::new(source).rule().unwrap().into()
-    }
 
     #[test]
     fn resolve_implicit_dots() {

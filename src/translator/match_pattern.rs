@@ -203,7 +203,7 @@ impl MatchPatterns {
 mod tests {
     use super::*;
     use crate::parser::RuleParser;
-    use crate::parser::{CharacterClass, PatternParser};
+    use crate::parser::{CharacterClass, match_rule::PatternParser};
     use crate::translator::TranslationStage;
 
     // just create some fake anchored rule for testing purposes
