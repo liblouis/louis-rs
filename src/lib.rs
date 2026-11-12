@@ -1,27 +1,45 @@
-/*! A library to translate text to braille and back
+/*! Translate text to braille and back.
 
-This library is a rust-only implementation of [liblouis](https://liblouis.io).
+louis-rs is a re-implementation of [liblouis](https://liblouis.io) in Rust. It reads
+liblouis's tables and passes its test suite, but shares no code with it.
 
 ## Status
 
-The API of this library is not stable yet. Breaking changes may occur
-in any version.
+The API follows semantic versioning: breaking changes come only with a new minor
+version (0.4 → 0.5), never with a patch release. Items hidden from this documentation
+are not covered.
 
 ## Usage
 
+A [`Translator`] compiles a list of tables for one [`Direction`]; translating the other
+way takes a second translator. [`Translator::new`] looks the tables up in the
+directories listed in the `LOUIS_TABLE_PATH` environment variable, and
+[`Translator::with_search_path`] takes the directories as an argument.
+
 ```no_run
-use std::path::Path;
+use louis::{Direction, Translator};
 
-use louis::Translator;
-use louis::Direction;
-
-# fn main() -> Result<(), Box<dyn std::error::Error>> {
 let translator = Translator::new(&["en-us-g1.ctb"], Direction::Forward)?;
-let braille = translator.translate("hello world");
-assert_eq!(braille, "⠓⠑⠇⠇⠕⠀⠺⠕⠗⠇⠙");
-# Ok(())
-# }
+assert_eq!(translator.translate("hello world"), "⠓⠑⠇⠇⠕⠀⠺⠕⠗⠇⠙");
+# Ok::<(), louis::Error>(())
 ```
+
+[`Translator::from_table_source`] compiles a table held in memory, which cannot
+include other tables:
+
+```
+use louis::{Direction, Translator};
+
+let table = "space \\s 0\nlowercase a 1\nlowercase b 12\n";
+let forward = Translator::from_table_source(table, Direction::Forward)?;
+assert_eq!(forward.translate("ab ba"), "⠁⠃⠀⠃⠁");
+let backward = Translator::from_table_source(table, Direction::Backward)?;
+assert_eq!(backward.translate("⠁⠃⠀⠃⠁"), "ab ba");
+# Ok::<(), louis::Error>(())
+```
+
+[`Translator::translate_with_options`] also maps positions between input and output,
+and [`metadata`] finds tables by their metadata instead of their file name.
 
 */
 
@@ -66,7 +84,7 @@ pub enum Error {
     /// its line.
     #[error("errors when reading the braille table(s)")]
     Table(Vec<TableError>),
-    /// The tables were read, but their rules don't fit together.
+    /// The tables were read, but a rule refers to something that no rule defines.
     #[error(transparent)]
     Compile(#[from] CompileError),
 }

@@ -101,7 +101,6 @@ first when back-translating. `--display` on `translate` and `trace`.
 
 Honest list, no dates attached:
 
-- **The library API is not stable.** Expect breaking changes.
 - **No C ABI and no bindings.** Rust consumers only, for now. PyO3 bindings are
   proposed in [#1](https://github.com/liblouis/louis-rs/issues/1) /
   [PR #12](https://github.com/liblouis/louis-rs/pull/12).

@@ -31,7 +31,11 @@ mod table;
 mod translation;
 mod trie;
 
-/// Why the rules of the tables don't fit together.
+/// An error in compiling the rules of a table.
+///
+/// Every line of the table parsed, but a rule refers to something that no rule in the
+/// table or its includes defines, such as a character or a swap class. Errors in reading
+/// or parsing a table are [`TableError`](crate::TableError)s instead.
 #[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
 pub enum CompileError {

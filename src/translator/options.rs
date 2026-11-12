@@ -12,7 +12,9 @@ use crate::emphasis::EmphasisSpan;
 ///
 /// These correspond to the mode bits that liblouis accepts in its `mode`
 /// parameter.
-#[derive(EnumSetType, Debug)]
+// no_ops: no `|` that would return an `EnumSet` and put enumset in the API
+#[derive(EnumSetType, Debug, Hash)]
+#[enumset(no_ops)]
 #[non_exhaustive]
 pub enum TranslationMode {
     /// Translate without contractions (liblouis's `noContractions`). Not implemented yet:
@@ -35,7 +37,7 @@ pub enum TranslationMode {
 }
 
 /// A set of [`TranslationMode`]s.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TranslationModes(EnumSet<TranslationMode>);
 
 impl TranslationModes {
@@ -108,8 +110,22 @@ impl TranslationOptions {
     }
 }
 
-impl Default for TranslationModes {
-    fn default() -> Self {
-        Self::empty()
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn translation_modes() {
+        let mut modes = TranslationModes::empty();
+        assert!(modes.insert(TranslationMode::NoUndefined));
+        assert!(!modes.insert(TranslationMode::NoUndefined));
+        assert!(modes.contains(TranslationMode::NoUndefined));
+        assert!(!modes.contains(TranslationMode::NoContractions));
+        let collected: TranslationModes =
+            [TranslationMode::NoUndefined, TranslationMode::PartialTrans]
+                .into_iter()
+                .collect();
+        assert!(collected.contains(TranslationMode::PartialTrans));
+        assert_ne!(modes, collected);
     }
 }

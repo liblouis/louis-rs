@@ -212,10 +212,14 @@ surface is explicit. Done on [2026-11-11 Wed] unless marked open:
   ignored. /Done/ (~PartialEq~, ~Eq~, ~FromIterator~). Only
   ~NoUndefined~ is implemented; the other modes are documented as
   ignored.
-- /Open:/ ~TranslationMode~ and ~Direction~ derive enumset's
-  ~EnumSetType~, which gives them a ~|~ that returns an
-  ~enumset::EnumSet~. That puts enumset in the public API, so a major
-  enumset release would be a breaking change for us.
+- ~TranslationMode~ and ~Direction~ derive enumset's ~EnumSetType~,
+  which gives them a ~|~ that returns an ~enumset::EnumSet~. That puts
+  enumset in the public API, so a major enumset release would be a
+  breaking change for us. /Done/ [2026-11-12 Thu]: both derive it
+  with ~#[enumset(no_ops)]~, so neither has the ~|~; a set of modes is
+  built with ~insert~ or ~collect~. ~EnumSetType~ stays implemented, a
+  small, deliberate leak: enumset 1.x is stable, and the sets inside
+  louis-rs and the CLI keep using it.
 - Add a static assertion that ~Translator: Send + Sync~ (true today),
   and run ~cargo-semver-checks~ in CI once the API is declared stable.
   /Done/ (the assertion, as a unit test like the API guidelines'

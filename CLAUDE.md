@@ -20,7 +20,8 @@ Use the Linux kernel's coding-assistants trailer format (https://docs.kernel.org
   escaped `"\\"` multipass operand in `it-it-comp6.utb:248`, fixed in 4980ced
 - Figures above measured at louis-rs `3a6e171` against liblouis `0d3be2c4`; see
   `doc/Liblouis_Parity.md`, which is the one place to update them
-- Library API: Not yet stable
+- Library API: follows semver, breaking changes only in a new 0.x minor version;
+  `louis::internals` is not covered
 
 ## Building and Testing
 

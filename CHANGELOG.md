@@ -28,7 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   - `TranslationResult`'s `output_positions` and `input_positions` are
     plain `Vec`s; they were always `Some`.
   - The public enums and `TranslationResult` are `#[non_exhaustive]`.
-  - `TranslationModes` implements `PartialEq`, `Eq` and `FromIterator`.
+  - `TranslationModes` implements `PartialEq`, `Eq`, `Copy` and
+    `FromIterator`.
+  - `TranslationMode` and `Direction` lose the `|` that returned an
+    `enumset::EnumSet`. Build a set of modes with
+    `TranslationModes::insert` or `collect`.
 - The `backwards_compatibility` feature is gone. louis-rs always behaves
   as it did with it, like liblouis: the first definition of a character
   wins.

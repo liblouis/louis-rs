@@ -3,6 +3,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use enumset::EnumSet;
+
 use rayon::prelude::*;
 
 use search_path::SearchPath;
@@ -362,7 +363,7 @@ pub struct Test {
 impl Test {
     fn check(&self, table: &TranslationPipeline, direction: Direction) -> TestResult {
         let mut options = TranslationOptions::default()
-            .with_mode(self.modes.clone())
+            .with_mode(self.modes)
             .with_emphasis(self.emphasis.clone());
         if let Some(CursorPosition::Single(cursor) | CursorPosition::Tuple(cursor, _)) =
             self.cursor_pos

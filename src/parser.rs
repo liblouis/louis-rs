@@ -113,7 +113,9 @@ const ANY_DIRECTION: Constraints = constraint_set!(Constraint::Nofor | Constrain
 /// Rules always have at least one direction. They are used for
 /// forward translation, for backward translation or for both
 /// directions. The concept of direction is related to `Constraint`.
-#[derive(EnumSetType, Debug, Default)]
+// no_ops: no `|` that would return an `EnumSet` and put enumset in the API
+#[derive(EnumSetType, Debug, Default, Hash)]
+#[enumset(no_ops)]
 pub enum Direction {
     /// From text to braille
     #[default]
