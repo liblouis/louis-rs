@@ -1,0 +1,29 @@
+[package]
+name = "louis-cli"
+version.workspace = true
+edition = "2024"
+description = "Command line tool for louis-rs, a pure Rust re-implementation of the liblouis braille translator"
+repository = "https://github.com/liblouis/louis-rs"
+readme = "../README.md"
+license = "LGPL-2.1-or-later"
+keywords = ["braille", "liblouis", "accessibility"]
+categories = ["command-line-utilities", "accessibility", "text-processing"]
+
+[[bin]]
+name = "louis"
+path = "src/main.rs"
+
+[dependencies]
+louis-rs = { path = "..", version = "0.3.1" }
+thiserror = "2"
+search_path = "0.1.4"
+clap = { version = "4.4.11", features = ["derive"] }
+env_logger = "0.11.3"
+tabled = "0.17.0"
+rayon = "1.12.0"
+saphyr-parser = "0.3.3"
+
+# The changelog and the v{{version}} tag belong to the library; the two crates share a version.
+[package.metadata.release]
+pre-release-replacements = []
+tag = false

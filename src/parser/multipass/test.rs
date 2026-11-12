@@ -1,8 +1,8 @@
 //! A Parser for the test operand of context and multipass opcodes
-use crate::parser::{Attribute, CharacterClass};
-use std::{collections::HashSet, iter::Peekable, str::Chars};
+use crate::parser::{Attribute, CharacterClass, attribute::ContextAttribute};
+use std::collections::HashSet;
 
-use crate::parser::multipass::{ConversionError, IsLiteral, ParseError};
+use crate::parser::multipass::{ConversionError, IsLiteral, ParseError, Scanner};
 
 use super::braille::{self, BrailleChars, is_braille_dot};
 
@@ -20,10 +20,33 @@ impl Test {
         &self.tests
     }
 
+    /// The text this test matches when it is only literals, ignoring the replacement
+    /// brackets, so `[@5-46-3456]` gives ⠐⠨⠼.
+    pub fn literal_text(&self) -> Option<String> {
+        self.tests
+            .iter()
+            .map(TestInstruction::literal_text)
+            .collect()
+    }
+
     fn has_replace(&self) -> bool {
         self.tests
             .iter()
             .any(|t| matches!(t, TestInstruction::Replace { .. }))
+    }
+
+    /// The length of the literal a forward `context` rule's test starts with at the rule's
+    /// position. liblouis indexes the rule by these characters (`passFindCharacters`), and
+    /// it competes as a rule of that length. It is the first literal reaching past what `_N`
+    /// steps back, skipping variable tests, `!`, the brackets and anchors, and stepping over
+    /// fixed-width classes inside the look-back. Anything else first, such as a class, gives
+    /// 0, and the rule is then tried at every position, ahead of the rule chosen there.
+    pub fn leading_literal_len(&self) -> usize {
+        let mut lookback = 0;
+        self.tests
+            .iter()
+            .find_map(|t| t.leading_literal_len(&mut lookback))
+            .unwrap_or(0)
     }
 
     /// How many characters the test spells out literally (`"..."` or `@...`), anywhere in it.
@@ -67,7 +90,7 @@ impl TryFrom<&Test> for String {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Operator {
     Eq,
     Gt,
@@ -138,6 +161,56 @@ impl TestInstruction {
             | TestInstruction::AtEnd => 0,
         }
     }
+
+    /// [`Test::leading_literal_len`] for this instruction, `lookback` being how much of
+    /// the `_N` look-back the instructions before it left uncovered: `Some` once the
+    /// length is decided, `None` to go on with the next instruction.
+    fn leading_literal_len(&self, lookback: &mut usize) -> Option<usize> {
+        let n = match self {
+            TestInstruction::String { .. } | TestInstruction::Dots { .. } => {
+                let n = self.literal_count();
+                if n > *lookback {
+                    return Some(n - *lookback);
+                }
+                n
+            }
+            TestInstruction::Attributes { quantifier, .. }
+            | TestInstruction::Class { quantifier, .. } => {
+                let n = match quantifier {
+                    None => 1,
+                    Some(Quantifier::Number(n)) => *n as usize,
+                    Some(Quantifier::Range(min, max)) if min == max => *min as usize,
+                    Some(_) => return Some(0),
+                };
+                if n > *lookback {
+                    return Some(0);
+                }
+                n
+            }
+            TestInstruction::Lookback { len } => {
+                *lookback += *len as usize;
+                return None;
+            }
+            TestInstruction::Negate { test } => return test.leading_literal_len(lookback),
+            TestInstruction::Replace { tests } => {
+                return tests.iter().find_map(|t| t.leading_literal_len(lookback));
+            }
+            TestInstruction::Variable { .. }
+            | TestInstruction::AtBeginning
+            | TestInstruction::AtEnd => 0,
+        };
+        *lookback -= n;
+        None
+    }
+
+    /// The text this instruction matches when it is only literals, looking inside
+    /// replacement brackets.
+    pub fn literal_text(&self) -> Option<String> {
+        match self {
+            TestInstruction::Replace { tests } => tests.iter().map(Self::literal_text).collect(),
+            _ => String::try_from(self).ok(),
+        }
+    }
 }
 
 impl IsLiteral for TestInstruction {
@@ -178,36 +251,13 @@ fn is_class_digit(c: &char) -> bool {
 
 /// A Parser for the test operand of context and multipass opcodes
 pub struct Parser<'a> {
-    chars: Peekable<Chars<'a>>,
+    chars: Scanner<'a>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
-            chars: source.chars().peekable(),
-        }
-    }
-
-    fn ascii_number(&mut self) -> Result<u8, ParseError> {
-        let mut s = String::new();
-        while self.chars.peek().filter(|c| c.is_ascii_digit()).is_some() {
-            s.push(self.chars.next().unwrap());
-        }
-        let number = s.parse::<u8>()?;
-        Ok(number)
-    }
-
-    fn consume(&mut self, expected: char) -> Result<(), ParseError> {
-        match self.chars.next() {
-            Some(e) if e == expected => Ok(()),
-            Some(c) => Err(ParseError::CharExpected {
-                expected,
-                found: Some(c),
-            }),
-            _ => Err(ParseError::CharExpected {
-                expected,
-                found: None,
-            }),
+            chars: Scanner::new(source),
         }
     }
 
@@ -218,9 +268,9 @@ impl<'a> Parser<'a> {
                 Ok(Some(Quantifier::OneOrMore))
             }
             Some(c) if c.is_ascii_digit() => {
-                let min = self.ascii_number()?;
+                let min = self.chars.ascii_number()?;
                 if self.chars.next_if_eq(&'-').is_some() {
-                    let max = match self.ascii_number() {
+                    let max = match self.chars.ascii_number() {
                         Ok(n) => n,
                         _ => {
                             return Err(ParseError::InvalidQuantifier);
@@ -240,7 +290,7 @@ impl<'a> Parser<'a> {
     }
 
     fn class(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('%')?;
+        self.chars.consume('%')?;
         let mut name = String::new();
         // for some stupid reason classes can be just a number
         if self.chars.peek().filter(|c| is_class_digit(c)).is_some() {
@@ -271,7 +321,7 @@ impl<'a> Parser<'a> {
     }
 
     fn dots(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('@')?;
+        self.chars.consume('@')?;
         let mut dots = String::new();
         while self
             .chars
@@ -292,68 +342,22 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn handle_escape_sequence(&mut self, c: char) -> Result<char, ParseError> {
-        if c != '\\' {
-            Ok(c)
-        } else {
-            match self.chars.peek() {
-                Some('s') => {
-                    self.chars.next();
-                    Ok(' ')
-                }
-                Some('"') => {
-                    self.chars.next();
-                    Ok('"')
-                }
-                Some('\\') => {
-                    self.chars.next();
-                    Ok('\\')
-                }
-                Some('x') => {
-                    self.chars.next();
-                    self.unescape_unicode(4)
-                }
-                Some('y') => {
-                    self.chars.next();
-                    self.unescape_unicode(5)
-                }
-                // pass through any other escape chars
-                Some(_) => Ok(c),
-                _ => Err(ParseError::InvalidEscapeSequence { found: None }),
-            }
-        }
-    }
-
-    fn unescape_unicode(&mut self, len: usize) -> Result<char, ParseError> {
-        let mut s = String::new();
-        for _ in 0..len {
-            match self.chars.next() {
-                Some(c) => s.push(c),
-                None => return Err(ParseError::InvalidEscapeSequence { found: None }),
-            }
-        }
-        u32::from_str_radix(&s, 16)
-            .ok()
-            .and_then(char::from_u32)
-            .ok_or(ParseError::InvalidEscapeSequence { found: None })
-    }
-
     fn string(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('"')?;
+        self.chars.consume('"')?;
         let mut s = String::new();
         while self.chars.peek().filter(|&c| *c != '"').is_some() {
             let raw = self.chars.next().unwrap();
-            let c = self.handle_escape_sequence(raw)?;
+            let c = self.chars.handle_escape_sequence(raw)?;
             s.push(c);
         }
-        self.consume('"')?;
+        self.chars.consume('"')?;
         Ok(TestInstruction::String { s })
     }
 
     fn lookback(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('_')?;
+        self.chars.consume('_')?;
         let n = match self.chars.peek() {
-            Some(c) if c.is_ascii_digit() => self.ascii_number()?,
+            Some(c) if c.is_ascii_digit() => self.chars.ascii_number()?,
             _ => 1,
         };
         Ok(TestInstruction::Lookback { len: n })
@@ -381,7 +385,7 @@ impl<'a> Parser<'a> {
     }
 
     fn attributes(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('$')?;
+        self.chars.consume('$')?;
         let mut attrs: HashSet<Attribute> = HashSet::new();
         while self.chars.peek().filter(|&c| is_attribute(c)).is_some() {
             attrs.insert(self.attribute()?);
@@ -397,9 +401,9 @@ impl<'a> Parser<'a> {
     }
 
     fn replacement(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('[')?;
+        self.chars.consume('[')?;
         let tests = self.many_tests()?;
-        self.consume(']')?;
+        self.chars.consume(']')?;
         Ok(TestInstruction::Replace { tests })
     }
 
@@ -428,18 +432,19 @@ impl<'a> Parser<'a> {
     }
 
     fn variable(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('#')?;
+        self.chars.consume('#')?;
         Ok(TestInstruction::Variable {
             var: self
+                .chars
                 .ascii_number()
                 .map_err(|_| ParseError::InvalidVariableName)?,
             op: self.operator()?,
-            operand: self.ascii_number()?,
+            operand: self.chars.ascii_number()?,
         })
     }
 
     fn negate(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('!')?;
+        self.chars.consume('!')?;
         let test = self.test()?;
         if matches!(test, TestInstruction::Negate { .. }) {
             return Err(ParseError::DoubleNegation);
@@ -453,12 +458,12 @@ impl<'a> Parser<'a> {
     }
 
     fn at_beginning(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('`')?;
+        self.chars.consume('`')?;
         Ok(TestInstruction::AtBeginning)
     }
 
     fn at_end(&mut self) -> Result<TestInstruction, ParseError> {
-        self.consume('~')?;
+        self.chars.consume('~')?;
         Ok(TestInstruction::AtEnd)
     }
 
@@ -514,37 +519,6 @@ mod display {
         }
     }
 
-    impl std::fmt::Display for Attribute {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            match self {
-                Attribute::Class(class) => match class {
-                    CharacterClass::Space => write!(f, "s"),
-                    CharacterClass::Digit => write!(f, "d"),
-                    CharacterClass::Litdigit => write!(f, "D"),
-                    CharacterClass::Letter => write!(f, "l"),
-                    CharacterClass::Uppercase => write!(f, "U"),
-                    CharacterClass::Lowercase => write!(f, "u"),
-                    CharacterClass::Punctuation => write!(f, "p"),
-                    CharacterClass::Sign => write!(f, "S"),
-                    CharacterClass::Math => write!(f, "m"),
-                    CharacterClass::Seqdelimiter => write!(f, "~"),
-                    CharacterClass::Seqbeforechars => write!(f, "<"),
-                    CharacterClass::Seqafterchars => write!(f, ">"),
-                    CharacterClass::UserDefined(name) => write!(f, "{}", name),
-                },
-                Attribute::ByOrder(order) => match order {
-                    1 => write!(f, "w"),
-                    2 => write!(f, "x"),
-                    3 => write!(f, "y"),
-                    4 => write!(f, "z"),
-                    _ => todo!(),
-                },
-                Attribute::Any => write!(f, "a"),
-                Attribute::Boundary => write!(f, "^"),
-            }
-        }
-    }
-
     impl std::fmt::Display for Operator {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             let op = match self {
@@ -586,7 +560,7 @@ mod display {
                 TestInstruction::Attributes { attrs, quantifier } => {
                     write!(f, "$")?;
                     for attr in attrs {
-                        write!(f, "{}", attr)?;
+                        write!(f, "{}", ContextAttribute(attr))?;
                     }
                     if let Some(q) = quantifier {
                         write!(f, "{}", q)?;
@@ -627,22 +601,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn leading_literal_len() {
+        let chars = |s| Parser::new(s).tests().unwrap().leading_literal_len();
+        // the first literal, skipping variable tests and brackets
+        assert_eq!(chars(r#""เ"[$l]"าะ""#), 1);
+        assert_eq!(chars(r#"#1=1["ab"]"#), 2);
+        // a class first: tried at every position instead
+        assert_eq!(chars(r#"[$l"z"]$s"lesz""#), 0);
+        // `_2` steps back over a fixed-width class and part of the string
+        assert_eq!(chars(r#"_2$l"abc""#), 2);
+        assert_eq!(chars(r#"_1$l."abc""#), 0);
+    }
+
+    #[test]
     fn literal_count() {
         let count = |s| Parser::new(s).tests().unwrap().literal_count();
         assert_eq!(count("@1-2"), 2);
         assert_eq!(count("$a"), 0);
         assert_eq!(count("#1=1[@1]$d\"ab\""), 3);
         assert_eq!(count("!\"ab\"@1"), 1);
-    }
-
-    #[test]
-    fn ascii_number() {
-        assert_eq!(Parser::new("123").ascii_number(), Ok(123));
-        assert_eq!(Parser::new("1").ascii_number(), Ok(1));
-        assert_eq!(Parser::new("1 ").ascii_number(), Ok(1));
-        assert_eq!(Parser::new("1abc").ascii_number(), Ok(1));
-        assert_ne!(Parser::new(" 1").ascii_number(), Ok(1));
-        assert_ne!(Parser::new("a1").ascii_number(), Ok(1));
     }
 
     #[test]

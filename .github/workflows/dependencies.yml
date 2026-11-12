@@ -13,4 +13,4 @@ jobs:
       - name: Deny check  
         run: |  
           cargo install cargo-deny  
-          cargo deny check
+          cargo deny --workspace check

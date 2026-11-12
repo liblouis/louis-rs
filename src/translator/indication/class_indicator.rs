@@ -18,12 +18,8 @@ use std::collections::HashSet;
 
 use crate::{
     parser::{AnchoredRule, CharacterClasses, Position},
-    translator::{ResolvedTranslation, TranslationStage},
+    translator::ResolvedTranslation,
 };
-
-fn make_translation(dots: &str, origin: &AnchoredRule) -> ResolvedTranslation {
-    ResolvedTranslation::new("", dots, 1, TranslationStage::Main, origin.clone())
-}
 
 /// A maximal run of active characters within a word, ignoring [`mode_characters`](ClassIndicator::mode_characters)
 /// gaps.
@@ -109,31 +105,31 @@ impl ClassIndicator {
     }
 
     pub(super) fn modeletter(&mut self, dots: &str, origin: &AnchoredRule) {
-        self.modeletter = Some(make_translation(dots, origin));
+        self.modeletter = Some(ResolvedTranslation::indication(dots, origin));
     }
 
     pub(super) fn begmodeword(&mut self, dots: &str, origin: &AnchoredRule) {
-        self.begmodeword = Some(make_translation(dots, origin));
+        self.begmodeword = Some(ResolvedTranslation::indication(dots, origin));
     }
 
     pub(super) fn endmodeword(&mut self, dots: &str, origin: &AnchoredRule) {
-        self.endmodeword = Some(make_translation(dots, origin));
+        self.endmodeword = Some(ResolvedTranslation::indication(dots, origin));
     }
 
     pub(super) fn begmode(&mut self, dots: &str, origin: &AnchoredRule) {
-        self.begmode = Some(make_translation(dots, origin));
+        self.begmode = Some(ResolvedTranslation::indication(dots, origin));
     }
 
     pub(super) fn endmode(&mut self, dots: &str, origin: &AnchoredRule) {
-        self.endmode = Some(make_translation(dots, origin));
+        self.endmode = Some(ResolvedTranslation::indication(dots, origin));
     }
 
     pub(super) fn begmodephrase(&mut self, dots: &str, origin: &AnchoredRule) {
-        self.begmodephrase = Some(make_translation(dots, origin));
+        self.begmodephrase = Some(ResolvedTranslation::indication(dots, origin));
     }
 
     pub(super) fn endmodephrase(&mut self, dots: &str, position: &Position, origin: &AnchoredRule) {
-        self.endmodephrase = Some(make_translation(dots, origin));
+        self.endmodephrase = Some(ResolvedTranslation::indication(dots, origin));
         self.endmodephrase_before = matches!(position, Position::Before);
     }
 

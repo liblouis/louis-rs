@@ -1,4 +1,4 @@
-use crate::parser::{Attribute, CharacterClass};
+use crate::parser::{Attribute, CharacterClass, attribute::MatchAttribute};
 use std::{collections::HashSet, iter::Peekable, str::Chars};
 
 #[derive(thiserror::Error, Debug, PartialEq)]
@@ -95,17 +95,18 @@ impl std::fmt::Display for Pattern {
                 write!(f, "]")?;
                 Ok(())
             }
-            Pattern::Attributes(attributes) => {
-                for attr in attributes {
-                    write!(f, "{}", attr)?;
+            Pattern::Attributes(attributes) | Pattern::AttributesOrBoundary(attributes, _) => {
+                // sorted, so that a set prints the same every time
+                let mut symbols: Vec<String> = attributes
+                    .iter()
+                    .map(|attribute| MatchAttribute(attribute).to_string())
+                    .collect();
+                symbols.sort();
+                // the boundary inside the set is always `^`, whichever side it is on
+                if matches!(self, Pattern::AttributesOrBoundary(..)) {
+                    symbols.push("^".to_string());
                 }
-                Ok(())
-            }
-            Pattern::AttributesOrBoundary(attributes, side) => {
-                for attr in attributes {
-                    write!(f, "{}", attr)?;
-                }
-                write!(f, "{}", Pattern::Boundary(*side))
+                write!(f, "%[{}]", symbols.concat())
             }
             Pattern::Group(patterns) => write!(f, "({})", patterns),
             Pattern::Negate(pattern) => write!(f, "!{}", pattern),
@@ -357,6 +358,14 @@ impl<'a> PatternParser<'a> {
 mod tests {
 
     use super::*;
+
+    #[test]
+    fn attributes_print_in_match_syntax() {
+        for (source, printed) in [("%[_#.]", "%[#._]"), ("%a", "%[a]"), ("%[^_]", "%[_^]")] {
+            let pattern = PatternParser::new(source, Side::Pre).pattern().unwrap();
+            assert_eq!(pattern.to_string(), printed);
+        }
+    }
 
     #[test]
     fn attribute() {

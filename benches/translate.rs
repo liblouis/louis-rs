@@ -12,7 +12,9 @@
 //!   export LOUIS_TABLE_PATH=~/src/liblouis/tables
 //!   cargo bench
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use std::hint::black_box;
+
+use criterion::{Criterion, criterion_group, criterion_main};
 use louis::{Direction, Translator};
 
 const WORD: &str = "understanding";
@@ -52,21 +54,19 @@ fn translate_benchmark(c: &mut Criterion) {
         ("paragraph", PARAGRAPH),
     ] {
         group.throughput(criterion::Throughput::Bytes(input.len() as u64));
-        group.bench_function(name, |b| {
-            b.iter(|| translator.translate(black_box(input)).unwrap())
-        });
+        group.bench_function(name, |b| b.iter(|| translator.translate(black_box(input))));
     }
     group.finish();
 
     // Backward translation reads Unicode braille, so *every* input character is in
     // U+2800..U+28FF and no input is ever ASCII.
-    let braille = translator.translate(PARAGRAPH).unwrap();
+    let braille = translator.translate(PARAGRAPH);
     let backward = Translator::new(&["en-ueb-g2.ctb"], Direction::Backward)
         .expect("failed to load en-ueb-g2.ctb for backward translation");
     let mut group = c.benchmark_group("translate/en-ueb-g2-backward");
     group.throughput(criterion::Throughput::Bytes(braille.len() as u64));
     group.bench_function("paragraph", |b| {
-        b.iter(|| backward.translate(black_box(&braille)).unwrap())
+        b.iter(|| backward.translate(black_box(&braille)))
     });
     group.finish();
 
@@ -77,7 +77,7 @@ fn translate_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("translate/el");
     group.throughput(criterion::Throughput::Bytes(GREEK.len() as u64));
     group.bench_function("paragraph", |b| {
-        b.iter(|| greek.translate(black_box(GREEK)).unwrap())
+        b.iter(|| greek.translate(black_box(GREEK)))
     });
     group.finish();
 }

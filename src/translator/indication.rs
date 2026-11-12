@@ -17,8 +17,22 @@
 //! * [`numeric::Indicator`]: detects digit sequences and emits number-sign indicators
 //! * [`uppercase::Indicator`]: detects uppercase runs and emits capitalisation indicators
 //! * [`mode::Indicator`]: detects character class runs and emits mode indicators
-//! * [`lettersign::Indicator`]: detects contractions that require a letter sign
-//! * [`nocontract::Indicator`]: detects contractions that require a no-contract sign
+//! * [`lettersign::Indicator`]: detects isolated letters that require a letter sign
+//!
+//! # Rewriters
+//!
+//! An indicator sees only the text. Indication that depends on which rule translation
+//! chose belongs in a rewriter instead: a function from the chosen
+//! [`ResolvedTranslation`]s to new ones, run at the end of the main stage, which may
+//! insert translations or change them. Don't guess the choice from the text in an
+//! indicator. Unlike the pipeline's pass2 to pass4, which apply table rules to a string,
+//! rewriters are built in and see each translation's rule. They are:
+//! * [`contraction::ContractionSigns`]: puts the `nocontractsign` and letter sign in
+//!   front of a `contraction` rule chosen (forward)
+//! * [`uppercase::BackwardCaps`]: capitalizes after a `capsletter` and in the words a
+//!   `begcapsword` starts, as written, with the table's `base uppercase` (backward)
+//!
+//! A table holds its rewriters as [`Rewriters`], applied in turn.
 
 use std::ops::Range;
 
@@ -27,10 +41,10 @@ use crate::translator::ResolvedTranslation;
 
 mod class_indicator;
 pub mod computer_braille;
+pub mod contraction;
 pub mod emphasis;
 pub mod lettersign;
 pub mod mode;
-pub mod nocontract;
 pub mod numeric;
 pub mod uppercase;
 
@@ -70,7 +84,6 @@ pub enum Indicator {
     Emphasis(emphasis::Indicator),
     LetterSign(lettersign::Indicator),
     Mode(mode::Indicator),
-    NoContract(nocontract::Indicator),
     Numeric(numeric::Indicator),
     Uppercase(uppercase::Indicator),
 }
@@ -115,7 +128,6 @@ impl Indicators {
                 Indicator::Uppercase(i) => i.precompute(input),
                 Indicator::Mode(i) => i.precompute(input),
                 Indicator::LetterSign(i) => i.precompute(input),
-                Indicator::NoContract(i) => i.precompute(input),
             };
             for (pos, t) in pairs {
                 indications[pos].push(t);
@@ -123,6 +135,41 @@ impl Indicators {
         }
 
         PrecomputedIndications(indications)
+    }
+}
+
+/// Rewrites the chosen translations, see [Rewriters](self#rewriters).
+#[derive(Debug, Clone)]
+pub enum Rewriter {
+    /// Puts the `nocontractsign` and letter sign in front of a `contraction` (forward).
+    ContractionSigns(contraction::ContractionSigns),
+    /// Capitalizes after a `capsletter` and in the words a `begcapsword` starts, as
+    /// written (backward).
+    BackwardCaps(uppercase::BackwardCaps),
+}
+
+impl Rewriter {
+    fn apply(&self, translations: Vec<ResolvedTranslation>) -> Vec<ResolvedTranslation> {
+        match self {
+            Rewriter::ContractionSigns(a) => a.apply(translations),
+            Rewriter::BackwardCaps(a) => a.apply(translations),
+        }
+    }
+}
+
+/// A collection of [`Rewriter`]s that are applied in turn.
+#[derive(Debug, Clone)]
+pub struct Rewriters(Vec<Rewriter>);
+
+impl Rewriters {
+    pub fn new(rewriters: Vec<Rewriter>) -> Self {
+        Rewriters(rewriters)
+    }
+
+    pub fn apply(&self, translations: Vec<ResolvedTranslation>) -> Vec<ResolvedTranslation> {
+        self.0
+            .iter()
+            .fold(translations, |t, rewriter| rewriter.apply(t))
     }
 }
 

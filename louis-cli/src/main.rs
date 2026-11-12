@@ -5,29 +5,22 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::{ExitCode, exit};
+use std::sync::LazyLock;
 
 use clap::{Parser, Subcommand};
 use rayon::prelude::*;
 use search_path::SearchPath;
 
-mod parser;
-use parser::RuleParser;
-use parser::TableError;
+use louis::Error;
+use louis::internals::parser::{self, AnchoredRule, Direction, TableError};
+use louis::internals::translator::{
+    DisplayTable, ResolvedTranslation, TranslationPipeline, TranslationStage,
+};
+use louis::metadata;
 
-use crate::parser::AnchoredRule;
-use crate::parser::Direction;
 use crate::test::TestResult;
-use crate::translator::DisplayTable;
-use crate::translator::ResolvedTranslation;
-use crate::translator::TranslationError;
-use crate::translator::TranslationPipeline;
-use crate::translator::TranslationStage;
 
-pub mod emphasis;
-mod hyphenation;
-mod metadata;
 mod test;
-mod translator;
 mod yaml;
 
 use tabled::{
@@ -35,6 +28,22 @@ use tabled::{
     settings::{Border, Style, object::Rows},
 };
 use yaml::YAMLParser;
+
+/// The library's [`Direction`], which deliberately knows nothing about clap.
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum DirectionArg {
+    Forward,
+    Backward,
+}
+
+impl From<DirectionArg> for Direction {
+    fn from(direction: DirectionArg) -> Self {
+        match direction {
+            DirectionArg::Forward => Direction::Forward,
+            DirectionArg::Backward => Direction::Backward,
+        }
+    }
+}
 
 #[derive(Debug, Clone, clap::ValueEnum)]
 enum TraceStyle {
@@ -45,11 +54,15 @@ enum TraceStyle {
 /// The commands available in the command line tool.
 #[derive(Debug, Subcommand)]
 enum Commands {
-    /// Parse and print debug information about the given `table`.
-    Parse {
-        /// Braille table to parse. If no table is specified, a REPL
-        /// is opened and each line you enter is parsed.
-        table: Option<PathBuf>,
+    /// Check that `table` compiles, like liblouis's `lou_checktable`.
+    ///
+    /// Errors go to stderr and make the exit status non-zero.
+    CheckTable {
+        /// Braille table to check
+        table: PathBuf,
+        /// Don't write "No errors found." when there are none
+        #[arg(short, long)]
+        quiet: bool,
     },
     /// Translate `input` using the specified braille `table`.
     ///
@@ -62,8 +75,8 @@ enum Commands {
         /// opened and each line you enter is translated.
         input: Option<String>,
         /// Direction of translation
-        #[arg(value_enum, short, long, default_value_t=Direction::Forward)]
-        direction: Direction,
+        #[arg(value_enum, short, long, default_value_t=DirectionArg::Forward)]
+        direction: DirectionArg,
         /// Display table mapping braille cells to the characters they are shown as. Without
         /// it braille is read and written as Unicode braille (U+2800).
         #[arg(long)]
@@ -81,8 +94,8 @@ enum Commands {
         /// opened and each line you enter is translated.
         input: Option<String>,
         /// Direction of translation
-        #[arg(value_enum, short, long, default_value_t=Direction::Forward)]
-        direction: Direction,
+        #[arg(value_enum, short, long, default_value_t=DirectionArg::Forward)]
+        direction: DirectionArg,
         #[arg(value_enum, short, long, default_value_t=TraceStyle::Table)]
         style: TraceStyle,
         /// Display table mapping braille cells to the characters they are shown as. Without
@@ -102,8 +115,10 @@ enum Commands {
     /// Find braille tables based on a metadata query. The tables are
     /// searched in the the search path `LOUIS_TABLE_PATH`.
     Query {
-        /// Metadata search query <key=value,...>
-        query: String,
+        /// Metadata search query in liblouis's syntax, e.g. `language:de grade:2`, either as
+        /// one argument or as one argument per pair
+        #[arg(required = true)]
+        query: Vec<String>,
     },
 }
 
@@ -129,7 +144,7 @@ fn print_errors(errors: Vec<TableError>) {
 }
 
 /// The search path for a table named on the command line: its own directory first, so that
-/// `louis parse /some/where/top.utb` finds an `include base.utb` sitting next to it without that
+/// `louis check-table /some/where/top.utb` finds an `include base.utb` sitting next to it without that
 /// directory being on `LOUIS_TABLE_PATH`. This is a convenience for a human typing a path, not a
 /// lookup rule -- the library API resolves names against the search path it is handed and
 /// nothing else. Unlike liblouis, which rebases on the including table at every level, the
@@ -142,16 +157,19 @@ fn cli_search_path(table: &Path) -> SearchPath {
     search_path
 }
 
-fn parse(file: &Path) -> ExitCode {
-    match parser::table_expanded_in(file, &cli_search_path(file)) {
-        Ok(rules) => {
-            for rule in rules {
-                println!("{:?}", rule);
+/// The table is compiled in both directions, as a rule can be valid in one only.
+fn check_table(table: &Path, quiet: bool) -> ExitCode {
+    match pipeline(table, None, Direction::Forward)
+        .and_then(|_| pipeline(table, None, Direction::Backward))
+    {
+        Ok(_) => {
+            if !quiet {
+                eprintln!("No errors found.");
             }
             ExitCode::SUCCESS
         }
-        Err(errors) => {
-            print_errors(errors);
+        Err(e) => {
+            report(e);
             ExitCode::FAILURE
         }
     }
@@ -211,32 +229,12 @@ fn print_trace(all_translations: &Vec<Vec<ResolvedTranslation>>, style: &TraceSt
     }
 }
 
-/// Why a table could not be turned into a [`TranslationPipeline`]: either the table (or the
-/// display table) could not be read, or it read but would not compile.
-///
-/// The two report differently -- reading can fail with any number of errors, each naming its
-/// own file and line -- so they keep their shapes here and [`Self::report`] prints whichever
-/// it is.
-// FIXME: This duplicates the library's own `TranslationError` in `src/lib.rs`, variant for variant.
-// It has to: the binary declares its own `mod parser`/`mod translator` rather than depending
-// on the library, so the two targets compile those sources separately and the library's type
-// cannot name the binary's `TableError`. See the entry about unifying the two targets in
-// `TODO.org` -- fixing that removes this type rather than moving it.
-#[derive(thiserror::Error, Debug)]
-enum TableLoadError {
-    // no `#[from]`: `Vec` doesn't implement `Error`, so it can't be a `thiserror` source
-    #[error("Errors when reading given braille table(s)")]
-    Table(Vec<TableError>),
-    #[error(transparent)]
-    Compile(#[from] TranslationError),
-}
-
-impl TableLoadError {
-    fn report(self) {
-        match self {
-            TableLoadError::Table(errors) => print_errors(errors),
-            TableLoadError::Compile(error) => eprintln!("Could not compile table: {:?}", error),
-        }
+/// Report why a table could not be turned into a [`TranslationPipeline`]: reading can fail
+/// with any number of errors, each naming its own file and line, compiling with one.
+fn report(error: Error) {
+    match error {
+        Error::Table(errors) => print_errors(errors),
+        error => eprintln!("Could not compile table: {error}"),
     }
 }
 
@@ -245,14 +243,13 @@ fn pipeline(
     table: &Path,
     display: Option<&Path>,
     direction: Direction,
-) -> Result<TranslationPipeline, TableLoadError> {
-    let rules =
-        parser::table_expanded_in(table, &cli_search_path(table)).map_err(TableLoadError::Table)?;
+) -> Result<TranslationPipeline, Error> {
+    let rules = parser::table_expanded_in(table, &cli_search_path(table)).map_err(Error::Table)?;
     let pipeline = TranslationPipeline::compile(&rules, direction)?;
     match display {
         Some(path) => {
-            let rules = parser::table_expanded_in(path, &cli_search_path(path))
-                .map_err(TableLoadError::Table)?;
+            let rules =
+                parser::table_expanded_in(path, &cli_search_path(path)).map_err(Error::Table)?;
             Ok(pipeline.with_display(DisplayTable::compile(&rules, direction)))
         }
         None => Ok(pipeline),
@@ -273,7 +270,7 @@ fn trace(
             ExitCode::SUCCESS
         }
         Err(e) => {
-            e.report();
+            report(e);
             ExitCode::FAILURE
         }
     }
@@ -286,16 +283,14 @@ fn translate(table: &Path, display: Option<&Path>, direction: Direction, input: 
             ExitCode::SUCCESS
         }
         Err(e) => {
-            e.report();
+            report(e);
             ExitCode::FAILURE
         }
     }
 }
 
-// we pass a closure to the repl function so that we can use it for
-// both the parsing repl and the translation repl. In the case of the
-// parsing repl it is an empty closure but the translation repl closes
-// over the TranslationPipeline.
+// The translate and trace repls differ only in what they do with a line, so each passes a
+// closure over its TranslationPipeline.
 fn repl(handler: Box<dyn Fn(String)>) -> ExitCode {
     print!("> ");
     io::stdout().flush().unwrap();
@@ -310,16 +305,6 @@ fn repl(handler: Box<dyn Fn(String)>) -> ExitCode {
         io::stdout().flush().unwrap();
     }
     ExitCode::SUCCESS
-}
-
-fn parse_line(line: String) {
-    if !line.starts_with('#') && !line.is_empty() {
-        let rule = RuleParser::new(&line).rule();
-        match rule {
-            Ok(rule) => println!("{:?}", rule),
-            Err(e) => eprintln!("{:?}", e),
-        }
-    }
 }
 
 #[derive(Tabled, Default)]
@@ -487,29 +472,35 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool) -> ExitCode {
     }
 }
 
+static INDEX: LazyLock<Result<metadata::Index, metadata::MetaDataError>> =
+    LazyLock::new(metadata::Index::new);
+
+/// The index of the tables on `LOUIS_TABLE_PATH`, built once on first use: the YAML files
+/// run in parallel and many query their tables, so they share one walk of the search path.
+fn index() -> Result<&'static metadata::Index, &'static metadata::MetaDataError> {
+    INDEX.as_ref()
+}
+
 fn main() -> ExitCode {
     env_logger::init();
 
     let args = Cli::parse();
 
     match args.command {
-        Commands::Parse { table } => match table {
-            Some(table) => parse(table.as_path()),
-            None => repl(Box::new(parse_line)),
-        },
+        Commands::CheckTable { table, quiet } => check_table(&table, quiet),
         Commands::Translate {
             table,
             input,
             direction,
             display,
         } => match input {
-            Some(input) => translate(&table, display.as_deref(), direction, &input),
-            None => match pipeline(&table, display.as_deref(), direction) {
+            Some(input) => translate(&table, display.as_deref(), direction.into(), &input),
+            None => match pipeline(&table, display.as_deref(), direction.into()) {
                 Ok(table) => repl(Box::new(move |input| {
                     println!("{}", table.translate(&input));
                 })),
                 Err(e) => {
-                    e.report();
+                    report(e);
                     ExitCode::FAILURE
                 }
             },
@@ -521,14 +512,14 @@ fn main() -> ExitCode {
             style,
             display,
         } => match input {
-            Some(input) => trace(&table, display.as_deref(), direction, &input, &style),
-            None => match pipeline(&table, display.as_deref(), direction) {
+            Some(input) => trace(&table, display.as_deref(), direction.into(), &input, &style),
+            None => match pipeline(&table, display.as_deref(), direction.into()) {
                 Ok(table) => repl(Box::new(move |input| {
                     println!("{}", table.translate(&input));
                     print_trace(&table.trace(&input), &style);
                 })),
                 Err(e) => {
-                    e.report();
+                    report(e);
                     ExitCode::FAILURE
                 }
             },
@@ -537,7 +528,7 @@ fn main() -> ExitCode {
             yaml_files,
             summary,
         } => check_yaml(yaml_files, summary),
-        Commands::Query { query } => match (metadata::Query::parse(&query), metadata::index()) {
+        Commands::Query { query } => match (metadata::Query::parse(&query.join(" ")), index()) {
             (Ok(query), Ok(index)) => {
                 println!("{:?}", index.find(query));
                 ExitCode::SUCCESS

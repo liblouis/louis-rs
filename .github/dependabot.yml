@@ -1,0 +1,11 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    # the fuzz crate is its own workspace with its own lockfile
+    directories: ["/", "/fuzz"]
+    schedule:
+      interval: weekly
+    # one PR for all compatible updates instead of one per crate
+    groups:
+      cargo:
+        update-types: [minor, patch]

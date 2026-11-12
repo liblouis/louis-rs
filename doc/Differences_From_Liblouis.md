@@ -32,7 +32,7 @@ table can include one sitting next to it without that directory being on
 `LOUIS_TABLE_PATH`:
 
 ```shell
-$ louis parse /some/where/top.utb   # finds an "include base.utb" next to it
+$ louis check-table /some/where/top.utb   # finds an "include base.utb" next to it
 ```
 
 That first step belongs to the command line tool. The library resolves names
@@ -107,6 +107,18 @@ whose meaning depends on declaration order is brittle.
 upstream for `da-dk-g16`, `da-dk-g26` and their variants, `es-g2.ctb`,
 `sv-6common.uti`, `th-g1.utb`, `th-g1.uti`, `th-g2.ctb` and the `zhcn` tables.
 Until then those rules are silently dropped.
+
+## `base` rules need a defined base character
+
+liblouis accepts a `base` rule whose base character is not defined, and the
+derived character then has no dots of its own. louis-rs rejects the table with
+`Base character 'å' of 'Å' not defined`. A definition for one direction
+(`noback`, `nofor`) is enough: backward, a `base` rule whose base is defined
+`noback` simply has nothing to derive. In liblouis's corpus only `ht-g1.utb` is
+affected (å, ó and ø, through `fr-bfu-comp6-puncs-math.uti`).
+
+**Migration path:** define the base character. For `ht-g1.utb` see
+[liblouis#2190](https://github.com/liblouis/liblouis/pull/2190).
 
 ## `repword` separators
 

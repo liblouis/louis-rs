@@ -3,15 +3,7 @@
 //! Analyses the `computer_braille` emphasis spans and emits `begcomp` before
 //! each span and `endcomp` after each span.
 
-use crate::{
-    emphasis::EmphasisSpan,
-    parser::AnchoredRule,
-    translator::{ResolvedTranslation, TranslationStage},
-};
-
-fn make_translation(dots: &str, origin: &AnchoredRule) -> ResolvedTranslation {
-    ResolvedTranslation::new("", dots, 1, TranslationStage::Main, origin.clone())
-}
+use crate::{emphasis::EmphasisSpan, parser::AnchoredRule, translator::ResolvedTranslation};
 
 // ── Builder ──────────────────────────────────────────────────────────────────
 
@@ -40,10 +32,10 @@ impl IndicatorBuilder {
 
     pub fn build(self) -> Option<Indicator> {
         let (begcomp_dots, begcomp_rule) = self.begcomp?;
-        let begcomp = make_translation(&begcomp_dots, &begcomp_rule);
+        let begcomp = ResolvedTranslation::indication(&begcomp_dots, &begcomp_rule);
         let endcomp = self
             .endcomp
-            .map(|(dots, rule)| make_translation(&dots, &rule));
+            .map(|(dots, rule)| ResolvedTranslation::indication(&dots, &rule));
         Some(Indicator { begcomp, endcomp })
     }
 }

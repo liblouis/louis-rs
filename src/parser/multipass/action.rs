@@ -1,10 +1,10 @@
 //! A Parser for the action operand of context and multipass opcodes
-use std::{iter::Peekable, str::Chars};
 
 use super::braille::{self, BrailleChars, is_braille_dot};
 use crate::parser::multipass::ConversionError;
 use crate::parser::multipass::IsLiteral;
 use crate::parser::multipass::ParseError;
+use crate::parser::multipass::Scanner;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Action {
@@ -95,32 +95,18 @@ fn is_action(c: &char) -> bool {
 }
 
 pub struct Parser<'a> {
-    chars: Peekable<Chars<'a>>,
+    chars: Scanner<'a>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
-            chars: source.chars().peekable(),
-        }
-    }
-
-    fn consume(&mut self, expected: char) -> Result<(), ParseError> {
-        match self.chars.next() {
-            Some(e) if e == expected => Ok(()),
-            Some(c) => Err(ParseError::CharExpected {
-                expected,
-                found: Some(c),
-            }),
-            _ => Err(ParseError::CharExpected {
-                expected,
-                found: None,
-            }),
+            chars: Scanner::new(source),
         }
     }
 
     fn dots(&mut self) -> Result<ActionInstruction, ParseError> {
-        self.consume('@')?;
+        self.chars.consume('@')?;
         let mut dots = String::new();
         while self
             .chars
@@ -141,104 +127,56 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn handle_escape_sequence(&mut self, c: char) -> Result<char, ParseError> {
-        if c != '\\' {
-            Ok(c)
-        } else {
-            match self.chars.peek() {
-                Some('s') => {
-                    self.chars.next();
-                    Ok(' ')
-                }
-                Some('"') => {
-                    self.chars.next();
-                    Ok('"')
-                }
-                Some('\\') => {
-                    self.chars.next();
-                    Ok('\\')
-                }
-                Some('x') => {
-                    self.chars.next();
-                    self.unescape_unicode(4)
-                }
-                Some('y') => {
-                    self.chars.next();
-                    self.unescape_unicode(5)
-                }
-                // pass through any other escape chars
-                Some(_) => Ok(c),
-                _ => Err(ParseError::InvalidEscapeSequence { found: None }),
-            }
-        }
-    }
-
-    fn unescape_unicode(&mut self, len: usize) -> Result<char, ParseError> {
-        let mut s = String::new();
-        for _ in 0..len {
-            match self.chars.next() {
-                Some(c) => s.push(c),
-                None => return Err(ParseError::InvalidEscapeSequence { found: None }),
-            }
-        }
-        u32::from_str_radix(&s, 16)
-            .ok()
-            .and_then(char::from_u32)
-            .ok_or(ParseError::InvalidEscapeSequence { found: None })
-    }
-
     fn string(&mut self) -> Result<ActionInstruction, ParseError> {
-        self.consume('"')?;
+        self.chars.consume('"')?;
         let mut s = String::new();
         while self.chars.peek().filter(|&c| *c != '"').is_some() {
             let raw = self.chars.next().unwrap();
-            let c = self.handle_escape_sequence(raw)?;
+            let c = self.chars.handle_escape_sequence(raw)?;
             s.push(c);
         }
-        self.consume('"')?;
+        self.chars.consume('"')?;
         Ok(ActionInstruction::String { s })
     }
 
     fn replace(&mut self) -> Result<ActionInstruction, ParseError> {
-        self.consume('*')?;
+        self.chars.consume('*')?;
         Ok(ActionInstruction::Replace)
     }
 
     fn ignore(&mut self) -> Result<ActionInstruction, ParseError> {
-        self.consume('?')?;
+        self.chars.consume('?')?;
         Ok(ActionInstruction::Ignore)
     }
 
-    fn ascii_number(&mut self) -> Result<u8, ParseError> {
-        let mut s = String::new();
-        while self.chars.peek().filter(|c| c.is_ascii_digit()).is_some() {
-            s.push(self.chars.next().unwrap());
-        }
-        let number = s.parse::<u8>()?;
-        Ok(number)
-    }
-
     fn variable(&mut self) -> Result<ActionInstruction, ParseError> {
-        self.consume('#')?;
+        self.chars.consume('#')?;
         let variable = self
+            .chars
             .ascii_number()
             .map_err(|_| ParseError::InvalidVariableName)?;
         match self.chars.peek() {
             Some('=') => {
-                self.consume('=')?;
+                self.chars.consume('=')?;
                 Ok(ActionInstruction::Assignment {
                     variable,
-                    value: self.ascii_number()?,
+                    value: self.chars.ascii_number()?,
                 })
             }
-            Some('+') => Ok(ActionInstruction::Increment { variable }),
-            Some('-') => Ok(ActionInstruction::Decrement { variable }),
+            Some('+') => {
+                self.chars.consume('+')?;
+                Ok(ActionInstruction::Increment { variable })
+            }
+            Some('-') => {
+                self.chars.consume('-')?;
+                Ok(ActionInstruction::Decrement { variable })
+            }
             c => Err(ParseError::InvalidOperator { found: c.copied() }),
         }
     }
 
     fn class(&mut self) -> Result<ActionInstruction, ParseError> {
-        self.consume('%')?;
+        self.chars.consume('%')?;
         let mut name = String::new();
         while self
             .chars
@@ -429,6 +367,16 @@ mod tests {
         assert_eq!(
             Parser::new("#5-").action(),
             Ok(ActionInstruction::Decrement { variable: 5 })
+        );
+        // the action after an increment or decrement starts after its `+` or `-`
+        assert_eq!(
+            Parser::new("#1+#2-")
+                .actions()
+                .map(|action| action.actions()),
+            Ok(vec![
+                ActionInstruction::Increment { variable: 1 },
+                ActionInstruction::Decrement { variable: 2 }
+            ])
         );
         assert_ne!(
             Parser::new("#1=").action(),
