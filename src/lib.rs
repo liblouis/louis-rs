@@ -583,4 +583,13 @@ mod tests {
         assert_eq!(translator.translate("⠼⠅⠼⠃"), "#2");
         assert_eq!(translator.translate("⠁⠼"), "aao");
     }
+
+    #[test]
+    fn a_numsign_after_a_sign_ending_in_the_numsign_starts_a_number() {
+        // Danish `punctuation # 45-3456`, where ⠼ is also part of in-word contractions:
+        // "⠘⠼⠼⠃" is "#2", the second ⠼ a numsign after the sign "#".
+        let table = "space \\s 0\nlowercase a 1\nlowercase b 12\nlowercase o 135\npunctuation # 45-3456\nlitdigit 2 12\nnumsign 3456\nmidendword ao 3456\nalways bao 12-3456\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠘⠼⠼⠃"), "#2");
+    }
 }

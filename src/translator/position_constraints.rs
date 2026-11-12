@@ -582,7 +582,9 @@ pub struct BackwardNumericConstrainer {
     /// The dots of the backward rules that contain a numsign after their first cell.
     covering_dots: Vec<String>,
     /// The dots of the characters other than letters that are a numsign and more, such as
-    /// Portuguese `sign # 3456-13`, which liblouis takes before the shorter numsign.
+    /// Portuguese `sign # 3456-13` or Danish `punctuation # 45-3456`, which liblouis takes
+    /// before the shorter numsign. Not on a digit inside a number, where liblouis tries no
+    /// rule of several cells.
     sign_dots: Vec<String>,
 }
 
@@ -605,7 +607,9 @@ impl BackwardNumericConstrainer {
         // the text before the next cell ends in the sign, not in a letter
         let mut sign_end = None;
         while pos < n {
-            if let Some(len) = longest_match_at(&chars, pos, &self.sign_dots) {
+            if !(in_number && self.digit_cells.contains(&chars[pos]))
+                && let Some(len) = longest_match_at(&chars, pos, &self.sign_dots)
+            {
                 pos += len;
                 in_number = false;
                 sign_end = Some(pos);
@@ -1022,7 +1026,7 @@ impl BackwardNumericConstrainerBuilder {
                 .filter(|dots| {
                     numsign_dots
                         .iter()
-                        .any(|n| dots.starts_with(n.as_str()) && dots.len() > n.len())
+                        .any(|n| dots.contains(n.as_str()) && dots.len() > n.len())
                 })
                 .collect();
             Some(BackwardNumericConstrainer {
