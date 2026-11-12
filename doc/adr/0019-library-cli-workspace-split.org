@@ -223,7 +223,10 @@ surface is explicit. Done on [2026-11-11 Wed] unless marked open:
 - Add a static assertion that ~Translator: Send + Sync~ (true today),
   and run ~cargo-semver-checks~ in CI once the API is declared stable.
   /Done/ (the assertion, as a unit test like the API guidelines'
-  C-SEND-SYNC); semver checks in CI remain open.
+  C-SEND-SYNC). No semver checks in CI: on main they would fail
+  between releases whenever it has breaking changes. Instead,
+  ~release.toml~ says to run ~cargo semver-checks~ before picking the
+  release level.
 
 ** Links
 
