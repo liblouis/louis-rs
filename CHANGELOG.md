@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `LOUIS_TABLE_PATH`, `Index::with_search_path` those in the given
   directories, and `Index::find` returns the tables matching a `&Query`,
   best match first. For now only tables carrying every pair of the query
-  match.
+  match. A `Query` is parsed with `"language:de grade:2".parse()`.
 - Back-translation returns the emphasis the braille indicates, as
   `TranslationResult::emphasis()`: liblouis's typeform output. Unlike
   liblouis, the space that ends an emphasized word is not emphasized.
@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   - The public enums are `#[non_exhaustive]`.
   - `Translator::with_search_path` takes any list of paths, such as
     `["/usr/share/liblouis/tables"]`, not only a `Vec<PathBuf>`.
+  - `TranslationResult` implements `Clone`, `PartialEq` and `Eq`, and so
+    does `TranslationOptions` for the latter two.
+  - Error messages start in lowercase and end without a full stop.
   - `TranslationModes` implements `PartialEq`, `Eq`, `Copy` and
     `FromIterator`.
   - `TranslationMode` and `Direction` lose the `|` that returned an

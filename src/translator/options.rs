@@ -66,7 +66,7 @@ impl FromIterator<TranslationMode> for TranslationModes {
 /// Per-call options for a translation.
 ///
 /// Positions are indices of characters (Unicode scalar values), not of bytes.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TranslationOptions {
     mode: TranslationModes,
     /// Which emphasis classes are active where in the input

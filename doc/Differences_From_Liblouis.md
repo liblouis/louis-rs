@@ -124,7 +124,7 @@ word that ends right before a space by that space.
 
 liblouis accepts a `base` rule whose base character is not defined, and the
 derived character then has no dots of its own. louis-rs rejects the table with
-`Base character 'å' of 'Å' not defined`. A definition for one direction
+`base character 'å' of 'Å' not defined`. A definition for one direction
 (`noback`, `nofor`) is enough: backward, a `base` rule whose base is defined
 `noback` simply has nothing to derive. In liblouis's corpus only `ht-g1.utb` is
 affected (å, ó and ø, through `fr-bfu-comp6-puncs-math.uti`).
@@ -140,7 +140,7 @@ error ([ADR-0020](adr/0020-repword.org)). Reduplication is written with a single
 hyphen, and the only table using these opcodes, `ms-my-g2.ctb`, uses `-`.
 
 **Migration path:** not needed for the corpus. A table using one fails to load
-with `Expected a single char, got Some("--")`.
+with `expected a single char, got Some("--")`.
 
 ## Opcodes not implemented
 
@@ -150,4 +150,4 @@ manual, and none appears in any table or test in liblouis's corpus
 ([ADR-0012](adr/0012-unimplemented-opcodes.org)).
 
 **Migration path:** not needed for the corpus. A table using one fails to load
-with `Opcode expected, got Some("uplow")`.
+with `opcode expected, got Some("uplow")`.

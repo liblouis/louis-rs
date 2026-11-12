@@ -12,33 +12,33 @@ pub mod test;
 /// An error that occurred during parsing of a multipass or context rule
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum ParseError {
-    #[error("Expected {expected:?}, got {found:?}")]
+    #[error("expected {expected:?}, got {found:?}")]
     CharExpected { expected: char, found: Option<char> },
-    #[error("Invalid number")]
+    #[error("invalid number")]
     InvalidNumber(#[from] ParseIntError),
-    #[error("Invalid range: min ({min}) >= max ({max})")]
+    #[error("invalid range: min ({min}) >= max ({max})")]
     InvalidRange { min: u8, max: u8 },
-    #[error("Invalid braille")]
+    #[error("invalid braille")]
     InvalidBraille(#[from] braille::ParseError),
-    #[error("Invalid test")]
+    #[error("invalid test")]
     InvalidTest { found: Option<char> },
-    #[error("Empty test")]
+    #[error("empty test")]
     EmptyTest,
-    #[error("Invalid action")]
+    #[error("invalid action")]
     InvalidAction { found: Option<char> },
-    #[error("Empty action")]
+    #[error("empty action")]
     EmptyAction,
-    #[error("Invalid class name")]
+    #[error("invalid class name")]
     InvalidClass,
-    #[error("Invalid attribute")]
+    #[error("invalid attribute")]
     InvalidAttribute { found: Option<char> },
-    #[error("Invalid variable name")]
+    #[error("invalid variable name")]
     InvalidVariableName,
-    #[error("Invalid quantifier, expected a number, a range or a dot")]
+    #[error("invalid quantifier, expected a number, a range or a dot")]
     InvalidQuantifier,
-    #[error("Invalid operator")]
+    #[error("invalid operator")]
     InvalidOperator { found: Option<char> },
-    #[error("Invalid escape sequence")]
+    #[error("invalid escape sequence")]
     InvalidEscapeSequence { found: Option<char> },
     #[error("double negation ('!!') is not allowed")]
     DoubleNegation,
@@ -144,9 +144,9 @@ impl Iterator for Scanner<'_> {
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum ConversionError {
-    #[error("Cannot convert test operand to string")]
+    #[error("cannot convert test operand to string")]
     TestNotLiteral,
-    #[error("Cannot convert action operand to string")]
+    #[error("cannot convert action operand to string")]
     ActionNotLiteral,
 }
 

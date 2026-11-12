@@ -2,7 +2,7 @@ use enumset::{EnumSet, EnumSetType, enum_set};
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum ParseError {
-    #[error("Invalid braille {character:?}")]
+    #[error("invalid braille {character:?}")]
     InvalidBraille { character: Option<char> },
 }
 

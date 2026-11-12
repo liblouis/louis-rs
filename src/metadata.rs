@@ -4,6 +4,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt, fs,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 /// Why an [`Index`] could not be built or a [`Query`] parsed.
@@ -24,10 +25,12 @@ use search_path::SearchPath;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Query(Vec<(String, String)>);
 
-impl Query {
+impl FromStr for Query {
+    type Err = MetadataError;
+
     /// Parse a query in liblouis's syntax, `key:value` pairs separated by whitespace, such
     /// as `language:de grade:2`.
-    pub fn parse(query: &str) -> Result<Self, MetadataError> {
+    fn from_str(query: &str) -> Result<Self, MetadataError> {
         query
             .split_whitespace()
             .map(|pair| match pair.split_once(':') {
@@ -39,7 +42,9 @@ impl Query {
             .collect::<Result<Vec<_>, _>>()
             .map(Self)
     }
+}
 
+impl Query {
     fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
@@ -63,7 +68,7 @@ impl fmt::Display for Query {
 
 /// Maps each `#+key: value` metadata pair found on the search path to the tables
 /// that carry it.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Index(HashMap<(String, String), HashSet<PathBuf>>);
 
 impl Index {
@@ -161,11 +166,11 @@ mod tests {
         fs::write(dir.join("a.utb"), "#+language: de\n#+grade: 2\n").unwrap();
         fs::write(dir.join("c.utb"), "#+language: de\n#+grade: 1\n").unwrap();
         let index = Index::with_search_path(vec![dir.clone()]).unwrap();
-        let found = index.find(&Query::parse("language:de grade:2").unwrap());
+        let found = index.find(&"language:de grade:2".parse().unwrap());
         assert_eq!(found, [dir.join("a.utb"), dir.join("b.utb")]);
-        assert!(index.find(&Query::parse("language:fr").unwrap()).is_empty());
-        assert!(Query::parse("language=de").is_err());
-        assert!(Query::parse("language:").is_err());
+        assert!(index.find(&"language:fr".parse().unwrap()).is_empty());
+        assert!("language=de".parse::<Query>().is_err());
+        assert!("language:".parse::<Query>().is_err());
         fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -144,18 +144,18 @@ type WithMatches = HashSet<WithMatch>;
 /// An error that occurred during parsing of a [liblouis](https://liblouis.io) braille table
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum ParseError {
-    #[error("Expected {expected:?}, got {found:?}")]
+    #[error("expected {expected:?}, got {found:?}")]
     TokenExpected {
         expected: String,
         found: Option<String>,
     },
-    #[error("Invalid braille")]
+    #[error("invalid braille")]
     InvalidBraille(#[from] braille::ParseError),
-    #[error("Braille expected")]
+    #[error("braille expected")]
     DotsExpected,
-    #[error("Comma separated tuple of Braille expected")]
+    #[error("comma separated tuple of Braille expected")]
     DotsTupleExpected,
-    #[error("Same number of replacements in swap opcode expected ({0} vs {1})")]
+    #[error("same number of replacements in swap opcode expected ({0} vs {1})")]
     SameNumberOfSwapReplacementsExpected(usize, usize),
     #[error("{found:?} is a multi-cell dot pattern, but only single cells are allowed here")]
     SingleCellDotsExpected { found: String },
@@ -165,38 +165,38 @@ pub enum ParseError {
     InvalidNumber(#[from] ParseIntError),
     #[error("invalid escape sequence {0:?}")]
     InvalidEscape(Option<char>),
-    #[error("Names can only contain a-z and A-Z, got {name:?}")]
+    #[error("names can only contain a-z and A-Z, got {name:?}")]
     InvalidName { name: String },
-    #[error("Constraints '{constraints:?}' not allowed for opcode {opcode:?}.")]
+    #[error("constraints '{constraints:?}' not allowed for opcode {opcode:?}")]
     InvalidConstraints {
         constraints: Constraints,
         opcode: Opcode,
     },
-    #[error("Expected classname, got {found:?}")]
+    #[error("expected classname, got {found:?}")]
     ClassNameExpected { found: Option<String> },
-    #[error("Opcode expected, got {found:?}")]
+    #[error("opcode expected, got {found:?}")]
     OpcodeExpected { found: Option<String> },
-    #[error("Name expected")]
+    #[error("name expected")]
     NameExpected,
-    #[error("Characters expected")]
+    #[error("characters expected")]
     CharsExpected,
-    #[error("Filename expected")]
+    #[error("filename expected")]
     FilenameExpected,
-    #[error("Number expected, got {found:?}")]
+    #[error("number expected, got {found:?}")]
     NumberExpected { found: Option<String> },
-    #[error("Multipass test expected")]
+    #[error("multipass test expected")]
     MultipassTestExpected,
-    #[error("Multipass action expected")]
+    #[error("multipass action expected")]
     MultipassActionExpected,
-    #[error("Invalid multipass operand: {0}")]
+    #[error("invalid multipass operand: {0}")]
     InvalidMultipassOperand(#[from] multipass::ParseError),
-    #[error("Invalid match pattern: {0}")]
+    #[error("invalid match pattern: {0}")]
     InvalidMatchPattern(#[from] match_rule::ParseError),
-    #[error("Match pre-pattern expected")]
+    #[error("match pre-pattern expected")]
     MatchPreExpected,
-    #[error("Match post-pattern expected")]
+    #[error("match post-pattern expected")]
     MatchPostExpected,
-    #[error("Expected a single char, got {found:?}")]
+    #[error("expected a single char, got {found:?}")]
     SingleCharExpected { found: Option<String> },
 }
 
@@ -2645,10 +2645,10 @@ pub enum TableError {
         error: SyntaxError,
     },
     /// Table source given in memory has an `include`, which needs the filesystem
-    #[error("Include directives are not supported when parsing table source in memory")]
+    #[error("include directives are not supported when parsing table source in memory")]
     IncludesNotSupportedInMemory,
     /// A table was found but could not be read
-    #[error("Cannot read table {path}: {error}")]
+    #[error("cannot read table {path}: {error}")]
     TableNotReadable {
         /// The table
         path: PathBuf,
@@ -2656,13 +2656,13 @@ pub enum TableError {
         error: io::Error,
     },
     /// A table is not on the search path
-    #[error("Cannot find table {0:?}")]
+    #[error("cannot find table {0}")]
     TableNotFound(PathBuf),
     /// A hyphenation table is not on the search path
-    #[error("Hyphenation table {0} not found")]
+    #[error("hyphenation table {0} not found")]
     HyphenationTableNotFound(PathBuf),
     /// A hyphenation table was found but could not be read
-    #[error("Cannot read hyphenation table {path}: {error}")]
+    #[error("cannot read hyphenation table {path}: {error}")]
     HyphenationTableNotReadable {
         /// The hyphenation table
         path: PathBuf,
@@ -2670,7 +2670,7 @@ pub enum TableError {
         error: io::Error,
     },
     /// A hyphenation table could not be parsed
-    #[error("Cannot parse hyphenation table {path}: {error}")]
+    #[error("cannot parse hyphenation table {path}: {error}")]
     HyphenationTableNotParseable {
         /// The hyphenation table
         path: PathBuf,

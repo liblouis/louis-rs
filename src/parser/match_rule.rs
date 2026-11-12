@@ -3,17 +3,17 @@ use std::{collections::HashSet, iter::Peekable, str::Chars};
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum ParseError {
-    #[error("Expected {expected:?}, got {found:?}")]
+    #[error("expected {expected:?}, got {found:?}")]
     CharExpected { expected: char, found: Option<char> },
-    #[error("Invalid attribute {0:?}")]
+    #[error("invalid attribute {0:?}")]
     InvalidAttribute(Option<char>),
-    #[error("Quantifier '{0}' not allowed without pattern")]
+    #[error("quantifier '{0}' not allowed without pattern")]
     MissingPatternBeforeQuantifier(char),
-    #[error("Either not allowed without pattern")]
+    #[error("either not allowed without pattern")]
     MissingPatternBeforeEither,
-    #[error("Pattern cannot be empty")]
+    #[error("pattern cannot be empty")]
     EmptyPattern,
-    #[error("Group cannot be empty")]
+    #[error("group cannot be empty")]
     EmptyGroup,
     #[error("invalid escape sequence")]
     InvalidEscape,

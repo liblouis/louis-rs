@@ -37,10 +37,10 @@ mod trie;
 #[non_exhaustive]
 pub enum CompileError {
     /// A rule uses a character's dots implicitly (`=`), but no rule defines that character
-    #[error("Implicit character {0:?} not defined")]
+    #[error("implicit character {0:?} not defined")]
     ImplicitCharacterNotDefined(char),
     /// A `base` rule's base character is not defined in either direction
-    #[error("Base character {base:?} of {derived:?} not defined")]
+    #[error("base character {base:?} of {derived:?} not defined")]
     BaseCharacterNotDefined {
         /// the base character
         base: char,
@@ -48,7 +48,7 @@ pub enum CompileError {
         derived: char,
     },
     /// A rule refers to a swap class that no rule defines
-    #[error("Swap class {0} not defined")]
+    #[error("swap class {0} not defined")]
     SwapClassNotDefined(String),
 }
 

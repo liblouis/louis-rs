@@ -92,7 +92,7 @@ pub enum Error {
 /// The result of [`Translator::translate_with_options`].
 ///
 /// All positions are indices of characters (Unicode scalar values), not of bytes.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct TranslationResult {
     output: String,
     emphasis: Option<Emphasis>,

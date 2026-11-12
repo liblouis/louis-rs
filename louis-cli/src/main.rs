@@ -513,7 +513,7 @@ fn main() -> ExitCode {
             yaml_files,
             summary,
         } => check_yaml(yaml_files, summary),
-        Commands::Query { query } => match (metadata::Query::parse(&query.join(" ")), index()) {
+        Commands::Query { query } => match (query.join(" ").parse::<metadata::Query>(), index()) {
             (Ok(query), Ok(index)) => {
                 println!("{:?}", index.find(&query));
                 ExitCode::SUCCESS
