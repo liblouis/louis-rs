@@ -8,15 +8,6 @@ use std::collections::{HashMap, HashSet};
 use crate::parser::braille::{BrailleChar, BrailleChars};
 use crate::translator::CharacterDefinition;
 
-// FIXME: isn't this the same as crate::parser::CharacterClass::Attribute?
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CharacterClassReference {
-    Class(CharacterClass),
-    ByOrder(u8),
-    Boundary,
-    Any,
-}
-
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum CharacterClass {
     Space,
@@ -59,6 +50,7 @@ impl From<&str> for CharacterClass {
 pub struct CharacterClasses(HashMap<CharacterClass, HashSet<char>>);
 
 impl CharacterClasses {
+    #[cfg(test)]
     pub fn new(mappings: &[(CharacterClass, &[char])]) -> Self {
         Self(HashMap::from_iter(mappings.iter().cloned().map(
             |(class, chars)| (class, HashSet::from_iter(chars.iter().cloned())),
@@ -104,34 +96,8 @@ impl CharacterClasses {
         self.0.get(class).cloned()
     }
 
-    pub fn is_punctuation(&self, c: char) -> bool {
-        self.get(&CharacterClass::Punctuation)
-            .is_some_and(|class| class.contains(&c))
-    }
-
     pub fn is_whitespace(&self, c: char) -> bool {
         self.get(&CharacterClass::Space)
-            .is_some_and(|class| class.contains(&c))
-    }
-
-    pub fn is_numeric(&self, c: char) -> bool {
-        [CharacterClass::Litdigit, CharacterClass::Digit]
-            .iter()
-            .any(|class| self.get(class).is_some_and(|class| class.contains(&c)))
-    }
-
-    pub fn is_word(&self, c: char) -> bool {
-        [
-            CharacterClass::Letter,
-            CharacterClass::Uppercase,
-            CharacterClass::Lowercase,
-        ]
-        .iter()
-        .any(|class| self.get(class).is_some_and(|class| class.contains(&c)))
-    }
-
-    pub fn is_sign(&self, c: char) -> bool {
-        self.get(&CharacterClass::Sign)
             .is_some_and(|class| class.contains(&c))
     }
 }

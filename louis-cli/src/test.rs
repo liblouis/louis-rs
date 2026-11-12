@@ -2,26 +2,26 @@
 
 use std::{collections::HashMap, path::PathBuf};
 
-use enumset::EnumSet;
 use rayon::prelude::*;
 
 use search_path::SearchPath;
 
-use crate::{
-    emphasis::EmphasisSpan,
-    metadata,
+use louis::EmphasisSpan;
+use louis::internals::{
     parser::{self, Direction, TableError},
     translator::{
         self, DisplayTable, PositionMap, TranslationModes, TranslationOptions, TranslationPipeline,
     },
 };
 
+use louis::metadata;
+
 #[derive(thiserror::Error, Debug)]
 pub enum TestError {
     #[error("Errors in table {0:?}")]
     TableErrors(Vec<TableError>),
     #[error("Error when compiling table {0:?}")]
-    CompilationError(#[from] translator::TranslationError),
+    CompilationError(#[from] translator::CompileError),
     #[error("Could not index the tables: {0}")]
     NotIndexable(String),
     #[error("No table matches the query {0}")]
@@ -69,6 +69,7 @@ pub enum TestResult {
         expected: String,
         actual: String,
         direction: Direction,
+        reason: Option<String>,
     },
     UnexpectedSuccess {
         input: String,
@@ -108,6 +109,8 @@ pub struct PositionMismatch {
     diffs: Vec<PositionDiff>,
 }
 
+// only the tests read a mismatch field by field
+#[cfg(test)]
 impl PositionMismatch {
     pub fn input(&self) -> &str {
         &self.input
@@ -204,11 +207,13 @@ impl<'a> TestMatrix<'a> {
                 parser::expand_includes(rules, &search_path, &[])?
             }
             Table::Query(query) => {
-                let index =
-                    metadata::index().map_err(|e| TestError::NotIndexable(e.to_string()))?;
+                let index = crate::index().map_err(|e| TestError::NotIndexable(e.to_string()))?;
                 let query = metadata::Query::from(query);
-                let matches: Vec<PathBuf> =
-                    index.find(query.clone()).into_iter().cloned().collect();
+                let matches: Vec<PathBuf> = index
+                    .find(query.clone())
+                    .into_iter()
+                    .map(PathBuf::from)
+                    .collect();
                 match matches.as_slice() {
                     [] => return Err(TestError::NoTableForQuery(query.to_string())),
                     [path] => parser::table_expanded_in(path, &search_path)?,
@@ -318,21 +323,47 @@ pub enum CursorPosition {
     Tuple(usize, usize),
 }
 
-pub type Directions = EnumSet<Direction>;
+/// Whether a test is expected to pass or fail in one direction
+#[derive(Debug, Clone, Default, PartialEq)]
+pub enum Expectation {
+    #[default]
+    Pass,
+    /// Expected to fail, for the reason given, if any
+    Fail(Option<String>),
+}
 
-#[derive(Debug, Clone)]
-pub enum ExpectedFailure {
-    Simple(bool),
-    Reason(String),
-    Direction(Directions),
+/// What a test is expected to do in each direction (its `xfail`)
+#[derive(Debug, Clone, Default)]
+pub struct ExpectedFailure {
+    forward: Expectation,
+    backward: Expectation,
 }
 
 impl ExpectedFailure {
+    pub fn new(forward: Expectation, backward: Expectation) -> Self {
+        Self { forward, backward }
+    }
+
+    /// The same expectation in both directions
+    pub fn both(expectation: Expectation) -> Self {
+        Self::new(expectation.clone(), expectation)
+    }
+
+    fn get(&self, direction: Direction) -> &Expectation {
+        match direction {
+            Direction::Forward => &self.forward,
+            Direction::Backward => &self.backward,
+        }
+    }
+
     fn is_failure(&self, direction: Direction) -> bool {
-        match &self {
-            Self::Simple(v) => *v,
-            Self::Reason(_) => true,
-            Self::Direction(d) => d.contains(direction),
+        matches!(self.get(direction), Expectation::Fail(_))
+    }
+
+    fn reason(&self, direction: Direction) -> Option<String> {
+        match self.get(direction) {
+            Expectation::Fail(reason) => reason.clone(),
+            Expectation::Pass => None,
         }
     }
 }
@@ -359,7 +390,7 @@ pub struct Test {
 impl Test {
     fn check(&self, table: &TranslationPipeline, direction: Direction) -> TestResult {
         let mut options = TranslationOptions::default()
-            .with_mode(self.modes.clone())
+            .with_mode(self.modes)
             .with_emphasis(self.emphasis.clone());
         if let Some(CursorPosition::Single(cursor) | CursorPosition::Tuple(cursor, _)) =
             self.cursor_pos
@@ -386,6 +417,7 @@ impl Test {
                 expected: self.expected.to_string(),
                 actual: translated,
                 direction,
+                reason: self.xfail.reason(direction),
             }
         } else {
             TestResult::Failure(FailureReason::Translation {
@@ -508,7 +540,7 @@ mod tests {
         Test::new(
             "ab".to_string(),
             "⠁⠃".to_string(),
-            ExpectedFailure::Simple(false),
+            ExpectedFailure::default(),
             vec![],
             vec![],
             input_pos,

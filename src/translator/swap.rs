@@ -36,6 +36,7 @@ impl Swapper {
 pub struct SwapClasses(HashMap<String, Swapper>);
 
 impl SwapClasses {
+    #[cfg(test)]
     pub fn new(mappings: &[(&str, &[(char, &str)])]) -> Self {
         Self(HashMap::from_iter(mappings.iter().cloned().map(
             |(name, mappings)| (name.to_string(), Swapper::new(mappings)),

@@ -1,47 +1,21 @@
-* Todo [1/9]
-- [ ] Have the ~louis~ binary depend on the ~louis~ library instead of
-  compiling the same sources again
-  - ~src/main.rs~ declares its own ~mod parser~, ~mod translator~,
-    ~mod metadata~, ~mod test~ and ~mod yaml~; ~src/lib.rs~ declares an
-    overlapping ~mod parser~, ~mod translator~, ~mod emphasis~ and
-    ~mod hyphenation~. Both targets therefore compile the same sources,
-    and to the compiler the resulting types are unrelated: the
-    binary's ~parser::TableError~ is not the library's.
-  - Consequences visible today:
-    - ~main.rs~'s ~TableLoadError~ is a variant-for-variant copy of
-      ~lib.rs~'s public ~TranslationError~, and cannot simply use it
-    - dead-code warnings differ between the two builds, so the same
-      function is "never used" in one target and used in the other,
-      which makes the warnings hard to act on (see
-      ~with_display~/~DisplayTable::compile~)
-    - anything the CLI needs has to exist twice or be duplicated
-  - The blocker is deciding what becomes public API. The CLI reaches
-    for ~parser::table_expanded_in~, ~TranslationPipeline~,
-    ~ResolvedTranslation~, ~AnchoredRule~ and ~TranslationStage~, none
-    of which ~lib.rs~ exports today, and the library API is explicitly
-    not stable yet. Same question as exposing a display table on
-    ~Translator~.
-  - Blocks translating from a metadata query: ~metadata~ is a module of
-    the binary only, so ~Translator~ cannot reach the index at all. See
-    the entry below.
+* Todo [1/8]
 - [ ] Let a ~Translator~ be built from a metadata query, as liblouis
   allows
-  - ~metadata::Index~ exists and the ~query~ subcommand and the YAML
-    test harness both use it, but it is declared in ~main.rs~, not in
-    ~lib.rs~, so nothing in the library API can reach it. Moving it is
-    part of the binary/library split above.
-  - ~Index::build~ takes the ~SearchPath~ to walk, so the index itself
-    carries no assumption about where tables live. What does is
-    ~metadata::index()~, the convenience the CLI and the harness use: a
-    process-wide ~LazyLock~ over ~LOUIS_TABLE_PATH~, built once from
-    whatever the environment said the first time anybody asked.
-  - That accessor must not become the way a ~Translator~ resolves a
+  - ~louis::metadata::Index~ is public library API now, built from
+    ~LOUIS_TABLE_PATH~ (~Index::new~) or from the caller's directories
+    (~Index::with_search_path~).
+  - ~Index::find~ should match like ~lou_findTables~: liblouis ranks
+    the tables by how well they match the query and returns the best,
+    where we only return tables that carry every pair. liblouis means to replace table file names with
+    such queries in the long run.
+  - The CLI caches one index in a process-wide ~LazyLock~ over
+    ~LOUIS_TABLE_PATH~ (~louis-cli/src/main.rs~, ~index()~). That cache
+    must not become the way a ~Translator~ resolves a
     query. A host using ~Translator::with_search_path~ supplies its own
     directories, and the ambient index would quietly answer from
     somewhere else instead; two different search paths in one process
-    cannot both be served by it either. Either call ~Index::build~ with
+    cannot both be served by it either. Either build an ~Index~ from
     the caller's search path and pay the walk, or cache per search path.
-- [ ] Implement the ~syllable~ opcode with boundary checking
 - [ ] Cursor handling
 - [ ] The boundary functions (~word_start~, etc) only work in forward
   translation — confirmed ~uppercase.rs~ has no backward-direction
@@ -74,23 +48,12 @@
   languages (see [[https://github.com/mozilla/cbindgen][cbindgen]] or [[https://github.com/rust-diplomat/diplomat][Diplomat]])
 
 * Known gaps
-- [ ] The "standing alone" check for ~word~ and ~contraction~ rules
-  (liblouis's ~inSequence~), used by tables with a ~seqdelimiter~
-  (~en-ueb-g2~, ~fil-g2~, ~xh-za-g2~). Before the word, skip
-  ~seqbeforechars~, then require a space, a ~seqdelimiter~ or the
-  start; after it, skip ~seqafterchars~ and ~seqafterpattern~ strings
-  (case-sensitive), then require a space, a ~seqdelimiter~ or the end.
-  louis-rs collects the ~seq*~ classes but uses none of them, and
-  ~seqafterpattern~ still compiles to nothing; the trie's word
-  boundaries (space or punctuation) give the same result for the cases
-  tried. Implementing it as a retain would drop the weight of the
-  boundary transitions, which ~Rank~ compares before precedence and
-  definition order.
-- [ ] Backward ~decpoint~ has no "digit follows" check. ~Rank~
-  compares weight before precedence and definition order, and the
-  check, as an ~End~ transition, would add weight: ~decpoint . 46~
-  would then beat the earlier ~always ख 46~ in ~hi-in-g1~, and ⠨⠔
-  would come out as ".ई" instead of "खी". Without it, ⠨ reads as "."
+- [ ] Backward ~decpoint~ has no "digit follows" check. It used to be
+  blocked by ~Rank~ comparing weight before definition order: the
+  check, as an ~End~ transition, added weight, so ~decpoint . 46~
+  beat the earlier ~always ख 46~ in ~hi-in-g1~, and ⠨⠔ came out as
+  ".ई" instead of "खी". Weight no longer ranks these rules, so worth
+  retrying. Without it, ⠨ reads as "."
   where no digit follows, now that the earlier-defined ~decpoint~
   wins the tie: 2 of ~ml.yaml~'s backward tests (⠍⠥⠨⠰ gives "മു.ം"
   instead of "മുഖം"). liblouis checks the digit and then falls through
@@ -114,7 +77,6 @@
   the "not implemented yet" arm of ~PrimaryTable::compile~, which is
   now exhaustive so a new ~Rule~ variant has to be placed. By number
   of liblouis tables using them:
-  - ~seqafterpattern~ (3)
   - ~exactdots~, ~grouping~ (none), and ~class~, a deprecated alias of
     ~attribute~ that no table uses
 - [X] Two ~match~ rules of equal rank: we pick the last defined,
@@ -206,25 +168,60 @@
   first must fail, louis-rs matches both. Since ~1ff7b7f~ the tie goes
   to the first-defined rule, so ~multipass-forward.yaml~ and
   ~multipass-backward.yaml~ lose that test.
-- [ ] A rule's pre-context is missed when the previous match consumed
+- [X] A ~match~ rule's ~pre~ is missed when the previous match consumed
   more than one character
-  - ~match~ rules with a ~pre~ pattern, and pass/~context~ tests with
-    checks before the brackets, are only discovered at the position
-    where that check starts, then held via ~delayed_translations~
-    until the cursor gets to the match. When the previous translation
-    jumps over that position the rule is never considered. liblouis
-    evaluates the check as a look-behind at the current position.
-  - ~en-ueb-g2~: "areas" → ⠜⠑⠁⠎ instead of ⠜⠂⠎, "brainless",
-    "affinity", "linen": the contraction after ~ar~/~in~/~ful~ is
-    missed (~match %a ea %a~, ~%a less -~, ~%a ity -~, the ~en~
-    rules), while "seas", "careless", "validity" work. 9 of 12 sampled
-    ~en-ueb-g2-dictionary_harness~ failures, so on the order of 1500
-    tests.
-  - ~it-it-comp6~: ~pass2 #1=1#2=1#3=0#4=0!%brlnonumsign[@⠽]~ (the
-    closing brace) is missed in ~{[(2x+3y)]*2y}=32~ backward after
-    ~#1=1#5=0[@⠸$u] #5=1*~ consumes ⠸⠽ in one step.
-  - Needs a design: checking the ~pre~ part against the text already
-    consumed instead of discovering it early.
+  - ~match~ rules with a ~pre~ pattern are discovered at the position
+    where ~pre~ starts and held via ~delayed_translations~. A
+    translation that jumps over that position used to hide them: in
+    ~en-ueb-g2~ "areas" gave ⠜⠑⠁⠎ instead of ⠜⠂⠎ (~always ar~ then
+    ~match %a ea %a~). Fixed by scanning the positions it jumps over
+    (~db20177~), then replaced by checking ~pre~ as a reversed
+    look-behind from the cursor, as liblouis does (~35b92b8~), so
+    ~match~ rules are no longer delayed.
+  - Not for ~context~ rules: liblouis matches the part before their
+    brackets forward from the cursor, so they must not fire inside a
+    jumped-over span (~da-dk-g26~: ~begnum mt~ then ~context $l[]$D~ on
+    "mt1").
+  - Still open, multipass: ~it-it-comp6~'s
+    ~pass2 #1=1#2=1#3=0#4=0!%brlnonumsign[@⠽]~ (the closing brace) is
+    missed in ~{[(2x+3y)]*2y}=32~ backward after ~#1=1#5=0[@⠸$u] #5=1*~
+    consumes ⠸⠽ in one step. Check liblouis's pass semantics first, by
+    the ~context~ argument above this may be correct.
+- [ ] ~context~ and pass rules: consume the text before ~[~ at the
+  cursor, and drop ~delayed_translations~
+  - liblouis applies such a rule where the cursor stands:
+    ~passDoAction~ copies the text before ~[~ (~copyCharacters~: by
+    character definition for ~context~, verbatim for pass rules),
+    writes the replacement and moves past ~]~. louis-rs holds the rule
+    as a delayed translation until the cursor gets to the ~[~, so other
+    rules can translate the text before it. They are the last users of
+    the delayed handling, in ~PrimaryTable~ and ~MultipassTable~.
+  - A first attempt is parked on branch ~context-consume-at-cursor~
+    (~0b61374~): it fixes 28 tests and breaks 552. Two blockers:
+    - ~_N~ compiles to nothing (see the lookback entry above). In
+      liblouis it moves the match position back N characters, so what
+      follows it is a look-behind, which the delayed scheme happened to
+      give. Consuming it breaks 534 ~zh-tw-dictionary~ tests
+      (~context _1"㔠"["㔠"] ...~): the tests after ~_N~ must match the
+      N characters before the cursor instead.
+    - Filters in ~PrimaryTable::trace~ take a candidate's length to be
+      the text it replaces: ~dont_contract_at~ drops
+      ~context $d"."[]%digitletter~ (~nl-g0~) and ~context $dy[]$u~
+      (~da-dk~) as multi-character contractions; ~uncontracted_at~,
+      ~contracts()~ and comp6 mode assume the same.
+  - liblouis also lets a ~context~ rule that matches at the cursor
+    override the rule otherwise chosen (the ~findForPassRule~ call
+    after ~for_selectRule~ in ~lou_translateString.c~), which ~Rank~
+    does not model.
+- [X] ~en-ueb~: the number sign went after ~match %a . %#~ /
+  ~match %a , %#~'s output, but ~en-ueb-g1.ctb~'s ~pass2
+  @3456-256-34569 @256-3456~ cleanup expects it before, so the virtual
+  dot 9 leaked: "a.7" gave ⠁⠲\uf013c⠼⠛ instead of ⠁⠲⠼⠛.
+  - The cause was not the ~match~ rule: ~numericmodechars~ never started
+    a number, so even ".7" gave ⠲⠼⠛ instead of ⠼⠲⠛. In liblouis
+    (~checkNumericMode~) a run of them followed by a digit starts
+    numeric mode, the number sign going before the run.
+    ~midendnumericmodechars~ still only keeps a number going.
 - [X] Backward: lower-sign contraction cells satisfy a ~word~ rule's
   space-or-punctuation boundary
   - Fixed by the backward boundary work below: the before side (9d4d0af)
@@ -327,15 +324,19 @@
     alphabetic contraction to the letter class to approximate the scan;
     it is gone. With it went its ceiling: ~always n't 12356~ next to
     ~partword ed 1246~ now back-translates ~⠉⠁⠷⠫~ to "can'ted".
-- [ ] Literal hyphen character breaks per-segment contraction in compounds
-  - e.g. en-ueb.yaml: "do-it-yourself" -> expected "d-x-yrf", actual
-    "do-x-y|rself" ("do" and "yourself" fail to contract on their own
-    side of the hyphen); same for "out-and-out"
-  - cause: ~Rule::Hyphen~ (~src/translator/table.rs~) files the hyphen
-    under generic ~CharacterClass::Punctuation~ instead of whatever
-    classification word-boundary detection needs to treat each side as
-    its own word. Unrelated to ~src/hyphenation.rs~/dictionary-based
-    hyphenation.
+- [X] Literal hyphen character breaks per-segment contraction in compounds
+  - "do-it-yourself" now gives the expected ⠙⠤⠭⠤⠽⠗⠋ ("d-x-yrf") with
+    ~en-ueb-g2~. Most ~en-g3~ failures blamed on this were two other
+    bugs: ~joinword~ lost to a ~word~ rule for the same characters, as
+    its word end was checked outside the trie and so added no weight
+    ("the men" kept its space), and every digit run blocked
+    contractions, where liblouis does so only in a numeric-mode table
+    whose ~nocontractsign~ is its ~nonumsign~ ("12" was not ⠇).
+  - Left in ~en-g3~: a closing quote read as opening (⠦ for ⠴) and
+    "with B" missing its letter sign. The letter sign on single-letter
+    words ("I am" gave ⠰⠊⠂) is fixed: a letter with a ~word~ or
+    ~largesign~ rule of its own is ~noletsign~, as in liblouis. In ~en-ueb~, "ing" after a hyphen ("to-ing"
+    gives ⠞⠕⠤⠬, not ⠞⠕⠤⠔⠛).
 - [ ] ~nocross~ only checks whether the matched candidate substring can
   hyphenate anywhere, not whether a break falls inside *that*
   candidate's span within the enclosing word (liblouis's real,
@@ -432,8 +433,8 @@
 - [ ] Back-translation of a lone cell carrying both a ~prepunc~ and a
   ~postpunc~ rule (e.g. ~⠠⠦~, ~⠠⠴~, ~⠰⠦~ in the yaml tests) is
   ambiguous: the cell both begins and ends a word, so both rules apply.
-  liblouis takes whichever comes first in the table; we pick by the
-  transitions' weight. Rule-order dependent per ADR-0016, so a
+  liblouis takes whichever comes first in the table, and so do we now
+  that weight no longer ranks them. Rule-order dependent per ADR-0016, so a
   candidate for a table fix rather than for copying liblouis.
 - [ ] Malayalam conjunct/reph rule: a specific virama/conjunct
   sequence consistently produces ⠗ instead of the expected ⠻

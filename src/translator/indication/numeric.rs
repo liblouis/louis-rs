@@ -5,10 +5,7 @@
 //! - Emits the numsign translation at the first digit of a numeric run.
 //! - Emits the non-numsign translation at the first non-numeric terminating character.
 
-use crate::{
-    parser::AnchoredRule,
-    translator::{ResolvedTranslation, TranslationStage},
-};
+use crate::{parser::AnchoredRule, translator::ResolvedTranslation};
 
 use std::collections::HashSet;
 
@@ -21,6 +18,7 @@ impl IndicatorBuilder {
         IndicatorBuilder(Indicator {
             numeric_chars: HashSet::default(),
             extra_numeric_chars: HashSet::default(),
+            starting_numeric_chars: HashSet::default(),
             mid_numeric_chars: HashSet::default(),
             start_translation: None,
             end_translation: None,
@@ -37,23 +35,11 @@ impl IndicatorBuilder {
     }
 
     pub fn numsign(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.start_translation = Some(ResolvedTranslation::new(
-            "",
-            s,
-            1,
-            TranslationStage::Main,
-            origin.clone(),
-        ));
+        self.0.start_translation = Some(ResolvedTranslation::indication(s, origin));
     }
 
     pub fn nonumsign(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.end_translation = Some(ResolvedTranslation::new(
-            "",
-            s,
-            1,
-            TranslationStage::Main,
-            origin.clone(),
-        ));
+        self.0.end_translation = Some(ResolvedTranslation::indication(s, origin));
     }
 
     pub fn midnum(&mut self, s: &str) {
@@ -64,9 +50,16 @@ impl IndicatorBuilder {
         self.0.terminating_chars = HashSet::from_iter(s.chars());
     }
 
-    /// Also used for `midendnumericmodechars`: within a number both keep it going.
-    /// liblouis's `numericmodechars` can also start one, which isn't implemented.
+    /// Within a number these keep it going, and a run of them followed by a digit
+    /// starts one, so the numsign goes before them (liblouis's `checkNumericMode`).
     pub fn numericmodechars(&mut self, s: &str) {
+        self.0.extra_numeric_chars.extend(s.chars());
+        self.0.starting_numeric_chars.extend(s.chars());
+    }
+
+    /// Within a number these keep it going, but unlike `numericmodechars` they don't
+    /// start one.
+    pub fn midendnumericmodechars(&mut self, s: &str) {
         self.0.extra_numeric_chars.extend(s.chars());
     }
 
@@ -82,6 +75,9 @@ pub struct Indicator {
     /// Characters that extend a numeric run without being digits themselves
     /// (`numericmodechars`, `midendnumericmodechars`)
     extra_numeric_chars: HashSet<char>,
+    /// Characters that start a numeric run when a run of them is followed by a digit
+    /// (`numericmodechars`)
+    starting_numeric_chars: HashSet<char>,
     /// Characters that extend a numeric run only when sandwiched between two
     /// digits (`midnum`)
     mid_numeric_chars: HashSet<char>,
@@ -107,7 +103,19 @@ impl Indicator {
 
         for (pos, &c) in chars.iter().enumerate() {
             let is_numeric = self.numeric_chars.contains(&c);
+            let starts_numeric = || {
+                let rest = chars[pos..].iter();
+                let mut rest = rest.skip_while(|c| self.starting_numeric_chars.contains(c));
+                self.starting_numeric_chars.contains(&c)
+                    && rest.next().is_some_and(|c| self.numeric_chars.contains(c))
+            };
             match (is_numeric, in_numeric) {
+                (false, false) if starts_numeric() => {
+                    in_numeric = true;
+                    if let Some(t) = &self.start_translation {
+                        translations.push((pos, t.clone()));
+                    }
+                }
                 (false, false) => {}
                 (true, false) => {
                     in_numeric = true;
@@ -156,17 +164,37 @@ mod tests {
 
     #[test]
     fn midendnumericmodechars_keep_a_number_going() {
-        // `midendnumericmodechars ,` shares the numericmodechars set: "1,2" is one
-        // number with one numsign, and a leading "," doesn't start one
+        // `midendnumericmodechars ,`: "1,2" is one number with one numsign, and a
+        // leading "," doesn't start one
         let mut builder = IndicatorBuilder::new();
         builder.numeric_characters(HashSet::from(['1', '2']));
         builder.numsign("⠼", &rule("numsign 3456"));
-        builder.numericmodechars(",");
+        builder.midendnumericmodechars(",");
         let indicator = builder.build().unwrap();
 
         assert_eq!(
             pairs(&indicator.precompute("1,2 ,1")),
             vec![(0, "⠼".to_string()), (5, "⠼".to_string())]
+        );
+    }
+
+    #[test]
+    fn numericmodechars_start_a_number() {
+        // `numericmodechars .,`: a run of them followed by a digit starts the number, so
+        // ".7" and ",.7" get the numsign first, a "." followed by a letter doesn't
+        let mut builder = IndicatorBuilder::new();
+        builder.numeric_characters(HashSet::from(['7']));
+        builder.numsign("⠼", &rule("numsign 3456"));
+        builder.numericmodechars(".,");
+        let indicator = builder.build().unwrap();
+
+        assert_eq!(
+            pairs(&indicator.precompute(".7 ,.7 .a 7.7")),
+            vec![
+                (0, "⠼".to_string()),
+                (3, "⠼".to_string()),
+                (10, "⠼".to_string())
+            ]
         );
     }
 

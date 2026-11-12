@@ -4,7 +4,10 @@ use std::collections::BTreeMap;
 
 use crate::{
     parser::{AnchoredRule, CharacterClass, CharacterClasses, Direction},
-    translator::{TranslationStage, beg_word::BegWordScanner, end_word::EndWordScanner},
+    translator::{
+        TranslationStage, beg_word::BegWordScanner, end_word::EndWordScanner,
+        standing_alone::StandingAloneScanner,
+    },
 };
 
 use super::ResolvedTranslation;
@@ -58,6 +61,9 @@ pub enum Transition {
     /// Non-consuming lookbehind: the preceding character must be in one of these classes.
     /// Inserted at the start of the path (before character transitions).
     Start(Vec<CharacterClass>),
+    /// The negation of [`Transition::Start`]: the preceding character must be in none of
+    /// these classes. The start of the input counts as a space.
+    NotStart(Vec<CharacterClass>),
     /// Non-consuming lookahead: the character immediately after the match must be in one of
     /// these classes. Inserted at the end of the path (after character transitions).
     End(Vec<CharacterClass>),
@@ -73,6 +79,12 @@ pub enum Transition {
     EndWord,
     /// The negation of [`Transition::EndWord`]: the word must continue after the match.
     ContinuesWord,
+    /// Forward, in a table with a `seqdelimiter`: the text before the match lets it stand
+    /// alone (see [`StandingAloneScanner`]).
+    StandsAloneBefore,
+    /// Forward, in a table with a `seqdelimiter`: the text after the match lets it stand
+    /// alone.
+    StandsAloneAfter,
 }
 
 /// The resolved, trie-internal counterpart of [`Transition`] plus the character transitions
@@ -81,19 +93,32 @@ pub enum Transition {
 enum ResolvedTransition {
     Character(char),
     Start(ResolvedClasses),
+    NotStart(ResolvedClasses),
     End(ResolvedClasses),
     BegWord,
     EndWord,
     ContinuesWord,
+    StandsAloneBefore,
+    StandsAloneAfter,
 }
 
-/// A class-based constraint attached to a rule via the liblouis `before`/`after` keywords.
-#[derive(Debug, Clone)]
-pub enum ClassConstraint {
-    /// `after CLASS` keyword: the character before the match must be in this class (lookbehind).
-    Start(CharacterClass),
-    /// `before CLASS` keyword: the character after the match must be in this class (lookahead).
-    End(CharacterClass),
+/// The class constraints a rule gets from the liblouis `before`/`after` keywords. A side with
+/// several classes is satisfied by any one of them.
+#[derive(Debug, Clone, Default)]
+pub struct ClassConstraints {
+    /// `after CLASS`: the character before the match must be in one of these (lookbehind).
+    preceding: Vec<CharacterClass>,
+    /// `before CLASS`: the character after the match must be in one of these (lookahead).
+    following: Vec<CharacterClass>,
+}
+
+impl ClassConstraints {
+    pub fn new(preceding: Vec<CharacterClass>, following: Vec<CharacterClass>) -> Self {
+        Self {
+            preceding,
+            following,
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -127,12 +152,12 @@ impl TrieNode {
 #[derive(Default, Debug, Clone)]
 pub struct Trie {
     root: TrieNode,
-    /// Character classes for the lookahead checks (`Transition::End`, `ClassConstraint::End`),
-    /// which read the input after the match: text classes for forward translation, braille
-    /// classes for backward.
+    /// Character classes for the lookahead checks (`Transition::End`,
+    /// `ClassConstraints::following`), which read the input after the match: text classes for
+    /// forward translation, braille classes for backward.
     lookahead_classes: CharacterClasses,
     /// Character classes for the lookbehind checks (`Transition::Start`,
-    /// `ClassConstraint::Start`), which read the last character of `preceding`. The same as
+    /// `ClassConstraints::preceding`), which read the last character of `preceding`. The same as
     /// `lookahead_classes` unless set with [`Trie::with_lookbehind_classes`]: backward,
     /// `preceding` is text while the input is braille.
     lookbehind_classes: CharacterClasses,
@@ -145,6 +170,9 @@ pub struct Trie {
     /// Resolves [`Transition::EndWord`] and [`Transition::ContinuesWord`]. Empty for forward
     /// tries, which never insert them.
     end_word: EndWordScanner,
+    /// Resolves [`Transition::StandsAloneBefore`] and [`Transition::StandsAloneAfter`],
+    /// which only tries for a table with a `seqdelimiter` insert.
+    standing_alone: StandingAloneScanner,
 }
 
 impl Trie {
@@ -156,6 +184,7 @@ impl Trie {
             case_sensitive: false,
             beg_word: BegWordScanner::default(),
             end_word: EndWordScanner::default(),
+            standing_alone: StandingAloneScanner::default(),
         }
     }
 
@@ -184,6 +213,13 @@ impl Trie {
         Trie { end_word, ..self }
     }
 
+    pub fn with_standing_alone_scanner(self, standing_alone: StandingAloneScanner) -> Self {
+        Trie {
+            standing_alone,
+            ..self
+        }
+    }
+
     pub fn case_sensitive(self) -> Self {
         Trie {
             case_sensitive: true,
@@ -197,12 +233,17 @@ impl Trie {
                 &self.lookbehind_classes,
                 &classes,
             )),
+            Transition::NotStart(classes) => ResolvedTransition::NotStart(
+                ResolvedClasses::resolve(&self.lookbehind_classes, &classes),
+            ),
             Transition::End(classes) => {
                 ResolvedTransition::End(ResolvedClasses::resolve(&self.lookahead_classes, &classes))
             }
             Transition::BegWord => ResolvedTransition::BegWord,
             Transition::EndWord => ResolvedTransition::EndWord,
             Transition::ContinuesWord => ResolvedTransition::ContinuesWord,
+            Transition::StandsAloneBefore => ResolvedTransition::StandsAloneBefore,
+            Transition::StandsAloneAfter => ResolvedTransition::StandsAloneAfter,
         }
     }
     pub fn insert_char(
@@ -219,7 +260,7 @@ impl Trie {
             None,
             None,
             direction,
-            vec![], // char rules never carry class constraints
+            ClassConstraints::default(), // char rules never carry class constraints
             stage,
             origin,
         );
@@ -232,7 +273,7 @@ impl Trie {
         before: Option<Transition>,
         after: Option<Transition>,
         direction: Direction,
-        class_constraints: Vec<ClassConstraint>,
+        class_constraints: ClassConstraints,
         stage: TranslationStage,
         origin: &AnchoredRule,
     ) {
@@ -258,17 +299,15 @@ impl Trie {
         let mut current_node = &mut self.root;
         let mut length = from.chars().count();
 
-        // StartClass constraints are lookbehind checks on `preceding` — inserted before char
-        // transitions
-        for constraint in &class_constraints {
-            if let ClassConstraint::Start(class) = constraint {
-                length += 1;
-                let resolved = ResolvedClasses::resolve(&self.lookbehind_classes, &[class.clone()]);
-                current_node = current_node
-                    .transitions
-                    .entry(ResolvedTransition::Start(resolved))
-                    .or_default();
-            }
+        // the lookbehind on `preceding` goes before the char transitions
+        if !class_constraints.preceding.is_empty() {
+            length += 1;
+            let resolved =
+                ResolvedClasses::resolve(&self.lookbehind_classes, &class_constraints.preceding);
+            current_node = current_node
+                .transitions
+                .entry(ResolvedTransition::Start(resolved))
+                .or_default();
         }
 
         if let Some(t) = before {
@@ -288,16 +327,15 @@ impl Trie {
             current_node = current_node.transitions.entry(t).or_default();
         }
 
-        // EndClass constraints are lookahead checks on the next char — inserted after char transitions
-        for constraint in &class_constraints {
-            if let ClassConstraint::End(class) = constraint {
-                length += 1;
-                let resolved = ResolvedClasses::resolve(&self.lookahead_classes, &[class.clone()]);
-                current_node = current_node
-                    .transitions
-                    .entry(ResolvedTransition::End(resolved))
-                    .or_default();
-            }
+        // the lookahead on the next char goes after them
+        if !class_constraints.following.is_empty() {
+            length += 1;
+            let resolved =
+                ResolvedClasses::resolve(&self.lookahead_classes, &class_constraints.following);
+            current_node = current_node
+                .transitions
+                .entry(ResolvedTransition::End(resolved))
+                .or_default();
         }
 
         // Rules with the same input and boundaries end up here together. They are all kept:
@@ -341,10 +379,19 @@ impl Trie {
         for (transition, child_node) in &node.transitions {
             let context_matches = match transition {
                 ResolvedTransition::Start(resolved) => resolved.matches(preceding.chars().last()),
+                ResolvedTransition::NotStart(resolved) => {
+                    !resolved.matches(preceding.chars().last())
+                }
                 ResolvedTransition::End(resolved) => resolved.matches(c),
                 ResolvedTransition::BegWord => self.beg_word.is_beg_word(preceding),
                 ResolvedTransition::EndWord => self.end_word.is_end_word(input),
                 ResolvedTransition::ContinuesWord => !self.end_word.is_end_word(input),
+                ResolvedTransition::StandsAloneBefore => {
+                    self.standing_alone.stands_alone_before(preceding)
+                }
+                ResolvedTransition::StandsAloneAfter => {
+                    self.standing_alone.stands_alone_after(input)
+                }
                 // Character transitions have been dealt with above
                 ResolvedTransition::Character(_) => false,
             };
@@ -388,7 +435,7 @@ mod tests {
             Some(Transition::BegWord),
             None,
             Direction::Backward,
-            vec![],
+            ClassConstraints::default(),
             TranslationStage::Main,
             &fake_rule(),
         );
@@ -412,7 +459,7 @@ mod tests {
                 None,
                 Some(transition),
                 Direction::Backward,
-                vec![],
+                ClassConstraints::default(),
                 TranslationStage::Main,
                 &fake_rule(),
             );
@@ -449,7 +496,7 @@ mod tests {
                 None,
                 None,
                 Direction::Forward,
-                vec![],
+                ClassConstraints::default(),
                 TranslationStage::Main,
                 rule,
             );
@@ -480,7 +527,7 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            vec![],
+            ClassConstraints::default(),
             TranslationStage::Main,
             &rule,
         );
@@ -490,7 +537,7 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            vec![],
+            ClassConstraints::default(),
             TranslationStage::Main,
             &rule,
         );
@@ -500,7 +547,7 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            vec![],
+            ClassConstraints::default(),
             TranslationStage::Main,
             &rule,
         );
@@ -510,7 +557,7 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            vec![],
+            ClassConstraints::default(),
             TranslationStage::Main,
             &rule,
         );
@@ -520,7 +567,7 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            vec![],
+            ClassConstraints::default(),
             TranslationStage::Main,
             &rule,
         );
@@ -564,7 +611,7 @@ mod tests {
             Some(Transition::Start(boundary.clone())),
             Some(Transition::End(boundary)),
             Direction::Forward,
-            vec![],
+            ClassConstraints::default(),
             TranslationStage::Main,
             &rule,
         );
@@ -592,7 +639,7 @@ mod tests {
             ])),
             Some(Transition::End(vec![CharacterClass::Letter])),
             Direction::Forward,
-            vec![],
+            ClassConstraints::default(),
             TranslationStage::Main,
             &rule,
         );
@@ -619,7 +666,7 @@ mod tests {
             Some(Transition::Start(vec![CharacterClass::Letter])),
             None,
             Direction::Forward,
-            vec![],
+            ClassConstraints::default(),
             TranslationStage::Main,
             &rule,
         );
@@ -647,7 +694,7 @@ mod tests {
             Some(Transition::Start(boundary.clone())),
             Some(Transition::End(boundary)),
             Direction::Forward,
-            vec![],
+            ClassConstraints::default(),
             TranslationStage::Main,
             &rule,
         );
@@ -679,7 +726,7 @@ mod tests {
             ])),
             Some(Transition::End(vec![CharacterClass::Litdigit])),
             Direction::Forward,
-            vec![],
+            ClassConstraints::default(),
             TranslationStage::Main,
             &rule,
         );
@@ -710,7 +757,7 @@ mod tests {
                 CharacterClass::Punctuation,
             ])),
             Direction::Forward,
-            vec![],
+            ClassConstraints::default(),
             TranslationStage::Main,
             &rule,
         );
@@ -738,7 +785,7 @@ mod tests {
             Some(Transition::Start(vec![CharacterClass::Letter])),
             None,
             Direction::Forward,
-            vec![],
+            ClassConstraints::default(),
             TranslationStage::Main,
             &rule,
         );
@@ -765,7 +812,7 @@ mod tests {
             None,
             Some(Transition::End(vec![CharacterClass::Letter])),
             Direction::Forward,
-            vec![],
+            ClassConstraints::default(),
             TranslationStage::Main,
             &rule,
         );
@@ -788,7 +835,7 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            vec![],
+            ClassConstraints::default(),
             TranslationStage::Main,
             &rule,
         );
@@ -812,7 +859,7 @@ mod tests {
                 None,
                 None,
                 Direction::Forward,
-                vec![],
+                ClassConstraints::default(),
                 TranslationStage::Main,
                 &rule,
             );
@@ -842,7 +889,10 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            vec![ClassConstraint::End(CharacterClass::Letter)],
+            ClassConstraints {
+                following: vec![CharacterClass::Letter],
+                ..Default::default()
+            },
             TranslationStage::Main,
             &rule,
         );
@@ -853,7 +903,10 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            vec![ClassConstraint::End(CharacterClass::Digit)],
+            ClassConstraints {
+                following: vec![CharacterClass::Digit],
+                ..Default::default()
+            },
             TranslationStage::Main,
             &rule,
         );
@@ -885,7 +938,10 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            vec![ClassConstraint::Start(CharacterClass::Letter)],
+            ClassConstraints {
+                preceding: vec![CharacterClass::Letter],
+                ..Default::default()
+            },
             TranslationStage::Main,
             &rule,
         );
@@ -896,7 +952,10 @@ mod tests {
             None,
             None,
             Direction::Forward,
-            vec![ClassConstraint::Start(CharacterClass::Digit)],
+            ClassConstraints {
+                preceding: vec![CharacterClass::Digit],
+                ..Default::default()
+            },
             TranslationStage::Main,
             &rule,
         );
@@ -904,5 +963,32 @@ mod tests {
         assert_eq!(trie.find_translations("foo", "1"), vec![foo_after_digit]);
         assert_eq!(trie.find_translations("foo", " "), empty);
         assert_eq!(trie.find_translations("foo", ""), empty);
+    }
+
+    #[test]
+    fn find_translations_with_not_start_class() {
+        let ctx = CharacterClasses::new(&[
+            (CharacterClass::Letter, &['a', 'b']),
+            (CharacterClass::Space, &[' ']),
+        ]);
+        let mut trie = Trie::new().with_context(ctx);
+        let rule = fake_rule();
+        let foo = ResolvedTranslation::new("foo", "F", 4, TranslationStage::Main, rule.clone());
+        // the preceding character must not be a letter
+        trie.insert(
+            "foo",
+            "F",
+            Some(Transition::NotStart(vec![CharacterClass::Letter])),
+            None,
+            Direction::Forward,
+            ClassConstraints::default(),
+            TranslationStage::Main,
+            &rule,
+        );
+        assert_eq!(trie.find_translations("foo", "a"), vec![]);
+        assert_eq!(trie.find_translations("foo", " "), vec![foo.clone()]);
+        assert_eq!(trie.find_translations("foo", "-"), vec![foo.clone()]);
+        // the start of the input counts as a space
+        assert_eq!(trie.find_translations("foo", ""), vec![foo]);
     }
 }

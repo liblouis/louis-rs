@@ -8,7 +8,7 @@ use crate::translator::{CharacterDefinition, ResolvedTranslation};
 use crate::{
     Direction,
     parser::{AnchoredRule, Rule, in_definition_order},
-    translator::{TranslationError, TranslationStage},
+    translator::{CompileError, TranslationStage},
 };
 
 #[derive(Debug)]
@@ -46,7 +46,7 @@ impl MultipassTable {
         direction: Direction,
         stage: TranslationStage,
         ctx: &TableContext,
-    ) -> Result<Self, TranslationError> {
+    ) -> Result<Self, CompileError> {
         let mut builder = MultipassTableBuilder::new();
         // definition order is the order of `rules`, see `Rank::definition_order`
         let rules = &in_definition_order(rules);

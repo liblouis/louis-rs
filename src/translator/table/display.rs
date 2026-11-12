@@ -50,13 +50,8 @@ impl DisplayTable {
                         to,
                         origin: rule.clone(),
                     };
-                    if cfg!(feature = "backwards_compatibility") {
-                        // first rule wins
-                        mappings.entry(from).or_insert(mapping);
-                    } else {
-                        // last rule wins
-                        mappings.insert(from, mapping);
-                    }
+                    // first rule wins, as in liblouis
+                    mappings.entry(from).or_insert(mapping);
                 }
                 _ => (), // ignore all other rules for display tables
             }

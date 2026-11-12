@@ -8,11 +8,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+- `louis::metadata` finds tables by their `#+key: value` metadata, like
+  liblouis's `lou_findTables`: `Index::new()` indexes the tables on
+  `LOUIS_TABLE_PATH`, `Index::with_search_path` those in the given
+  directories, and `Index::find` returns the tables matching a `Query`,
+  best match first. For now only tables carrying every pair of the query
+  match.
+
 ### Changed
 - A `%name` test in a `context`, `correct` or pass rule that names neither
   a class nor a swap is now a table error, as in liblouis. It compiled to
   a test that never matched, so the rule was silently dead. `$w` to `$z`
   and `$^` still add no characters, but now log a warning.
+- louis-rs is in beta: translation matches liblouis closely, and the
+  library API follows semantic versioning.
+- The library API, on the way to a stable one:
+  - `Translator`'s constructors return `louis::Error`, either
+    `Error::Table` with the `TableError`s (now public) or `Error::Compile`
+    with a `CompileError` (formerly `TranslationError`). A syntax error in
+    a table carries a `SyntaxError`, which says what is wrong without
+    exposing the parser's internals.
+  - `translate` returns a `String` and `translate_with_options` a
+    `TranslationResult`, not a `Result`: translating cannot fail.
+  - `TranslationResult`'s `output_positions` and `input_positions` are
+    plain `Vec`s; they were always `Some`.
+  - The public enums and `TranslationResult` are `#[non_exhaustive]`.
+  - `TranslationModes` implements `PartialEq`, `Eq`, `Copy` and
+    `FromIterator`.
+  - `TranslationMode` and `Direction` lose the `|` that returned an
+    `enumset::EnumSet`. Build a set of modes with
+    `TranslationModes::insert` or `collect`.
+- The `backwards_compatibility` feature is gone. louis-rs always behaves
+  as it did with it, like liblouis: the first definition of a character
+  wins.
+- A `base` rule whose base character is not defined in either direction
+  is an error, `CompileError::BaseCharacterNotDefined`; liblouis ignores
+  it. A base character defined for one direction only (`noback`,
+  `nofor`) is fine.
+- `louis query` takes liblouis's query syntax, `language:de grade:2`,
+  instead of `language=de,grade=2`, either as one argument or as one
+  argument per pair.
+- The `louis` command line tool is now its own crate, `louis-cli`; install
+  it with `cargo install louis-cli`. `louis-rs` is the library only and no
+  longer pulls in clap, rayon, tabled, env_logger or saphyr-parser.
+- `Direction` no longer implements `clap::ValueEnum`.
+- `louis parse` is replaced by `louis check-table`, which compiles a table
+  in both directions and reports its errors, like liblouis's
+  `lou_checktable`. It prints "No errors found." unless given `--quiet`.
+  The rule dump and the rule-parsing REPL are gone.
+
+### Fixed
+- Multipass and `context` variables work as in liblouis: `#1+` and `#1-`
+  increment and decrement, a test can compare with `<`, `>`, `<=` and
+  `>=` as well as `=`, and a variable that was never set is 0. Before,
+  `#1+` failed to parse, the other comparisons panicked, and an unset
+  variable matched nothing.
+- `louis trace` prints the attributes of a `match` rule in match syntax,
+  `%[_~]`, not in the multipass letters without brackets (`s~`).
+
+## [0.3.1] - 2026-11-11
+
+### Changed
+- `louis check` now parses YAML with saphyr-parser instead of libyaml,
+  whose underlying crate is unmaintained (RUSTSEC-2024-0449). A file that
+  is not UTF-8 is now rejected. Four of liblouis's test files (`en-g3`,
+  `en-ueb`, `it` and `de-g2-sbs`) need liblouis#2176 to parse.
+- A `match` rule's `pre` is now a real look-behind. The regexp engine
+  can reverse a pattern, and `pre` runs backwards from the current
+  position over the text before it, the way liblouis checks it. Before,
+  the whole rule ran forward from where `pre` would have to start and
+  was held until translation got to its characters, so a translation
+  covering that start hid the rule. Now any `match` rule, however long
+  or open-ended its `pre`, is decided at the position it applies to,
+  whatever translated the text before it. Translation is faster too, as
+  `pre` is only checked once the rule's characters have matched.
 - The `seqafterexpression` opcode is now deliberately ignored rather than
   listed as not implemented: liblouis compiles it but never uses it
   (liblouis#2164).
@@ -29,12 +99,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   fall back on when it did not apply. With `pa.tbl`, "?" gave ⠈⠦ instead
   of ⠦, and with `afr-za-g2.ctb`, "algemene" gave ⠫⠿⠍⠢⠑ instead of
   ⠫⠿⠍⠑⠝⠑.
+- How much context a rule checked no longer decides between rules
+  ahead of liblouis's order, and `context` rules are now chosen as
+  liblouis chooses them: one whose test starts with a literal competes
+  as a rule of that literal's length, and one that starts otherwise,
+  with a class say, overrides any other rule that applies. With
+  `en-g3.ctb`, a closing quote is now ⠴ instead of the ⠦ of a later
+  `word` rule, and with `th.ctb` a longer `always` rule now beats a
+  `context` rule that starts with a single character.
 
 ### Fixed
 - A `%name` test can now name a swap, and matches the characters the
   swap maps from, as in liblouis. A class defined with the deprecated
   `class` opcode now exists: it was parsed but never registered, so a
   test naming it never matched.
+- Backward, a `base` character is no longer read from its base's dots,
+  and a capital sign gives a letter's first `base uppercase` character
+  rather than Unicode's uppercase, as in liblouis: with `tr-g1.ctb`,
+  "⠊" gave "İ" instead of "i", and "⠠⠊" "I" instead of "İ"; with
+  `sv-g2.ctb`, "gå" came out as "gÅ".
+- Backward, a `capsletter` capitalizes the next character written, as
+  in liblouis, not the next cell: with `fr-bfu-g2.ctb`, whose passes
+  put the letter sign after the capital sign, "⠰⠨⠊⠲" gave "i." instead
+  of "I.".
+- Backward, a `litdigit` is read only inside a number, as in liblouis:
+  with `tr-g2.tbl`, "⠰⠁" gave "1" instead of "a", and "Zekice" came
+  out as "Z5kic5".
+- A `contraction` now gets its letter sign and `nocontractsign` only
+  where it is the rule applied, as in liblouis. Where another rule for
+  the same letters applied instead, it got them anyway: with
+  `en-us-g2.ctb`, "as" gave ⠰⠵ instead of ⠵, the earlier `word as`
+  applying, and with `fr-bfu-g2.ctb` "d'abord" gave ⠰⠙⠄⠁ instead of ⠙⠄⠁.
+- A rule no longer runs into the syllable of a `syllable` rule, as in
+  liblouis: with `en-us-g2.ctb`, "adulthood" gave ⠁⠙⠥⠇⠹⠕⠕⠙ instead of
+  ⠁⠙⠥⠇⠞⠓⠕⠕⠙, the `th` taking the "h" of `syllable hood`.
+- In a table with a `seqdelimiter`, such as `en-ueb-g2.ctb`, a `word` or
+  `contraction` rule now applies only where it stands alone as liblouis
+  defines it: going back over `seqbeforechars` characters and on over
+  `seqafterchars` characters and `seqafterpattern` strings must reach a
+  space, a `seqdelimiter` or the end of the text. Any punctuation used
+  to do. With `en-ueb-g2.ctb`, "!about" gave the shortform ⠖⠁⠃ instead
+  of ⠖⠁⠃⠳⠞, and ";b" gave ⠰⠆⠰⠃ instead of ⠰⠆⠃.
+- A letter with a `word` or `largesign` rule of its own no longer gets a
+  letter sign, as the liblouis manual says: with `en-g3.ctb`, "I am not"
+  gave ⠰⠊⠂⠝ instead of ⠊⠂⠝.
+- A `contraction` now gets its letter sign even when its first letter is
+  listed in `noletsign`, as in liblouis: with `da-dk-g26.ctb`, "ii" gave
+  ⠊⠊ instead of ⠠⠊⠊.
+- A `joinword` rule now wins over a `word` rule for the same characters
+  defined after it, as in liblouis. It lost on rank, as the word end it
+  needs was not counted: with `en-g3.ctb`, "the men" gave ⠮⠀⠍⠢ instead
+  of ⠮⠍⠢.
+- Digits no longer block contractions in every table. liblouis does so
+  only in a table with numeric mode (`numericmodechars`,
+  `midendnumericmodechars` or `numericnocontchars`) whose
+  `nocontractsign` is its `nonumsign`, and then from the number to the
+  next space, letters after it included. With `en-g3.ctb`, "12" gave
+  ⠼⠁⠃ instead of ⠼⠇.
+- A rule with several `before` or several `after` classes now applies
+  when any one of them matches, as in liblouis, rather than never. With
+  `fr-bfu-g2.ctb`, ⠨⠖⠿⠎⠊⠙⠣ gave "Présidê" instead of "Président".
+- Back-translation now reads the cells of a number as digits even where
+  their letters spell a contraction, as liblouis does. With
+  `en-ueb-g2.ctb`, ⠼⠁⠃ gave "about" instead of "12".
+- In back-translation, a letter sign now keeps contractions off the
+  letters after it across capital indicators, as in liblouis. With
+  `en-ueb-g2.ctb`, ⠰⠠⠠⠠⠅⠲ gave "KNOWLEDGE." instead of "K.".
+- In back-translation, a letter sign no longer ends at the first cell
+  that isn't a letter: as in liblouis, it lapses, and keeps `word`,
+  `sufword` and `prfword` off the rest of the word. With
+  `en-ueb-g2.ctb`, ⠰⠉⠲⠆ gave "c.be" instead of "c.;".
+- In back-translation, a capitalized word now goes on while letters are
+  written, whatever rule wrote them, and ends at the first character
+  that isn't a letter or a `capsmodechars` character, as in liblouis.
+  It used to end at the first cell that wasn't a letter's: with
+  `en-ueb-g2.ctb`, ⠠⠠⠗⠁⠆⠊⠞ gave "RAbbit" instead of "RABBIT", and with
+  `mao-nz-g1.ctb`, ⠠⠠⠅⠸⠁⠏⠸⠕ gave "Kāpō" instead of "KĀPŌ".
+- In back-translation, a `letsign` or `nonumsign` no longer applies right
+  after a letter, as in liblouis, so the same dots can be another
+  indicator there: with `da-dk-g16.ctb`, ⠸⠋⠕⠕⠰⠃⠁⠗ is "FOObar", ⠰ ending
+  the capitals.
+- In back-translation, an emphasis indicator gives way to any other rule
+  with the same dots: with `fr-bfu-comp6.utb`, ⠨⠨⠓⠉⠠⠄⠇ is "HCl", ⠠⠄
+  ending the capitals rather than italics.
+- A `match` rule whose `pre` starts inside the previous translation now
+  applies, thanks to the look-behind above: with `en-ueb-g2.ctb`,
+  "areas" gave ⠜⠑⠁⠎ instead of ⠜⠂⠎, as `always ar` covered the "r" that
+  `match %a ea %a` needs.
+- A `numericmodechars` character followed by a digit now starts a number,
+  so the number sign goes before it: with `en-ueb-g1.ctb`, ".7" gave ⠲⠼⠛
+  instead of ⠼⠲⠛. `midendnumericmodechars` still only keeps a number
+  going.
+- A quoted string in a `context`, `correct` or pass rule now decodes the
+  escapes `\e`, `\f`, `\n`, `\r`, `\t` and `\v`. They were read as a
+  backslash and a letter: `hu-hu-g2.ctb`'s `context [",\n"] @2` looked
+  for a literal `\n` instead of a newline.
 - Backward `correct` and pass rules whose action consumes nothing, such
   as `*`, `?` or a variable assignment, are no longer dropped. Tables use
   them to keep a word from a shorter correction: with `hu-hu-g1.ctb`,
@@ -45,11 +204,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Back-translation now continues a number across a `numericmodechars` or
   `midendnumericmodechars` character, as liblouis does. With
   `it-it-comp6.utb`, ⠼⠁⠚⠂⠑ gave "10,e" instead of "10,5".
+- Back-translation now reads a number sign right after a letter as one,
+  unless a rule that only applies after a letter, such as Punjabi's
+  `midendword ਣ 3456`, uses its dots. With `hu-hu-g1.ctb`, ⠨⠁⠼⠁⠤⠃⠑⠝
+  gave "Aa-ben" instead of "A1-ben".
 - The `nocontractsign` now comes before a capital sign, as in liblouis.
   With `en-ueb-g2.ctb`, "B" gave ⠠⠰⠃ instead of ⠰⠠⠃.
 - A `base` rule now gives its class to the base character's dots, and
   the number signs come after the capital sign, both as in liblouis.
   With `en-ueb-g2.ctb`, "1A" gave ⠼⠁⠰⠠⠁ instead of ⠼⠁⠠⠁.
+- Back-translation now drops emphasis indicators. It read their cells as
+  the characters that share their dots: with `en-ueb-g1.ctb`, ⠨⠂⠺⠕⠗⠙⠨⠄
+  gave &/,word&/' instead of "word".
 - In a `context` rule, `*` now puts in the dots of the characters it
   stands for. It copied the characters themselves into the braille: with
   `th-g1.utb`, "เอะ" gave อ⠋⠁ instead of ⠕⠋⠁.
@@ -484,7 +650,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 -   Make it clear that the library API is unstable.
 
 <!-- next-url -->
-[Unreleased]: https://github.com/liblouis/louis-rs/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/liblouis/louis-rs/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/liblouis/louis-rs/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/liblouis/louis-rs/compare/v0.2.8...v0.3.0
 [0.2.8]: https://github.com/liblouis/louis-rs/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/liblouis/louis-rs/compare/v0.2.6...v0.2.7

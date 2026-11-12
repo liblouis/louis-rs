@@ -12,22 +12,24 @@ $ louis translate en-us-g2.ctb "It's about the blind"
 ⠠⠭⠄⠎⠀⠁⠃⠀⠮⠀⠃⠇
 ```
 
-> [!CAUTION]
-> louis-rs is in alpha. It passes over 98% of the liblouis test suite, but the
-> library API has not been worked out and is not stable.
+> [!NOTE]
+> louis-rs is in beta. Of liblouis's test suite it fails only 0.1% that liblouis
+> passes; [doc/Liblouis_Parity.md](doc/Liblouis_Parity.md) lists the known gaps.
 
 ## What is here
 
--   a hand-rolled two-pass parser for liblouis tables; all 458 table files under
-    `tables/` parse cleanly
+-   a hand-rolled parser and a two-pass compiler for liblouis tables; every
+    table under `tables/` that liblouis compiles, louis-rs compiles too
 -   forward and backward translation through the full pipeline: correct rules,
     the main stage, and pass2/pass3/pass4
 -   a virtual-machine regexp engine behind the `match` and `context` opcodes, and
     a trie for everything else
 -   hyphenation straight from liblouis's `.dic` files, with no external crate and
     no build step
--   the `louis` binary: `translate`, `trace`, `parse`, `check` and `query`; see
+-   the `louis` binary: `translate`, `trace`, `check-table`, `check` and `query`; see
     `louis help`
+-   [doc/Architecture.md](doc/Architecture.md) — the concepts and how a
+    translation goes through them
 -   [doc/Liblouis_Parity.md](doc/Liblouis_Parity.md) — what works, what doesn't,
     and where the remaining failures are
 -   [doc/Differences_From_Liblouis.md](doc/Differences_From_Liblouis.md) — where
@@ -40,7 +42,10 @@ $ louis translate en-us-g2.ctb "It's about the blind"
 
 You need the [Rust tool chain](https://www.rust-lang.org/). Then:
 
-    $ cargo install louis-rs
+    $ cargo install louis-cli
+
+This installs the `louis` command. The library itself is the `louis-rs`
+crate.
 
 Point `LOUIS_TABLE_PATH` at a set of tables and translate something:
 
@@ -81,12 +86,12 @@ Point `LOUIS_TABLE_PATH` at a set of tables and translate something:
 
 and `query` finds tables by their metadata:
 
-    $ louis query language=de,contraction=full
+    $ louis query language:de contraction:full
     {"[...]/liblouis/tables/de-g2-detailed.ctb", "[...]/liblouis/tables/de-g2.ctb"}
 
 ## Project status
 
-Alpha. Compatibility with liblouis is driven by its own test suite, which
+Beta. Compatibility with liblouis is driven by its own test suite, which
 louis-rs runs in full — better than two million assertions, forward and backward
 — on every change; [doc/Liblouis_Parity.md](doc/Liblouis_Parity.md) carries the
 current figures and the reproduction steps.

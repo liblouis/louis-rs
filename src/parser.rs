@@ -21,7 +21,7 @@ use crate::hyphenation::{self, HyphenationTable};
 pub use attribute::Attribute;
 pub use braille::{BrailleChar, BrailleChars};
 pub use character_class::{CharacterClass, CharacterClasses};
-pub use match_rule::{Pattern, PatternParser, Patterns, Side};
+pub use match_rule::{Pattern, Patterns, Side};
 pub use multipass::action::ActionInstruction;
 pub use multipass::test::{Quantifier, TestInstruction};
 pub use multipass::{Action, Test};
@@ -29,7 +29,8 @@ pub use multipass::{Action, Test};
 mod attribute;
 mod braille;
 mod character_class;
-mod match_rule;
+// pub(crate) so that the match pattern tests can build patterns with its `PatternParser`
+pub(crate) mod match_rule;
 pub mod multipass;
 
 /// A restriction that applies to a [`Rule`].
@@ -113,10 +114,14 @@ const ANY_DIRECTION: Constraints = constraint_set!(Constraint::Nofor | Constrain
 /// Rules always have at least one direction. They are used for
 /// forward translation, for backward translation or for both
 /// directions. The concept of direction is related to `Constraint`.
-#[derive(EnumSetType, Debug, Default, clap::ValueEnum)]
+// no_ops: no `|` that would return an `EnumSet` and put enumset in the API
+#[derive(EnumSetType, Debug, Default, Hash)]
+#[enumset(no_ops)]
 pub enum Direction {
+    /// From text to braille
     #[default]
     Forward,
+    /// From braille to text
     Backward,
 }
 
@@ -1174,6 +1179,10 @@ pub enum Precedence {
     /// the fallback when no other rule matches, which liblouis expresses by putting them
     /// at the end of its rule chains.
     CharacterDefinition,
+    /// Backward-only emphasis indicators (`begemphword`, `endemphphrase`, ...). Any other
+    /// rule with the same dots wins over them, as `endcapsword 6-3` does over
+    /// `endemphword italic 6-3` in `fr-bfu-comp6.utb`.
+    Emphasis,
     /// Backward-only indicator opcodes (`capsletter`, `numsign`, ...). Above the
     /// character definitions, whose dots they can coincide with in some tables, but below
     /// `always`: a same-dots `always` rule is a more specific language rule that must
@@ -1216,6 +1225,13 @@ impl HasPrecedence for Rule {
             | Rule::Endcapsword { .. }
             | Rule::Numsign { .. }
             | Rule::Nonumsign { .. } => Precedence::Indicator,
+            Rule::Begemph { .. }
+            | Rule::Endemph { .. }
+            | Rule::Emphletter { .. }
+            | Rule::Begemphword { .. }
+            | Rule::Endemphword { .. }
+            | Rule::Begemphphrase { .. }
+            | Rule::Endemphphrase { .. } => Precedence::Emphasis,
             Rule::Always { .. } => Precedence::Always,
             _ => Precedence::Translation,
         }
@@ -1324,6 +1340,20 @@ fn unescape_unicode(chars: &mut Chars, len: u8) -> Result<char, ParseError> {
     Ok('\u{FFFD}')
 }
 
+fn simple_escape(c: char) -> Option<char> {
+    Some(match c {
+        'e' => '\u{001B}',
+        'f' => '\u{000C}',
+        'n' => '\n',
+        'r' => '\r',
+        's' => ' ',
+        't' => '\t',
+        'v' => '\u{000B}',
+        '\\' => '\\',
+        _ => return None,
+    })
+}
+
 pub fn unescape(s: &str, context: EscapingContext) -> Result<String, ParseError> {
     let mut iter = s.chars();
     let mut new = String::new();
@@ -1335,14 +1365,6 @@ pub fn unescape(s: &str, context: EscapingContext) -> Result<String, ParseError>
         }
 
         match iter.next() {
-            Some('f') => new.push('\u{000C}'),
-            Some('n') => new.push('\n'),
-            Some('r') => new.push('\r'),
-            Some('t') => new.push('\t'),
-            Some('s') => new.push(' '),
-            Some('v') => new.push('\u{000B}'),
-            Some('e') => new.push('\u{001B}'),
-            Some('\\') => new.push('\\'),
             // when unescaping a match pattern leave \(, \) and \] alone as they are needed later
             Some(c @ ('(' | ')' | ']')) if context == EscapingContext::MatchPattern => {
                 new.push('\\');
@@ -1350,7 +1372,7 @@ pub fn unescape(s: &str, context: EscapingContext) -> Result<String, ParseError>
             }
             Some('x') => new.push(unescape_unicode(&mut iter, 4)?),
             Some('y') => new.push(unescape_unicode(&mut iter, 5)?),
-            Some(c) => return Err(ParseError::InvalidEscape(Some(c))),
+            Some(c) => new.push(simple_escape(c).ok_or(ParseError::InvalidEscape(Some(c)))?),
             _ => return Err(ParseError::InvalidEscape(None)),
         };
     }
@@ -2594,36 +2616,77 @@ impl<'a> RuleParser<'a> {
     }
 }
 
+/// What is wrong with a line of a table, or with a hyphenation table. Its message says
+/// what; the details are not public API, as they follow the parser's internals.
+#[derive(thiserror::Error, Debug)]
+#[error(transparent)]
+pub struct SyntaxError(SyntaxErrorKind);
+
+#[derive(thiserror::Error, Debug)]
+enum SyntaxErrorKind {
+    #[error(transparent)]
+    Rule(ParseError),
+    #[error(transparent)]
+    Hyphenation(hyphenation::ParseError),
+}
+
 /// An error that occurred during reading of a [liblouis](https://liblouis.io) braille table
 #[derive(thiserror::Error, Debug)]
+#[non_exhaustive]
 pub enum TableError {
-    #[error("Parse error {error:?} on line {line:?}")]
+    /// A line of a table could not be parsed
+    #[error("line {line}: {error}")]
     ParseError {
+        /// The table, or `None` for table source given in memory
         path: Option<PathBuf>,
+        /// The line number, counting from 1
         line: usize,
-        error: ParseError,
+        /// What is wrong with the line
+        error: SyntaxError,
     },
+    /// Table source given in memory has an `include`, which needs the filesystem
     #[error("Include directives are not supported when parsing table source in memory")]
     IncludesNotSupportedInMemory,
+    /// A table was found but could not be read
     #[error("Cannot read table {path}: {error}")]
-    TableNotReadable { path: PathBuf, error: io::Error },
+    TableNotReadable {
+        /// The table
+        path: PathBuf,
+        /// Why it could not be read
+        error: io::Error,
+    },
+    /// A table is not on the search path
     #[error("Cannot find table {0:?}")]
     TableNotFound(PathBuf),
+    /// A hyphenation table is not on the search path
     #[error("Hyphenation table {0} not found")]
     HyphenationTableNotFound(PathBuf),
+    /// A hyphenation table was found but could not be read
     #[error("Cannot read hyphenation table {path}: {error}")]
-    HyphenationTableNotReadable { path: PathBuf, error: io::Error },
+    HyphenationTableNotReadable {
+        /// The hyphenation table
+        path: PathBuf,
+        /// Why it could not be read
+        error: io::Error,
+    },
+    /// A hyphenation table could not be parsed
     #[error("Cannot parse hyphenation table {path}: {error}")]
     HyphenationTableNotParseable {
+        /// The hyphenation table
         path: PathBuf,
-        error: hyphenation::ParseError,
+        /// What is wrong with it
+        error: SyntaxError,
     },
+    /// Tables include each other in a cycle, listed in the order of inclusion
     #[error("circular table inclusion detected: {0:?}")]
     CircularInclude(Vec<PathBuf>),
+    /// A chain of includes is deeper than the given maximum
     #[error("table inclusion chain exceeds the maximum depth of {0}")]
     IncludeTooDeep(usize),
+    /// The `endmodephrase` of the named emphasis class is defined both before and after
     #[error("endmodephrase {0:?} may only be defined as before or after, not both")]
     ConflictingEndmodephrasePosition(String),
+    /// `endcapsphrase` is defined both before and after
     #[error("endcapsphrase may only be defined as before or after, not both")]
     ConflictingEndcapsphrasePosition,
 }
@@ -2632,7 +2695,7 @@ pub enum TableError {
 /// (but acyclic) chain of includes -- cyclic ones are caught earlier, by [`TableError::CircularInclude`].
 const MAX_INCLUDE_DEPTH: usize = 64;
 
-/// A [`Rule`] combined with information about which table file it originated from.
+/// A `Rule` combined with information about which table file it originated from.
 #[derive(PartialEq, Debug, Clone)]
 pub struct AnchoredRule {
     pub rule: Rule,
@@ -2724,7 +2787,7 @@ pub fn table(table: &str, path: Option<PathBuf>) -> Result<Vec<AnchoredRule>, Ve
                 .map_err(|e| TableError::ParseError {
                     path: path.clone(),
                     line: line_no + 1,
-                    error: e,
+                    error: SyntaxError(SyntaxErrorKind::Rule(e)),
                 })
         })
         .partition(Result::is_ok);
@@ -2816,7 +2879,7 @@ fn expand_include(
                 let table = HyphenationTable::parse(&source).map_err(|error| {
                     vec![TableError::HyphenationTableNotParseable {
                         path: resolved,
-                        error,
+                        error: SyntaxError(SyntaxErrorKind::Hyphenation(error)),
                     }]
                 })?;
                 return Ok(vec![AnchoredRule::new(
@@ -2862,7 +2925,7 @@ fn check_conflicting_rules(rules: &[AnchoredRule]) -> Result<(), Vec<TableError>
     Ok(())
 }
 
-/// See [`table_expanded_with`] for what `chain` tracks. Callers expanding a rule set that isn't
+/// See `table_expanded_with` for what `chain` tracks. Callers expanding a rule set that isn't
 /// itself nested inside another include expansion (e.g. an inline/in-memory table) should pass
 /// `&[]`.
 pub fn expand_includes(

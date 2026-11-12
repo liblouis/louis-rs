@@ -4,7 +4,7 @@ pub mod primary;
 
 use crate::{
     parser::{AnchoredRule, CharacterClass, CharacterClasses, Rule},
-    translator::{CharacterDefinition, TranslationError, swap::SwapClasses},
+    translator::{CharacterDefinition, CompileError, swap::SwapClasses},
 };
 
 #[derive(Debug, Default)]
@@ -16,7 +16,7 @@ pub struct TableContext {
 }
 
 impl TableContext {
-    // used for testing
+    #[cfg(test)]
     pub fn new(
         character_classes: CharacterClasses,
         dots_classes: CharacterClasses,
@@ -46,7 +46,7 @@ impl TableContext {
         &self.swap_classes
     }
 
-    pub fn compile(rules: &[AnchoredRule]) -> Result<TableContext, TranslationError> {
+    pub fn compile(rules: &[AnchoredRule]) -> Result<TableContext, CompileError> {
         let mut character_definitions = CharacterDefinition::new();
         let mut character_classes = CharacterClasses::default();
         let mut dots_classes = CharacterClasses::default();
@@ -173,17 +173,9 @@ impl TableContext {
                                 &character_definitions,
                             );
                         }
-                    } else {
-                        // hm, there is no character definition for the base character.
-                        // If we are backwards compatible ignore the problem, otherwise
-                        // throw an error
-                        if !cfg!(feature = "backwards_compatibility") {
-                            return Err(TranslationError::BaseCharacterNotDefined {
-                                base: *base,
-                                derived: *derived,
-                            });
-                        }
                     }
+                    // no definition of the base character for this direction (`noback`, `nofor`), so
+                    // nothing to derive; `TranslationPipeline::compile` rejects one with none at all
                 }
                 // `class` is liblouis' deprecated spelling of `attribute`
                 Rule::Attribute { name, chars } | Rule::Class { name, chars } => {

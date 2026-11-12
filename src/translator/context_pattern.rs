@@ -4,20 +4,18 @@ use std::collections::HashSet;
 
 use log::warn;
 
-use crate::parser::multipass::test::Operator;
 use crate::parser::{Action, ActionInstruction, Quantifier, Test, TestInstruction};
 
+use crate::parser::multipass::test::Operator;
 use crate::parser::{AnchoredRule, Attribute, CharacterClass, CharacterClasses};
 use crate::translator::effect::{Effect, Environment};
-use crate::translator::regexp::{self, CompiledRegexp, Regexp};
+use crate::translator::regexp::{Comparison, CompiledRegexp, Regexp};
 use crate::translator::swap::SwapClasses;
 use crate::translator::table::TableContext;
 use crate::translator::translation::{
     Translation, TranslationTarget, TranslationTargets, UnresolvedTranslation,
 };
-use crate::translator::{
-    CharacterDefinition, ResolvedTranslation, TranslationError, TranslationStage,
-};
+use crate::translator::{CharacterDefinition, CompileError, ResolvedTranslation, TranslationStage};
 
 impl Regexp {
     fn from_test(
@@ -25,7 +23,7 @@ impl Regexp {
         whole_match: bool,
         ctx: &CharacterClasses,
         swaps: &SwapClasses,
-    ) -> Result<Self, TranslationError> {
+    ) -> Result<Self, CompileError> {
         let regexp = Regexp::from_instructions(test.tests(), whole_match, ctx, swaps)?;
         Ok(if whole_match {
             Regexp::Consume(Box::new(regexp))
@@ -39,7 +37,7 @@ impl Regexp {
         whole_match: bool,
         ctx: &CharacterClasses,
         swaps: &SwapClasses,
-    ) -> Result<Self, TranslationError> {
+    ) -> Result<Self, CompileError> {
         let mut regexps = instructions
             .iter()
             .map(|instruction| Regexp::from_instruction(instruction, whole_match, ctx, swaps));
@@ -56,7 +54,7 @@ impl Regexp {
         whole_match: bool,
         ctx: &CharacterClasses,
         swaps: &SwapClasses,
-    ) -> Result<Self, TranslationError> {
+    ) -> Result<Self, CompileError> {
         Ok(match instruction {
             // liblouis' `_N` rewinds a single mutable cursor by N so a later test can peek at
             // already-consumed (or, at the end of a test, not-yet-consumed) text without that
@@ -73,13 +71,9 @@ impl Regexp {
             // correct, not a stand-in for a real implementation — hence `Empty`, not some
             // "unimplemented" marker.
             TestInstruction::Lookback { .. } => Regexp::Empty,
-            TestInstruction::Variable { var, op, operand } => match op {
-                Operator::Eq => Regexp::VariableEqual(*var, *operand),
-                // FIXME: operands other than equal do not seem to exist in the wild (at least not
-                // in the tables that are shipped with liblouis), so maybe that feature should be
-                // removed
-                _ => todo!(),
-            },
+            TestInstruction::Variable { var, op, operand } => {
+                Regexp::VariableCompare(*var, (*op).into(), *operand)
+            }
             TestInstruction::String { s } => Regexp::String(s.to_string()),
             TestInstruction::Dots { dots } => Regexp::String(dots.to_string()),
             TestInstruction::Attributes { attrs, quantifier } => {
@@ -128,11 +122,11 @@ impl Regexp {
         quantifier: &Option<Quantifier>,
         ctx: &CharacterClasses,
         swaps: &SwapClasses,
-    ) -> Result<Self, TranslationError> {
+    ) -> Result<Self, CompileError> {
         let characters = ctx
             .get(&CharacterClass::from(name))
             .or_else(|| swaps.get(name).map(|swapper| swapper.sources()))
-            .ok_or_else(|| TranslationError::ClassNotDefined(name.to_string()))?;
+            .ok_or_else(|| CompileError::ClassNotDefined(name.to_string()))?;
         Ok(Regexp::CharacterClass(characters).quantified(quantifier))
     }
 
@@ -175,14 +169,14 @@ impl TranslationTarget {
         value: ActionInstruction,
         ctx: &SwapClasses,
         capture_target: &TranslationTarget,
-    ) -> Result<Self, TranslationError> {
+    ) -> Result<Self, CompileError> {
         match value {
             ActionInstruction::String { s } => Ok(TranslationTarget::Literal(s)),
             ActionInstruction::Dots { dots } => Ok(TranslationTarget::Literal(dots.to_string())),
             ActionInstruction::SwapClass { name } => {
                 let swapper = ctx
                     .get(&name)
-                    .ok_or(TranslationError::SwapClassNotDefined(name))?;
+                    .ok_or(CompileError::SwapClassNotDefined(name))?;
                 Ok(TranslationTarget::Swap(swapper))
             }
             ActionInstruction::Replace => Ok(capture_target.clone()),
@@ -200,7 +194,7 @@ impl TranslationTargets {
         values: &[ActionInstruction],
         ctx: &SwapClasses,
         capture_target: &TranslationTarget,
-    ) -> Result<Vec<TranslationTarget>, TranslationError> {
+    ) -> Result<Vec<TranslationTarget>, CompileError> {
         values
             .iter()
             .cloned()
@@ -211,26 +205,29 @@ impl TranslationTargets {
     }
 }
 
-/// A sequence of [`Effect`]
-#[derive(Debug, Clone)]
-pub struct Effects(Vec<Effect>);
-
-impl Effects {
-    fn from_instructions(values: &[ActionInstruction]) -> Vec<Effect> {
-        values
-            .iter()
-            .cloned()
-            .flat_map(Effects::from_instruction)
-            .collect()
-    }
-
-    fn from_instruction(value: ActionInstruction) -> Option<Effect> {
-        if let ActionInstruction::Assignment { variable, value } = value {
-            Some(Effect::new(variable, value))
-        } else {
-            None
+impl From<Operator> for Comparison {
+    fn from(operator: Operator) -> Self {
+        match operator {
+            Operator::Eq => Comparison::Eq,
+            Operator::Lt => Comparison::Lt,
+            Operator::Gt => Comparison::Gt,
+            Operator::LtEq => Comparison::LtEq,
+            Operator::GtEq => Comparison::GtEq,
         }
     }
+}
+
+/// The effects of the instructions that change variables
+fn effects(instructions: &[ActionInstruction]) -> Vec<Effect> {
+    instructions
+        .iter()
+        .filter_map(|instruction| match *instruction {
+            ActionInstruction::Assignment { variable, value } => Some(Effect::new(variable, value)),
+            ActionInstruction::Increment { variable } => Some(Effect::increment(variable)),
+            ActionInstruction::Decrement { variable } => Some(Effect::decrement(variable)),
+            _ => None,
+        })
+        .collect()
 }
 
 #[derive(Debug)]
@@ -253,10 +250,10 @@ impl ContextPatternsBuilder {
         stage: TranslationStage,
         swap_classes: &SwapClasses,
         capture_target: &TranslationTarget,
-    ) -> Result<UnresolvedTranslation, TranslationError> {
+    ) -> Result<UnresolvedTranslation, CompileError> {
         let targets =
             TranslationTargets::from_instructions(&action.actions(), swap_classes, capture_target)?;
-        let effects = Effects::from_instructions(&action.actions());
+        let effects = effects(&action.actions());
         Ok(UnresolvedTranslation::new(
             &targets,
             stage,
@@ -279,7 +276,7 @@ impl ContextPatternsBuilder {
         stage: TranslationStage,
         ctx: &TableContext,
         capture_target: &TranslationTarget,
-    ) -> Result<(), TranslationError> {
+    ) -> Result<(), CompileError> {
         let translation = Translation::Unresolved(self.translation(
             action,
             origin,

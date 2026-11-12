@@ -1,3 +1,5 @@
+# Before `cargo release <level>`, run `cargo semver-checks -p louis-rs` to pick the level:
+# if it reports breaking ("major") changes, a 0.x release has to be `minor`, not `patch`.
 pre-release-replacements = [
   {file="CHANGELOG.md", search="Unreleased", replace="{{version}}"},
   {file="CHANGELOG.md", search="\\.\\.\\.HEAD", replace="...{{tag_name}}", exactly=1},
