@@ -178,17 +178,18 @@ It was replaced by ~check-table~, which does what liblouis's
 - The API-review findings below are separate work and are not part of
   the split.
 
-** Related API-review findings (do alongside or after the split)
+** Related API-review findings (do alongside or after the split) [15/15]
 
 From the same review. Most of these become easier once the public
-surface is explicit. Done on [2026-11-11 Wed] unless marked open:
+surface is explicit. The first nine were done on [2026-11-11 Wed], the
+rest in a second pass on [2026-11-12 Thu].
 
-- ~backwards_compatibility~ is a non-additive default feature (it changes
-  rule selection). It should be a runtime option. /Done:/ deleted
-  instead; louis-rs always behaves like liblouis (first definition
-  wins). A ~base~ rule whose base character is not defined in either
-  direction is a ~CompileError~, not ignored as in liblouis.
-- ~parser::TableError~, ~parser::ParseError~ and
+- [X] ~backwards_compatibility~ is a non-additive default feature (it
+  changes rule selection). It should be a runtime option. /Done:/
+  deleted instead; louis-rs always behaves like liblouis (first
+  definition wins). A ~base~ rule whose base character is not defined
+  in either direction is a ~CompileError~, not ignored as in liblouis.
+- [X] ~parser::TableError~, ~parser::ParseError~ and
   ~translator::TranslationError~ are pub-in-private: users can see them
   but can't name them. Re-export them, and rename the two
   ~TranslationError~ types (e.g. a top-level ~Error~). /Done:/ the
@@ -198,37 +199,54 @@ surface is explicit. Done on [2026-11-11 Wed] unless marked open:
   ~TableError~ carries an opaque ~SyntaxError~ (a message, no
   variants). ~translate~ and ~translate_with_options~ cannot fail and
   no longer return a ~Result~.
-- Add ~#[non_exhaustive]~ to the public enums and to ~TranslationResult~.
-  /Done/, except ~Direction~, which will only ever have two.
-  ~TranslationResult~ and ~EmphasisSpan~ later got private fields with
-  getters instead [2026-11-12 Thu], which also leaves room to add fields.
-- ~TranslationResult~: ~emphasis~ is always ~None~, and the position
-  vectors are always ~Some~. /Done:/ the positions are plain ~Vec~s;
-  ~emphasis~ stays, documented as not implemented.
-- Document that positions and ~cursor_pos~ are char indices, not bytes.
-  Add ~# Errors~ sections, and fill in the ~-W missing_docs~ gaps (~30
-  items). /Done/ for the public API; the remaining gaps are in
-  ~internals~.
-- ~TranslationModes~: add ~PartialEq~ / ~Eq~ / ~BitOr~ / ~FromIterator~.
-  ~CompbrlAtCursor~ / ~CompbrlLeftCursor~ are accepted but silently
-  ignored. /Done/ (~PartialEq~, ~Eq~, ~FromIterator~). Only
-  ~NoUndefined~ is implemented; the other modes are documented as
+- [X] Add ~#[non_exhaustive]~ to the public enums and to
+  ~TranslationResult~. /Done/, except ~Direction~, which will only ever
+  have two. ~TranslationResult~ later got private fields instead (see
+  below), which also leaves room to add fields.
+- [X] ~TranslationResult~: ~emphasis~ is always ~None~, and the
+  position vectors are always ~Some~. /Done:/ the positions are no
+  longer ~Option~s. ~emphasis~ was first documented as not implemented;
+  since [2026-11-12 Thu] it holds the typeform of a back-translation.
+- [X] Document that positions and ~cursor_pos~ are char indices, not
+  bytes. Add ~# Errors~ sections, and fill in the ~-W missing_docs~
+  gaps (~30 items). /Done/ for the public API; the remaining gaps are
+  in ~internals~.
+- [X] ~TranslationModes~: add ~PartialEq~ / ~Eq~ / ~BitOr~ /
+  ~FromIterator~. ~CompbrlAtCursor~ / ~CompbrlLeftCursor~ are accepted
+  but silently ignored. /Done/ (~PartialEq~, ~Eq~, ~FromIterator~).
+  Only ~NoUndefined~ is implemented; the other modes are documented as
   ignored.
-- ~TranslationMode~ and ~Direction~ derive enumset's ~EnumSetType~,
+- [X] ~TranslationMode~ and ~Direction~ derive enumset's ~EnumSetType~,
   which gives them a ~|~ that returns an ~enumset::EnumSet~. That puts
   enumset in the public API, so a major enumset release would be a
-  breaking change for us. /Done/ [2026-11-12 Thu]: both derive it
-  with ~#[enumset(no_ops)]~, so neither has the ~|~; a set of modes is
-  built with ~insert~ or ~collect~. ~EnumSetType~ stays implemented, a
-  small, deliberate leak: enumset 1.x is stable, and the sets inside
-  louis-rs and the CLI keep using it.
-- Add a static assertion that ~Translator: Send + Sync~ (true today),
-  and run ~cargo-semver-checks~ in CI once the API is declared stable.
-  /Done/ (the assertion, as a unit test like the API guidelines'
-  C-SEND-SYNC). No semver checks in CI: on main they would fail
-  between releases whenever it has breaking changes. Instead,
+  breaking change for us. /Done:/ both derive it with
+  ~#[enumset(no_ops)]~, so neither has the ~|~; a set of modes is built
+  with ~insert~ or ~collect~. ~EnumSetType~ stays implemented, a small,
+  deliberate leak: enumset 1.x is stable, and the sets inside louis-rs
+  keep using it.
+- [X] Add a static assertion that ~Translator: Send + Sync~ (true
+  today), and run ~cargo-semver-checks~ in CI once the API is declared
+  stable. /Done/ (the assertion, as a unit test like the API
+  guidelines' C-SEND-SYNC). No semver checks in CI: on main they would
+  fail between releases whenever it has breaking changes. Instead,
   ~release.toml~ says to run ~cargo semver-checks~ before picking the
   release level.
+- [X] The typeform as a type: an ~Emphasis~ holds a text's
+  ~EmphasisSpan~s in one order, merged, so that two compare equal when
+  they emphasize the same; ~with_emphasis~ takes one and the result
+  returns one.
+- [X] No public fields: ~TranslationResult~ and ~EmphasisSpan~ have
+  private fields with getters, which the crate uses too.
+- [X] Names: ~MetadataError~ (not ~MetaDataError~) with ~Io~ (not
+  ~IoError~), and ~TableError::Syntax~ (not ~ParseError~).
+- [X] ~Translator::with_search_path~ and ~Index::with_search_path~ take
+  any list of paths, not only a ~Vec<PathBuf>~.
+- [X] ~Index::find~ borrows the ~Query~.
+- [X] Common traits: ~TranslationResult~ is ~Clone~, ~PartialEq~ and
+  ~Eq~, ~TranslationOptions~ ~PartialEq~ and ~Eq~, ~Index~ ~Clone~; a
+  ~Query~ is parsed with ~FromStr~.
+- [X] Error messages follow the Rust convention: lowercase, no trailing
+  full stop.
 
 ** Links
 
