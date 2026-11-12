@@ -52,6 +52,8 @@ impl Transformation {
 pub struct TranslationPipeline {
     steps: Vec<Transformation>,
     direction: Direction,
+    /// The `emphclass` names, in the order the rules declare them
+    emphasis_classes: Vec<String>,
 }
 
 impl TranslationPipeline {
@@ -124,13 +126,27 @@ impl TranslationPipeline {
                 MultipassTable::compile(&pass4_rules, direction, TranslationStage::Post3, &ctx)?;
             steps.push(Transformation::Post(transform));
         }
-        match direction {
-            Direction::Forward => Ok(Self { steps, direction }),
-            Direction::Backward => Ok(Self {
-                steps: steps.into_iter().rev().collect(),
-                direction,
-            }),
+        let mut emphasis_classes: Vec<String> = Vec::new();
+        for rule in rules {
+            if let Rule::Emphclass { name } = &rule.rule
+                && !emphasis_classes.contains(name)
+            {
+                emphasis_classes.push(name.clone());
+            }
         }
+        let steps = match direction {
+            Direction::Forward => steps,
+            Direction::Backward => steps.into_iter().rev().collect(),
+        };
+        Ok(Self {
+            steps,
+            direction,
+            emphasis_classes,
+        })
+    }
+
+    pub fn emphasis_classes(&self) -> &[String] {
+        &self.emphasis_classes
     }
 
     /// Add `display` as the outermost stage, mapping the braille side of the pipeline.

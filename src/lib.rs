@@ -243,6 +243,12 @@ impl Translator {
         Self(self.0.with_display(encoding.compile(direction)))
     }
 
+    /// The emphasis classes the tables declare with `emphclass`, such as `italic` or
+    /// `bold`, in the order they declare them: the classes an [`EmphasisSpan`] can name.
+    pub fn emphasis_classes(&self) -> impl Iterator<Item = &str> {
+        self.0.emphasis_classes().iter().map(String::as_str)
+    }
+
     /// Translate `input`.
     pub fn translate(&self, input: &str) -> String {
         self.0.translate(input)
@@ -255,7 +261,9 @@ impl Translator {
         options: &TranslationOptions,
     ) -> TranslationResult {
         let (output, positions, emphasis) = self.0.translate_with_details(input, options);
-        let cursor_position = options.cursor_position().map(|cursor| positions.cursor(cursor));
+        let cursor_position = options
+            .cursor_position()
+            .map(|cursor| positions.cursor(cursor));
         let (output_positions, input_positions) = positions.into_parts();
         TranslationResult {
             output,
@@ -370,6 +378,16 @@ mod tests {
     }
 
     #[test]
+    fn a_translator_lists_its_emphasis_classes() {
+        let table = "emphclass italic\nemphclass bold\nemphclass italic\nletter a 1\n";
+        let translator = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(
+            translator.emphasis_classes().collect::<Vec<_>>(),
+            ["italic", "bold"]
+        );
+    }
+
+    #[test]
     fn a_table_error_says_what_and_where() {
         let error =
             Translator::from_table_source("letter a 1\nfoo b 2\nbar c 3\n", Direction::Forward)
@@ -444,8 +462,10 @@ mod tests {
     #[test]
     fn positions_with_number_sign() {
         let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
-        let result = translator
-            .translate_with_options("a 42", &TranslationOptions::default().with_cursor_position(2));
+        let result = translator.translate_with_options(
+            "a 42",
+            &TranslationOptions::default().with_cursor_position(2),
+        );
         assert_eq!(result.output(), "⠁⠀⠼⠙⠃");
         assert_eq!(result.output_positions(), [0, 1, 2, 4]);
         assert_eq!(result.input_positions(), [0, 1, 2, 2, 3]);
@@ -455,8 +475,10 @@ mod tests {
     #[test]
     fn cursor_past_the_end_maps_to_the_output_length() {
         let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
-        let result = translator
-            .translate_with_options("a 42", &TranslationOptions::default().with_cursor_position(4));
+        let result = translator.translate_with_options(
+            "a 42",
+            &TranslationOptions::default().with_cursor_position(4),
+        );
         assert_eq!(result.cursor_position(), Some(5));
     }
 
@@ -472,8 +494,8 @@ mod tests {
     fn positions_with_capital_sign() {
         let table = "lowercase h 125\nlowercase i 24\nbase uppercase H h\ncapsletter 6\n";
         let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
-        let result =
-            forward.translate_with_options("Hi", &TranslationOptions::default().with_cursor_position(0));
+        let result = forward
+            .translate_with_options("Hi", &TranslationOptions::default().with_cursor_position(0));
         assert_eq!(result.output(), "⠠⠓⠊");
         assert_eq!(result.output_positions(), [0, 2]);
         assert_eq!(result.input_positions(), [0, 0, 1]);

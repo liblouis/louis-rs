@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `from_table_source`), e.g. `en-us-brf.dis`.
 - `louis translate` and `louis trace` call their `--display` option
   `--braille-encoding`; `--display` still works.
+- `Translator::emphasis_classes` lists the emphasis classes the tables
+  declare, the names an `EmphasisSpan` can use, like liblouis's
+  `lou_getEmphClasses`.
 
 ### Changed
 - louis-rs is in beta: translation matches liblouis closely, and the
