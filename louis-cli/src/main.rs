@@ -196,7 +196,7 @@ fn display_rule(rule: &Option<AnchoredRule>) -> String {
     }
 }
 
-fn print_trace(all_translations: &Vec<Vec<ResolvedTranslation>>, style: &TraceStyle) {
+fn print_trace(all_translations: &[Vec<ResolvedTranslation>], style: &TraceStyle) {
     let mut traces: Vec<Trace> = Vec::new();
     for (id, translation) in all_translations
         .iter()

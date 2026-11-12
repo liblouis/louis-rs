@@ -326,12 +326,12 @@ impl PunctuationConstrainer {
             // prepunc: not immediately preceded by a letter, then scan forward (past
             // any further punctuation) for a letter/digit before hitting whitespace.
             if pos == 0 || !self.letter_chars.contains(&chars[pos - 1]) {
-                for k in pos + 1..n {
-                    if self.letter_or_digit_chars.contains(&chars[k]) {
+                for c in &chars[pos + 1..] {
+                    if self.letter_or_digit_chars.contains(c) {
                         constraints[pos].insert(Constraint::PrepuncOk);
                         break;
                     }
-                    if self.space_chars.contains(&chars[k]) {
+                    if self.space_chars.contains(c) {
                         break;
                     }
                 }
@@ -526,8 +526,8 @@ impl ComputerBrailleConstrainer {
         for span in spans {
             if span.class() == "computer_braille" {
                 let end = span.range().end.min(n);
-                for pos in span.range().start..end {
-                    constraints[pos].insert(Constraint::UseComp6);
+                for c in constraints.iter_mut().take(end).skip(span.range().start) {
+                    c.insert(Constraint::UseComp6);
                 }
             }
         }

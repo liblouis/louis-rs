@@ -25,7 +25,7 @@ impl Action {
     pub fn consumes_whole_match(&self) -> bool {
         self.actions
             .iter()
-            .any(|t| matches!(t, ActionInstruction::Replace { .. }))
+            .any(|t| matches!(t, ActionInstruction::Replace))
     }
 }
 

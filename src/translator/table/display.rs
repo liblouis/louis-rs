@@ -35,25 +35,24 @@ impl DisplayTable {
         let mut mappings = HashMap::new();
         let rules: Vec<_> = rules.iter().filter(|r| r.is_direction(direction)).collect();
 
+        // a display table only takes the `display` rules
         for rule in rules {
-            match &rule.rule {
-                Rule::Display {
-                    character, dots, ..
-                } => {
-                    let braille = dots.to_unicode();
-                    // swap `from` and `to` for backwards translation
-                    let (from, to) = match direction {
-                        Direction::Forward => (braille, *character),
-                        Direction::Backward => (*character, braille),
-                    };
-                    let mapping = DisplayMapping {
-                        to,
-                        origin: rule.clone(),
-                    };
-                    // first rule wins, as in liblouis
-                    mappings.entry(from).or_insert(mapping);
-                }
-                _ => (), // ignore all other rules for display tables
+            if let Rule::Display {
+                character, dots, ..
+            } = &rule.rule
+            {
+                let braille = dots.to_unicode();
+                // swap `from` and `to` for backwards translation
+                let (from, to) = match direction {
+                    Direction::Forward => (braille, *character),
+                    Direction::Backward => (*character, braille),
+                };
+                let mapping = DisplayMapping {
+                    to,
+                    origin: rule.clone(),
+                };
+                // first rule wins, as in liblouis
+                mappings.entry(from).or_insert(mapping);
             }
         }
         DisplayTable { mappings }
