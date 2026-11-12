@@ -1194,7 +1194,11 @@ impl PrimaryTable {
                     derived,
                     base,
                 } => {
-                    if let Some(translation) = ctx.character_definitions().get(base).cloned() {
+                    if let Some(translation) = ctx
+                        .character_definitions()
+                        .derive(*derived, *base, rule.definition_order())
+                        .cloned()
+                    {
                         // Backward, as in liblouis, the derived character has no dots of
                         // its own: the dots give the base, which a capital sign uppercases.
                         match direction {
@@ -1214,8 +1218,10 @@ impl PrimaryTable {
                             Direction::Backward => {}
                         }
                     }
-                    // no definition of the base character for this direction (`noback`, `nofor`), so
-                    // nothing to derive; `TranslationPipeline::compile` rejects one with none at all
+                    // nothing to derive if the base character has no definition for this
+                    // direction (`noback`, `nofor`; `TranslationPipeline::compile` rejects one
+                    // with none at all), or the derived one has its own, see
+                    // `CharacterDefinition::derive`
                 }
                 Rule::Comp6 { character, dots } => {
                     let character = character.to_string();

@@ -225,6 +225,14 @@ mod tests {
     }
 
     #[test]
+    fn a_base_rule_after_a_definition_with_other_dots_is_ignored() {
+        // as in liblouis: the sign keeps its dots, and gets no capital sign
+        let table = "lowercase o 135\nsign O 3456\ncapsletter 46\nbase uppercase O o\n";
+        let translator = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(translator.translate("Oo"), "⠼⠕");
+    }
+
+    #[test]
     fn translator_from_table_source_rejects_include() {
         let error =
             Translator::from_table_source("include en-us-g1.ctb", Direction::Forward).unwrap_err();

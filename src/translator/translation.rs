@@ -511,8 +511,8 @@ mod tests {
     #[test]
     fn resolve_translate_capture() {
         let mut definitions = CharacterDefinition::new();
-        definitions.insert('a', "⠁");
-        definitions.insert('b', "⠃");
+        definitions.insert('a', "⠁", 0);
+        definitions.insert('b', "⠃", 1);
 
         let resolved = TranslationTarget::TranslateCapture.resolve("abc", &definitions);
         // `c` has no definition and stays as it is

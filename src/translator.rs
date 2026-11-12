@@ -52,30 +52,42 @@ pub enum CompileError {
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct CharacterDefinition(HashMap<char, String>);
+/// The dots of each character, and the definition order of the rule that defined it
+pub struct CharacterDefinition(HashMap<char, (String, usize)>);
 
 impl CharacterDefinition {
     fn new() -> Self {
         Self(HashMap::new())
     }
 
-    fn insert(&mut self, from: char, to: &str) {
+    fn insert(&mut self, from: char, to: &str, order: usize) {
         // first rule wins, as in liblouis
-        self.0.entry(from).or_insert(to.to_string());
+        self.0.entry(from).or_insert((to.to_string(), order));
     }
 
     pub fn get(&self, from: &char) -> Option<&String> {
-        self.0.get(from)
+        self.0.get(from).map(|(dots, _)| dots)
+    }
+
+    /// The dots that the `base` rule at definition `order` gives `derived`: those of
+    /// `base`. As in liblouis, the rule is ignored if `derived` was defined before it
+    /// with other dots.
+    pub fn derive(&self, derived: char, base: char, order: usize) -> Option<&String> {
+        let dots = self.get(&base)?;
+        match self.0.get(&derived) {
+            Some((own, defined_at)) if *defined_at < order && own != dots => None,
+            _ => Some(dots),
+        }
     }
 
     /// The dots of every definition.
     pub fn dots(&self) -> impl Iterator<Item = &str> {
-        self.0.values().map(String::as_str)
+        self.0.values().map(|(dots, _)| dots.as_str())
     }
 
     /// Whether some character is defined with exactly these dots.
     pub fn defines_dots(&self, dots: &str) -> bool {
-        self.0.values().any(|d| d == dots)
+        self.0.values().any(|(d, _)| d == dots)
     }
 
     fn resolve_implicit_dots(&self, chars: &str) -> Result<String, CompileError> {
@@ -126,8 +138,8 @@ mod tests {
         let char_defs = CharacterDefinition::new();
         assert!(char_defs.resolve_implicit_dots("xs").is_err());
         let mut char_defs = CharacterDefinition::new();
-        char_defs.insert('a', "A");
-        char_defs.insert('h', "H");
+        char_defs.insert('a', "A", 0);
+        char_defs.insert('h', "H", 1);
         assert_eq!(char_defs.resolve_implicit_dots("haha").unwrap(), "HAHA");
     }
 }

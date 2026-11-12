@@ -58,47 +58,47 @@ impl TableContext {
         // through them, and also the letter dots class, because a boundary check in
         // backward translation asks whether a neighbouring *cell* is a letter and a
         // contraction's cell only qualifies via the rule that produced it.
-        for rule in rules {
+        for (order, rule) in rules.iter().enumerate() {
             match &rule.rule {
                 Rule::Space {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots.to_string());
+                    character_definitions.insert(*character, &dots.to_string(), order);
                     character_classes.insert(CharacterClass::Space, *character);
                     dots_classes.insert_dots(CharacterClass::Space, dots);
                 }
                 Rule::Punctuation {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots.to_string());
+                    character_definitions.insert(*character, &dots.to_string(), order);
                     character_classes.insert(CharacterClass::Punctuation, *character);
                     dots_classes.insert_dots(CharacterClass::Punctuation, dots);
                 }
                 Rule::Digit {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots.to_string());
+                    character_definitions.insert(*character, &dots.to_string(), order);
                     character_classes.insert(CharacterClass::Digit, *character);
                     dots_classes.insert_dots(CharacterClass::Digit, dots);
                 }
                 Rule::Litdigit {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots.to_string());
+                    character_definitions.insert(*character, &dots.to_string(), order);
                     character_classes.insert(CharacterClass::Litdigit, *character);
                     dots_classes.insert_dots(CharacterClass::Litdigit, dots);
                 }
                 Rule::Letter {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots.to_string());
+                    character_definitions.insert(*character, &dots.to_string(), order);
                     character_classes.insert(CharacterClass::Letter, *character);
                     dots_classes.insert_dots(CharacterClass::Letter, dots);
                 }
                 Rule::Lowercase {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots.to_string());
+                    character_definitions.insert(*character, &dots.to_string(), order);
                     character_classes.insert(CharacterClass::Lowercase, *character);
                     character_classes.insert(CharacterClass::Letter, *character);
                     dots_classes.insert_dots(CharacterClass::Lowercase, dots);
@@ -107,7 +107,7 @@ impl TableContext {
                 Rule::Uppercase {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots.to_string());
+                    character_definitions.insert(*character, &dots.to_string(), order);
                     character_classes.insert(CharacterClass::Uppercase, *character);
                     character_classes.insert(CharacterClass::Letter, *character);
                     dots_classes.insert_dots(CharacterClass::Uppercase, dots);
@@ -116,27 +116,27 @@ impl TableContext {
                 Rule::Sign {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots.to_string());
+                    character_definitions.insert(*character, &dots.to_string(), order);
                     character_classes.insert(CharacterClass::Sign, *character);
                     dots_classes.insert_dots(CharacterClass::Sign, dots);
                 }
                 Rule::Math {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots.to_string());
+                    character_definitions.insert(*character, &dots.to_string(), order);
                     character_classes.insert(CharacterClass::Math, *character);
                     dots_classes.insert_dots(CharacterClass::Math, dots);
                 }
                 Rule::Hyphen {
                     character, dots, ..
                 } => {
-                    character_definitions.insert(*character, &dots.to_string());
+                    character_definitions.insert(*character, &dots.to_string(), order);
                     // FIXME: In what character class is the hyphen (if any)?
                     character_classes.insert(CharacterClass::Punctuation, *character);
                     dots_classes.insert_dots(CharacterClass::Punctuation, dots);
                 }
                 Rule::Decpoint { character, dots } => {
-                    character_definitions.insert(*character, &dots.to_string());
+                    character_definitions.insert(*character, &dots.to_string(), order);
                     // FIXME: In what character class is the decimal point (if any)?
                     character_classes.insert(CharacterClass::Punctuation, *character);
                     dots_classes.insert_dots(CharacterClass::Punctuation, dots);
@@ -145,15 +145,18 @@ impl TableContext {
             }
         }
         // go through the rules again with all the character_definitions sorted out
-        for rule in rules {
+        for (order, rule) in rules.iter().enumerate() {
             match &rule.rule {
                 Rule::Base {
                     derived,
                     base,
                     name,
                 } => {
-                    if let Some(translation) = character_definitions.get(base).cloned() {
-                        character_definitions.insert(*derived, &translation);
+                    if let Some(translation) = character_definitions
+                        .derive(*derived, *base, order)
+                        .cloned()
+                    {
+                        character_definitions.insert(*derived, &translation, order);
                         character_classes.insert(CharacterClass::from(name.as_str()), *derived);
                         // liblouis also gives a single-cell base's dots the derived
                         // class, so with `base uppercase A a` a pass rule's `$U` matches
@@ -174,8 +177,10 @@ impl TableContext {
                             );
                         }
                     }
-                    // no definition of the base character for this direction (`noback`, `nofor`), so
-                    // nothing to derive; `TranslationPipeline::compile` rejects one with none at all
+                    // nothing to derive if the base character has no definition for this
+                    // direction (`noback`, `nofor`; `TranslationPipeline::compile` rejects one
+                    // with none at all), or the derived one has its own, see
+                    // `CharacterDefinition::derive`
                 }
                 Rule::Attribute { name, chars } => {
                     let class = CharacterClass::from(name.as_str());

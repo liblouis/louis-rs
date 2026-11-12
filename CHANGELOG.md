@@ -48,6 +48,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `lou_checktable`. It prints "No errors found." unless given `--quiet`.
   The rule dump and the rule-parsing REPL are gone.
 
+### Fixed
+- A `base` rule for a character that an earlier rule already defined
+  with other dots is ignored, as in liblouis. Before, the character kept
+  its dots but still got the rule's class, so `Ø` in `fr-bfu-comp6.utb`
+  (a `sign`) got a capital sign.
+
 ## [0.3.1] - 2026-11-11
 
 ### Changed
