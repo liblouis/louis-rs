@@ -136,7 +136,6 @@ library's.
 Tests use YAML files from the liblouis project. Current gaps:
 - Emphasis indication (partial support)
 - Some backward translation rules
-- Computer braille cursor modes (`compbrlAtCursor`/`compbrlLeftCursor` not implemented)
 
 See `TODO.org` for detailed tracking.
 
@@ -152,7 +151,7 @@ See `TODO.org` for detailed tracking.
 - Emphasis indication not fully implemented
 - nocross-driven hyphenation dictionary lookup works natively (`src/hyphenation.rs`)
 - Some backward translation modes missing
-- Computer braille is implemented as a full pipeline feature; only `compbrlAtCursor`/`compbrlLeftCursor` modes are missing
+- Computer braille is implemented as a full pipeline feature, including the cursor modes `compbrlAtCursor`/`compbrlLeftCursor`
 
 ## Relevant Files for Common Tasks
 

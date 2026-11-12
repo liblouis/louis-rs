@@ -90,6 +90,13 @@ pub type Constraints = EnumSet<Constraint>;
 pub struct PositionConstraints(Vec<Constraints>);
 
 impl PositionConstraints {
+    /// Translate the characters in `range` as computer braille.
+    pub fn use_comp6_in(&mut self, range: std::ops::Range<usize>) {
+        for constraints in self.0.iter_mut().take(range.end).skip(range.start) {
+            constraints.insert(Constraint::UseComp6);
+        }
+    }
+
     #[cfg(test)]
     pub fn empty() -> Self {
         Self(Vec::new())

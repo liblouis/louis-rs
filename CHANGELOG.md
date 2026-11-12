@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   middle of a word, such as the cells typed so far, no word is taken to
   end, so rules for whole words or word ends don't apply, as in
   liblouis (#19).
+- The `compbrlAtCursor` and `compbrlLeftCursor` modes: with a cursor
+  position, the word at the cursor, or its part before the cursor, is
+  shown uncontracted in computer braille, without `begcomp` and
+  `endcomp`, as in liblouis (#20).
 
 ### Changed
 - louis-rs is in beta: translation matches liblouis closely, and the

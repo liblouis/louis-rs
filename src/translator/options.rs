@@ -20,13 +20,14 @@ pub enum TranslationMode {
     /// Translate without contractions (liblouis's `noContractions`). Not implemented yet:
     /// ignored.
     NoContractions,
-    /// Translate the word at the cursor in computer braille. Not implemented yet: ignored.
+    /// Show the word at the cursor uncontracted, in computer braille without `begcomp` and
+    /// `endcomp` (`compbrlAtCursor`). Needs a cursor position; backward: ignored.
     CompbrlAtCursor,
     /// Read and write braille as dot patterns rather than characters (`dotsIO`). Not
     /// implemented yet: ignored.
     DotsIo,
-    /// Translate from the cursor to the end of the word in computer braille. Not
-    /// implemented yet: ignored.
+    /// Like [`CompbrlAtCursor`](Self::CompbrlAtCursor), but only the part of the word
+    /// before the cursor (`compbrlLeftCursor`).
     CompbrlLeftCursor,
     /// Write computer braille with uppercase letters (`ucBrl`). Not implemented yet: ignored.
     UcBrl,

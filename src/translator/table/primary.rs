@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Range,
+};
 
 use log::warn;
 
@@ -57,6 +60,57 @@ fn unknown_hex(ch: char) -> String {
 /// dots. Returns `None` for a character that is not a braille cell.
 fn unknown_dots(ch: char) -> Option<String> {
     BrailleChar::from_unicode(ch).map(|cell| format!("\\{}/", cell.dot_numbers()))
+}
+
+/// Finds the word at the cursor to show uncontracted, in computer braille, with
+/// `compbrlAtCursor` or `compbrlLeftCursor`, as liblouis does: the word the cursor is in, up
+/// to the next space, or only up to the cursor with `compbrlLeftCursor`; the space itself if
+/// the cursor is on one.
+#[derive(Debug)]
+struct CursorWordScanner {
+    character_classes: CharacterClasses,
+}
+
+impl CursorWordScanner {
+    fn scan(&self, input: &str, options: &TranslationOptions) -> Option<Range<usize>> {
+        let modes = options.modes();
+        let left = modes.contains(TranslationMode::CompbrlLeftCursor);
+        if !(left || modes.contains(TranslationMode::CompbrlAtCursor)) {
+            return None;
+        }
+        let cursor = options.cursor_position()?;
+        let chars: Vec<char> = input.chars().collect();
+        if cursor > chars.len() {
+            return None;
+        }
+        let is_space = |c: &char| self.character_classes.is_whitespace(*c);
+        if chars.get(cursor).is_some_and(is_space) {
+            return Some(cursor..cursor + 1);
+        }
+        let start = chars[..cursor]
+            .iter()
+            .rposition(is_space)
+            .map_or(0, |p| p + 1);
+        let end = if left {
+            cursor
+        } else {
+            chars[cursor..]
+                .iter()
+                .position(is_space)
+                .map_or(chars.len(), |p| cursor + p)
+        };
+        Some(start..end)
+    }
+
+    /// Whether the characters of `input` in `range` are all spaces, as between a
+    /// `joinword` and the word at the cursor it would join
+    fn only_spaces(&self, input: &str, range: Range<usize>) -> bool {
+        input
+            .chars()
+            .skip(range.start)
+            .take(range.len())
+            .all(|c| self.character_classes.is_whitespace(c))
+    }
 }
 
 /// Detects compbrl-triggered computer braille regions and adds `computer_braille` spans.
@@ -154,6 +208,8 @@ pub struct PrimaryTable {
     constrainers: Constrainers,
     /// Detects compbrl-triggered computer braille regions.
     compbrl_scanner: Option<CompbrlScanner>,
+    /// Forward, finds the word at the cursor (`compbrlAtCursor`)
+    cursor_word_scanner: Option<CursorWordScanner>,
     direction: Direction,
     /// Backward-only: overrides the trie's default (letter) reading for a braille cell
     /// that is shared between a digit and a letter, keyed by the cell itself. Consulted
@@ -531,6 +587,9 @@ impl PrimaryTableBuilder {
             ),
             compbrl_scanner: (!triggers.is_empty()).then(|| CompbrlScanner {
                 triggers,
+                character_classes: ctx.character_classes.clone(),
+            }),
+            cursor_word_scanner: (direction == Direction::Forward).then(|| CursorWordScanner {
                 character_classes: ctx.character_classes.clone(),
             }),
             backward_digit_overrides: self.backward_digit_overrides,
@@ -2200,11 +2259,23 @@ impl PrimaryTable {
         };
 
         let indications = self.indicators.precompute(input, &enriched_spans);
-        let constraints = self.constrainers.precompute(input, &enriched_spans);
+        let mut constraints = self.constrainers.precompute(input, &enriched_spans);
+        // the word at the cursor is computer braille, but without begcomp and endcomp
+        let cursor_word = self
+            .cursor_word_scanner
+            .as_ref()
+            .and_then(|scanner| scanner.scan(input, options));
+        if let Some(word) = &cursor_word {
+            constraints.use_comp6_in(word.clone());
+        }
+        let in_cursor_word = |pos: usize| cursor_word.as_ref().is_some_and(|w| w.contains(&pos));
 
         loop {
             if last_pos != Some(char_pos) {
-                translations.extend(indications.translations_at(char_pos));
+                // nor any other indicator in the word at the cursor
+                if !in_cursor_word(char_pos) {
+                    translations.extend(indications.translations_at(char_pos));
+                }
                 seen.clear();
                 last_pos = Some(char_pos);
             }
@@ -2231,6 +2302,12 @@ impl PrimaryTable {
                 .nocross_candidates(chars.as_str(), preceding, char_pos, &constraints, partial)
                 .into_iter()
                 .filter(|t| !(constraints.uncontracted_at(char_pos) && Self::contracts(t)))
+                // not in or into the word at the cursor, which is computer braille
+                .filter(|t| {
+                    cursor_word
+                        .as_ref()
+                        .is_none_or(|w| char_pos + t.length() <= w.start || char_pos >= w.end)
+                })
                 .max_by_key(|t| t.rank(self.direction));
 
             // given an input query the trie for matching translations. Then split off the
@@ -2359,6 +2436,19 @@ impl PrimaryTable {
                         )
                     )
                 });
+            }
+
+            // No rule reaches into the word at the cursor, and none joins onto it
+            if let Some(word) = &cursor_word
+                && let Some(scanner) = &self.cursor_word_scanner
+                && char_pos < word.start
+            {
+                let before_word = |t: &ResolvedTranslation| char_pos + t.length() <= word.start;
+                let joins_word = |t: &ResolvedTranslation| {
+                    matches!(t.rule(), Some(Rule::Joinword { .. } | Rule::Joinnum { .. }))
+                        && scanner.only_spaces(input, char_pos + t.length()..word.start)
+                };
+                candidates.retain(|t| before_word(t) && !joins_word(t));
             }
 
             // In computer braille mode, discard normal candidates and use comp6 rules only.

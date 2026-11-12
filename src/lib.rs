@@ -409,6 +409,29 @@ mod tests {
     }
 
     #[test]
+    fn the_word_at_the_cursor_is_computer_braille() {
+        let table = "space \\s 0\nlowercase a 1\nlowercase b 12\nlowercase c 14\n\
+                     always abc 123456\ncomp6 a 2\ncomp6 b 23\ncomp6 c 25\n\
+                     begcomp 456-346\nendcomp 456-156\n";
+        let translator = Translator::from_table_source(table, Direction::Forward).unwrap();
+        let translate = |mode, cursor| {
+            let options = TranslationOptions::default()
+                .with_modes([mode].into_iter().collect())
+                .with_cursor_position(cursor);
+            translator
+                .translate_with_options("abc abc abc", &options)
+                .output()
+                .to_string()
+        };
+        // the whole word at the cursor, without begcomp and endcomp
+        assert_eq!(translate(TranslationMode::CompbrlAtCursor, 5), "⠿⠀⠂⠆⠒⠀⠿");
+        // only up to the cursor
+        assert_eq!(translate(TranslationMode::CompbrlLeftCursor, 6), "⠿⠀⠂⠆⠉⠀⠿");
+        // without the mode, the cursor changes nothing
+        assert_eq!(translate(TranslationMode::NoUndefined, 5), "⠿⠀⠿⠀⠿");
+    }
+
+    #[test]
     fn a_table_error_says_what_and_where() {
         let error =
             Translator::from_table_source("letter a 1\nfoo b 2\nbar c 3\n", Direction::Forward)
