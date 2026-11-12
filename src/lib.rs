@@ -388,6 +388,27 @@ mod tests {
     }
 
     #[test]
+    fn partial_input_has_no_word_end() {
+        let table = "space \\s 0\nlowercase a 1\nlowercase b 12\nlowercase y 13456\n\
+                     word about 1-12\njoinword by 356\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        let partial = TranslationOptions::default()
+            .with_modes([TranslationMode::PartialTrans].into_iter().collect());
+        let translate = |braille, options: &TranslationOptions| {
+            translator
+                .translate_with_options(braille, options)
+                .output()
+                .to_string()
+        };
+        // the input could still become a longer word, so `word about` doesn't apply
+        assert_eq!(translate("⠁⠃", &TranslationOptions::default()), "about");
+        assert_eq!(translate("⠁⠃", &partial), "ab");
+        // a `joinword` applies, and puts its space back only once a word follows
+        assert_eq!(translate("⠴", &partial), "by");
+        assert_eq!(translate("⠴⠁", &partial), "by a");
+    }
+
+    #[test]
     fn a_table_error_says_what_and_where() {
         let error =
             Translator::from_table_source("letter a 1\nfoo b 2\nbar c 3\n", Direction::Forward)

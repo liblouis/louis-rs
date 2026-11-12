@@ -2105,9 +2105,10 @@ impl PrimaryTable {
         &self,
         input: &str,
         preceding: &str,
+        partial: bool,
     ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
         self.trie
-            .find_translations(input, preceding)
+            .find_translations_partial(input, preceding, partial)
             .into_iter()
             .partition(|t| t.offset() == 0)
     }
@@ -2122,9 +2123,10 @@ impl PrimaryTable {
         preceding: &str,
         char_pos: usize,
         constraints: &PositionConstraints,
+        partial: bool,
     ) -> Vec<ResolvedTranslation> {
         self.nocross_trie
-            .find_translations(input, preceding)
+            .find_translations_partial(input, preceding, partial)
             .into_iter()
             .filter(|t| {
                 !(char_pos..char_pos + t.length().saturating_sub(1))
@@ -2169,6 +2171,9 @@ impl PrimaryTable {
     }
 
     pub fn trace(&self, input: &str, options: &TranslationOptions) -> Vec<ResolvedTranslation> {
+        // back-translating input that may end in the middle of a word (`partialTrans`)
+        let partial = self.direction == Direction::Backward
+            && options.modes().contains(TranslationMode::PartialTrans);
         let mut translations: Vec<ResolvedTranslation> = Vec::new();
         let mut delayed_translations: Vec<ResolvedTranslation> = Vec::new();
 
@@ -2223,14 +2228,36 @@ impl PrimaryTable {
 
             // First check for nocross candidates
             let nocross_candidate = self
-                .nocross_candidates(chars.as_str(), preceding, char_pos, &constraints)
+                .nocross_candidates(chars.as_str(), preceding, char_pos, &constraints, partial)
                 .into_iter()
                 .filter(|t| !(constraints.uncontracted_at(char_pos) && Self::contracts(t)))
                 .max_by_key(|t| t.rank(self.direction));
 
             // given an input query the trie for matching translations. Then split off the
             // translations that are delayed, i.e. have an offset because they have a pre-pattern
-            let (mut candidates, delayed) = self.translation_candidates(chars.as_str(), preceding);
+            let (mut candidates, delayed) =
+                self.translation_candidates(chars.as_str(), preceding, partial);
+            // nor do rules for whole words apply to a word that may go on
+            if partial {
+                candidates.retain(|t| {
+                    !matches!(t.rule(), Some(Rule::Word { .. } | Rule::Lowword { .. }))
+                });
+                // a `joinword` puts back the space before the word it joins, which hasn't
+                // been typed yet at the end of the input
+                let remaining = chars.as_str().chars().count();
+                candidates = candidates
+                    .into_iter()
+                    .map(|t| match t.rule() {
+                        Some(Rule::Joinword { .. } | Rule::Joinnum { .. })
+                            if t.length() == remaining =>
+                        {
+                            let output = t.output();
+                            t.with_output(output.trim_end_matches(' '))
+                        }
+                        _ => t,
+                    })
+                    .collect();
+            }
             delayed_translations.extend(delayed);
 
             // then the match patterns, which all match at the cursor: `pre` is checked

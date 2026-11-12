@@ -32,7 +32,9 @@ pub enum TranslationMode {
     UcBrl,
     /// Drop characters the tables don't define rather than writing them out (`noUndefined`)
     NoUndefined,
-    /// Translate a partial input (`partialTrans`). Not implemented yet: ignored.
+    /// Back-translate input that may end in the middle of a word, such as braille typed so
+    /// far (`partialTrans`): no word is taken to end, so rules for whole words or word
+    /// ends don't apply, and rules for a word that goes on do. Forward: ignored.
     PartialTrans,
 }
 

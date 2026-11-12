@@ -108,9 +108,7 @@ Honest list, no dates attached:
 - **No C ABI and no bindings.** Rust consumers only, for now. PyO3 bindings are
   proposed in [#1](https://github.com/liblouis/louis-rs/issues/1) /
   [PR #12](https://github.com/liblouis/louis-rs/pull/12).
-- **Two screen-reader modes are missing**: `partialTrans`
-  ([#19](https://github.com/liblouis/louis-rs/issues/19)) and
-  `compbrlAtCursor`/`compbrlLeftCursor`
+- **A screen-reader mode is missing**: `compbrlAtCursor`/`compbrlLeftCursor`
   ([#20](https://github.com/liblouis/louis-rs/issues/20)). The option flags are
   accepted; nothing reads them yet.
 - **Nothing reports whether a back-translation result could still change if more
@@ -179,7 +177,6 @@ nothing at all, and `de-eurobrl6.yaml`, `hu-hu-g1-hyph_harness.yaml` and
 
 | Capability                                                                                      | Status                                                                                                                                                    | Size   |
 |-------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------|--------|
-| `partialTrans` ([#19](https://github.com/liblouis/louis-rs/issues/19))                          | Flag accepted, nothing reads it. A screen reader sets it on every keystroke of contracted input; without it, word-final rules fire on an unfinished word. | M      |
 | `compbrlAtCursor` / `compbrlLeftCursor` ([#20](https://github.com/liblouis/louis-rs/issues/20)) | Flags accepted, nothing reads them. Computer-braille rendering already works, so this is cursor plumbing.                                                 | M      |
 | Back-translation finality ([#29](https://github.com/liblouis/louis-rs/issues/29))               | Nothing says whether more cells could change the characters already produced.                                                                             | M      |
 | `hyphenate`, `charToDots`, `dotsToChar`                                                         | Deliberately waiting for a user; the conversions will go on `BrailleEncoding`, `hyphenate` with a formatter ([ADR-0022](adr/0022-hyphenate-chartodots-dotstochar.org)). | S each |

@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `Translator::emphasis_classes` lists the emphasis classes the tables
   declare, the names an `EmphasisSpan` can use, like liblouis's
   `lou_getEmphClasses`.
+- The `partialTrans` mode: back-translating braille that may end in the
+  middle of a word, such as the cells typed so far, no word is taken to
+  end, so rules for whole words or word ends don't apply, as in
+  liblouis (#19).
 
 ### Changed
 - louis-rs is in beta: translation matches liblouis closely, and the

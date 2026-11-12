@@ -356,6 +356,7 @@ impl Trie {
         input: &str,
         preceding: &str,
         node: &TrieNode,
+        partial: bool,
     ) -> Vec<ResolvedTranslation> {
         let mut matching_rules = Vec::new();
         let mut chars = input.chars();
@@ -372,6 +373,7 @@ impl Trie {
                     &input[bytes..],
                     preceding,
                     node,
+                    partial,
                 ));
             }
         }
@@ -384,8 +386,9 @@ impl Trie {
                 }
                 ResolvedTransition::End(resolved) => resolved.matches(c),
                 ResolvedTransition::BegWord => self.beg_word.is_beg_word(preceding),
-                ResolvedTransition::EndWord => self.end_word.is_end_word(input),
-                ResolvedTransition::ContinuesWord => !self.end_word.is_end_word(input),
+                // in a partial input no word ends: it may go on (`partialTrans`)
+                ResolvedTransition::EndWord => !partial && self.end_word.is_end_word(input),
+                ResolvedTransition::ContinuesWord => partial || !self.end_word.is_end_word(input),
                 ResolvedTransition::StandsAloneBefore => {
                     self.standing_alone.stands_alone_before(preceding)
                 }
@@ -396,8 +399,9 @@ impl Trie {
                 ResolvedTransition::Character(_) => false,
             };
             if context_matches {
-                matching_rules
-                    .extend(self.find_translations_from_node(input, preceding, child_node));
+                matching_rules.extend(
+                    self.find_translations_from_node(input, preceding, child_node, partial),
+                );
             }
         }
         matching_rules
@@ -406,7 +410,19 @@ impl Trie {
     /// The rules that match at the start of `input`, given the `preceding` text: the input
     /// already consumed forward, the output already produced backward.
     pub fn find_translations(&self, input: &str, preceding: &str) -> Vec<ResolvedTranslation> {
-        self.find_translations_from_node(input, preceding, &self.root)
+        self.find_translations_from_node(input, preceding, &self.root, false)
+    }
+
+    /// Like [`Self::find_translations`], but when `partial`, the input may end in the
+    /// middle of a word, so no backward word-end check holds anywhere in it, as with
+    /// liblouis's `partialTrans`.
+    pub fn find_translations_partial(
+        &self,
+        input: &str,
+        preceding: &str,
+        partial: bool,
+    ) -> Vec<ResolvedTranslation> {
+        self.find_translations_from_node(input, preceding, &self.root, partial)
     }
 }
 
