@@ -12,16 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `louis::metadata` finds tables by their `#+key: value` metadata, like
   liblouis's `lou_findTables`: `Index::new()` indexes the tables on
   `LOUIS_TABLE_PATH`, `Index::with_search_path` those in the given
-  directories, and `Index::find` returns the tables matching a `Query`,
+  directories, and `Index::find` returns the tables matching a `&Query`,
   best match first. For now only tables carrying every pair of the query
   match.
 - Back-translation returns the emphasis the braille indicates, as
-  `TranslationResult::emphasis`: liblouis's typeform output. Unlike
+  `TranslationResult::emphasis()`: liblouis's typeform output. Unlike
   liblouis, the space that ends an emphasized word is not emphasized.
 - `Emphasis`, a text's emphasis spans in one order, with touching spans
   merged, so that two compare equal when they emphasize the same.
   `TranslationOptions::with_emphasis` takes one instead of a
-  `Vec<EmphasisSpan>`, and `TranslationResult::emphasis` is one.
+  `Vec<EmphasisSpan>`, and `TranslationResult::emphasis()` returns one.
 
 ### Changed
 - louis-rs is in beta: translation matches liblouis closely, and the
@@ -34,9 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
     exposing the parser's internals.
   - `translate` returns a `String` and `translate_with_options` a
     `TranslationResult`, not a `Result`: translating cannot fail.
-  - `TranslationResult`'s `output_positions` and `input_positions` are
-    plain `Vec`s; they were always `Some`.
-  - The public enums and `TranslationResult` are `#[non_exhaustive]`.
+  - `TranslationResult`'s fields are private, read with `output()`,
+    `emphasis()`, `output_positions()`, `input_positions()` and
+    `cursor_pos()`. The positions are plain slices; they were always
+    `Some`. Likewise `EmphasisSpan`'s, read with `class()` and `range()`.
+  - The public enums are `#[non_exhaustive]`.
+  - `Translator::with_search_path` takes any list of paths, such as
+    `["/usr/share/liblouis/tables"]`, not only a `Vec<PathBuf>`.
   - `TranslationModes` implements `PartialEq`, `Eq`, `Copy` and
     `FromIterator`.
   - `TranslationMode` and `Direction` lose the `|` that returned an

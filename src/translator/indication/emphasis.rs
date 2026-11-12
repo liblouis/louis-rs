@@ -109,9 +109,9 @@ impl ClassIndicator {
         let n = chars.len();
         let mut active = vec![false; n];
         for span in spans {
-            if span.class == self.class_name {
-                let end = span.range.end.min(n);
-                for pos in span.range.start..end {
+            if span.class() == self.class_name {
+                let end = span.range().end.min(n);
+                for pos in span.range().start..end {
                     if !self.noemphchars.contains(&chars[pos]) {
                         active[pos] = true;
                     }

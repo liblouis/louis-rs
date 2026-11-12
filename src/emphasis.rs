@@ -2,26 +2,31 @@
 
 use std::ops::Range;
 
-/// An emphasis class active over a contiguous range of input characters.
-///
-/// The translator inspects these spans before translation begins to determine
-/// which emphasis indicator cells to insert.
+/// An emphasis class active over a contiguous range of characters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EmphasisSpan {
-    /// Name of the emphasis class (e.g. `"italic"`, `"bold"`, `"underline"`).
-    /// Must match a class declared with the `emphclass` opcode in the table.
-    pub class: String,
-    /// Character-index range `[start, end)` over which the class is active.
-    pub range: Range<usize>,
+    class: String,
+    range: Range<usize>,
 }
 
 impl EmphasisSpan {
-    /// Emphasis of `class` over the input characters in `range`.
+    /// Emphasis of `class` over the characters in `range`. The class must be declared with
+    /// the `emphclass` opcode in the table, e.g. `"italic"`, `"bold"` or `"underline"`.
     pub fn new(class: impl Into<String>, range: Range<usize>) -> Self {
         Self {
             class: class.into(),
             range,
         }
+    }
+
+    /// The name of the emphasis class.
+    pub fn class(&self) -> &str {
+        &self.class
+    }
+
+    /// The characters emphasized, as character indices `[start, end)`.
+    pub fn range(&self) -> Range<usize> {
+        self.range.clone()
     }
 }
 

@@ -134,7 +134,7 @@ struct Cli {
 fn print_errors(errors: Vec<TableError>) {
     for error in errors {
         match error {
-            TableError::ParseError { path, line, error } => match path {
+            TableError::Syntax { path, line, error } => match path {
                 Some(path) => eprintln!("{}:{}: {}", path.display(), line, error),
                 None => eprintln!("{}: {}", line, error),
             },
@@ -457,12 +457,12 @@ fn check_yaml(paths: Vec<PathBuf>, summary: bool) -> ExitCode {
     }
 }
 
-static INDEX: LazyLock<Result<metadata::Index, metadata::MetaDataError>> =
+static INDEX: LazyLock<Result<metadata::Index, metadata::MetadataError>> =
     LazyLock::new(metadata::Index::new);
 
 /// The index of the tables on `LOUIS_TABLE_PATH`, built once on first use: the YAML files
 /// run in parallel and many query their tables, so they share one walk of the search path.
-fn index() -> Result<&'static metadata::Index, &'static metadata::MetaDataError> {
+fn index() -> Result<&'static metadata::Index, &'static metadata::MetadataError> {
     INDEX.as_ref()
 }
 
@@ -515,7 +515,7 @@ fn main() -> ExitCode {
         } => check_yaml(yaml_files, summary),
         Commands::Query { query } => match (metadata::Query::parse(&query.join(" ")), index()) {
             (Ok(query), Ok(index)) => {
-                println!("{:?}", index.find(query));
+                println!("{:?}", index.find(&query));
                 ExitCode::SUCCESS
             }
             (Err(e), _) => {

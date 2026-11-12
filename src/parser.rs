@@ -2636,7 +2636,7 @@ enum SyntaxErrorKind {
 pub enum TableError {
     /// A line of a table could not be parsed
     #[error("line {line}: {error}")]
-    ParseError {
+    Syntax {
         /// The table, or `None` for table source given in memory
         path: Option<PathBuf>,
         /// The line number, counting from 1
@@ -2784,7 +2784,7 @@ pub fn table(table: &str, path: Option<PathBuf>) -> Result<Vec<AnchoredRule>, Ve
             RuleParser::new(line)
                 .rule()
                 .map(|rule| AnchoredRule::new(rule, path.clone(), line_no + 1))
-                .map_err(|e| TableError::ParseError {
+                .map_err(|e| TableError::Syntax {
                     path: path.clone(),
                     line: line_no + 1,
                     error: SyntaxError(SyntaxErrorKind::Rule(e)),

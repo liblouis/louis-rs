@@ -93,20 +93,41 @@ pub enum Error {
 ///
 /// All positions are indices of characters (Unicode scalar values), not of bytes.
 #[derive(Debug, Default)]
-#[non_exhaustive]
 pub struct TranslationResult {
-    /// The translated text
-    pub output: String,
+    output: String,
+    emphasis: Option<Emphasis>,
+    output_positions: Vec<usize>,
+    input_positions: Vec<usize>,
+    cursor_pos: Option<usize>,
+}
+
+impl TranslationResult {
+    /// The translated text.
+    pub fn output(&self) -> &str {
+        &self.output
+    }
+
     /// Backward, the emphasis of the output, as the braille's emphasis indicators give it:
     /// the typeform of a back-translation. Forward, where the emphasis is given with the
     /// input, always `None`.
-    pub emphasis: Option<Emphasis>,
-    /// For each input character, the position of its translation in the output
-    pub output_positions: Vec<usize>,
-    /// For each output character, the position of the input it was translated from
-    pub input_positions: Vec<usize>,
-    /// The cursor position given in the options, mapped to the output
-    pub cursor_pos: Option<usize>,
+    pub fn emphasis(&self) -> Option<&Emphasis> {
+        self.emphasis.as_ref()
+    }
+
+    /// For each input character, the position of its translation in the output.
+    pub fn output_positions(&self) -> &[usize] {
+        &self.output_positions
+    }
+
+    /// For each output character, the position of the input it was translated from.
+    pub fn input_positions(&self) -> &[usize] {
+        &self.input_positions
+    }
+
+    /// The cursor position given in the options, mapped to the output.
+    pub fn cursor_pos(&self) -> Option<usize> {
+        self.cursor_pos
+    }
 }
 
 /// Translates text to braille ([`Direction::Forward`]) or braille to text
@@ -142,8 +163,9 @@ impl Translator {
     pub fn with_search_path<P: AsRef<Path>>(
         tables: &[P],
         direction: Direction,
-        search_path: Vec<PathBuf>,
+        search_path: impl IntoIterator<Item = impl Into<PathBuf>>,
     ) -> Result<Self, Error> {
+        let search_path: Vec<PathBuf> = search_path.into_iter().map(Into::into).collect();
         Self::compile_tables(tables, direction, &SearchPath::from(search_path))
     }
 
@@ -234,8 +256,9 @@ mod tests {
         let emphasis = |braille| {
             translator
                 .translate_with_options(braille, TranslationOptions::default())
-                .emphasis
+                .emphasis()
                 .unwrap()
+                .clone()
         };
         // a letter, then a word up to its end indicator
         assert_eq!(
@@ -256,7 +279,7 @@ mod tests {
         assert!(
             forward
                 .translate_with_options("ab", TranslationOptions::default())
-                .emphasis
+                .emphasis()
                 .is_none()
         );
     }
@@ -345,10 +368,10 @@ mod tests {
         let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
         let result = translator
             .translate_with_options("a 42", TranslationOptions::default().with_cursor_pos(2));
-        assert_eq!(result.output, "⠁⠀⠼⠙⠃");
-        assert_eq!(result.output_positions, vec![0, 1, 2, 4]);
-        assert_eq!(result.input_positions, vec![0, 1, 2, 2, 3]);
-        assert_eq!(result.cursor_pos, Some(2));
+        assert_eq!(result.output(), "⠁⠀⠼⠙⠃");
+        assert_eq!(result.output_positions(), [0, 1, 2, 4]);
+        assert_eq!(result.input_positions(), [0, 1, 2, 2, 3]);
+        assert_eq!(result.cursor_pos(), Some(2));
     }
 
     #[test]
@@ -356,15 +379,15 @@ mod tests {
         let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
         let result = translator
             .translate_with_options("a 42", TranslationOptions::default().with_cursor_pos(4));
-        assert_eq!(result.cursor_pos, Some(5));
+        assert_eq!(result.cursor_pos(), Some(5));
     }
 
     #[test]
     fn positions_without_cursor() {
         let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
         let result = translator.translate_with_options("a 42", TranslationOptions::default());
-        assert_eq!(result.output, translator.translate("a 42"));
-        assert_eq!(result.cursor_pos, None);
+        assert_eq!(result.output(), translator.translate("a 42"));
+        assert_eq!(result.cursor_pos(), None);
     }
 
     #[test]

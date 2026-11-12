@@ -517,9 +517,9 @@ impl ComputerBrailleConstrainer {
         let n = input.chars().count();
         let mut constraints: Vec<Constraints> = vec![Constraints::empty(); n];
         for span in spans {
-            if span.class == "computer_braille" {
-                let end = span.range.end.min(n);
-                for pos in span.range.start..end {
+            if span.class() == "computer_braille" {
+                let end = span.range().end.min(n);
+                for pos in span.range().start..end {
                     constraints[pos].insert(Constraint::UseComp6);
                 }
             }

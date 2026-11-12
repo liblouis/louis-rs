@@ -219,11 +219,8 @@ impl<'a> TestMatrix<'a> {
             Table::Query(query) => {
                 let index = crate::index().map_err(|e| TestError::NotIndexable(e.to_string()))?;
                 let query = metadata::Query::from(query);
-                let matches: Vec<PathBuf> = index
-                    .find(query.clone())
-                    .into_iter()
-                    .map(PathBuf::from)
-                    .collect();
+                let matches: Vec<PathBuf> =
+                    index.find(&query).into_iter().map(PathBuf::from).collect();
                 match matches.as_slice() {
                     [] => return Err(TestError::NoTableForQuery(query.to_string())),
                     [path] => parser::table_expanded_in(path, &search_path)?,

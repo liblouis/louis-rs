@@ -66,11 +66,11 @@ impl Indicator {
         let mut result: Vec<(usize, ResolvedTranslation)> = Vec::new();
 
         for span in spans {
-            if span.class != "computer_braille" {
+            if span.class() != "computer_braille" {
                 continue;
             }
-            let start = span.range.start;
-            let end = span.range.end.min(n);
+            let start = span.range().start;
+            let end = span.range().end.min(n);
             if start >= end {
                 continue;
             }

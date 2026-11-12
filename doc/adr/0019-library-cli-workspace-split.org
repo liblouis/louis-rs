@@ -200,6 +200,8 @@ surface is explicit. Done on [2026-11-11 Wed] unless marked open:
   no longer return a ~Result~.
 - Add ~#[non_exhaustive]~ to the public enums and to ~TranslationResult~.
   /Done/, except ~Direction~, which will only ever have two.
+  ~TranslationResult~ and ~EmphasisSpan~ later got private fields with
+  getters instead [2026-11-12 Thu], which also leaves room to add fields.
 - ~TranslationResult~: ~emphasis~ is always ~None~, and the position
   vectors are always ~Some~. /Done:/ the positions are plain ~Vec~s;
   ~emphasis~ stays, documented as not implemented.
