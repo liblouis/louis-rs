@@ -41,7 +41,9 @@ Backward (braille to text) runs the same stages in reverse order, the display ta
    this direction (`nofor`, `noback`), sorts the rest into stages by opcode, and compiles
    each stage, with the context, into a table: a `MultipassTable` for `correct` and each of
    `pass2` to `pass4`, a `PrimaryTable` for everything else. Backward, the stages are
-   reversed. A display table, if any, is added as the outermost stage.
+   reversed. A braille encoding (`BrailleEncoding`, from a liblouis display table), if
+   the caller gives one, is added as the outermost stage, a `DisplayTable`; a display
+   table a translation table includes is ignored.
 
 ### The main stage: `PrimaryTable::trace`
 
@@ -59,7 +61,10 @@ has three phases.
   rule starts here" (`SyllableStart`) or "a hyphenation break falls here"
   (`HyphenationBreak`).
 
-Both read only the input text. Neither knows which rules will be chosen.
+Both read only the input text, and the options. Neither knows which rules will be chosen.
+Forward, with `compbrlAtCursor` or `compbrlLeftCursor`, the word at the cursor
+(`CursorWordScanner`) is computer braille (`UseComp6`) without indicators, and no rule
+reaches into it.
 
 **The loop** walks the input. At each position it:
 
@@ -150,12 +155,15 @@ output, `nocross`, a `context` rule's test, and finally the earliest definition.
 of the fields is the order of precedence; ADR-0016 has the reasoning, and the doc comments
 on `Rank` the details.
 
-**Effects, environment.** The variables a `context` or multipass rule tests and sets
-(`#1=0`), carried along one stage's loop.
+**Effects, environment.** The variables a `context` or multipass rule sets (`#1=0`,
+`#1+`, `#1-`) and tests (`#1=3`, `#1<3`, ...), carried along one stage's loop. A
+variable that was never set is 0.
 
-**Scanners.** Small helpers the trie consults for a transition that needs more than the
-neighbouring character: `BegWordScanner` and `EndWordScanner` (backward word boundaries),
-`StandingAloneScanner` (`seqdelimiter` sequences).
+**Scanners.** Small helpers that look further than the neighbouring character. The trie
+consults `BegWordScanner` and `EndWordScanner` (backward word boundaries) and
+`StandingAloneScanner` (`seqdelimiter` sequences) for its transitions; the main stage uses
+`CompbrlScanner` (words with a `compbrl` string become computer braille) and
+`CursorWordScanner` (the word at the cursor) before the loop.
 
 ## Where does new logic go?
 
@@ -190,6 +198,11 @@ Backward translation runs the same machinery over braille, with these difference
 - **`Rank`** prefers the rule that writes more text, as liblouis sorts its backward rules.
 - **Capitals** are applied by the `BackwardCaps` rewriter, with the table's
   `base uppercase` rules.
+- **Emphasis** comes out as the typeform, `TranslationResult::emphasis`:
+  `backward_emphasis` reads the emphasis indicators chosen in the main stage, and the
+  pipeline carries the result over the stages after it with the position map.
+- **Partial input** (`partialTrans`): no word ends anywhere, so the trie's `EndWord` never
+  holds and `ContinuesWord` always does, and `word` and `lowword` rules don't apply.
 
 ## Further reading
 

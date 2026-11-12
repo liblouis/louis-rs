@@ -13,8 +13,10 @@ $ louis translate en-us-g2.ctb "It's about the blind"
 ```
 
 > [!NOTE]
-> louis-rs is in beta. Of liblouis's test suite it fails only 0.1% that liblouis
-> passes; [doc/Liblouis_Parity.md](doc/Liblouis_Parity.md) lists the known gaps.
+> louis-rs is in beta and ready for wider testing: it fails only 0.1% of liblouis's
+> test suite that liblouis passes, and the library API follows semantic versioning.
+> Try it on your own texts and tables, and [report what
+> breaks](https://github.com/liblouis/louis-rs/issues).
 
 ## What is here
 
@@ -87,7 +89,22 @@ Point `LOUIS_TABLE_PATH` at a set of tables and translate something:
 and `query` finds tables by their metadata:
 
     $ louis query language:de contraction:full
-    {"[...]/liblouis/tables/de-g2-detailed.ctb", "[...]/liblouis/tables/de-g2.ctb"}
+    ["[...]/liblouis/tables/de-g2-detailed.ctb", "[...]/liblouis/tables/de-g2.ctb"]
+
+### As a library
+
+    $ cargo add louis-rs
+
+```rust
+use louis::{Direction, Translator};
+
+let translator = Translator::new(&["en-us-g2.ctb"], Direction::Forward)?;
+assert_eq!(translator.translate("It's about the blind"), "⠠⠭⠄⠎⠀⠁⠃⠀⠮⠀⠃⠇");
+```
+
+The [API documentation](https://docs.rs/louis-rs) covers the rest: back-translation,
+positions and the cursor, emphasis, braille encodings such as ASCII braille, and
+finding tables by their metadata.
 
 ## Project status
 
@@ -98,8 +115,10 @@ current figures and the reproduction steps.
 
 ## Contributing
 
-If you have any improvements or comments please feel free to file a
-pull request or an issue.
+Reports from real use are the most useful contribution right now: a text that
+comes out wrong, a table that doesn't load, an API that gets in the way. Please
+[file an issue](https://github.com/liblouis/louis-rs/issues); pull requests are
+welcome too.
 
 ## Acknowledgments
 
