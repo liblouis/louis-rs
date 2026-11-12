@@ -105,6 +105,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   variable matched nothing.
 - `louis trace` prints the attributes of a `match` rule in match syntax,
   `%[_~]`, not in the multipass letters without brackets (`s~`).
+- A character class that lists braille cells, such as French contracted
+  braille's `bvoy` and `bvoyyy`, keeps them in back-translation although
+  `braille-patterns.cti` defines them only forward (`noback sign`). Before,
+  a `before` or `after` rule testing such a class never matched backward,
+  so "laissait" came back as "laièait".
 
 ## [0.3.1] - 2026-11-11
 
