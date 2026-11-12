@@ -2,7 +2,7 @@
 //!
 //! Unlike the other indications they depend on the rule translation picks, not on the text:
 //! liblouis inserts them only once it has chosen a `contraction` rule (`insertLetterSign`).
-//! So [`ContractionSigns`] is an amender (see [`indication`](super)), not an [`Indicator`].
+//! So [`ContractionSigns`] is a rewriter (see [`indication`](super)), not an [`Indicator`].
 //!
 //! [`Indicator`]: super::Indicator
 

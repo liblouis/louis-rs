@@ -22,7 +22,7 @@ table files ──parse──▶ rules ──TableContext──▶ TranslationPi
                              ├─ the loop, at each position:
                              │      candidates (trie, match, context, ...)
                              │      ─▶ filtered by the constraints ─▶ the best by Rank
-                             └─ after the loop:   amenders ─▶ the final translations
+                             └─ after the loop:   rewriters ─▶ the final translations
 ```
 
 Backward (braille to text) runs the same stages in reverse order, the display table first.
@@ -85,7 +85,7 @@ Both read only the input text. Neither knows which rules will be chosen.
    consumed. If nothing matches, the character's own definition applies, and failing that
    the `undefined` rule or an escape spelling out the character's code.
 
-**After the loop**, the **amenders** (`indication.rs`, `Amenders`) rewrite the chosen
+**After the loop**, the **rewriters** (`indication.rs`, `Rewriters`) rewrite the chosen
 translations where the result depends on which rule was chosen: the `nocontractsign` and
 letter sign in front of a `contraction` applied (forward), and the capitals (backward).
 
@@ -93,7 +93,7 @@ letter sign in front of a `contraction` applied (forward), and the capitals (bac
 
 `correct` and `pass2` to `pass4` (`table/multipass.rs`) run the same loop with less: their
 rules are all context patterns over the output of the previous stage, chosen by the same
-`Rank`, with no indicators, constrainers or amenders.
+`Rank`, with no indicators, constrainers or rewriters.
 
 ## Concepts
 
@@ -111,7 +111,7 @@ each produces `ResolvedTranslation`s whose output is the next stage's input.
 **`ResolvedTranslation`.** One applied rule: the input it consumed, the output it produced,
 its length, offset and weight, and the rule it came from. An indication is one that consumes
 no input (`ResolvedTranslation::indication`). Keeping the rule lets the trace show it, and
-lets the amenders see what was chosen.
+lets the rewriters see what was chosen.
 
 **Trie, transition.** A prefix tree over the input characters for every rule that is a
 fixed string, case-insensitive with case-sensitive character definitions kept aside.
@@ -135,9 +135,11 @@ apply, before translation, as one set of flags per position. One per question: i
 number, inside a `nocont` word, a syllable start, a hyphenation break, backward after a
 number sign, and so on.
 
-**Amender.** Rewrites the chosen translations after the loop, where the result depends on
-the rule chosen rather than on the text: `ContractionSigns` (forward), `BackwardCaps`
-(backward). A table holds them as `Amenders`, applied in turn.
+**Rewriter.** Rewrites the chosen translations after the loop, where the result depends on
+the rule chosen rather than on the text. It may insert translations or change them:
+`ContractionSigns` puts a chosen contraction's signs in front of it (forward),
+`BackwardCaps` uppercases after a chosen `capsletter` or `begcapsword` (backward). A table
+holds them as `Rewriters`, applied in turn.
 
 **`Rank`, `Precedence`.** How the loop picks between candidates at the same position: a
 key compared field by field. Roughly: a forward `context` rule with no leading literal
@@ -163,14 +165,14 @@ neighbouring character: `BegWordScanner` and `EndWordScanner` (backward word bou
 | a pattern liblouis expresses as a regexp                         | the regexp VM, via a match/context pattern |
 | the text, to decide where indication cells go                    | an indicator                               |
 | the text, to decide where rules may apply                        | a constrainer and a `Constraint` flag      |
-| which rule was chosen                                            | an amender                                 |
+| which rule was chosen                                            | a rewriter                                 |
 | which of several matching rules liblouis would prefer            | `Rank` (and an ADR)                        |
 | what the table author wrote in a pass                            | nothing: it's a table rule                 |
 
 The common mistake is the fifth row: guessing from the text which rule will be chosen, in an
 indicator or constrainer, when the choice can simply be read afterwards. A contraction's
 letter sign and a capital sign followed by another indicator were both fixed by moving
-them into an amender.
+them into a rewriter.
 
 ## Backward
 
@@ -186,7 +188,7 @@ Backward translation runs the same machinery over braille, with these difference
 - **Word boundaries** are decided from the text already written (`BegWordScanner`) and the
   cells still to come (`EndWordScanner`), since a cell doesn't say whether it is a letter.
 - **`Rank`** prefers the rule that writes more text, as liblouis sorts its backward rules.
-- **Capitals** are applied by the `BackwardCaps` amender, with the table's
+- **Capitals** are applied by the `BackwardCaps` rewriter, with the table's
   `base uppercase` rules.
 
 ## Further reading

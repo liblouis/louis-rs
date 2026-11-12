@@ -17,7 +17,7 @@ use crate::{
         effect::Environment,
         end_word::EndWordScanner,
         indication::{
-            Amender, Amenders, Indicator, Indicators, PrecomputedIndications, computer_braille,
+            Indicator, Indicators, PrecomputedIndications, Rewriter, Rewriters, computer_braille,
             contraction::ContractionSignsBuilder,
             emphasis, lettersign, mode, numeric,
             uppercase::{self, BackwardCapsBuilder},
@@ -161,8 +161,8 @@ pub struct PrimaryTable {
     ///
     /// [`Constraint::PreferDigit`]: crate::translator::position_constraints::Constraint::PreferDigit
     backward_digit_overrides: HashMap<char, ResolvedTranslation>,
-    /// Amend the translations chosen, see [`Amenders`].
-    amenders: Amenders,
+    /// Rewrite the translations chosen, see [`Rewriters`].
+    rewriters: Rewriters,
 }
 
 /// A builder for [`PrimaryTable`]
@@ -457,15 +457,15 @@ impl PrimaryTableBuilder {
         .flatten()
         .collect();
         PrimaryTable {
-            amenders: Amenders::new(match direction {
+            rewriters: Rewriters::new(match direction {
                 Direction::Forward => self
                     .contraction_signs
                     .build()
-                    .map(Amender::ContractionSigns)
+                    .map(Rewriter::ContractionSigns)
                     .into_iter()
                     .collect(),
                 Direction::Backward => {
-                    vec![Amender::BackwardCaps(
+                    vec![Rewriter::BackwardCaps(
                         self.backward_caps.build(ctx, self.uppercase_letters),
                     )]
                 }
@@ -2436,7 +2436,7 @@ impl PrimaryTable {
                 break;
             }
         }
-        self.amenders.apply(translations)
+        self.rewriters.apply(translations)
     }
 
     /// Whether `t` comes from an opcode that liblouis switches off in a word with a

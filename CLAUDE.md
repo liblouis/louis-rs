@@ -96,7 +96,7 @@ cargo clippy
 
 **Read [`doc/Architecture.md`](doc/Architecture.md)** for the concepts and how they fit
 together: the pipeline and its stages, `TableContext`, the trie and its transitions, the
-regexp VM with match and context patterns, indicators, constrainers, amenders, `Rank` and
+regexp VM with match and context patterns, indicators, constrainers, rewriters, `Rank` and
 `Precedence`, effects, and what differs backward. It also has the table of where new logic
 goes. Keep it up to date when a concept changes; don't repeat it here.
 
@@ -108,9 +108,9 @@ The short version:
   main stage (`table/primary.rs`, `PrimaryTable`), `pass2`-`pass4` (`MultipassTable`), and
   a display table; backward, in reverse
 - `PrimaryTable::trace`: indicators and constrainers precompute from the input, the loop
-  picks a candidate per position by `Rank` (`translation.rs`), the amenders rewrite the
-  chosen translations
-- Logic that depends on which rule was chosen goes in an amender, never in an indicator or
+  picks a candidate per position by `Rank` (`translation.rs`), and the rewriters rewrite
+  the chosen translations
+- Logic that depends on which rule was chosen goes in a rewriter, never in an indicator or
   constrainer guessing from the text
 
 Other modules: `src/hyphenation.rs` reads `.dic` files; `src/emphasis.rs` turns a

@@ -19,20 +19,20 @@
 //! * [`mode::Indicator`]: detects character class runs and emits mode indicators
 //! * [`lettersign::Indicator`]: detects isolated letters that require a letter sign
 //!
-//! # Amenders
+//! # Rewriters
 //!
 //! An indicator sees only the text. Indication that depends on which rule translation
-//! chose belongs in an amender instead: a function from the chosen
-//! [`ResolvedTranslation`]s to new ones, run at the end of the main stage. Don't guess
-//! the choice from the text in an indicator. Unlike the pipeline's pass2 to pass4,
-//! which apply table rules to a string, amenders are built in and see each
-//! translation's rule. They are:
+//! chose belongs in a rewriter instead: a function from the chosen
+//! [`ResolvedTranslation`]s to new ones, run at the end of the main stage, which may
+//! insert translations or change them. Don't guess the choice from the text in an
+//! indicator. Unlike the pipeline's pass2 to pass4, which apply table rules to a string,
+//! rewriters are built in and see each translation's rule. They are:
 //! * [`contraction::ContractionSigns`]: puts the `nocontractsign` and letter sign in
 //!   front of a `contraction` rule chosen (forward)
 //! * [`uppercase::BackwardCaps`]: capitalizes after a `capsletter` and in the words a
 //!   `begcapsword` starts, as written, with the table's `base uppercase` (backward)
 //!
-//! A table holds its amenders as [`Amenders`], applied in turn.
+//! A table holds its rewriters as [`Rewriters`], applied in turn.
 
 use std::ops::Range;
 
@@ -138,9 +138,9 @@ impl Indicators {
     }
 }
 
-/// Amends the chosen translations, see [Amenders](self#amenders).
+/// Rewrites the chosen translations, see [Rewriters](self#rewriters).
 #[derive(Debug, Clone)]
-pub enum Amender {
+pub enum Rewriter {
     /// Puts the `nocontractsign` and letter sign in front of a `contraction` (forward).
     ContractionSigns(contraction::ContractionSigns),
     /// Capitalizes after a `capsletter` and in the words a `begcapsword` starts, as
@@ -148,28 +148,28 @@ pub enum Amender {
     BackwardCaps(uppercase::BackwardCaps),
 }
 
-impl Amender {
+impl Rewriter {
     fn apply(&self, translations: Vec<ResolvedTranslation>) -> Vec<ResolvedTranslation> {
         match self {
-            Amender::ContractionSigns(a) => a.apply(translations),
-            Amender::BackwardCaps(a) => a.apply(translations),
+            Rewriter::ContractionSigns(a) => a.apply(translations),
+            Rewriter::BackwardCaps(a) => a.apply(translations),
         }
     }
 }
 
-/// A collection of [`Amender`]s that are applied in turn.
+/// A collection of [`Rewriter`]s that are applied in turn.
 #[derive(Debug, Clone)]
-pub struct Amenders(Vec<Amender>);
+pub struct Rewriters(Vec<Rewriter>);
 
-impl Amenders {
-    pub fn new(amenders: Vec<Amender>) -> Self {
-        Amenders(amenders)
+impl Rewriters {
+    pub fn new(rewriters: Vec<Rewriter>) -> Self {
+        Rewriters(rewriters)
     }
 
     pub fn apply(&self, translations: Vec<ResolvedTranslation>) -> Vec<ResolvedTranslation> {
         self.0
             .iter()
-            .fold(translations, |t, amender| amender.apply(t))
+            .fold(translations, |t, rewriter| rewriter.apply(t))
     }
 }
 
