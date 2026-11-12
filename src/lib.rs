@@ -17,7 +17,7 @@ use louis::Direction;
 
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
 let translator = Translator::new(&["en-us-g1.ctb"], Direction::Forward)?;
-let braille = translator.translate("hello world")?;
+let braille = translator.translate("hello world");
 assert_eq!(braille, "⠓⠑⠇⠇⠕⠀⠺⠕⠗⠇⠙");
 # Ok(())
 # }
@@ -34,10 +34,10 @@ mod translator;
 use std::path::{Path, PathBuf};
 
 pub use emphasis::EmphasisSpan;
-pub use parser::Direction;
+pub use parser::{Direction, SyntaxError, TableError};
 use search_path::SearchPath;
 use translator::TranslationPipeline;
-pub use translator::{TranslationMode, TranslationModes, TranslationOptions};
+pub use translator::{CompileError, TranslationMode, TranslationModes, TranslationOptions};
 
 /// What the `louis` command line tool needs beyond the public API: rule tracing for `trace`,
 /// and the pipeline and display tables for `check-table` and the YAML test harness.
@@ -52,40 +52,60 @@ pub mod internals {
     }
     pub mod translator {
         pub use crate::translator::{
-            DisplayTable, PositionMap, ResolvedTranslation, TranslationError, TranslationMode,
+            CompileError, DisplayTable, PositionMap, ResolvedTranslation, TranslationMode,
             TranslationModes, TranslationOptions, TranslationPipeline, TranslationStage,
         };
     }
 }
 
+/// Why a [`Translator`] could not be built.
 #[derive(thiserror::Error, Debug)]
-pub enum TranslationError {
+#[non_exhaustive]
+pub enum Error {
+    /// The tables could not be read: each error names its table and, for a syntax error,
+    /// its line.
+    #[error("errors when reading the braille table(s)")]
+    Table(Vec<TableError>),
+    /// The tables were read, but their rules don't fit together.
     #[error(transparent)]
-    TranslationFailed(#[from] translator::TranslationError),
-    #[error("Errors when reading given braille table(s)")]
-    ParseFailed(Vec<parser::TableError>),
+    Compile(#[from] CompileError),
 }
 
+/// The result of [`Translator::translate_with_options`].
+///
+/// All positions are indices of characters (Unicode scalar values), not of bytes.
 #[derive(Debug, Default)]
+#[non_exhaustive]
 pub struct TranslationResult {
+    /// The translated text
     pub output: String,
-    pub emphasis: Option<Vec<EmphasisSpan>>, // Only if input had emphasis
-    pub output_positions: Option<Vec<usize>>, // Maps input pos -> output pos
-    pub input_positions: Option<Vec<usize>>, // Maps output pos -> input pos
+    /// The emphasis of the output. Not implemented yet: always `None`.
+    pub emphasis: Option<Vec<EmphasisSpan>>,
+    /// For each input character, the position of its translation in the output
+    pub output_positions: Vec<usize>,
+    /// For each output character, the position of the input it was translated from
+    pub input_positions: Vec<usize>,
+    /// The cursor position given in the options, mapped to the output
     pub cursor_pos: Option<usize>,
 }
 
+/// Translates text to braille ([`Direction::Forward`]) or braille to text
+/// ([`Direction::Backward`]) with a set of compiled tables.
 #[derive(Debug)]
 pub struct Translator(TranslationPipeline);
 
 impl Translator {
+    /// Compile `tables` for translating in `direction`.
+    ///
     /// Tables are looked up in the `LOUIS_TABLE_PATH` search path. Use
     /// [`Self::with_search_path`] to supply the directories instead, which a host
     /// application managing its own table locations will want.
-    pub fn new<P: AsRef<Path>>(
-        tables: &[P],
-        direction: Direction,
-    ) -> Result<Self, TranslationError> {
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Table`] if a table or one it includes cannot be found, read or parsed, and
+    /// [`Error::Compile`] if the rules cannot be compiled.
+    pub fn new<P: AsRef<Path>>(tables: &[P], direction: Direction) -> Result<Self, Error> {
         Self::compile_tables(
             tables,
             direction,
@@ -95,11 +115,15 @@ impl Translator {
 
     /// Like [`Self::new`], but looking tables up in `search_path` instead of reading the
     /// `LOUIS_TABLE_PATH` environment variable.
+    ///
+    /// # Errors
+    ///
+    /// As for [`Self::new`].
     pub fn with_search_path<P: AsRef<Path>>(
         tables: &[P],
         direction: Direction,
         search_path: Vec<PathBuf>,
-    ) -> Result<Self, TranslationError> {
+    ) -> Result<Self, Error> {
         Self::compile_tables(tables, direction, &SearchPath::from(search_path))
     }
 
@@ -107,13 +131,12 @@ impl Translator {
         tables: &[P],
         direction: Direction,
         search_path: &SearchPath,
-    ) -> Result<Self, TranslationError> {
+    ) -> Result<Self, Error> {
         let mut all_rules = Vec::new();
 
         for table_path in tables {
             let path = table_path.as_ref();
-            let rules = parser::table_expanded_in(path, search_path)
-                .map_err(TranslationError::ParseFailed)?;
+            let rules = parser::table_expanded_in(path, search_path).map_err(Error::Table)?;
             all_rules.extend(rules);
         }
 
@@ -124,41 +147,44 @@ impl Translator {
     ///
     /// This parses only the inline table text. Unlike [`Self::new`], it does
     /// not resolve `include` directives from the filesystem.
-    pub fn from_table_source(table: &str, direction: Direction) -> Result<Self, TranslationError> {
-        let rules = parser::table(table, None).map_err(TranslationError::ParseFailed)?;
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Table`] if the source cannot be parsed or contains an `include`, and
+    /// [`Error::Compile`] if the rules cannot be compiled.
+    pub fn from_table_source(table: &str, direction: Direction) -> Result<Self, Error> {
+        let rules = parser::table(table, None).map_err(Error::Table)?;
         if rules
             .iter()
             .any(|rule| matches!(rule.rule, parser::Rule::Include { .. }))
         {
-            return Err(TranslationError::ParseFailed(vec![
-                parser::TableError::IncludesNotSupportedInMemory,
-            ]));
+            return Err(Error::Table(vec![TableError::IncludesNotSupportedInMemory]));
         }
 
         Ok(Self(TranslationPipeline::compile(&rules, direction)?))
     }
 
-    /// Simple translation - just input text to braille
-    pub fn translate(&self, input: &str) -> Result<String, TranslationError> {
-        Ok(self.0.translate(input))
+    /// Translate `input`.
+    pub fn translate(&self, input: &str) -> String {
+        self.0.translate(input)
     }
 
-    /// Full-featured translation with all options
+    /// Translate `input` with `options`, and say which input became which output.
     pub fn translate_with_options(
         &self,
         input: &str,
         options: TranslationOptions,
-    ) -> Result<TranslationResult, TranslationError> {
+    ) -> TranslationResult {
         let (output, positions) = self.0.translate_with_positions(input, &options);
         let cursor_pos = options.cursor_pos().map(|cursor| positions.cursor(cursor));
         let (output_positions, input_positions) = positions.into_parts();
-        Ok(TranslationResult {
+        TranslationResult {
             output,
-            output_positions: Some(output_positions),
-            input_positions: Some(input_positions),
+            output_positions,
+            input_positions,
             cursor_pos,
-            ..Default::default()
-        })
+            emphasis: None,
+        }
     }
 }
 
@@ -166,11 +192,36 @@ impl Translator {
 mod tests {
     use super::*;
 
+    // a translator is meant to be shared between threads
+    #[test]
+    fn translator_is_send_and_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<Translator>();
+    }
+
     #[test]
     fn translator_from_table_source() {
         let table = "space \\s 0\nletter a 1\nletter b 12\n";
         let translator = Translator::from_table_source(table, Direction::Forward).unwrap();
-        assert_eq!(translator.translate("ab").unwrap(), "⠁⠃");
+        assert_eq!(translator.translate("ab"), "⠁⠃");
+    }
+
+    #[test]
+    fn a_base_character_must_be_defined_in_some_direction() {
+        let error =
+            Translator::from_table_source("base uppercase A a", Direction::Forward).unwrap_err();
+        assert!(matches!(
+            error,
+            Error::Compile(CompileError::BaseCharacterNotDefined {
+                base: 'a',
+                derived: 'A'
+            })
+        ));
+        // defined forward only: backward there is nothing to derive, which is fine
+        let table = "noback lowercase a 1\nbase uppercase A a\n";
+        for direction in [Direction::Forward, Direction::Backward] {
+            assert!(Translator::from_table_source(table, direction).is_ok());
+        }
     }
 
     #[test]
@@ -178,10 +229,10 @@ mod tests {
         let error =
             Translator::from_table_source("include en-us-g1.ctb", Direction::Forward).unwrap_err();
         match error {
-            TranslationError::ParseFailed(errors) => {
+            Error::Table(errors) => {
                 assert!(matches!(
                     errors.as_slice(),
-                    [parser::TableError::IncludesNotSupportedInMemory]
+                    [TableError::IncludesNotSupportedInMemory]
                 ));
             }
             other => panic!("unexpected error: {other:?}"),
@@ -198,10 +249,10 @@ mod tests {
         let table = "space \\s 0\nlowercase a 1\nlowercase b 12\nlowercase s 234\nbase uppercase A a\nletsign 56\ncapsletter 6\nword as 1356\ncontraction as\ncontraction ab\n";
         let translator = Translator::from_table_source(table, Direction::Forward).unwrap();
         // the earlier `word as` applies, so no letter sign
-        assert_eq!(translator.translate("as").unwrap(), "⠵");
+        assert_eq!(translator.translate("as"), "⠵");
         // the contraction applies, its letter sign before the capital
-        assert_eq!(translator.translate("ab").unwrap(), "⠰⠁⠃");
-        assert_eq!(translator.translate("Ab").unwrap(), "⠰⠠⠁⠃");
+        assert_eq!(translator.translate("ab"), "⠰⠁⠃");
+        assert_eq!(translator.translate("Ab"), "⠰⠠⠁⠃");
     }
 
     #[test]
@@ -209,14 +260,14 @@ mod tests {
         let translator =
             Translator::from_table_source(CAPS_WORD_TABLE, Direction::Backward).unwrap();
         // whatever rule writes them: ⠆ is the semicolon and the contraction "bb"
-        assert_eq!(translator.translate("⠠⠠⠗⠁⠆⠊⠞").unwrap(), "RABBIT");
+        assert_eq!(translator.translate("⠠⠠⠗⠁⠆⠊⠞"), "RABBIT");
         // a hyphen after a letter ends the word, but not one before the first letter
-        assert_eq!(translator.translate("⠠⠠⠁⠃⠤⠍⠁⠝").unwrap(), "AB-man");
-        assert_eq!(translator.translate("⠠⠠⠤⠍⠁⠝").unwrap(), "-MAN");
+        assert_eq!(translator.translate("⠠⠠⠁⠃⠤⠍⠁⠝"), "AB-man");
+        assert_eq!(translator.translate("⠠⠠⠤⠍⠁⠝"), "-MAN");
         // it can end partway through what a rule writes
-        assert_eq!(translator.translate("⠠⠠⠍⠁⠝⠄⠎").unwrap(), "MAN's");
+        assert_eq!(translator.translate("⠠⠠⠍⠁⠝⠄⠎"), "MAN's");
         // after a letter, ⠰ is `endcapsword`, not `letsign`
-        assert_eq!(translator.translate("⠠⠠⠁⠃⠰⠉").unwrap(), "ABc");
+        assert_eq!(translator.translate("⠠⠠⠁⠃⠰⠉"), "ABc");
     }
 
     #[test]
@@ -224,25 +275,24 @@ mod tests {
         // French `after conabr after bvoy endword ent 126`
         let table = "space \\s 0\nlowercase a 1\nlowercase b 12\nlowercase c 14\nlowercase x 1346\nattribute one a\nattribute two b\nafter one after two always yy 1346\n";
         let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
-        assert_eq!(translator.translate("⠁⠭⠀⠃⠭⠀⠉⠭").unwrap(), "ayy byy cx");
+        assert_eq!(translator.translate("⠁⠭⠀⠃⠭⠀⠉⠭"), "ayy byy cx");
     }
 
     #[test]
     fn digits_after_a_number_sign_are_not_read_as_a_contraction() {
         let table = "space \\s 0\nletter a 1\nletter b 12\nlitdigit 1 1\nlitdigit 2 12\nnumsign 3456\nword about 1-12\n";
         let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
-        assert_eq!(translator.translate("⠼⠁⠃⠀⠁⠃").unwrap(), "12 about");
+        assert_eq!(translator.translate("⠼⠁⠃⠀⠁⠃"), "12 about");
     }
 
     #[test]
     fn positions_with_number_sign() {
         let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
         let result = translator
-            .translate_with_options("a 42", TranslationOptions::default().with_cursor_pos(2))
-            .unwrap();
+            .translate_with_options("a 42", TranslationOptions::default().with_cursor_pos(2));
         assert_eq!(result.output, "⠁⠀⠼⠙⠃");
-        assert_eq!(result.output_positions, Some(vec![0, 1, 2, 4]));
-        assert_eq!(result.input_positions, Some(vec![0, 1, 2, 2, 3]));
+        assert_eq!(result.output_positions, vec![0, 1, 2, 4]);
+        assert_eq!(result.input_positions, vec![0, 1, 2, 2, 3]);
         assert_eq!(result.cursor_pos, Some(2));
     }
 
@@ -250,67 +300,55 @@ mod tests {
     fn cursor_past_the_end_maps_to_the_output_length() {
         let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
         let result = translator
-            .translate_with_options("a 42", TranslationOptions::default().with_cursor_pos(4))
-            .unwrap();
+            .translate_with_options("a 42", TranslationOptions::default().with_cursor_pos(4));
         assert_eq!(result.cursor_pos, Some(5));
     }
 
     #[test]
     fn positions_without_cursor() {
         let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
-        let result = translator
-            .translate_with_options("a 42", TranslationOptions::default())
-            .unwrap();
-        assert_eq!(result.output, translator.translate("a 42").unwrap());
+        let result = translator.translate_with_options("a 42", TranslationOptions::default());
+        assert_eq!(result.output, translator.translate("a 42"));
         assert_eq!(result.cursor_pos, None);
-        assert!(result.output_positions.is_some());
-        assert!(result.input_positions.is_some());
     }
 
     #[test]
     fn positions_with_capital_sign() {
         let table = "lowercase h 125\nlowercase i 24\nbase uppercase H h\ncapsletter 6\n";
         let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
-        let result = forward
-            .translate_with_options("Hi", TranslationOptions::default().with_cursor_pos(0))
-            .unwrap();
+        let result =
+            forward.translate_with_options("Hi", TranslationOptions::default().with_cursor_pos(0));
         assert_eq!(result.output, "⠠⠓⠊");
-        assert_eq!(result.output_positions, Some(vec![0, 2]));
-        assert_eq!(result.input_positions, Some(vec![0, 0, 1]));
+        assert_eq!(result.output_positions, vec![0, 2]);
+        assert_eq!(result.input_positions, vec![0, 0, 1]);
         assert_eq!(result.cursor_pos, Some(0));
 
         let backward = Translator::from_table_source(table, Direction::Backward).unwrap();
-        let result = backward
-            .translate_with_options("⠠⠓⠊", TranslationOptions::default())
-            .unwrap();
+        let result = backward.translate_with_options("⠠⠓⠊", TranslationOptions::default());
         assert_eq!(result.output, "Hi");
-        assert_eq!(result.output_positions, Some(vec![0, 0, 1]));
+        assert_eq!(result.output_positions, vec![0, 0, 1]);
         // backward, a consumed cell is claimed by the character that follows it, so the "H"
         // covers the capital sign as well ("prepend to next", as liblouis calls it)
-        assert_eq!(result.input_positions, Some(vec![0, 2]));
+        assert_eq!(result.input_positions, vec![0, 2]);
     }
 
     #[test]
     fn positions_with_correction_insertion() {
         let table = "letter f 124\nletter o 135\nletter b 12\nletter a 1\nletter r 1235\npunctuation , 6\npunctuation - 36\nnoback correct \"f,\"[]\"o\" \"-\"\n";
         let translator = Translator::from_table_source(table, Direction::Forward).unwrap();
-        let result = translator
-            .translate_with_options("f,oobar", TranslationOptions::default())
-            .unwrap();
+        let result = translator.translate_with_options("f,oobar", TranslationOptions::default());
         assert_eq!(result.output, "⠋⠠⠤⠕⠕⠃⠁⠗");
-        assert_eq!(result.output_positions, Some(vec![0, 1, 2, 4, 5, 6, 7]));
-        assert_eq!(result.input_positions, Some(vec![0, 1, 2, 2, 3, 4, 5, 6]));
+        assert_eq!(result.output_positions, vec![0, 1, 2, 4, 5, 6, 7]);
+        assert_eq!(result.input_positions, vec![0, 1, 2, 2, 3, 4, 5, 6]);
     }
 
     #[test]
     fn positions_with_pass2_deletion() {
         let table = "letter f 124\nletter o 135\nletter x 1346\nnoback pass2 @1346 ?\n";
         let translator = Translator::from_table_source(table, Direction::Forward).unwrap();
-        let result = translator
-            .translate_with_options("xfoo", TranslationOptions::default())
-            .unwrap();
+        let result = translator.translate_with_options("xfoo", TranslationOptions::default());
         assert_eq!(result.output, "⠋⠕⠕");
-        assert_eq!(result.output_positions, Some(vec![0, 0, 1, 2]));
-        assert_eq!(result.input_positions, Some(vec![1, 2, 3]));
+        assert_eq!(result.output_positions, vec![0, 0, 1, 2]);
+        assert_eq!(result.input_positions, vec![1, 2, 3]);
     }
 }

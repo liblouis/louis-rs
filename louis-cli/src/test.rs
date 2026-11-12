@@ -22,7 +22,7 @@ pub enum TestError {
     #[error("Errors in table {0:?}")]
     TableErrors(Vec<TableError>),
     #[error("Error when compiling table {0:?}")]
-    CompilationError(#[from] translator::TranslationError),
+    CompilationError(#[from] translator::CompileError),
     #[error("Could not index the tables: {0}")]
     NotIndexable(String),
     #[error("No table matches the query {0}")]

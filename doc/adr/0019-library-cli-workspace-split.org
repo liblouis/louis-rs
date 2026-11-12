@@ -181,25 +181,45 @@ It was replaced by ~check-table~, which does what liblouis's
 ** Related API-review findings (do alongside or after the split)
 
 From the same review. Most of these become easier once the public
-surface is explicit:
+surface is explicit. Done on [2026-11-11 Wed] unless marked open:
 
 - ~backwards_compatibility~ is a non-additive default feature (it changes
-  rule selection). It should be a runtime option.
+  rule selection). It should be a runtime option. /Done:/ deleted
+  instead; louis-rs always behaves like liblouis (first definition
+  wins). A ~base~ rule whose base character is not defined in either
+  direction is a ~CompileError~, not ignored as in liblouis.
 - ~parser::TableError~, ~parser::ParseError~ and
   ~translator::TranslationError~ are pub-in-private: users can see them
   but can't name them. Re-export them, and rename the two
-  ~TranslationError~ types (e.g. a top-level ~Error~).
+  ~TranslationError~ types (e.g. a top-level ~Error~). /Done:/ the
+  constructors return ~louis::Error~ (~Table~ or ~Compile~), with
+  ~TableError~ and ~CompileError~ public. ~ParseError~ stays internal:
+  it exposes ~Opcode~, ~Constraints~ and four nested error enums, so
+  ~TableError~ carries an opaque ~SyntaxError~ (a message, no
+  variants). ~translate~ and ~translate_with_options~ cannot fail and
+  no longer return a ~Result~.
 - Add ~#[non_exhaustive]~ to the public enums and to ~TranslationResult~.
+  /Done/, except ~Direction~, which will only ever have two.
 - ~TranslationResult~: ~emphasis~ is always ~None~, and the position
-  vectors are always ~Some~.
+  vectors are always ~Some~. /Done:/ the positions are plain ~Vec~s;
+  ~emphasis~ stays, documented as not implemented.
 - Document that positions and ~cursor_pos~ are char indices, not bytes.
   Add ~# Errors~ sections, and fill in the ~-W missing_docs~ gaps (~30
-  items).
+  items). /Done/ for the public API; the remaining gaps are in
+  ~internals~.
 - ~TranslationModes~: add ~PartialEq~ / ~Eq~ / ~BitOr~ / ~FromIterator~.
   ~CompbrlAtCursor~ / ~CompbrlLeftCursor~ are accepted but silently
+  ignored. /Done/ (~PartialEq~, ~Eq~, ~FromIterator~). Only
+  ~NoUndefined~ is implemented; the other modes are documented as
   ignored.
+- /Open:/ ~TranslationMode~ and ~Direction~ derive enumset's
+  ~EnumSetType~, which gives them a ~|~ that returns an
+  ~enumset::EnumSet~. That puts enumset in the public API, so a major
+  enumset release would be a breaking change for us.
 - Add a static assertion that ~Translator: Send + Sync~ (true today),
   and run ~cargo-semver-checks~ in CI once the API is declared stable.
+  /Done/ (the assertion, as a unit test like the API guidelines'
+  C-SEND-SYNC); semver checks in CI remain open.
 
 ** Links
 

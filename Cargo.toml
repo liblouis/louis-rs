@@ -31,10 +31,6 @@ smallvec = "1"
 [dev-dependencies]
 criterion = "0.5"
 
-[features]
-default = ["backwards_compatibility"]
-backwards_compatibility = []
-
 [[bench]]
 name = "translate"
 harness = false

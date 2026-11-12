@@ -115,8 +115,10 @@ const ANY_DIRECTION: Constraints = constraint_set!(Constraint::Nofor | Constrain
 /// directions. The concept of direction is related to `Constraint`.
 #[derive(EnumSetType, Debug, Default)]
 pub enum Direction {
+    /// From text to braille
     #[default]
     Forward,
+    /// From braille to text
     Backward,
 }
 
@@ -2611,36 +2613,77 @@ impl<'a> RuleParser<'a> {
     }
 }
 
+/// What is wrong with a line of a table, or with a hyphenation table. Its message says
+/// what; the details are not public API, as they follow the parser's internals.
+#[derive(thiserror::Error, Debug)]
+#[error(transparent)]
+pub struct SyntaxError(SyntaxErrorKind);
+
+#[derive(thiserror::Error, Debug)]
+enum SyntaxErrorKind {
+    #[error(transparent)]
+    Rule(ParseError),
+    #[error(transparent)]
+    Hyphenation(hyphenation::ParseError),
+}
+
 /// An error that occurred during reading of a [liblouis](https://liblouis.io) braille table
 #[derive(thiserror::Error, Debug)]
+#[non_exhaustive]
 pub enum TableError {
-    #[error("Parse error {error:?} on line {line:?}")]
+    /// A line of a table could not be parsed
+    #[error("line {line}: {error}")]
     ParseError {
+        /// The table, or `None` for table source given in memory
         path: Option<PathBuf>,
+        /// The line number, counting from 1
         line: usize,
-        error: ParseError,
+        /// What is wrong with the line
+        error: SyntaxError,
     },
+    /// Table source given in memory has an `include`, which needs the filesystem
     #[error("Include directives are not supported when parsing table source in memory")]
     IncludesNotSupportedInMemory,
+    /// A table was found but could not be read
     #[error("Cannot read table {path}: {error}")]
-    TableNotReadable { path: PathBuf, error: io::Error },
+    TableNotReadable {
+        /// The table
+        path: PathBuf,
+        /// Why it could not be read
+        error: io::Error,
+    },
+    /// A table is not on the search path
     #[error("Cannot find table {0:?}")]
     TableNotFound(PathBuf),
+    /// A hyphenation table is not on the search path
     #[error("Hyphenation table {0} not found")]
     HyphenationTableNotFound(PathBuf),
+    /// A hyphenation table was found but could not be read
     #[error("Cannot read hyphenation table {path}: {error}")]
-    HyphenationTableNotReadable { path: PathBuf, error: io::Error },
+    HyphenationTableNotReadable {
+        /// The hyphenation table
+        path: PathBuf,
+        /// Why it could not be read
+        error: io::Error,
+    },
+    /// A hyphenation table could not be parsed
     #[error("Cannot parse hyphenation table {path}: {error}")]
     HyphenationTableNotParseable {
+        /// The hyphenation table
         path: PathBuf,
-        error: hyphenation::ParseError,
+        /// What is wrong with it
+        error: SyntaxError,
     },
+    /// Tables include each other in a cycle, listed in the order of inclusion
     #[error("circular table inclusion detected: {0:?}")]
     CircularInclude(Vec<PathBuf>),
+    /// A chain of includes is deeper than the given maximum
     #[error("table inclusion chain exceeds the maximum depth of {0}")]
     IncludeTooDeep(usize),
+    /// The `endmodephrase` of the named emphasis class is defined both before and after
     #[error("endmodephrase {0:?} may only be defined as before or after, not both")]
     ConflictingEndmodephrasePosition(String),
+    /// `endcapsphrase` is defined both before and after
     #[error("endcapsphrase may only be defined as before or after, not both")]
     ConflictingEndcapsphrasePosition,
 }
@@ -2741,7 +2784,7 @@ pub fn table(table: &str, path: Option<PathBuf>) -> Result<Vec<AnchoredRule>, Ve
                 .map_err(|e| TableError::ParseError {
                     path: path.clone(),
                     line: line_no + 1,
-                    error: e,
+                    error: SyntaxError(SyntaxErrorKind::Rule(e)),
                 })
         })
         .partition(Result::is_ok);
@@ -2833,7 +2876,7 @@ fn expand_include(
                 let table = HyphenationTable::parse(&source).map_err(|error| {
                     vec![TableError::HyphenationTableNotParseable {
                         path: resolved,
-                        error,
+                        error: SyntaxError(SyntaxErrorKind::Hyphenation(error)),
                     }]
                 })?;
                 return Ok(vec![AnchoredRule::new(

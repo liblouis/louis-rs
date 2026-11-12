@@ -11,7 +11,7 @@ use clap::{Parser, Subcommand};
 use rayon::prelude::*;
 use search_path::SearchPath;
 
-use louis::TranslationError;
+use louis::Error;
 use louis::internals::parser::{self, AnchoredRule, Direction, TableError};
 use louis::internals::translator::{
     DisplayTable, ResolvedTranslation, TranslationPipeline, TranslationStage,
@@ -231,12 +231,10 @@ fn print_trace(all_translations: &Vec<Vec<ResolvedTranslation>>, style: &TraceSt
 
 /// Report why a table could not be turned into a [`TranslationPipeline`]: reading can fail
 /// with any number of errors, each naming its own file and line, compiling with one.
-fn report(error: TranslationError) {
+fn report(error: Error) {
     match error {
-        TranslationError::ParseFailed(errors) => print_errors(errors),
-        TranslationError::TranslationFailed(error) => {
-            eprintln!("Could not compile table: {:?}", error)
-        }
+        Error::Table(errors) => print_errors(errors),
+        error => eprintln!("Could not compile table: {error}"),
     }
 }
 
@@ -245,14 +243,13 @@ fn pipeline(
     table: &Path,
     display: Option<&Path>,
     direction: Direction,
-) -> Result<TranslationPipeline, TranslationError> {
-    let rules = parser::table_expanded_in(table, &cli_search_path(table))
-        .map_err(TranslationError::ParseFailed)?;
+) -> Result<TranslationPipeline, Error> {
+    let rules = parser::table_expanded_in(table, &cli_search_path(table)).map_err(Error::Table)?;
     let pipeline = TranslationPipeline::compile(&rules, direction)?;
     match display {
         Some(path) => {
-            let rules = parser::table_expanded_in(path, &cli_search_path(path))
-                .map_err(TranslationError::ParseFailed)?;
+            let rules =
+                parser::table_expanded_in(path, &cli_search_path(path)).map_err(Error::Table)?;
             Ok(pipeline.with_display(DisplayTable::compile(&rules, direction)))
         }
         None => Ok(pipeline),

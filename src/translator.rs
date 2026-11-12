@@ -31,12 +31,22 @@ mod table;
 mod translation;
 mod trie;
 
+/// Why the rules of the tables don't fit together.
 #[derive(thiserror::Error, Debug)]
-pub enum TranslationError {
+#[non_exhaustive]
+pub enum CompileError {
+    /// A rule uses a character's dots implicitly (`=`), but no rule defines that character
     #[error("Implicit character {0:?} not defined")]
     ImplicitCharacterNotDefined(char),
-    #[error("Character in base rule not defined: derived: {derived:?}, base: {base:?}")]
-    BaseCharacterNotDefined { base: char, derived: char },
+    /// A `base` rule's base character is not defined in either direction
+    #[error("Base character {base:?} of {derived:?} not defined")]
+    BaseCharacterNotDefined {
+        /// the base character
+        base: char,
+        /// the character derived from it
+        derived: char,
+    },
+    /// A rule refers to a swap class that no rule defines
     #[error("Swap class {0} not defined")]
     SwapClassNotDefined(String),
 }
@@ -50,13 +60,8 @@ impl CharacterDefinition {
     }
 
     fn insert(&mut self, from: char, to: &str) {
-        if cfg!(feature = "backwards_compatibility") {
-            // first rule wins
-            self.0.entry(from).or_insert(to.to_string());
-        } else {
-            // last rule wins
-            self.0.insert(from, to.to_string());
-        }
+        // first rule wins, as in liblouis
+        self.0.entry(from).or_insert(to.to_string());
     }
 
     pub fn get(&self, from: &char) -> Option<&String> {
@@ -73,12 +78,12 @@ impl CharacterDefinition {
         self.0.values().any(|d| d == dots)
     }
 
-    fn resolve_implicit_dots(&self, chars: &str) -> Result<String, TranslationError> {
+    fn resolve_implicit_dots(&self, chars: &str) -> Result<String, CompileError> {
         chars
             .chars()
             .map(|c| {
                 self.get(&c)
-                    .ok_or(TranslationError::ImplicitCharacterNotDefined(c))
+                    .ok_or(CompileError::ImplicitCharacterNotDefined(c))
                     .map(|t| t.to_string())
             })
             .collect()
@@ -92,9 +97,9 @@ impl CharacterDefinition {
     /// braille with the given `character_definitions` and using the [`Self::resolve_implicit_dots`]
     /// function.
     ///
-    /// Returns the braille Unicode characters or [`TranslationError`] if the implicit characters
+    /// Returns the braille Unicode characters or [`CompileError`] if the implicit characters
     /// could not be converted.
-    fn braille_to_unicode(&self, dots: &Braille, chars: &str) -> Result<String, TranslationError> {
+    fn braille_to_unicode(&self, dots: &Braille, chars: &str) -> Result<String, CompileError> {
         let dots = match dots {
             Braille::Implicit => self.resolve_implicit_dots(chars)?,
             Braille::Explicit(dots) => dots.to_string(),

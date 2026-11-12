@@ -6,10 +6,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Why an [`Index`] could not be built or a [`Query`] parsed.
 #[derive(thiserror::Error, Debug)]
+#[non_exhaustive]
 pub enum MetaDataError {
+    /// A directory on the search path could not be read
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+    /// A part of the query is not a `key:value` pair
     #[error("{0:?} is not a key:value pair")]
     InvalidQuery(String),
 }

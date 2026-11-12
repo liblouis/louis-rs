@@ -17,6 +17,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   match.
 
 ### Changed
+- The library API, on the way to a stable one:
+  - `Translator`'s constructors return `louis::Error`, either
+    `Error::Table` with the `TableError`s (now public) or `Error::Compile`
+    with a `CompileError` (formerly `TranslationError`). A syntax error in
+    a table carries a `SyntaxError`, which says what is wrong without
+    exposing the parser's internals.
+  - `translate` returns a `String` and `translate_with_options` a
+    `TranslationResult`, not a `Result`: translating cannot fail.
+  - `TranslationResult`'s `output_positions` and `input_positions` are
+    plain `Vec`s; they were always `Some`.
+  - The public enums and `TranslationResult` are `#[non_exhaustive]`.
+  - `TranslationModes` implements `PartialEq`, `Eq` and `FromIterator`.
+- The `backwards_compatibility` feature is gone. louis-rs always behaves
+  as it did with it, like liblouis: the first definition of a character
+  wins.
+- A `base` rule whose base character is not defined in either direction
+  is an error, `CompileError::BaseCharacterNotDefined`; liblouis ignores
+  it. A base character defined for one direction only (`noback`,
+  `nofor`) is fine.
 - `louis query` takes liblouis's query syntax, `language:de grade:2`,
   instead of `language=de,grade=2`, either as one argument or as one
   argument per pair.

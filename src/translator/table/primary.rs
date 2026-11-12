@@ -10,7 +10,7 @@ use crate::{
         HasDirection, HasNocross, WithClass, in_definition_order,
     },
     translator::{
-        CharacterDefinition, ClassConstraints, ResolvedTranslation, Rule, TranslationError,
+        CharacterDefinition, ClassConstraints, CompileError, ResolvedTranslation, Rule,
         TranslationMode, TranslationOptions, TranslationStage,
         beg_word::BegWordScanner,
         context_pattern::{ContextPatterns, ContextPatternsBuilder},
@@ -122,13 +122,8 @@ impl CharacterTranslation {
     }
 
     fn insert(&mut self, from: char, translation: ResolvedTranslation) {
-        if cfg!(feature = "backwards_compatibility") {
-            // first rule wins
-            self.0.entry(from).or_insert(translation);
-        } else {
-            // last rule wins
-            self.0.insert(from, translation);
-        }
+        // first rule wins, as in liblouis
+        self.0.entry(from).or_insert(translation);
     }
 
     fn get(&self, from: &char) -> Option<&ResolvedTranslation> {
@@ -599,7 +594,7 @@ impl PrimaryTable {
         direction: Direction,
         _stage: TranslationStage,
         ctx: &TableContext,
-    ) -> Result<Self, TranslationError> {
+    ) -> Result<Self, CompileError> {
         // definition order is the order of `rules`, see `Rank::definition_order`
         let rules = &in_definition_order(rules);
         // Word/number boundary checks must consult the classes of the characters they are
@@ -1218,17 +1213,9 @@ impl PrimaryTable {
                             }
                             Direction::Backward => {}
                         }
-                    } else {
-                        // hm, there is no character definition for the base character.
-                        // If we are backwards compatible ignore the problem, otherwise
-                        // throw an error
-                        if !cfg!(feature = "backwards_compatibility") {
-                            return Err(TranslationError::BaseCharacterNotDefined {
-                                base: *base,
-                                derived: *derived,
-                            });
-                        }
                     }
+                    // no definition of the base character for this direction (`noback`, `nofor`), so
+                    // nothing to derive; `TranslationPipeline::compile` rejects one with none at all
                 }
                 Rule::Comp6 { character, dots } => {
                     let character = character.to_string();

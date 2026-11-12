@@ -13,9 +13,7 @@ use crate::translator::table::TableContext;
 use crate::translator::translation::{
     Translation, TranslationTarget, TranslationTargets, UnresolvedTranslation,
 };
-use crate::translator::{
-    CharacterDefinition, ResolvedTranslation, TranslationError, TranslationStage,
-};
+use crate::translator::{CharacterDefinition, CompileError, ResolvedTranslation, TranslationStage};
 
 impl Regexp {
     fn from_test(test: &Test, whole_match: bool, ctx: &CharacterClasses) -> Self {
@@ -148,14 +146,14 @@ impl TranslationTarget {
         value: ActionInstruction,
         ctx: &SwapClasses,
         capture_target: &TranslationTarget,
-    ) -> Result<Self, TranslationError> {
+    ) -> Result<Self, CompileError> {
         match value {
             ActionInstruction::String { s } => Ok(TranslationTarget::Literal(s)),
             ActionInstruction::Dots { dots } => Ok(TranslationTarget::Literal(dots.to_string())),
             ActionInstruction::SwapClass { name } => {
                 let swapper = ctx
                     .get(&name)
-                    .ok_or(TranslationError::SwapClassNotDefined(name))?;
+                    .ok_or(CompileError::SwapClassNotDefined(name))?;
                 Ok(TranslationTarget::Swap(swapper))
             }
             ActionInstruction::Replace => Ok(capture_target.clone()),
@@ -173,7 +171,7 @@ impl TranslationTargets {
         values: &[ActionInstruction],
         ctx: &SwapClasses,
         capture_target: &TranslationTarget,
-    ) -> Result<Vec<TranslationTarget>, TranslationError> {
+    ) -> Result<Vec<TranslationTarget>, CompileError> {
         values
             .iter()
             .cloned()
@@ -226,7 +224,7 @@ impl ContextPatternsBuilder {
         stage: TranslationStage,
         swap_classes: &SwapClasses,
         capture_target: &TranslationTarget,
-    ) -> Result<UnresolvedTranslation, TranslationError> {
+    ) -> Result<UnresolvedTranslation, CompileError> {
         let targets =
             TranslationTargets::from_instructions(&action.actions(), swap_classes, capture_target)?;
         let effects = Effects::from_instructions(&action.actions());
@@ -252,7 +250,7 @@ impl ContextPatternsBuilder {
         stage: TranslationStage,
         ctx: &TableContext,
         capture_target: &TranslationTarget,
-    ) -> Result<(), TranslationError> {
+    ) -> Result<(), CompileError> {
         let translation = Translation::Unresolved(self.translation(
             action,
             origin,
