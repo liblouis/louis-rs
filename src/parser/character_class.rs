@@ -96,6 +96,11 @@ impl CharacterClasses {
         self.0.get(class).cloned()
     }
 
+    /// The characters in any class, which are those the table defines
+    pub fn all(&self) -> HashSet<char> {
+        self.0.values().flatten().copied().collect()
+    }
+
     pub fn is_whitespace(&self, c: char) -> bool {
         self.get(&CharacterClass::Space)
             .is_some_and(|class| class.contains(&c))

@@ -1,6 +1,6 @@
 //! Store and find simple translation rules using a prefix tree ([Trie](https://en.wikipedia.org/wiki/Trie))
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use crate::{
     parser::{AnchoredRule, CharacterClass, CharacterClasses, Direction},
@@ -50,6 +50,13 @@ impl ResolvedClasses {
             Some(c) => self.chars.binary_search(&c).is_ok(),
             None => self.includes_space,
         }
+    }
+
+    /// [`Self::matches`] for the text before a match, where a character the table doesn't
+    /// define counts as a space, as in liblouis, whose `getChar` gives it the space attribute.
+    /// Not for braille: liblouis knows the cells of all its rules, not only of its characters.
+    fn matches_behind(&self, c: Option<char>, defined: &HashSet<char>) -> bool {
+        self.matches(c) || c.is_some_and(|c| self.includes_space && !defined.contains(&c))
     }
 }
 
@@ -161,6 +168,8 @@ pub struct Trie {
     /// `lookahead_classes` unless set with [`Trie::with_lookbehind_classes`]: backward,
     /// `preceding` is text while the input is braille.
     lookbehind_classes: CharacterClasses,
+    /// The characters in `lookbehind_classes`, see [`ResolvedClasses::matches_behind`]
+    lookbehind_defined: HashSet<char>,
     /// When true, character transitions are matched on the exact character instead of
     /// being lowercased first. Needed for `comp6`, where `comp6 a 1` and `comp6 A 17`
     /// are independent rules.
@@ -181,6 +190,7 @@ impl Trie {
             root: TrieNode::default(),
             lookahead_classes: CharacterClasses::default(),
             lookbehind_classes: CharacterClasses::default(),
+            lookbehind_defined: HashSet::new(),
             case_sensitive: false,
             beg_word: BegWordScanner::default(),
             end_word: EndWordScanner::default(),
@@ -191,6 +201,7 @@ impl Trie {
     /// Set the classes for both the lookahead and the lookbehind checks
     pub fn with_context(self, ctx: CharacterClasses) -> Self {
         Trie {
+            lookbehind_defined: ctx.all(),
             lookbehind_classes: ctx.clone(),
             lookahead_classes: ctx,
             ..self
@@ -200,6 +211,7 @@ impl Trie {
     /// Set the classes for the lookbehind checks only
     pub fn with_lookbehind_classes(self, lookbehind_classes: CharacterClasses) -> Self {
         Trie {
+            lookbehind_defined: lookbehind_classes.all(),
             lookbehind_classes,
             ..self
         }
@@ -380,9 +392,11 @@ impl Trie {
         // Non-consuming checks: they look at the context of the match without consuming input
         for (transition, child_node) in &node.transitions {
             let context_matches = match transition {
-                ResolvedTransition::Start(resolved) => resolved.matches(preceding.chars().last()),
+                ResolvedTransition::Start(resolved) => {
+                    resolved.matches_behind(preceding.chars().last(), &self.lookbehind_defined)
+                }
                 ResolvedTransition::NotStart(resolved) => {
-                    !resolved.matches(preceding.chars().last())
+                    !resolved.matches_behind(preceding.chars().last(), &self.lookbehind_defined)
                 }
                 ResolvedTransition::End(resolved) => resolved.matches(c),
                 ResolvedTransition::BegWord => self.beg_word.is_beg_word(preceding),
