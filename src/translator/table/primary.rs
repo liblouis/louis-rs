@@ -66,6 +66,10 @@ fn unknown_dots(ch: char) -> Option<String> {
 /// `compbrlAtCursor` or `compbrlLeftCursor`, as liblouis does: the word the cursor is in, up
 /// to the next space, or only up to the cursor with `compbrlLeftCursor`; the space itself if
 /// the cursor is on one.
+///
+/// Unlike liblouis, `repeated` rules next to the word are left alone: liblouis's limits
+/// there are off by one, so a `repeated \s 0` expands spaces inconsistently (its own
+/// `present_progressive.yaml` marks this `xfail`), and a `repword` can't reach into the word.
 #[derive(Debug)]
 struct CursorWordScanner {
     character_classes: CharacterClasses,
