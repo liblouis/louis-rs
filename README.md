@@ -13,27 +13,35 @@ $ louis translate en-us-g2.ctb "It's about the blind"
 ```
 
 > [!NOTE]
-> louis-rs is in beta and ready for wider testing: it fails only 0.1% of liblouis's
-> test suite that liblouis passes, and the library API follows semantic versioning.
+> louis-rs is in beta and ready for wider testing: of the more than two million
+> assertions in liblouis's own test suite, it passes 99.9% of those liblouis passes,
+> and the library API follows semantic versioning.
 > Try it on your own texts and tables, and [report what
 > breaks](https://github.com/liblouis/louis-rs/issues).
 
-## What is here
+## What it does
 
--   a hand-rolled parser and a two-pass compiler for liblouis tables; every
-    table under `tables/` that liblouis compiles, louis-rs compiles too
--   forward and backward translation through the full pipeline: correct rules,
-    the main stage, and pass2/pass3/pass4
+Everything liblouis does to translate text to braille and back. Every table under
+`tables/` that liblouis compiles, louis-rs compiles too, and translates through the
+whole pipeline in both directions: `correct` rules, the main stage, `pass2` to `pass4`,
+with hyphenation, emphasis, computer braille and the modes screen readers use. The
+`louis` binary translates, traces which rule produced what, checks tables, runs
+liblouis's YAML tests and finds tables by their metadata; see `louis help`.
+
+## How it is built
+
+-   a hand-rolled parser and a two-pass compiler for liblouis tables
 -   a virtual-machine regexp engine behind the `match` and `context` opcodes, and
     a trie for everything else
 -   hyphenation straight from liblouis's `.dic` files, with no external crate and
     no build step
--   the `louis` binary: `translate`, `trace`, `check-table`, `check` and `query`; see
-    `louis help`
+
+## Documentation
+
 -   [doc/Architecture.md](doc/Architecture.md) — the concepts and how a
     translation goes through them
--   [doc/Liblouis_Parity.md](doc/Liblouis_Parity.md) — what works, what doesn't,
-    and where the remaining failures are
+-   [doc/Liblouis_Parity.md](doc/Liblouis_Parity.md) — how close louis-rs is to
+    liblouis, and where the remaining failures are
 -   [doc/Differences_From_Liblouis.md](doc/Differences_From_Liblouis.md) — where
     louis-rs deliberately does something other than what liblouis does, notably
     table lookup and display tables
@@ -102,9 +110,7 @@ let translator = Translator::new(&["en-us-g2.ctb"], Direction::Forward)?;
 assert_eq!(translator.translate("It's about the blind"), "⠠⠭⠄⠎⠀⠁⠃⠀⠮⠀⠃⠇");
 ```
 
-The [API documentation](https://docs.rs/louis-rs) covers the rest: back-translation,
-positions and the cursor, emphasis, braille encodings such as ASCII braille, and
-finding tables by their metadata.
+The [API documentation](https://docs.rs/louis-rs) has the rest.
 
 ## Project status
 
