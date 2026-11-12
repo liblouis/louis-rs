@@ -2189,8 +2189,8 @@ impl PrimaryTable {
 
         // Enrich spans with compbrl-detected regions.
         let enriched_spans = match &self.compbrl_scanner {
-            Some(scanner) => scanner.enrich(input, options.emphasis()),
-            None => options.emphasis().to_vec(),
+            Some(scanner) => scanner.enrich(input, options.emphasis().spans()),
+            None => options.emphasis().spans().to_vec(),
         };
 
         let indications = self.indicators.precompute(input, &enriched_spans);

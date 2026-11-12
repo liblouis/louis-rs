@@ -51,7 +51,7 @@ mod translator;
 
 use std::path::{Path, PathBuf};
 
-pub use emphasis::EmphasisSpan;
+pub use emphasis::{Emphasis, EmphasisSpan};
 pub use parser::{Direction, SyntaxError, TableError};
 use search_path::SearchPath;
 use translator::TranslationPipeline;
@@ -97,8 +97,10 @@ pub enum Error {
 pub struct TranslationResult {
     /// The translated text
     pub output: String,
-    /// The emphasis of the output. Not implemented yet: always `None`.
-    pub emphasis: Option<Vec<EmphasisSpan>>,
+    /// Backward, the emphasis of the output, as the braille's emphasis indicators give it:
+    /// the typeform of a back-translation. Forward, where the emphasis is given with the
+    /// input, always `None`.
+    pub emphasis: Option<Emphasis>,
     /// For each input character, the position of its translation in the output
     pub output_positions: Vec<usize>,
     /// For each output character, the position of the input it was translated from
@@ -193,7 +195,7 @@ impl Translator {
         input: &str,
         options: TranslationOptions,
     ) -> TranslationResult {
-        let (output, positions) = self.0.translate_with_positions(input, &options);
+        let (output, positions, emphasis) = self.0.translate_with_details(input, &options);
         let cursor_pos = options.cursor_pos().map(|cursor| positions.cursor(cursor));
         let (output_positions, input_positions) = positions.into_parts();
         TranslationResult {
@@ -201,7 +203,7 @@ impl Translator {
             output_positions,
             input_positions,
             cursor_pos,
-            emphasis: None,
+            emphasis,
         }
     }
 }
@@ -222,6 +224,41 @@ mod tests {
         let table = "space \\s 0\nletter a 1\nletter b 12\n";
         let translator = Translator::from_table_source(table, Direction::Forward).unwrap();
         assert_eq!(translator.translate("ab"), "⠁⠃");
+    }
+
+    #[test]
+    fn back_translation_returns_the_emphasis() {
+        let table = "space \\s 0\nlowercase a 1\nlowercase b 12\nemphclass italic\n\
+                     emphletter italic 46-23\nbegemphword italic 46-2\nendemphword italic 46-3\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        let emphasis = |braille| {
+            translator
+                .translate_with_options(braille, TranslationOptions::default())
+                .emphasis
+                .unwrap()
+        };
+        // a letter, then a word up to its end indicator
+        assert_eq!(
+            emphasis("⠨⠆⠁⠃").spans(),
+            [EmphasisSpan::new("italic", 0..1)]
+        );
+        assert_eq!(
+            emphasis("⠃⠀⠨⠂⠁⠃⠨⠄⠁").spans(),
+            [EmphasisSpan::new("italic", 2..4)]
+        );
+        // a word without an end indicator ends at the space
+        assert_eq!(
+            emphasis("⠨⠂⠁⠃⠀⠁").spans(),
+            [EmphasisSpan::new("italic", 0..2)]
+        );
+        // forward, the emphasis comes with the input
+        let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert!(
+            forward
+                .translate_with_options("ab", TranslationOptions::default())
+                .emphasis
+                .is_none()
+        );
     }
 
     #[test]

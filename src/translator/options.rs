@@ -6,7 +6,7 @@
 
 use enumset::{EnumSet, EnumSetType};
 
-use crate::emphasis::EmphasisSpan;
+use crate::emphasis::Emphasis;
 
 /// Flags that modify the behaviour of the translator.
 ///
@@ -69,8 +69,8 @@ impl FromIterator<TranslationMode> for TranslationModes {
 #[derive(Debug, Clone, Default)]
 pub struct TranslationOptions {
     mode: TranslationModes,
-    /// Per-character emphasis annotations (which emphasis classes are active where).
-    emphasis: Vec<EmphasisSpan>,
+    /// Which emphasis classes are active where in the input
+    emphasis: Emphasis,
     cursor_pos: Option<usize>,
 }
 
@@ -82,7 +82,7 @@ impl TranslationOptions {
     }
 
     /// Translate with the input emphasized as `emphasis` says.
-    pub fn with_emphasis(mut self, emphasis: Vec<EmphasisSpan>) -> Self {
+    pub fn with_emphasis(mut self, emphasis: Emphasis) -> Self {
         self.emphasis = emphasis;
         self
     }
@@ -100,7 +100,7 @@ impl TranslationOptions {
     }
 
     /// The emphasis of the input.
-    pub fn emphasis(&self) -> &[EmphasisSpan] {
+    pub fn emphasis(&self) -> &Emphasis {
         &self.emphasis
     }
 

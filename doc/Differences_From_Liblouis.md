@@ -108,6 +108,17 @@ upstream for `da-dk-g16`, `da-dk-g26` and their variants, `es-g2.ctb`,
 `sv-6common.uti`, `th-g1.utb`, `th-g1.uti`, `th-g2.ctb` and the `zhcn` tables.
 Until then those rules are silently dropped.
 
+## A word's emphasis ends before the space
+
+Back-translating, an emphasis indicator for a word without an end indicator emphasizes
+the word up to the next space. liblouis also emphasizes that space, since it ends the word
+only after writing it: for `⠨⠂⠮ ⠯` it gives italic over "the ", and for `⠨⠂ ⠨⠄` an
+italic space. louis-rs leaves the space plain, as the forward translation would read it.
+Eight cases in liblouis's `backtranslation_emphasis.yaml` expect the space emphasized.
+
+**Migration path:** where liblouis's typeform is needed, extend each emphasis span of a
+word that ends right before a space by that space.
+
 ## `base` rules need a defined base character
 
 liblouis accepts a `base` rule whose base character is not defined, and the

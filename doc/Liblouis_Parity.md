@@ -111,11 +111,8 @@ Honest list, no dates attached:
   `compbrlAtCursor`/`compbrlLeftCursor`
   ([#20](https://github.com/liblouis/louis-rs/issues/20)). The option flags are
   accepted; nothing reads them yet.
-- **Back-translation returns text but not typeform.** `TranslationResult::emphasis`
-  is never populated, and the YAML runner doesn't compare `expected_typeform`, so
-  `backtranslation_emphasis.yaml` passes on the text alone. Nothing reports whether a back-translation result could
-  still change if more cells arrive
-  ([#29](https://github.com/liblouis/louis-rs/issues/29)).
+- **Nothing reports whether a back-translation result could still change if more
+  cells arrive** ([#29](https://github.com/liblouis/louis-rs/issues/29)).
 - **No Unicode normalization.** NFC was implemented and reverted — it fixed tables
   with precomposed-character rules and broke tables with standalone
   combining-character rules (IPA, Hebrew, Yiddish). NFD is the proposed path.
@@ -143,8 +140,7 @@ and are there so you can pick work by appetite, not to add up. Failure counts ar
 Two cross-cutting items have no single file behind them:
 
 - **Backward direction, generally.** The boundary predicates (`word_start` and
-  friends) only work forward, caps passages have no backward path at all, and
-  emphasis indicators are only dropped, with no typeform.
+  friends) only work forward, and caps passages have no backward path at all.
 - **Engine debt.** Regexp negation of concatenation and alternation is wrong
   (`!(e1e2)` ≠ `(!e1!e2)`); `Attribute::ByOrder` and `Any` are no-ops in
   `match_pattern.rs` and all three are no-ops in `context_pattern.rs`. *(M)*

@@ -1,8 +1,9 @@
 use crate::{
-    Direction,
+    Direction, Emphasis,
     parser::{AnchoredRule, HasDirection, Rule},
     translator::{
         CompileError, PositionMap, ResolvedTranslation, TranslationOptions, TranslationStage,
+        indication::emphasis::backward_emphasis,
         table::{
             TableContext, display::DisplayTable, multipass::MultipassTable, primary::PrimaryTable,
         },
@@ -183,19 +184,41 @@ impl TranslationPipeline {
         result
     }
 
-    /// Translate `input` and map its positions to the positions of the output
-    pub fn translate_with_positions(
+    /// Translate `input`, map its positions to the positions of the output and, backward,
+    /// find the emphasis of the output
+    pub fn translate_with_details(
         &self,
         input: &str,
         options: &TranslationOptions,
-    ) -> (String, PositionMap) {
+    ) -> (String, PositionMap, Option<Emphasis>) {
         let stages = self.trace_with_options(input, options);
         let output = stages.last().map_or_else(
             || input.to_string(),
             |steps| steps.iter().map(|t| t.output()).collect(),
         );
         let positions = PositionMap::from_trace(input.chars().count(), &stages, self.direction);
-        (output, positions)
+        let emphasis = self.emphasis(&stages);
+        (output, positions, emphasis)
+    }
+
+    /// Backward, the emphasis that the indicators chosen in the main stage give the output.
+    /// The stages after the main stage can change the text, so the emphasis of each
+    /// character of the main stage's output is carried over to the characters it becomes.
+    fn emphasis(&self, stages: &[Vec<ResolvedTranslation>]) -> Option<Emphasis> {
+        if self.direction != Direction::Backward {
+            return None;
+        }
+        let main = self
+            .steps
+            .iter()
+            .position(|step| matches!(step, Transformation::Primary(_)))?;
+        let emphasis = backward_emphasis(&stages[main]);
+        let main_output_len = stages[main]
+            .iter()
+            .map(|t| t.output().chars().count())
+            .sum();
+        let later = PositionMap::from_trace(main_output_len, &stages[main + 1..], self.direction);
+        Some(emphasis.remap(later.input_positions()))
     }
 }
 
@@ -279,7 +302,7 @@ mod tests {
     }
 
     #[test]
-    fn translate_with_positions_matches_translate() {
+    fn translate_with_details_matches_translate() {
         let rules = [
             parse_rule("always foo 123"),
             parse_rule("always bar 456"),
@@ -291,14 +314,14 @@ mod tests {
         let options = TranslationOptions::default();
         for input in ["foobaz", "foobar", "  ", "🐂", ""] {
             assert_eq!(
-                pipeline.translate_with_positions(input, &options).0,
+                pipeline.translate_with_details(input, &options).0,
                 pipeline.translate_with_options(input, &options)
             );
         }
     }
 
     #[test]
-    fn translate_with_positions_composes_stages() {
+    fn translate_with_details_composes_stages() {
         let rules = [
             parse_rule("always foo 123"),
             parse_rule("always bar 456"),
@@ -306,8 +329,8 @@ mod tests {
             parse_rule("space \\s 0"),
         ];
         let pipeline = TranslationPipeline::compile(&rules, Direction::Forward).unwrap();
-        let (output, positions) =
-            pipeline.translate_with_positions("foobaz", &TranslationOptions::default());
+        let (output, positions, _) =
+            pipeline.translate_with_details("foobaz", &TranslationOptions::default());
         assert_eq!(output, "⠇⠸");
         assert_eq!(positions.output_positions(), [0, 0, 0, 1, 1, 1]);
         assert_eq!(positions.input_positions(), [0, 3]);
@@ -316,7 +339,7 @@ mod tests {
     }
 
     #[test]
-    fn translate_with_positions_counts_the_context_a_star_action_consumes() {
+    fn translate_with_details_counts_the_context_a_star_action_consumes() {
         let rules = [
             parse_rule("letter a 1"),
             parse_rule("letter b 12"),
@@ -325,8 +348,8 @@ mod tests {
             parse_rule("noback correct [\"a\"]\"b\" *"),
         ];
         let pipeline = TranslationPipeline::compile(&rules, Direction::Forward).unwrap();
-        let (output, positions) =
-            pipeline.translate_with_positions("abc", &TranslationOptions::default());
+        let (output, positions, _) =
+            pipeline.translate_with_details("abc", &TranslationOptions::default());
         assert_eq!(output, "⠁⠉");
         // the dropped "b" shares the "a"'s cell, and the "c" keeps its own
         assert_eq!(positions.output_positions(), [0, 0, 1]);
@@ -388,7 +411,7 @@ mod tests {
 
         // a one-to-one stage must leave the positions alone
         let options = TranslationOptions::default();
-        let (output, _) = forward.translate_with_positions("a", &options);
+        let (output, _, _) = forward.translate_with_details("a", &options);
         assert_eq!(output, "A");
     }
 }

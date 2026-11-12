@@ -137,7 +137,6 @@ Tests use YAML files from the liblouis project. Current gaps:
 - Emphasis indication (partial support)
 - Some backward translation rules
 - Computer braille cursor modes (`compbrlAtCursor`/`compbrlLeftCursor` not implemented)
-- Typeform output (`TranslationResult::emphasis` is never populated)
 
 See `TODO.org` for detailed tracking.
 

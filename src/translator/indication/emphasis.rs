@@ -10,8 +10,8 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    emphasis::EmphasisSpan,
-    parser::{AnchoredRule, CharacterClasses, Position},
+    emphasis::{Emphasis, EmphasisSpan},
+    parser::{AnchoredRule, CharacterClasses, Position, Rule},
     translator::{ResolvedTranslation, table::TableContext},
 };
 
@@ -489,6 +489,59 @@ impl Indicator {
             .map(|(pos, trans, _, _)| (pos, trans))
             .collect()
     }
+}
+
+/// The emphasis of what the chosen backward `translations` output: an `emphletter`
+/// emphasizes what the next rule writes, a `begemphword` or `begemph` everything up to the
+/// next `space` rule or the matching end, and a `begemphphrase` everything up to its
+/// `endemphphrase`.
+pub fn backward_emphasis(translations: &[ResolvedTranslation]) -> Emphasis {
+    // A small state machine: the classes active for the phrase, for the word and for the
+    // next rule only. The indicators chosen switch them on and off, a space ends the word,
+    // and whatever a translation writes gets the classes active at that point.
+    let mut phrase: HashSet<&str> = HashSet::new();
+    let mut word: HashSet<&str> = HashSet::new();
+    let mut next: HashSet<&str> = HashSet::new();
+    let mut spans = Vec::new();
+    let mut position = 0;
+    for translation in translations {
+        match translation.rule() {
+            Some(Rule::Emphletter { name, .. }) => {
+                next.insert(name);
+            }
+            Some(Rule::Begemphword { name, .. } | Rule::Begemph { name, .. }) => {
+                word.insert(name);
+            }
+            // `endemphword` and `endemphphrase` can share their dots (UEB), so like liblouis
+            // an end without a word to end ends the phrase
+            Some(Rule::Endemphword { name, .. } | Rule::Endemph { name, .. }) => {
+                if !word.remove(name.as_str()) {
+                    phrase.remove(name.as_str());
+                }
+            }
+            Some(Rule::Begemphphrase { name, .. }) => {
+                phrase.insert(name);
+            }
+            Some(Rule::Endemphphrase { name, .. }) => {
+                phrase.remove(name.as_str());
+            }
+            _ => (),
+        }
+        // a space ends a word's emphasis. liblouis only ends it after writing the space,
+        // which so gets the emphasis of the word before it; louis-rs doesn't do that
+        if matches!(translation.rule(), Some(Rule::Space { .. })) {
+            word.clear();
+        }
+        let written = translation.output().chars().count();
+        if written > 0 {
+            for class in &(&phrase | &word) | &next {
+                spans.push(EmphasisSpan::new(class, position..position + written));
+            }
+            next.clear();
+        }
+        position += written;
+    }
+    spans.into_iter().collect()
 }
 
 #[cfg(test)]

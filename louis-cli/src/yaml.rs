@@ -13,7 +13,7 @@ use crate::test::{
     CursorPosition, Display, Expectation, ExpectedFailure, Table, TableQuery, Test, TestError,
     TestMatrix, TestMode, TestResult,
 };
-use louis::EmphasisSpan;
+use louis::{Emphasis, EmphasisSpan};
 use louis::{TranslationMode, TranslationModes};
 
 #[derive(thiserror::Error, Debug)]
@@ -253,30 +253,21 @@ impl YAMLParser {
         }
     }
 
-    fn emphasis_spans_value(&mut self) -> Result<Vec<EmphasisSpan>, ParseError> {
+    fn emphasis_value(&mut self) -> Result<Emphasis, ParseError> {
         let mut spans: Vec<EmphasisSpan> = Vec::new();
         self.mapping_start()?;
         while let Some(Ok((Event::Scalar(..), _))) = self.events.peek() {
             let class = self.scalar()?;
             let mask = self.scalar()?;
-            // Convert a run-length mask ("++--++") to spans over the class.
-            let mut run_start: Option<usize> = None;
+            // a span per `+` in the mask ("++--++"), which `Emphasis` merges into runs
             for (i, ch) in mask.chars().enumerate() {
-                match (ch == '+', run_start) {
-                    (true, None) => run_start = Some(i),
-                    (false, Some(s)) => {
-                        spans.push(EmphasisSpan::new(class.clone(), s..i));
-                        run_start = None;
-                    }
-                    _ => {}
+                if ch == '+' {
+                    spans.push(EmphasisSpan::new(class.clone(), i..i + 1));
                 }
-            }
-            if let Some(s) = run_start {
-                spans.push(EmphasisSpan::new(class, s..mask.chars().count()));
             }
         }
         self.mapping_end()?;
-        Ok(spans)
+        Ok(spans.into_iter().collect())
     }
 
     fn usize_value(&mut self) -> Result<usize, ParseError> {
@@ -371,8 +362,8 @@ impl YAMLParser {
             expected = unescape(&self.scalar()?, EscapingContext::Default)?;
         }
         let mut xfail = ExpectedFailure::default();
-        let mut emphasis: Vec<EmphasisSpan> = Vec::new();
-        let mut expected_emphasis: Vec<EmphasisSpan> = Vec::new();
+        let mut emphasis = Emphasis::default();
+        let mut expected_emphasis: Option<Emphasis> = None;
         let mut input_pos: Vec<usize> = Vec::new();
         let mut output_pos: Vec<usize> = Vec::new();
         let mut cursor_pos = None;
@@ -388,10 +379,10 @@ impl YAMLParser {
                         xfail = self.xfail()?;
                     }
                     "typeform" => {
-                        emphasis = self.emphasis_spans_value()?;
+                        emphasis = self.emphasis_value()?;
                     }
                     "expected_typeform" => {
-                        expected_emphasis = self.emphasis_spans_value()?;
+                        expected_emphasis = Some(self.emphasis_value()?);
                     }
                     "inputPos" => {
                         input_pos = self.pos_values()?;

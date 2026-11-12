@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   directories, and `Index::find` returns the tables matching a `Query`,
   best match first. For now only tables carrying every pair of the query
   match.
+- Back-translation returns the emphasis the braille indicates, as
+  `TranslationResult::emphasis`: liblouis's typeform output. Unlike
+  liblouis, the space that ends an emphasized word is not emphasized.
+- `Emphasis`, a text's emphasis spans in one order, with touching spans
+  merged, so that two compare equal when they emphasize the same.
+  `TranslationOptions::with_emphasis` takes one instead of a
+  `Vec<EmphasisSpan>`, and `TranslationResult::emphasis` is one.
 
 ### Changed
 - louis-rs is in beta: translation matches liblouis closely, and the
