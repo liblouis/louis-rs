@@ -19,7 +19,7 @@ thiserror = "2"
 search_path = "0.1.4"
 clap = { version = "4.4.11", features = ["derive"] }
 env_logger = "0.11.3"
-tabled = "0.17.0"
+tabled = "0.22.0"
 rayon = "1.12.0"
 saphyr-parser = "0.3.3"
 

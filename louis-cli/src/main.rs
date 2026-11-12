@@ -182,19 +182,15 @@ struct Trace {
     sequence_id: usize,
     from: String,
     to: String,
-    #[tabled(display_with("Self::display_origin", self))]
+    #[tabled(display = "display_rule")]
     rule: Option<AnchoredRule>,
     stage: TranslationStage,
 }
 
-impl Trace {
-    fn display_origin(&self) -> String {
-        match &self.rule {
-            Some(AnchoredRule { rule, .. }) => {
-                format!("{}", rule)
-            }
-            None => String::new(),
-        }
+fn display_rule(rule: &Option<AnchoredRule>) -> String {
+    match rule {
+        Some(AnchoredRule { rule, .. }) => format!("{}", rule),
+        None => String::new(),
     }
 }
 
@@ -313,18 +309,15 @@ struct YAMLTestResult {
     #[tabled(rename = "YAML File")]
     yaml_file: String,
     tests: usize,
-    #[tabled(display_with("Self::display_successes", self))]
+    #[tabled(display("Self::display_percent", self))]
     successes: usize,
-    #[tabled(display_with("Self::display_failures", self))]
+    #[tabled(display("Self::display_percent", self))]
     failures: usize,
-    #[tabled(
-        rename = "Expected\nFailures",
-        display_with("Self::display_expected", self)
-    )]
+    #[tabled(rename = "Expected\nFailures", display("Self::display_percent", self))]
     expected_failures: usize,
     #[tabled(
         rename = "Unexpected\nSuccesses",
-        display_with("Self::display_unexpected", self)
+        display("Self::display_percent", self)
     )]
     unexpected_successes: usize,
     #[tabled(rename = "Position\nMismatches")]
@@ -336,17 +329,9 @@ fn percent(n: usize, total: usize) -> f64 {
 }
 
 impl YAMLTestResult {
-    fn display_successes(&self) -> String {
-        format!("{:.1}%", percent(self.successes, self.tests))
-    }
-    fn display_failures(&self) -> String {
-        format!("{:.1}%", percent(self.failures, self.tests))
-    }
-    fn display_expected(&self) -> String {
-        format!("{:.1}%", percent(self.expected_failures, self.tests))
-    }
-    fn display_unexpected(&self) -> String {
-        format!("{:.1}%", percent(self.unexpected_successes, self.tests))
+    /// A count as a percentage of the tests
+    fn display_percent(n: &usize, result: &Self) -> String {
+        format!("{:.1}%", percent(*n, result.tests))
     }
     fn update(
         &mut self,
