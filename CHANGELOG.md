@@ -52,6 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `lou_checktable`. It prints "No errors found." unless given `--quiet`.
   The rule dump and the rule-parsing REPL are gone.
 
+### Fixed
+- `louis trace` prints the attributes of a `match` rule in match syntax,
+  `%[_~]`, not in the multipass letters without brackets (`s~`).
+
 ## [0.3.1] - 2026-11-11
 
 ### Changed
