@@ -2436,7 +2436,56 @@ impl PrimaryTable {
                 break;
             }
         }
-        self.rewriters.apply(translations)
+        // Capitalized words are read from the text as written, before the spaces go back,
+        // so a capitalized run of large signs stays capitalized across all of its words.
+        let mut translations = self.rewriters.apply(translations);
+        if self.direction == Direction::Backward {
+            Self::space_largesigns(&mut translations);
+        }
+        translations
+    }
+
+    /// Forward, the space between two `largesign` words is dropped, as in U.S. grade 2's
+    /// ⠯⠮ for "and the", so backward a space goes back between the large signs of a run
+    /// that stands as a word of its own, as liblouis means to (`insertSpace` in
+    /// `backTranslateString`). A large sign inside a word, such as the "the" of
+    /// "theater", stays as it is. Indicators such as a capital sign write nothing, so they
+    /// don't stand between.
+    fn space_largesigns(translations: &mut [ResolvedTranslation]) {
+        let is_largesign =
+            |t: &ResolvedTranslation| matches!(t.rule(), Some(Rule::Largesign { .. }));
+        let written: Vec<usize> = (0..translations.len())
+            .filter(|&i| !translations[i].output().is_empty())
+            .collect();
+        let mut run_start = 0;
+        while run_start < written.len() {
+            let mut run_end = run_start;
+            while run_end < written.len() && is_largesign(&translations[written[run_end]]) {
+                run_end += 1;
+            }
+            if run_end - run_start < 2 {
+                run_start = run_end.max(run_start + 1);
+                continue;
+            }
+            let apart = |i: Option<&usize>, last: bool| {
+                i.map(|&i| translations[i].output()).is_none_or(|output| {
+                    let edge = if last {
+                        output.chars().next()
+                    } else {
+                        output.chars().last()
+                    };
+                    edge.is_none_or(|c| !c.is_alphanumeric())
+                })
+            };
+            let before = run_start.checked_sub(1).and_then(|i| written.get(i));
+            if apart(before, false) && apart(written.get(run_end), true) {
+                for &i in &written[run_start + 1..run_end] {
+                    let spaced = format!(" {}", translations[i].output());
+                    translations[i] = translations[i].clone().with_output(&spaced);
+                }
+            }
+            run_start = run_end;
+        }
     }
 
     /// Whether `t` comes from an opcode that liblouis switches off in a word with a

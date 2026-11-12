@@ -105,6 +105,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `context` rule that starts with a single character.
 
 ### Fixed
+- Back-translation now puts the space back between large signs written
+  together, as liblouis means to. With `en-us-g2.ctb`, ⠯⠮ gave "andthe"
+  instead of "and the".
 - Backward, a `base` character is no longer read from its base's dots,
   and a capital sign gives a letter's first `base uppercase` character
   rather than Unicode's uppercase, as in liblouis: with `tr-g1.ctb`,
