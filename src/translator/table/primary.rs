@@ -2060,9 +2060,55 @@ impl PrimaryTable {
                     _ => (),
                 }
             }
+            // A numsign whose dots also make an in-word rule starts no number after a cell
+            // that comes back ending in a letter. A cell inside a longer rule, such as ⠶ in
+            // en-us-g2's `always bedragg 23-145-1235-1-2356`, says nothing about that: "⠶⠼⠁"
+            // is "(1". A one-cell rule does, where it can apply.
+            let mut word_start_letter_cells = HashSet::new();
+            let mut inner_letter_cells = HashSet::new();
+            for rule in rules {
+                let (chars, dots, at_word_start, inside_word) = match &rule.rule {
+                    Rule::Always { chars, dots, .. }
+                    | Rule::Partword { chars, dots, .. }
+                    | Rule::Begmidword { chars, dots, .. } => (chars, dots, true, true),
+                    Rule::Begword { chars, dots, .. }
+                    | Rule::Prfword { chars, dots, .. }
+                    | Rule::Sufword { chars, dots, .. } => (chars, dots, true, false),
+                    Rule::Midword { chars, dots, .. }
+                    | Rule::Midendword { chars, dots, .. }
+                    | Rule::Endword { chars, dots, .. } => (chars, dots, false, true),
+                    _ => continue,
+                };
+                let Braille::Explicit(dots) = dots else {
+                    continue;
+                };
+                if dots.len() != 1
+                    || !rule.rule.is_direction(Direction::Backward)
+                    || !chars.chars().last().is_some_and(char::is_alphabetic)
+                {
+                    continue;
+                }
+                let cell = dots.to_string().chars().next();
+                if at_word_start {
+                    word_start_letter_cells.extend(cell);
+                }
+                if inside_word {
+                    inner_letter_cells.extend(cell);
+                }
+            }
+            builder.backward_numeric_constrainer.letter_cells(
+                ctx.dots_classes()
+                    .get(&CharacterClass::Letter)
+                    .unwrap_or_default(),
+            );
             builder
                 .backward_numeric_constrainer
-                .letter_cells(letter_cells.clone());
+                .contraction_letter_cells(word_start_letter_cells, inner_letter_cells);
+            builder.backward_numeric_constrainer.space_cells(
+                ctx.dots_classes()
+                    .get(&CharacterClass::Space)
+                    .unwrap_or_default(),
+            );
             builder
                 .backward_nocontract_constrainer
                 .letter_cells(letter_cells.clone());
