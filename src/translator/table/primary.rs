@@ -1136,7 +1136,7 @@ impl PrimaryTable {
                         let dots = match replacement {
                             Some(replacement) => ctx
                                 .character_definitions()
-                                .braille_to_unicode(&Braille::Implicit, replacement)?,
+                                .braille_to_unicode(&Braille::Implicit, replacement).map_err(|e| e.at(rule))?,
                             None => String::new(),
                         };
                         builder.get_trie_mut(rule).insert(
@@ -1156,7 +1156,7 @@ impl PrimaryTable {
                     if direction == Direction::Forward {
                         let dots = ctx
                             .character_definitions()
-                            .braille_to_unicode(&Braille::Implicit, chars)?;
+                            .braille_to_unicode(&Braille::Implicit, chars).map_err(|e| e.at(rule))?;
                         builder.get_trie_mut(rule).insert(
                             chars,
                             &dots,
@@ -1221,7 +1221,7 @@ impl PrimaryTable {
                     let character = character.to_string();
                     let dots = ctx
                         .character_definitions()
-                        .braille_to_unicode(dots, &character)?;
+                        .braille_to_unicode(dots, &character).map_err(|e| e.at(rule))?;
                     builder.comp6_trie.insert(
                         &character,
                         &dots,
@@ -1260,7 +1260,7 @@ impl PrimaryTable {
                 } => {
                     let dots = ctx
                         .character_definitions()
-                        .braille_to_unicode(dots, chars)?;
+                        .braille_to_unicode(dots, chars).map_err(|e| e.at(rule))?;
                     let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     builder.get_trie_mut(rule).insert(
                         chars,
@@ -1279,7 +1279,7 @@ impl PrimaryTable {
                     builder.syllable_constrainer.syllable(chars);
                     let dots = ctx
                         .character_definitions()
-                        .braille_to_unicode(dots, chars)?;
+                        .braille_to_unicode(dots, chars).map_err(|e| e.at(rule))?;
                     builder.get_trie_mut(rule).insert(
                         chars,
                         &dots,
@@ -1332,7 +1332,7 @@ impl PrimaryTable {
                     builder.lettersign_indicator.single_letter_word(chars);
                     let dots = ctx
                         .character_definitions()
-                        .braille_to_unicode(dots, chars)?;
+                        .braille_to_unicode(dots, chars).map_err(|e| e.at(rule))?;
                     let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     builder.get_trie_mut(rule).insert(
                         chars,
@@ -1353,7 +1353,7 @@ impl PrimaryTable {
                 } => {
                     let dots = ctx
                         .character_definitions()
-                        .braille_to_unicode(dots, chars)?;
+                        .braille_to_unicode(dots, chars).map_err(|e| e.at(rule))?;
                     let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     builder.get_trie_mut(rule).insert(
                         chars,
@@ -1377,7 +1377,7 @@ impl PrimaryTable {
                 } => {
                     let dots = ctx
                         .character_definitions()
-                        .braille_to_unicode(dots, chars)?;
+                        .braille_to_unicode(dots, chars).map_err(|e| e.at(rule))?;
                     if direction == Direction::Backward {
                         builder.backward_numeric_constrainer.after_letter(&dots);
                     }
@@ -1405,7 +1405,7 @@ impl PrimaryTable {
                     // 2. at word-start followed by word char (begword)
                     let dots = ctx
                         .character_definitions()
-                        .braille_to_unicode(dots, chars)?;
+                        .braille_to_unicode(dots, chars).map_err(|e| e.at(rule))?;
                     let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     builder.get_trie_mut(rule).insert(
                         chars,
@@ -1436,7 +1436,7 @@ impl PrimaryTable {
                 } => {
                     let dots = ctx
                         .character_definitions()
-                        .braille_to_unicode(dots, chars)?;
+                        .braille_to_unicode(dots, chars).map_err(|e| e.at(rule))?;
                     if direction == Direction::Backward {
                         builder.backward_numeric_constrainer.after_letter(&dots);
                     }
@@ -1469,7 +1469,7 @@ impl PrimaryTable {
                 } => {
                     let dots = ctx
                         .character_definitions()
-                        .braille_to_unicode(dots, chars)?;
+                        .braille_to_unicode(dots, chars).map_err(|e| e.at(rule))?;
                     if direction == Direction::Backward {
                         builder.backward_numeric_constrainer.after_letter(&dots);
                     }
@@ -1493,7 +1493,7 @@ impl PrimaryTable {
                 } => {
                     let dots = ctx
                         .character_definitions()
-                        .braille_to_unicode(dots, chars)?;
+                        .braille_to_unicode(dots, chars).map_err(|e| e.at(rule))?;
                     let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     // a prfword is basically syntactic sugar for a word rule combined with an
                     // endword rule. So just make the two appropriate insertions in the trie
@@ -1529,7 +1529,7 @@ impl PrimaryTable {
                 } => {
                     let dots = ctx
                         .character_definitions()
-                        .braille_to_unicode(dots, chars)?;
+                        .braille_to_unicode(dots, chars).map_err(|e| e.at(rule))?;
                     let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     // forward, a sufword is basically syntactic sugar for a word rule combined
                     // with a begword rule; backward, liblouis checks nothing after it
@@ -1567,7 +1567,7 @@ impl PrimaryTable {
                 } => {
                     let dots = ctx
                         .character_definitions()
-                        .braille_to_unicode(dots, chars)?;
+                        .braille_to_unicode(dots, chars).map_err(|e| e.at(rule))?;
                     let class_constraints = Self::resolve_class_constraints(ctx, with_classes);
                     builder.get_trie_mut(rule).insert(
                         chars,
@@ -1651,7 +1651,7 @@ impl PrimaryTable {
                 Rule::Endnum { chars, dots, .. } => {
                     let dots = ctx
                         .character_definitions()
-                        .braille_to_unicode(dots, chars)?;
+                        .braille_to_unicode(dots, chars).map_err(|e| e.at(rule))?;
                     if direction == Direction::Backward {
                         builder.backward_numeric_constrainer.endnum(&dots);
                     }
@@ -1782,7 +1782,7 @@ impl PrimaryTable {
                 } => {
                     let dots = ctx
                         .character_definitions()
-                        .braille_to_unicode(dots, chars)?;
+                        .braille_to_unicode(dots, chars).map_err(|e| e.at(rule))?;
                     builder.match_patterns.insert(
                         pre,
                         chars,
@@ -1960,7 +1960,8 @@ impl PrimaryTable {
                     | Rule::Partword { chars, dots, .. } => {
                         let dots = ctx
                             .character_definitions()
-                            .braille_to_unicode(dots, chars)?;
+                            .braille_to_unicode(dots, chars)
+                            .map_err(|e| e.at(rule))?;
                         builder.backward_numeric_constrainer.rule_dots(&dots);
                         // an `always` rule takes an indicator's dots as its own, where the
                         // word-family rules would only be kept off the letters after it

@@ -2729,6 +2729,16 @@ impl AnchoredRule {
     pub fn definition_order(&self) -> usize {
         self.definition_order
     }
+
+    /// The table the rule comes from, or `None` for table source given in memory
+    pub fn path(&self) -> Option<&Path> {
+        self.path.as_deref()
+    }
+
+    /// The line the rule is on, counting from 1
+    pub fn line(&self) -> usize {
+        self.line
+    }
 }
 
 impl HasDirection for AnchoredRule {

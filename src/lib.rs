@@ -55,7 +55,9 @@ pub use emphasis::{Emphasis, EmphasisSpan};
 pub use parser::{Direction, SyntaxError, TableError};
 use search_path::SearchPath;
 use translator::TranslationPipeline;
-pub use translator::{CompileError, TranslationMode, TranslationModes, TranslationOptions};
+pub use translator::{
+    CompileError, CompileErrorKind, TranslationMode, TranslationModes, TranslationOptions,
+};
 
 /// What the `louis` command line tool needs beyond the public API: rule tracing for `trace`,
 /// and the pipeline and display tables for `check-table` and the YAML test harness.
@@ -215,9 +217,9 @@ impl Translator {
     pub fn translate_with_options(
         &self,
         input: &str,
-        options: TranslationOptions,
+        options: &TranslationOptions,
     ) -> TranslationResult {
-        let (output, positions, emphasis) = self.0.translate_with_details(input, &options);
+        let (output, positions, emphasis) = self.0.translate_with_details(input, options);
         let cursor_pos = options.cursor_pos().map(|cursor| positions.cursor(cursor));
         let (output_positions, input_positions) = positions.into_parts();
         TranslationResult {
@@ -255,7 +257,7 @@ mod tests {
         let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
         let emphasis = |braille| {
             translator
-                .translate_with_options(braille, TranslationOptions::default())
+                .translate_with_options(braille, &TranslationOptions::default())
                 .emphasis()
                 .unwrap()
                 .clone()
@@ -278,7 +280,7 @@ mod tests {
         let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
         assert!(
             forward
-                .translate_with_options("ab", TranslationOptions::default())
+                .translate_with_options("ab", &TranslationOptions::default())
                 .emphasis()
                 .is_none()
         );
@@ -288,13 +290,22 @@ mod tests {
     fn a_base_character_must_be_defined_in_some_direction() {
         let error =
             Translator::from_table_source("base uppercase A a", Direction::Forward).unwrap_err();
-        assert!(matches!(
-            error,
-            Error::Compile(CompileError::BaseCharacterNotDefined {
+        let Error::Compile(error) = error else {
+            panic!("expected a compile error, got {error:?}");
+        };
+        assert_eq!(
+            *error.kind(),
+            CompileErrorKind::BaseCharacterNotDefined {
                 base: 'a',
                 derived: 'A'
-            })
-        ));
+            }
+        );
+        // table source in memory has no path, and the rule is on the first line
+        assert_eq!((error.path(), error.line()), (None, 1));
+        assert_eq!(
+            error.to_string(),
+            "line 1: base character 'a' of 'A' not defined"
+        );
         // defined forward only: backward there is nothing to derive, which is fine
         let table = "noback lowercase a 1\nbase uppercase A a\n";
         for direction in [Direction::Forward, Direction::Backward] {
@@ -367,7 +378,7 @@ mod tests {
     fn positions_with_number_sign() {
         let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
         let result = translator
-            .translate_with_options("a 42", TranslationOptions::default().with_cursor_pos(2));
+            .translate_with_options("a 42", &TranslationOptions::default().with_cursor_pos(2));
         assert_eq!(result.output(), "⠁⠀⠼⠙⠃");
         assert_eq!(result.output_positions(), [0, 1, 2, 4]);
         assert_eq!(result.input_positions(), [0, 1, 2, 2, 3]);
@@ -378,14 +389,14 @@ mod tests {
     fn cursor_past_the_end_maps_to_the_output_length() {
         let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
         let result = translator
-            .translate_with_options("a 42", TranslationOptions::default().with_cursor_pos(4));
+            .translate_with_options("a 42", &TranslationOptions::default().with_cursor_pos(4));
         assert_eq!(result.cursor_pos(), Some(5));
     }
 
     #[test]
     fn positions_without_cursor() {
         let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
-        let result = translator.translate_with_options("a 42", TranslationOptions::default());
+        let result = translator.translate_with_options("a 42", &TranslationOptions::default());
         assert_eq!(result.output(), translator.translate("a 42"));
         assert_eq!(result.cursor_pos(), None);
     }
@@ -395,38 +406,38 @@ mod tests {
         let table = "lowercase h 125\nlowercase i 24\nbase uppercase H h\ncapsletter 6\n";
         let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
         let result =
-            forward.translate_with_options("Hi", TranslationOptions::default().with_cursor_pos(0));
-        assert_eq!(result.output, "⠠⠓⠊");
-        assert_eq!(result.output_positions, vec![0, 2]);
-        assert_eq!(result.input_positions, vec![0, 0, 1]);
-        assert_eq!(result.cursor_pos, Some(0));
+            forward.translate_with_options("Hi", &TranslationOptions::default().with_cursor_pos(0));
+        assert_eq!(result.output(), "⠠⠓⠊");
+        assert_eq!(result.output_positions(), [0, 2]);
+        assert_eq!(result.input_positions(), [0, 0, 1]);
+        assert_eq!(result.cursor_pos(), Some(0));
 
         let backward = Translator::from_table_source(table, Direction::Backward).unwrap();
-        let result = backward.translate_with_options("⠠⠓⠊", TranslationOptions::default());
-        assert_eq!(result.output, "Hi");
-        assert_eq!(result.output_positions, vec![0, 0, 1]);
+        let result = backward.translate_with_options("⠠⠓⠊", &TranslationOptions::default());
+        assert_eq!(result.output(), "Hi");
+        assert_eq!(result.output_positions(), [0, 0, 1]);
         // backward, a consumed cell is claimed by the character that follows it, so the "H"
         // covers the capital sign as well ("prepend to next", as liblouis calls it)
-        assert_eq!(result.input_positions, vec![0, 2]);
+        assert_eq!(result.input_positions(), [0, 2]);
     }
 
     #[test]
     fn positions_with_correction_insertion() {
         let table = "letter f 124\nletter o 135\nletter b 12\nletter a 1\nletter r 1235\npunctuation , 6\npunctuation - 36\nnoback correct \"f,\"[]\"o\" \"-\"\n";
         let translator = Translator::from_table_source(table, Direction::Forward).unwrap();
-        let result = translator.translate_with_options("f,oobar", TranslationOptions::default());
-        assert_eq!(result.output, "⠋⠠⠤⠕⠕⠃⠁⠗");
-        assert_eq!(result.output_positions, vec![0, 1, 2, 4, 5, 6, 7]);
-        assert_eq!(result.input_positions, vec![0, 1, 2, 2, 3, 4, 5, 6]);
+        let result = translator.translate_with_options("f,oobar", &TranslationOptions::default());
+        assert_eq!(result.output(), "⠋⠠⠤⠕⠕⠃⠁⠗");
+        assert_eq!(result.output_positions(), [0, 1, 2, 4, 5, 6, 7]);
+        assert_eq!(result.input_positions(), [0, 1, 2, 2, 3, 4, 5, 6]);
     }
 
     #[test]
     fn positions_with_pass2_deletion() {
         let table = "letter f 124\nletter o 135\nletter x 1346\nnoback pass2 @1346 ?\n";
         let translator = Translator::from_table_source(table, Direction::Forward).unwrap();
-        let result = translator.translate_with_options("xfoo", TranslationOptions::default());
-        assert_eq!(result.output, "⠋⠕⠕");
-        assert_eq!(result.output_positions, vec![0, 0, 1, 2]);
-        assert_eq!(result.input_positions, vec![1, 2, 3]);
+        let result = translator.translate_with_options("xfoo", &TranslationOptions::default());
+        assert_eq!(result.output(), "⠋⠕⠕");
+        assert_eq!(result.output_positions(), [0, 0, 1, 2]);
+        assert_eq!(result.input_positions(), [1, 2, 3]);
     }
 }

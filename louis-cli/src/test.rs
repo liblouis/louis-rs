@@ -218,7 +218,8 @@ impl<'a> TestMatrix<'a> {
             }
             Table::Query(query) => {
                 let index = crate::index().map_err(|e| TestError::NotIndexable(e.to_string()))?;
-                let query = metadata::Query::from(query);
+                let query: metadata::Query =
+                    query.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                 let matches: Vec<PathBuf> =
                     index.find(&query).into_iter().map(PathBuf::from).collect();
                 match matches.as_slice() {

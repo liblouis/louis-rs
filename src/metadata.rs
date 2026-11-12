@@ -50,9 +50,9 @@ impl Query {
     }
 }
 
-impl From<&HashMap<String, String>> for Query {
-    fn from(query: &HashMap<String, String>) -> Self {
-        Self(query.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+impl FromIterator<(String, String)> for Query {
+    fn from_iter<I: IntoIterator<Item = (String, String)>>(pairs: I) -> Self {
+        Self(pairs.into_iter().collect())
     }
 }
 

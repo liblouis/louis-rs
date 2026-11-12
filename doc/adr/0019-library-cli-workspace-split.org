@@ -178,7 +178,7 @@ It was replaced by ~check-table~, which does what liblouis's
 - The API-review findings below are separate work and are not part of
   the split.
 
-** Related API-review findings (do alongside or after the split) [15/15]
+** Related API-review findings (do alongside or after the split) [18/18]
 
 From the same review. Most of these become easier once the public
 surface is explicit. The first nine were done on [2026-11-11 Wed], the
@@ -247,6 +247,13 @@ rest in a second pass on [2026-11-12 Thu].
   ~Query~ is parsed with ~FromStr~.
 - [X] Error messages follow the Rust convention: lowercase, no trailing
   full stop.
+- [X] A ~CompileError~ says where: it is a struct with ~path()~ and
+  ~line()~ of the rule, and ~kind()~, a ~#[non_exhaustive]~
+  ~CompileErrorKind~ for what is wrong. The location is the struct's, so
+  the kinds don't each have to carry it.
+- [X] ~translate_with_options~ borrows its ~TranslationOptions~.
+- [X] ~Query~ is collected from ~(key, value)~ pairs (~FromIterator~),
+  not converted from a ~&HashMap~, which was a convenience for the CLI.
 
 ** Links
 

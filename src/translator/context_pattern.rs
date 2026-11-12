@@ -13,7 +13,9 @@ use crate::translator::table::TableContext;
 use crate::translator::translation::{
     Translation, TranslationTarget, TranslationTargets, UnresolvedTranslation,
 };
-use crate::translator::{CharacterDefinition, CompileError, ResolvedTranslation, TranslationStage};
+use crate::translator::{
+    CharacterDefinition, CompileError, CompileErrorKind, ResolvedTranslation, TranslationStage,
+};
 
 impl Regexp {
     fn from_test(test: &Test, whole_match: bool, ctx: &CharacterClasses) -> Self {
@@ -142,14 +144,14 @@ impl TranslationTarget {
         value: ActionInstruction,
         ctx: &SwapClasses,
         capture_target: &TranslationTarget,
-    ) -> Result<Self, CompileError> {
+    ) -> Result<Self, CompileErrorKind> {
         match value {
             ActionInstruction::String { s } => Ok(TranslationTarget::Literal(s)),
             ActionInstruction::Dots { dots } => Ok(TranslationTarget::Literal(dots.to_string())),
             ActionInstruction::SwapClass { name } => {
                 let swapper = ctx
                     .get(&name)
-                    .ok_or(CompileError::SwapClassNotDefined(name))?;
+                    .ok_or(CompileErrorKind::SwapClassNotDefined(name))?;
                 Ok(TranslationTarget::Swap(swapper))
             }
             ActionInstruction::Replace => Ok(capture_target.clone()),
@@ -167,7 +169,7 @@ impl TranslationTargets {
         values: &[ActionInstruction],
         ctx: &SwapClasses,
         capture_target: &TranslationTarget,
-    ) -> Result<Vec<TranslationTarget>, CompileError> {
+    ) -> Result<Vec<TranslationTarget>, CompileErrorKind> {
         values
             .iter()
             .cloned()
@@ -225,7 +227,8 @@ impl ContextPatternsBuilder {
         capture_target: &TranslationTarget,
     ) -> Result<UnresolvedTranslation, CompileError> {
         let targets =
-            TranslationTargets::from_instructions(&action.actions(), swap_classes, capture_target)?;
+            TranslationTargets::from_instructions(&action.actions(), swap_classes, capture_target)
+                .map_err(|e| e.at(origin))?;
         let effects = effects(&action.actions());
         Ok(UnresolvedTranslation::new(
             &targets,

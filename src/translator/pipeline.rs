@@ -2,7 +2,8 @@ use crate::{
     Direction, Emphasis,
     parser::{AnchoredRule, HasDirection, Rule},
     translator::{
-        CompileError, PositionMap, ResolvedTranslation, TranslationOptions, TranslationStage,
+        CompileError, CompileErrorKind, PositionMap, ResolvedTranslation, TranslationOptions,
+        TranslationStage,
         indication::emphasis::backward_emphasis,
         table::{
             TableContext, display::DisplayTable, multipass::MultipassTable, primary::PrimaryTable,
@@ -63,7 +64,7 @@ impl TranslationPipeline {
             if let Rule::Base { derived, base, .. } = rule.rule
                 && ctx.character_definitions().get(&base).is_none()
             {
-                return Err(CompileError::BaseCharacterNotDefined { base, derived });
+                return Err(CompileErrorKind::BaseCharacterNotDefined { base, derived }.at(rule));
             }
         }
         let mut steps = Vec::new();

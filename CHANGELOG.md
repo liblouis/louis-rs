@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `LOUIS_TABLE_PATH`, `Index::with_search_path` those in the given
   directories, and `Index::find` returns the tables matching a `&Query`,
   best match first. For now only tables carrying every pair of the query
-  match. A `Query` is parsed with `"language:de grade:2".parse()`.
+  match. A `Query` is parsed with `"language:de grade:2".parse()`, or
+  collected from `(key, value)` pairs.
 - Back-translation returns the emphasis the braille indicates, as
   `TranslationResult::emphasis()`: liblouis's typeform output. Unlike
   liblouis, the space that ends an emphasized word is not emphasized.
@@ -29,11 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The library API, on the way to a stable one:
   - `Translator`'s constructors return `louis::Error`, either
     `Error::Table` with the `TableError`s (now public) or `Error::Compile`
-    with a `CompileError` (formerly `TranslationError`). A syntax error in
+    with a `CompileError` (formerly `TranslationError`), which says
+    where the rule is (`path()`, `line()`) and what is wrong with it
+    (`kind()`, a `CompileErrorKind`). A syntax error in
     a table carries a `SyntaxError`, which says what is wrong without
     exposing the parser's internals.
   - `translate` returns a `String` and `translate_with_options` a
     `TranslationResult`, not a `Result`: translating cannot fail.
+    `translate_with_options` borrows its `TranslationOptions`.
   - `TranslationResult`'s fields are private, read with `output()`,
     `emphasis()`, `output_positions()`, `input_positions()` and
     `cursor_pos()`. The positions are plain slices; they were always
