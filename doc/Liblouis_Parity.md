@@ -147,18 +147,18 @@ Two cross-cutting items have no single file behind them:
   (`!(e1e2)` ≠ `(!e1!e2)`); `Attribute::ByOrder` and `Any` are no-ops in
   `match_pattern.rs` and all three are no-ops in `context_pattern.rs`. *(M)*
 
-## Forty-two blocks that never run
+## Forty blocks that never run
 
 A YAML file is a sequence of blocks, each with its own table. A block whose table
 won't load is reported on stderr and skipped, and the rest of the file still runs.
-Forty-two blocks across twelve files are skipped this way, so those tests report
+Forty blocks across twelve files are skipped this way, so those tests report
 neither passes nor failures — the one genuine unknown in this document, and the
 cheapest work in it.
 
 | Reason                                    | Blocks | What it needs                                                                                                                                                                                           | Size |
 |-------------------------------------------|-------:|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------|
 | `multipass-vs-match_common.uti` not found |     25 | The include sits next to the YAML file rather than on `LOUIS_TABLE_PATH`. One missing fixture takes out every block of `multipass-vs-match.yaml`. | S    |
-| Parser gaps                               |      6 | An `InvalidAction` and an `EmptyTest` in each of `multipass-forward.yaml` and `multipass-backward.yaml`, plus an `OpcodeExpected` and a surrogate-pair escape.                                          | S    |
+| Parser gaps                               |      4 | An `EmptyTest` in each of `multipass-forward.yaml` and `multipass-backward.yaml`, an `OpcodeExpected` and a surrogate-pair escape.                                                                      | S    |
 | Ambiguous metadata queries                |      7 | `language:grc region:en` matches two tables and `system:cmn-traditional` three. `lou_findTable` scores its candidates and always lands on one; we intersect and insist on exactly one.                  | M    |
 | Hyphenation dictionaries                  |      2 | `hyph_en_US.dic` rejected for its ISO-8859-1 encoding; `hyphenation.dic` not found.                                                                                                                     | S    |
 | `macro.utb` not found                     |      1 | Deliberate non-goal.                                                                                                                                                                                    | —    |
@@ -189,13 +189,13 @@ nothing at all, and `de-eurobrl6.yaml`, `hu-hu-g1-hyph_harness.yaml` and
 
 Good entry points, roughly easiest first:
 
-1. **Wake up the 42 blocks that don't run.** Several independent small fixes,
+1. **Wake up the 40 blocks that don't run.** Several independent small fixes,
    listed above, and nobody knows what those tests will report. *(S each)*
 2. **The three parser gaps.** Small, concrete, and each has a failing file to check
    against. *(S)*
 3. **Expose the four missing entry points.** Mechanical. *(S each)*
 4. **Survey a failure cluster.** Every row in the table above now names a cause, so
-   what's left is the ~1 700 failures spread across roughly 100 smaller files, and
+   what's left is the ~950 failures spread across roughly 90 smaller files, and
    the residue of the two clusters already surveyed. Reading failure output rather
    than deep engine work — and each of the three clusters that got this treatment
    turned out to be one or two root causes rather than a long tail. *(M)*
