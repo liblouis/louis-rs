@@ -573,4 +573,14 @@ mod tests {
         assert_eq!(result.output_positions(), [0, 0, 1, 2]);
         assert_eq!(result.input_positions(), [1, 2, 3]);
     }
+
+    #[test]
+    fn a_blank_cell_ends_a_number_although_the_no_break_space_continues_one() {
+        // Swedish `midendnumericmodechars .,\x00a0`: the no-break space shares the blank
+        // cell with the space, which is defined first, so the blank cell is a space and
+        // "⠼⠁⠋⠀⠉" is "16 och", not "16 3".
+        let table = "space \\s 0\nspace \\x00a0 0\nlowercase a 1\nlowercase b 12\nlitdigit 1 1\nlitdigit 2 12\nnumsign 3456\nmidendnumericmodechars \\x00a0\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠼⠁⠀⠃"), "1 b");
+    }
 }
