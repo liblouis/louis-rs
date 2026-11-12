@@ -118,7 +118,7 @@ derived character then has no dots of its own. louis-rs rejects the table with
 affected (å, ó and ø, through `fr-bfu-comp6-puncs-math.uti`).
 
 **Migration path:** define the base character. For `ht-g1.utb` see
-liblouis/liblouis#TODO.
+[liblouis#2190](https://github.com/liblouis/liblouis/pull/2190).
 
 ## `repword` separators
 
