@@ -12,9 +12,9 @@ $ louis translate en-us-g2.ctb "It's about the blind"
 ⠠⠭⠄⠎⠀⠁⠃⠀⠮⠀⠃⠇
 ```
 
-> [!CAUTION]
-> louis-rs is in alpha. It passes over 98% of the liblouis test suite, but the
-> library API has not been worked out and is not stable.
+> [!NOTE]
+> louis-rs is in beta. Of liblouis's test suite it fails only 0.1% that liblouis
+> passes; [doc/Liblouis_Parity.md](doc/Liblouis_Parity.md) lists the known gaps.
 
 ## What is here
 
@@ -91,7 +91,7 @@ and `query` finds tables by their metadata:
 
 ## Project status
 
-Alpha. Compatibility with liblouis is driven by its own test suite, which
+Beta. Compatibility with liblouis is driven by its own test suite, which
 louis-rs runs in full — better than two million assertions, forward and backward
 — on every change; [doc/Liblouis_Parity.md](doc/Liblouis_Parity.md) carries the
 current figures and the reproduction steps.

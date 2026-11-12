@@ -10,7 +10,7 @@ Use the Linux kernel's coding-assistants trailer format (https://docs.kernel.org
 
 **louis-rs** is a Rust reimplementation of [liblouis](https://liblouis.io/), a braille translator and back-translator. It is **not** a direct port of the C code but a complete rewrite using different data structures and algorithms while maintaining compatibility with liblouis tables and tests.
 
-**Current Status**: Alpha stage
+**Current Status**: Beta stage
 - Translation: ~99.4% compatibility with the liblouis test suite (forward and
   backward combined)
 - Table parsing: every table file under `tables/` that liblouis compiles, louis-rs

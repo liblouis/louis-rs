@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   match.
 
 ### Changed
+- louis-rs is in beta: translation matches liblouis closely, and the
+  library API follows semantic versioning.
 - The library API, on the way to a stable one:
   - `Translator`'s constructors return `louis::Error`, either
     `Error::Table` with the `TableError`s (now public) or `Error::Compile`
