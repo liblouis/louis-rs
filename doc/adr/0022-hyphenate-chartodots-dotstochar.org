@@ -1,0 +1,105 @@
+#+options: todo:t
+#+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
+#+language: en
+
+* ACCEPTED ADR-0022: Wait with ~lou_hyphenate~, ~lou_charToDots~ and ~lou_dotsToChar~, and where they go when they come
+- Deciders :: CE
+- Date :: [2026-11-12 Thu]
+
+** Context and Problem Statement
+
+liblouis has three entry points besides translation that louis-rs has
+no counterpart for:
+
+- ~lou_hyphenate~ :: where a word may be broken across lines, from the
+  hyphenation dictionary (~.dic~) the table names. With a ~mode~, the
+  word is braille and is hyphenated by way of its text. A braille
+  formatter needs it to break lines; liblouisutdml is the typical
+  user.
+- ~lou_charToDots~ :: characters to braille cells, one by one, through
+  the display table and without translating: braille that is already
+  in some encoding, such as a BRF file, as dot patterns.
+- ~lou_dotsToChar~ :: the reverse: dot patterns to the characters of
+  the display encoding, typically to write BRF.
+
+The fourth such entry point, ~lou_getEmphClasses~, has a counterpart:
+~Translator::emphasis_classes~, which the name-based ~EmphasisSpan~
+needs.
+
+The machinery for all three exists: ~src/hyphenation.rs~ reads the
+~.dic~ files, as ~nocross~ rules need them, and a ~BrailleEncoding~
+holds the display rules. Nobody has asked for any of them yet. Should
+louis-rs offer them now, and if so, how?
+
+** Decision Drivers
+
+- An API that is offered has to be kept stable, so it should be shaped
+  by a real use.
+- In liblouis the two conversions take a table list, because the
+  display table is found in the table list. In louis-rs a braille
+  encoding is a value of its own, ~BrailleEncoding~ (see
+  [[file:0019-library-cli-workspace-split.org][ADR-0019]]).
+- The shape of ~hyphenate~ depends on what its caller needs: text or
+  braille, a word or a line, break points or the hyphenated string.
+  Its main user would be a braille formatter
+  ([[file:0017-braille-formatter.org][ADR-0017]], a draft).
+
+** Considered Options
+
+1. Offer all three now, as liblouis does: on ~Translator~, or as free
+   functions taking tables.
+2. Offer the two conversions now, on ~BrailleEncoding~, and
+   ~hyphenate~ now on ~Translator~.
+3. Wait for a user, and decide now where they will go.
+
+** Decision Outcome
+
+Option 3. None of them is built until someone needs it. When they
+are:
+
+- ~charToDots~ and ~dotsToChar~ become methods of ~BrailleEncoding~,
+  e.g. ~encoding.to_dots(&str)~ and ~encoding.to_chars(&str)~: they
+  are the encoding's two directions, applied on their own. Not on
+  ~Translator~, which would tie them to translation tables as in
+  liblouis.
+- ~hyphenate~ comes with the braille formatter, or with the first
+  other user, shaped by what that user needs.
+
+*** Positive Consequences
+
+- No API to keep stable before it has a user.
+- Whoever adds the conversions later puts them where the encoding is,
+  not where liblouis has them.
+
+*** Negative Consequences
+
+- An application moving off liblouis that uses one of the three has
+  no replacement in louis-rs yet.
+
+*** Migration path
+
+None yet ([[file:0018-parity-or-migration-path.org][ADR-0018]]): an
+application that needs one of the three should say so, and it can be
+added as decided here. Each is small (S) once its user is known.
+
+** Pros and Cons of the Options
+
+*** Option 1: all three now, like liblouis
+
+- Good, because a liblouis user finds what they know.
+- Bad, because ~charToDots~ and ~dotsToChar~ would take translation
+  tables only to find the display rules in them, which louis-rs
+  deliberately does not do.
+- Bad, because ~hyphenate~ would be shaped without its user.
+
+*** Option 2: the conversions on ~BrailleEncoding~, ~hyphenate~ on ~Translator~, now
+
+- Good, because the conversions would be in the right place.
+- Bad, because it is API without a user, and ~hyphenate~ still guesses
+  its shape.
+
+*** Option 3: wait, and decide the place now
+
+- Good, because nothing is built that nobody uses, and the design
+  question is answered while the reasoning is fresh.
+- Bad, because a liblouis user has to ask first.

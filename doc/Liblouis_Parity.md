@@ -182,7 +182,7 @@ nothing at all, and `de-eurobrl6.yaml`, `hu-hu-g1-hyph_harness.yaml` and
 | `partialTrans` ([#19](https://github.com/liblouis/louis-rs/issues/19))                          | Flag accepted, nothing reads it. A screen reader sets it on every keystroke of contracted input; without it, word-final rules fire on an unfinished word. | M      |
 | `compbrlAtCursor` / `compbrlLeftCursor` ([#20](https://github.com/liblouis/louis-rs/issues/20)) | Flags accepted, nothing reads them. Computer-braille rendering already works, so this is cursor plumbing.                                                 | M      |
 | Back-translation finality ([#29](https://github.com/liblouis/louis-rs/issues/29))               | Nothing says whether more cells could change the characters already produced.                                                                             | M      |
-| `hyphenate`, `charToDots`, `dotsToChar`                                                         | Working internals, nothing exposed on `Translator`.                                                                                                       | S each |
+| `hyphenate`, `charToDots`, `dotsToChar`                                                         | Deliberately waiting for a user; the conversions will go on `BrailleEncoding`, `hyphenate` with a formatter ([ADR-0022](adr/0022-hyphenate-chartodots-dotstochar.org)). | S each |
 | C ABI                                                                                           | Not started. cbindgen or Diplomat.                                                                                                                        | M–L    |
 
 ## Help wanted
@@ -193,8 +193,7 @@ Good entry points, roughly easiest first:
    listed above, and nobody knows what those tests will report. *(S each)*
 2. **The three parser gaps.** Small, concrete, and each has a failing file to check
    against. *(S)*
-3. **Expose the three missing entry points.** Mechanical. *(S each)*
-4. **Survey a failure cluster.** Every row in the table above now names a cause, so
+3. **Survey a failure cluster.** Every row in the table above now names a cause, so
    what's left is the ~950 failures spread across roughly 90 smaller files, and
    the residue of the two clusters already surveyed. Reading failure output rather
    than deep engine work — and each of the three clusters that got this treatment
