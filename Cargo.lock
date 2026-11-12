@@ -494,7 +494,6 @@ name = "louis-cli"
 version = "0.3.1"
 dependencies = [
  "clap",
- "enumset",
  "env_logger",
  "louis-rs",
  "rayon",

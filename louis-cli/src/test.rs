@@ -2,8 +2,6 @@
 
 use std::{collections::HashMap, path::PathBuf};
 
-use enumset::EnumSet;
-
 use rayon::prelude::*;
 
 use search_path::SearchPath;
@@ -71,6 +69,7 @@ pub enum TestResult {
         expected: String,
         actual: String,
         direction: Direction,
+        reason: Option<String>,
     },
     UnexpectedSuccess {
         input: String,
@@ -322,21 +321,46 @@ pub enum CursorPosition {
     Tuple(usize, usize),
 }
 
-pub type Directions = EnumSet<Direction>;
+/// Whether a test is expected to pass or fail in one direction
+#[derive(Debug, Clone, Default, PartialEq)]
+pub enum Expectation {
+    #[default]
+    Pass,
+    /// Expected to fail, for the reason given, if any
+    Fail(Option<String>),
+}
 
-#[derive(Debug, Clone)]
-pub enum ExpectedFailure {
-    Simple(bool),
-    Reason(String),
-    Direction(Directions),
+/// What a test is expected to do in each direction (its `xfail`)
+#[derive(Debug, Clone, Default)]
+pub struct ExpectedFailure {
+    pub forward: Expectation,
+    pub backward: Expectation,
 }
 
 impl ExpectedFailure {
+    /// The same expectation in both directions
+    pub fn both(expectation: Expectation) -> Self {
+        Self {
+            forward: expectation.clone(),
+            backward: expectation,
+        }
+    }
+
+    fn get(&self, direction: Direction) -> &Expectation {
+        match direction {
+            Direction::Forward => &self.forward,
+            Direction::Backward => &self.backward,
+        }
+    }
+
     fn is_failure(&self, direction: Direction) -> bool {
-        match &self {
-            Self::Simple(v) => *v,
-            Self::Reason(_) => true,
-            Self::Direction(d) => d.contains(direction),
+        matches!(self.get(direction), Expectation::Fail(_))
+    }
+
+    fn reason(&self, direction: Direction) -> Option<String> {
+        match self.get(direction) {
+            Expectation::Fail(reason) => reason.clone(),
+            Expectation::Pass => None,
         }
     }
 }
@@ -390,6 +414,7 @@ impl Test {
                 expected: self.expected.to_string(),
                 actual: translated,
                 direction,
+                reason: self.xfail.reason(direction),
             }
         } else {
             TestResult::Failure(FailureReason::Translation {
@@ -512,7 +537,7 @@ mod tests {
         Test::new(
             "ab".to_string(),
             "⠁⠃".to_string(),
-            ExpectedFailure::Simple(false),
+            ExpectedFailure::default(),
             vec![],
             vec![],
             input_pos,
