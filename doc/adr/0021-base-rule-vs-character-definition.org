@@ -1,0 +1,92 @@
+#+options: todo:t
+#+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
+#+language: en
+
+* DRAFT ADR-0021: A ~base~ rule that conflicts with a character definition
+- Deciders :: CE
+- Date :: [2026-11-12 Thu]
+
+Technical Story: a stray capital sign before Ø in ~fr-bfu-comp6.utb~.
+A fix that follows liblouis is parked on the branch
+~base-rule-first-definition-wins~ (~419af56~) until this is decided.
+
+** Context and Problem Statement
+
+~base uppercase Ø ø~ derives Ø from ø: Ø gets the dots of ø and the
+class ~uppercase~, so it is written with a capital sign.
+~fr-bfu-comp6-puncs-math.uti~ has that rule, but defines ~sign \x00D8
+3456~ (Ø) before it, with other dots.
+
+What should happen when a ~base~ rule and a character definition
+disagree about the dots of the same character?
+
+- liblouis: whichever comes first wins. A definition before the ~base~
+  rule makes liblouis ignore the rule entirely; a ~base~ rule before
+  the definition makes it drop the definition. Equal dots are no
+  conflict, and both apply.
+- louis-rs today: the definition's dots always win, whatever the
+  order, but the ~base~ rule still adds its class. So Ø is translated
+  ⠨⠼ where liblouis gives ⠼.
+
+Measured over ~tables/~ on [2026-11-12 Thu], forward:
+
+- Definition first: about 250 distinct rules in 16 tables. Most are a
+  table overriding a shared include: ~tr-g1.ctb~ defines Turkish ~I~
+  before ~latinLetterDef6Dots.uti~'s ~base uppercase I i~, and
+  ~en-ueb-chardefs.uti~, ~nl-chardefs.uti~, ~no-no-chardefs6.uti~ and
+  ~vi-lettersdef.uti~ are included after a table's own forms.
+- ~base~ rule first: 82 hits, in ~vi-cb8.utb~, the ~sv-6*d~ tables,
+  ~sv-6g0p.utb~ and ~da-dk-g28.ctb~. Not looked at yet.
+
+** Decision Drivers
+
+- Tables override shared includes by defining a character first; that
+  has to keep working.
+- A rule should apply as a whole or not at all, not half.
+- The behaviour should be easy to explain to a table author, not just
+  match liblouis ([[file:0018-parity-or-migration-path.org][ADR-0018]]).
+
+** Considered Options
+
+1. Follow liblouis: a ~base~ rule is a character definition, and the
+   first definition wins (the parked patch does the definition-first
+   half).
+2. A definition always beats a ~base~ rule, whatever the order: the
+   ~base~ rule only applies to a character without a definition.
+3. Make a conflict a table error, like a ~base~ rule whose base is not
+   defined at all.
+4. Keep today's behaviour.
+
+** Decision Outcome
+
+Open.
+
+** Pros and Cons of the Options
+
+*** Option 1: first definition wins
+
+- Good, because it is the rule louis-rs already uses for every other
+  character opcode, and liblouis behaves the same.
+- Good, because the definition-first case is the override pattern the
+  tables rely on.
+- Good, because the YAML suite agrees: ~grc-international-common~
+  "Χριστος" passes, and ~tr.yaml~ backward Æ and Œ fail as liblouis
+  does (they are ~xfail~).
+- Bad, because in the reverse order a later explicit definition is
+  silently dropped, which is unlikely to be what the author meant.
+
+*** Option 2: a definition always wins
+
+- Good, because an explicit definition is the more specific statement.
+- Bad, because order no longer decides, unlike everywhere else.
+- Bad, because it differs from liblouis in the reverse case, so it
+  needs a migration path.
+
+*** Option 3: an error
+
+- Good, because nothing is decided silently.
+- Bad, because it breaks the ~250 rules of the override pattern.
+
+*** Option 4: keep today's behaviour
+
+- Bad, because half a rule applies, which nobody intends.

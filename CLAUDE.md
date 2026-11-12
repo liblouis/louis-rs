@@ -10,16 +10,19 @@ Use the Linux kernel's coding-assistants trailer format (https://docs.kernel.org
 
 **louis-rs** is a Rust reimplementation of [liblouis](https://liblouis.io/), a braille translator and back-translator. It is **not** a direct port of the C code but a complete rewrite using different data structures and algorithms while maintaining compatibility with liblouis tables and tests.
 
-**Current Status**: Alpha stage
-- Translation: ~99.3% compatibility with the liblouis test suite (forward and
+**Current Status**: Beta stage
+- Translation: ~99.4% compatibility with the liblouis test suite (forward and
   backward combined)
-- Table parsing: all 458 table files under `tables/` parse cleanly. 3 that used
+- Table parsing: every table file under `tables/` that liblouis compiles, louis-rs
+  compiles too (`louis check-table`, like `lou_checktable`). 3 that used
   to fail were table-authoring bugs, not louis-rs gaps, and have since been fixed
   upstream (liblouis/liblouis#2070, #2071, #2072); the last one was ours, an
   escaped `"\\"` multipass operand in `it-it-comp6.utb:248`, fixed in 4980ced
-- Figures above measured at louis-rs `db20177` against liblouis `0d3be2c4`; see
+- Figures above measured at louis-rs `a7b8e47` against liblouis `011cfb3b` plus
+  liblouis#2176 and #2190; see
   `doc/Liblouis_Parity.md`, which is the one place to update them
-- Library API: Not yet stable
+- Library API: follows semver, breaking changes only in a new 0.x minor version;
+  `louis::internals` is not covered
 
 ## Building and Testing
 
@@ -56,8 +59,8 @@ cargo run -- check ~/src/liblouis/tests/braille-specs/*.yaml --summary
 ### Key Commands for Development
 
 ```bash
-# Parse a braille table and print debug info
-cargo run -- parse path/to/table.ctb
+# Check that a braille table compiles, like liblouis's lou_checktable
+cargo run -- check-table path/to/table.ctb
 
 # Translate text to braille
 cargo run -- translate de-comp6.utb
@@ -71,7 +74,7 @@ cargo run -- trace en-us-g2.ctb
 cargo run -- check path/to/test.yaml
 
 # Query tables by metadata
-cargo run -- query language=de,contraction=full
+cargo run -- query language:de contraction:full
 ```
 
 ### Linting
@@ -91,130 +94,40 @@ cargo clippy
 
 ## Architecture
 
-### High-Level Design
+**Read [`doc/Architecture.md`](doc/Architecture.md)** for the concepts and how they fit
+together: the pipeline and its stages, `TableContext`, the trie and its transitions, the
+regexp VM with match and context patterns, indicators, constrainers, rewriters, `Rank` and
+`Precedence`, effects, and what differs backward. It also has the table of where new logic
+goes. Keep it up to date when a concept changes; don't repeat it here.
 
-The translation pipeline transforms input text through several stages:
+The short version:
+- `parser.rs` turns each table line into a `Rule` (`AnchoredRule` keeps its file, line and
+  definition order); `TableContext::compile` is the first pass over the rules, the
+  character definitions and classes; each table's compile is the second
+- `translator/pipeline.rs` sorts the rules into stages: `correct` (`MultipassTable`), the
+  main stage (`table/primary.rs`, `PrimaryTable`), `pass2`-`pass4` (`MultipassTable`), and
+  a display table; backward, in reverse
+- `PrimaryTable::trace`: indicators and constrainers precompute from the input, the loop
+  picks a candidate per position by `Rank` (`translation.rs`), and the rewriters rewrite
+  the chosen translations
+- Logic that depends on which rule was chosen goes in a rewriter, never in an indicator or
+  constrainer guessing from the text
 
-1. **Pre-stage (Correct rules)**: Corrections applied before main translation (optional)
-2. **Main stage (Primary translation)**: Core character and pattern-based rules
-3. **Post-stages (Pass2, Pass3, Pass4)**: Additional transformations after main (optional)
+Other modules: `src/hyphenation.rs` reads `.dic` files; `src/emphasis.rs` turns a
+typeform into emphasis spans.
 
-For backward translation, the stages are applied in reverse order.
-
-### Key Components
-
-#### 1. Parser Module (`src/parser.rs`, `src/parser/*.rs`)
-
-Parses liblouis braille tables (.ctb and .utb files) into rules. Two-pass compilation:
-- **Pass 1**: Collects all character definitions, classes, and metadata
-- **Pass 2**: Uses that context to parse transformation rules
-
-Key types:
-- `Rule`: Enum representing all liblouis opcodes (letter, always, word, match, etc.)
-- `AnchoredRule`: Rule with file location metadata
-- `Direction`: Forward (text→braille) or Backward (braille→text)
-- `Constraint`: Restrictions on rules (nofor, noback, nocross)
-- Character classes and character definitions are built during parsing
-
-#### 2. Translator Module (`src/translator/`)
-
-Executes the translation pipeline:
-
-**`pipeline.rs`**: Orchestrates the multi-stage translation
-- Separates rules by stage (Pre/Main/Post1-3)
-- Compiles and chains transformations
-- For backward translation, reverses the pipeline order
-
-**`table/primary.rs`**: Main translation table
-- **PrimaryTable**: Compiled representation of translation rules for a single stage
-- Uses three data structures for rule matching:
-  - **Trie** (`trie.rs`): Prefix tree for fast simple pattern matching
-  - **MatchPatterns** (`match_pattern.rs`): Handles liblouis `match` rules via the custom regexp engine
-  - **ContextPatterns** (`context_pattern.rs`): Handles liblouis `context` rules via the custom regexp engine
-- Handles word boundaries, character definitions, and indicators
-
-**`table/multipass.rs`**: Pass2/Pass3/Pass4 transformations
-- Simpler pattern matching (sequential text replacement)
-- Used for corrections and post-processing
-
-**`trie.rs`**: Prefix tree data structure
-- Stores character and word translations with boundaries
-- Handles case-insensitive matching while preserving case sensitivity for lookups
-- Boundary support: word starts/ends, number starts/ends, punctuation, etc.
-- Keeps every rule that lands on the same node; selection among them happens later via `Rank`
-
-**`regexp.rs`**: Virtual machine-based regex engine
-- Compiles regex ASTs to instruction sequences
-- Supports character classes, quantifiers, captures, negation
-- Linear time complexity matching (based on Russ Cox's VM approach)
-- Handles liblouis-specific features like effects and variable matching
-
-**`indication/` submodules**: Special rule handling
-- `numeric.rs`: Number indication (inserting number signs)
-- `uppercase.rs`: Capital indication (capitalization markers)
-- `lettersign.rs`: Letter sign insertion for certain contexts
-- `nocontract.rs`: Contraction prevention
-- Each indicator builds during compilation and applies during translation
-
-**`effect.rs`**: Rule effects and context environment
-- Manages "effects" that rules can apply (numeric, uppercase context)
-- Tracks environment (whether in number, caps, etc.)
-
-**`context_pattern.rs`**: Handles liblouis `context` rules via the custom regexp engine
-- Parallel to `match_pattern.rs` (which handles `match` rules); both are regex-based and have similar implementations but were developed independently in liblouis for different opcodes
-
-### 3. Test Module (`src/test.rs`, `src/yaml.rs`)
-
-Runs YAML test files (liblouis format):
-- Parses test metadata, tables, modes, and test cases
-- Runs tests in various modes (forward, backward, display, hyphenate)
-- Generates success/failure/expected-failure reports
-
-### 4. Main CLI (`src/main.rs`)
-
-Subcommands:
-- `parse`: Parse and debug a table
-- `translate`: Interactive translator (REPL or single input)
-- `trace`: Show rules applied during translation
-- `check`: Run YAML test suites
-- `query`: Find tables by metadata
-
-## Important Design Decisions
-
-### Character Handling
-
-- **Character definitions**: Maps characters to their braille representation
-- **Character classes**: Groups of related characters (letter, digit, space, punctuation, etc.)
-- **Case sensitivity**: Internally case-insensitive matching, but character definitions and translation rules preserve case
-- **Unicode support**: Handles full Unicode including virtual dots (Supplementary Private Use Area-A)
-- **Fallback for undefined**: Unknown characters converted to hex representation
-
-### Rule Precedence and Selection
-
-- **Trie-based lookup**: Simple character/word matches found fastest
-- **Match patterns**: Regex-based rules (liblouis `match` opcode) checked after trie
-- **Context patterns**: Regex-based rules (liblouis `context` opcode) checked last
-- **`Rank`** (`translation.rs`): all candidates that pass the boundary checks compete on one
-  key, compared field by field: zero-length first, then length, weight, pass-rule literals,
-  `Precedence` (character definition < indicator < `always` < other rules), backward
-  main-stage output length, `nocross`, and finally definition order (earliest wins)
-
-### Boundary Handling
-
-Word boundaries are critical for rule matching:
-- **Word boundaries**: Transitions between letters and non-letters
-- **Number boundaries**: Transitions involving digits
-- **Punctuation boundaries**: Transitions involving punctuation
-- Separate tries for nocross rules (hyphenation-aware)
-
-### Multi-stage Pipeline
-
-Rules are segregated by opcode to execute in correct order:
-1. **Correct rules**: Text replacements before main translation
-2. **Primary rules**: Main character/word translations
-3. **Pass2/Pass3/Pass4**: Post-processing rules
-
-This order is crucial for correct braille generation and must be reversed for backward translation.
+The repository is a workspace (ADR-0019). The root package `louis-rs` is the library;
+`louis-cli/` is the `louis` CLI (`check-table`, `translate`, `trace`, `check`, `query`), with
+`louis-cli/src/test.rs` and `louis-cli/src/yaml.rs` running liblouis's YAML tests. The
+table index (`src/metadata.rs`, finding tables by their `#+key: value` metadata) is public
+library API (`louis::metadata`), as liblouis means to move from table file names to metadata
+queries. Its API is meant to stay; only its matching is to improve, ranking tables like
+`lou_findTables`.
+The CLI depends on the library like any other
+user; what it needs beyond the public API comes from `louis::internals` (`#[doc(hidden)]`,
+not semver-covered), which re-exports exactly those items. CLI-only dependencies (clap,
+rayon, tabled, env_logger, saphyr-parser) belong in `louis-cli/Cargo.toml`, never in the
+library's.
 
 ## Key Implementation Notes
 
@@ -222,7 +135,6 @@ This order is crucial for correct braille generation and must be reversed for ba
 
 Tests use YAML files from the liblouis project. Current gaps:
 - Emphasis indication (partial support)
-- Compound-word contraction across a nocross hyphen (see `TODO.org`'s "Known gaps")
 - Some backward translation rules
 - Computer braille cursor modes (`compbrlAtCursor`/`compbrlLeftCursor` not implemented)
 - Typeform output (`TranslationResult::emphasis` is never populated)
@@ -239,7 +151,7 @@ See `TODO.org` for detailed tracking.
 ### Known Limitations (from TODO.org)
 
 - Emphasis indication not fully implemented
-- nocross-driven hyphenation dictionary lookup works natively (`src/hyphenation.rs`), but compound-word contraction across a hyphen still has a known gap
+- nocross-driven hyphenation dictionary lookup works natively (`src/hyphenation.rs`)
 - Some backward translation modes missing
 - Computer braille is implemented as a full pipeline feature; only `compbrlAtCursor`/`compbrlLeftCursor` modes are missing
 
@@ -249,7 +161,7 @@ See `TODO.org` for detailed tracking.
 |------|-------|
 | Add new opcode support | `src/parser.rs` (parsing) + `src/translator/table/primary.rs` (compilation) |
 | Fix translation bug | `src/translator/trie.rs` or `src/translator/regexp.rs` depending on rule type |
-| Add test harness | `src/yaml.rs`, `src/test.rs` |
+| Add test harness | `louis-cli/src/yaml.rs`, `louis-cli/src/test.rs` |
 | Improve regex engine | `src/translator/regexp.rs` |
 | Optimize performance | `src/translator/trie.rs`, `src/translator/table/primary.rs` |
 | Handle new character class | `src/parser/character_class.rs`, `src/translator/table.rs` |
@@ -266,7 +178,7 @@ This runs ~700k tests across 70+ test files with various languages and braille s
 
 ## Code Organization Philosophy
 
-- **Parser is two-pass**: First pass collects context, second pass uses it
+- **Compilation is two-pass**: `TableContext` collects the definitions and classes, each table's compile uses them
 - **Compilation is separate from translation**: Rules are compiled once at load time
 - **Data structures optimize for speed**: Tries for fast lookups, VMs for regex
 - **Features are isolated**: Indicators, effects, and stages are modular

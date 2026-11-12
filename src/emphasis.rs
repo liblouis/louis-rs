@@ -16,6 +16,7 @@ pub struct EmphasisSpan {
 }
 
 impl EmphasisSpan {
+    /// Emphasis of `class` over the input characters in `range`.
     pub fn new(class: impl Into<String>, range: Range<usize>) -> Self {
         Self {
             class: class.into(),

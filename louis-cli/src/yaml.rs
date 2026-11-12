@@ -5,17 +5,16 @@ use std::{
     vec,
 };
 
-use crate::{parser, parser::EscapingContext, parser::unescape};
+use louis::internals::{parser, parser::EscapingContext, parser::unescape};
 
 use saphyr_parser::{BufferedInput, Event, Parser, ScalarStyle, ScanError, Span};
 
-use crate::emphasis::EmphasisSpan;
-use crate::parser::Direction;
 use crate::test::{
-    CursorPosition, Directions, Display, ExpectedFailure, Table, TableQuery, Test, TestError,
+    CursorPosition, Display, Expectation, ExpectedFailure, Table, TableQuery, Test, TestError,
     TestMatrix, TestMode, TestResult,
 };
-use crate::translator::{TranslationMode, TranslationModes};
+use louis::EmphasisSpan;
+use louis::{TranslationMode, TranslationModes};
 
 #[derive(thiserror::Error, Debug)]
 pub enum ParseError {
@@ -217,50 +216,39 @@ impl YAMLParser {
         Ok(mode)
     }
 
-    fn xfail_value(&mut self) -> Result<ExpectedFailure, ParseError> {
+    fn xfail_value(&mut self) -> Result<Expectation, ParseError> {
         let value = self.scalar()?;
         let value = match &*value {
-            "off" | "false" => ExpectedFailure::Simple(false),
-            "on" | "true" => ExpectedFailure::Simple(true),
-            reason => ExpectedFailure::Reason(reason.to_string()),
+            "off" | "false" => Expectation::Pass,
+            "on" | "true" => Expectation::Fail(None),
+            reason => Expectation::Fail(Some(reason.to_string())),
         };
         Ok(value)
     }
 
-    fn xfail_mapping_value(&mut self) -> Result<Directions, ParseError> {
-        let mut directions = Directions::empty();
+    fn xfail_mapping_value(&mut self) -> Result<ExpectedFailure, ParseError> {
+        let mut forward = Expectation::Pass;
+        let mut backward = Expectation::Pass;
         self.mapping_start()?;
         while let Some(Ok((Event::Scalar(..), _))) = self.events.peek() {
             let direction = self.scalar()?;
             let value = self.xfail_value()?;
             match &*direction {
-                "forward" => match value {
-                    ExpectedFailure::Simple(true) | ExpectedFailure::Reason(_) => {
-                        directions.insert(Direction::Forward);
-                    }
-                    _ => (),
-                },
-                "backward" => match value {
-                    ExpectedFailure::Simple(true) | ExpectedFailure::Reason(_) => {
-                        directions.insert(Direction::Backward);
-                    }
-                    _ => (),
-                },
+                "forward" => forward = value,
+                "backward" => backward = value,
                 _ => {
                     return Err(ParseError::InvalidXFail);
                 }
             }
         }
         self.mapping_end()?;
-        Ok(directions)
+        Ok(ExpectedFailure::new(forward, backward))
     }
 
     fn xfail(&mut self) -> Result<ExpectedFailure, ParseError> {
         match self.events.peek() {
-            Some(Ok((Event::MappingStart(..), _))) => {
-                Ok(ExpectedFailure::Direction(self.xfail_mapping_value()?))
-            }
-            Some(Ok((Event::Scalar(..), _))) => self.xfail_value(),
+            Some(Ok((Event::MappingStart(..), _))) => self.xfail_mapping_value(),
+            Some(Ok((Event::Scalar(..), _))) => Ok(ExpectedFailure::both(self.xfail_value()?)),
             _ => Err(ParseError::InvalidXFail),
         }
     }
@@ -382,7 +370,7 @@ impl YAMLParser {
             input = expected;
             expected = unescape(&self.scalar()?, EscapingContext::Default)?;
         }
-        let mut xfail = ExpectedFailure::Simple(false);
+        let mut xfail = ExpectedFailure::default();
         let mut emphasis: Vec<EmphasisSpan> = Vec::new();
         let mut expected_emphasis: Vec<EmphasisSpan> = Vec::new();
         let mut input_pos: Vec<usize> = Vec::new();
@@ -557,6 +545,7 @@ mod tests {
 
     use super::*;
     use crate::test::{FailureReason, PositionDiff};
+    use louis::Direction;
 
     fn run(name: &str, yaml: &str) -> Result<Vec<TestResult>, ParseError> {
         let path =
@@ -646,6 +635,29 @@ mod tests {
         let yaml = format!("{AB_TABLE}tests:\n  - - ab\n    - ⠁⠁\n    - inputPos: [5, 5]\n");
         let results = run("failed_translation", &yaml).unwrap();
         assert!(results[0].is_translation_failure());
+    }
+
+    #[test]
+    fn expected_failures_report_their_reason() {
+        let yaml = "table: |\n  letter a 1\n  letter b 12\nflags: {testmode: bothDirections}\ntests:\n  - [ab, ⠃⠁, {xfail: {forward: wrong order, backward: true}}]\n  - [ab, ⠃⠁, {xfail: also wrong}]\n";
+        let results = run("xfail_reasons", yaml).unwrap();
+        let reasons: Vec<_> = results
+            .iter()
+            .map(|result| match result {
+                TestResult::ExpectedFailure { reason, .. } => reason.as_deref(),
+                other => panic!("expected failure, got {other:?}"),
+            })
+            .collect();
+        // all forward results first, then all backward ones
+        assert_eq!(
+            reasons,
+            [
+                Some("wrong order"),
+                Some("also wrong"),
+                None,
+                Some("also wrong")
+            ]
+        );
     }
 
     #[test]

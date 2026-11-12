@@ -5,10 +5,7 @@
 //! - Emits the numsign translation at the first digit of a numeric run.
 //! - Emits the non-numsign translation at the first non-numeric terminating character.
 
-use crate::{
-    parser::AnchoredRule,
-    translator::{ResolvedTranslation, TranslationStage},
-};
+use crate::{parser::AnchoredRule, translator::ResolvedTranslation};
 
 use std::collections::HashSet;
 
@@ -38,23 +35,11 @@ impl IndicatorBuilder {
     }
 
     pub fn numsign(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.start_translation = Some(ResolvedTranslation::new(
-            "",
-            s,
-            1,
-            TranslationStage::Main,
-            origin.clone(),
-        ));
+        self.0.start_translation = Some(ResolvedTranslation::indication(s, origin));
     }
 
     pub fn nonumsign(&mut self, s: &str, origin: &AnchoredRule) {
-        self.0.end_translation = Some(ResolvedTranslation::new(
-            "",
-            s,
-            1,
-            TranslationStage::Main,
-            origin.clone(),
-        ));
+        self.0.end_translation = Some(ResolvedTranslation::indication(s, origin));
     }
 
     pub fn midnum(&mut self, s: &str) {

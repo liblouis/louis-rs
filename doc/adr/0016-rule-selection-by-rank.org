@@ -8,7 +8,10 @@
 
 Revised. The first version ([2026-09-03 Thu]) held that a tie between
 candidates is an ill-formed table and declined any tie-break by table
-order; see "History" below.
+order; see "History" below. Amended [2026-11-11 Wed]: weight no longer
+ranks rules ahead of liblouis's chain order, and ~context~ rules are
+ranked as liblouis files them; see "Amendment: weight and ~context~
+rules".
 
 ** Context and Problem Statement
 
@@ -40,6 +43,11 @@ liblouis decides the same questions by the order of its rule chains
 - pass rules: by the length of the literal their test starts with
   (~passFindCharacters~), then definition order; the first rule that
   matches wins, without comparing what it consumes
+- main-stage ~context~ rules: one whose test starts with a literal
+  goes into the ordinary chains under that literal, as if it were a
+  rule of that length; one without goes on a separate list, which
+  ~findForPassRule~ checks after a rule has been chosen, the first
+  match overriding that choice
 - and in every chain the first rule that validates is taken, so a rule
   rejected by its context check hands over to the next one
 
@@ -51,8 +59,8 @@ before a catch-all one; ~vi-lettersdef.uti~ is included before the
 
 ** Decision Drivers
 
-- The rules' own content comes first. A longer match, or one that
-  checked more context, is more specific, whatever its position.
+- The rules' own content comes first. A longer match is more
+  specific, whatever its position.
 - Parity with liblouis: tables are written and tested against its
   behaviour, and the ties are not rare (an earlier diagnostic found
   414 occurrences in 14 tables, see "History").
@@ -78,16 +86,18 @@ to the next one, as in liblouis. Candidates then compete on ~Rank~
 (~src/translator/translation.rs~), a struct whose derived ordering
 compares its fields in declaration order, the highest winning:
 
-| Field              | Meaning                                                      | Source                      |
-|--------------------+--------------------------------------------------------------+-----------------------------|
-| ~zero_length~      | a candidate that consumes nothing goes first                 | louis-rs                    |
-| ~length~           | characters consumed                                          | louis-rs, liblouis          |
-| ~weight~           | length plus the ~before~/~after~ context checked             | louis-rs                    |
-| ~literals~         | literal characters in a pass or ~correct~ test               | liblouis's pass-rule sort   |
-| ~precedence~       | character definition < indicator < ~always~ < other rules    | liblouis's chain order      |
-| ~output_length~    | backward main stage only: the longer output                  | liblouis's backward chains  |
-| ~nocross~          | a ~nocross~ rule beats its plain twin                        | louis-rs                    |
-| ~definition_order~ | the earliest-defined rule                                    | liblouis                    |
+| Field                        | Meaning                                                         | Source                       |
+|------------------------------+-----------------------------------------------------------------+------------------------------|
+| ~context_no_leading_literal~ | forward ~context~ rule whose test has no leading literal        | liblouis's ~findForPassRule~ |
+| ~zero_length~                | a candidate that consumes nothing goes first                    | louis-rs                     |
+| ~length~                     | characters consumed; for a forward ~context~ rule, the          | louis-rs, liblouis           |
+|                              | leading literal it is filed under (~Test::leading_literal_len~) |                              |
+| ~literals~                   | literal characters in a pass or ~correct~ test                  | liblouis's pass-rule sort    |
+| ~precedence~                 | character definition < indicator < ~always~ < other rules       | liblouis's chain order       |
+| ~output_length~              | backward main stage only: the longer output                     | liblouis's backward chains   |
+| ~nocross~                    | a ~nocross~ rule beats its plain twin                           | louis-rs                     |
+| ~context_weight~             | between forward ~context~ rules: how much the test checked      | louis-rs                     |
+| ~definition_order~           | the earliest-defined rule                                       | liblouis                     |
 
 - ~Precedence~ is derived from the rule, not stored. A one-character
   ~always~ counts as an ordinary rule, since liblouis only puts
@@ -96,9 +106,10 @@ compares its fields in declaration order, the highest winning:
   compiled from, across ~include~ files and table lists, stamped by
   ~parser::in_definition_order~.
 
-Option 2 was measured: dropping weight in favour of liblouis's order
-alone churned results (~en-g3~ lost 184 tests, ~tr~ and ~da~ gained
-about 90), so weight stays ahead of the chain-order keys.
+The first measurement of option 2, dropping weight in favour of
+liblouis's order alone, churned results (~en-g3~ lost 184 tests, ~tr~
+and ~da~ gained about 90), so weight was kept ahead of the chain-order
+keys. It has since been dropped; see the amendment below.
 
 *** Positive Consequences
 
@@ -121,17 +132,54 @@ about 90), so weight stays ahead of the chain-order keys.
   nothing else separates changes the output. Such tables still
   deserve fixing upstream, and the engine no longer surfaces them (see
   "Deferred: a table linter").
-- Where weight decides before the chain-order keys, louis-rs can still
-  differ from liblouis. Backward ~decpoint~ cannot get its "digit
-  follows" check, which would add weight and beat an earlier
-  same-dots ~always~ (~TODO.org~).
-- Known divergences that remain: liblouis does not compare consumed
-  length between pass rules, and tries ~context~ rules without a
-  leading literal before all others (~findForPassRule~ in
-  ~lou_translateString.c~). Neither is modelled.
+- Known divergence that remains: liblouis does not compare consumed
+  length between pass rules.
 - A ~_N~ lookback that rewinds past the start is not checked, which
   the old last-defined accident hid; ~multipass-forward.yaml~ and
   ~multipass-backward.yaml~ now fail that test (~TODO.org~).
+
+** Amendment: weight and ~context~ rules
+
+Weight (length plus the ~before~/~after~ context a rule checked) came
+second in ~Rank~, and made a later ~word " 236~ beat an earlier
+~postpunc " 356~ in ~en-g3~, which liblouis never does. Most of what
+the 184 ~en-g3~ losses above depended on was two other things:
+~joinword~'s word end was checked outside the trie and so lacked the
+weight of its ~word~ twin (fixed in be18c6e), and liblouis's ordering
+of ~context~ rules, which weight happened to approximate because a
+~context~ rule's weight counts its whole test.
+
+Modelling that ordering directly removed the need for weight:
+
+- A forward main-stage ~context~ rule whose test starts with no
+  literal ranks above everything (~context_no_leading_literal~), as
+  ~findForPassRule~ lets it override the rule chosen from the chains.
+  ~hu-hu-g2~'s ~[%nevelo"z"]$s"lesz"~ thereby beats ~joinword az~.
+- One with a leading literal competes as a rule of that literal's
+  length (~Test::leading_literal_len~, a port of ~passFindCharacters~), not by
+  what it consumes: ~th~'s ~"เ"[…]"าะ"~ loses to the eight-character
+  ~always เพราะว่า~.
+- Weight survives only between two forward ~context~ rules
+  (~context_weight~), just before definition order. liblouis tries a
+  ~context~ rule's test where the test starts; louis-rs gets to the
+  rule only once the cursor reaches its ~[~, and the longer test
+  stands in for having been tried earlier (~hu-hu-g2~ "II. Tamás").
+  It should go once ~context~ rules run at the cursor (branch
+  ~context-consume-at-cursor~).
+- Backward, liblouis chooses ~context~ rules its own way
+  (~back_selectRule~), and they rank like any other rule.
+
+63 more tests pass (~ta~, ~ml~, ~hi~, ~th~, ~afr-za-g2~, ~ar-ar-g2~,
+~pa~, ~en-g3~) and none fail that passed before.
+
+The ~findForPassRule~ override is not a priority anyone chose: it
+follows from ~context~ rules without a leading literal having no
+characters to be filed under. Whether a rule overrides everything thus
+depends on how its test is spelled (~$l"z"[…]~ does, ~"z"[…]~ does
+not), which is fragile in liblouis too; raised upstream as
+[[https://github.com/liblouis/liblouis/issues/2189][liblouis#2189]]. Not
+modelled: liblouis skips the override at a position where the previous
+rule did not advance (~posIncremented~).
 
 ** Deferred: a table linter
 

@@ -2,13 +2,13 @@
 #+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
 #+language: en
 
-* DRAFT ADR-0019: Split the library and the CLI into a two-crate workspace
+* ACCEPTED ADR-0019: Split the library and the CLI into a two-crate workspace
 - Deciders :: CE
 - Date :: [2026-11-06 Fri]
 
 Technical Story: came out of a review of the public API against the
-[[https://rust-lang.github.io/api-guidelines/][Rust API Guidelines]] and chapter 3 of /Rust for Rustaceans/. Parked
-until the remaining unimplemented opcodes are done.
+[[https://rust-lang.github.io/api-guidelines/][Rust API Guidelines]] and chapter 3 of /Rust for Rustaceans/.
+Implemented on [2026-11-11 Wed], after the 0.3.1 release.
 
 ** Context and Problem Statement
 
@@ -49,22 +49,25 @@ depending on the library like any other user?
 
 ** Decision Outcome
 
-Tentatively option 2. It fixes the dependency leak for good and makes
+Option 2. It fixes the dependency leak for good and makes
 the CLI an honest user of the library. Option 3 can follow later if
 library users ask for ~trace~-style access.
 
-Sketch:
+Sketch. The library stays at the repository root, so ~src/~, the fuzz
+crate's ~path = ".."~, the doc links and the git history of the
+library files do not move. Only the CLI moves into a member crate:
 
 #+begin_example
-louis-rs/            (workspace)
-├── louis/           lib: parser, translator, hyphenation, emphasis
+louis-rs/            (workspace root) package louis-rs, lib "louis"
 │                    deps: thiserror, search_path, enumset, smallvec, log
-└── louis-cli/       bin "louis": main, test, yaml, metadata
-                     deps: louis, clap, rayon, tabled, env_logger, saphyr-parser
+└── louis-cli/       package louis-cli, bin "louis": main, test, yaml, metadata
+                     deps: louis-rs, clap, rayon, tabled, env_logger, saphyr-parser
 #+end_example
 
 ~test.rs~, ~yaml.rs~ and ~metadata.rs~ move to the CLI crate: they make
-up the test harness and the ~query~ command, not translation.
+up the test harness and the ~query~ command, not translation. Nothing
+in the library uses them, and the benches and fuzz targets already use
+only ~louis::{Translator, Direction}~.
 
 *** Positive Consequences
 
@@ -107,28 +110,123 @@ up the test harness and the ~query~ command, not translation.
 - Bad, because it means designing and stabilizing an API nobody has
   asked for yet.
 
+** Implementation plan
+
+Checked against the code on [2026-11-11 Wed] (~597cab9~).
+
+*** Internals the CLI uses today
+
+| Caller              | Uses                                                                                                                                                                                                      |
+|---------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ~main.rs~ (check-table, translate, trace) | ~parser::{table_expanded_in, AnchoredRule, TableError}~, ~TranslationPipeline::{compile, with_display, trace}~, ~TranslationStage~, ~ResolvedTranslation~, ~DisplayTable~, ~translator::TranslationError~ |
+| ~test.rs~ (check)   | ~parser::{table, expand_includes, table_expanded_in}~, ~TranslationPipeline~, ~DisplayTable~, ~PositionMap~                                                                                                 |
+| ~yaml.rs~           | ~parser::{unescape, EscapingContext, ParseError}~, ~TranslationMode(s)~                                                                                                                                    |
+
+The only CLI dependency in library code is the ~clap::ValueEnum~ derive
+on ~Direction~ (~src/parser.rs~).
+
+*** Steps
+
+1. *Workspace.* Add ~[workspace] members = ["louis-cli"]~ and
+   ~default-members = [".", "louis-cli"]~ to the root ~Cargo.toml~, so
+   that a plain ~cargo run~ / ~cargo test~ keep working (verify this).
+2. *Drop clap from the library.* Remove the ~clap::ValueEnum~ derive
+   from ~Direction~; the CLI gets a small enum of its own that maps
+   onto it.
+3. *Hidden internals.* Add ~#[doc(hidden)] pub mod internals~ to
+   ~lib.rs~, re-exporting exactly the items in the table above and
+   nothing more. In the moved modules, ~crate::parser::…~ becomes
+   ~louis::internals::…~.
+4. *Move and split.* ~git mv~ ~main.rs~, ~test.rs~, ~yaml.rs~ and
+   ~metadata.rs~ to ~louis-cli/src/~; their unit tests move with them,
+   the tests in ~lib.rs~ stay. Move ~clap~, ~rayon~, ~tabled~,
+   ~env_logger~ and ~saphyr-parser~ to the CLI's ~Cargo.toml~.
+5. *Tooling and docs.* CI (~rust.yml~) runs ~cargo test --workspace~;
+   adapt ~release.toml~ (cargo-release) to the workspace; check
+   ~deny.toml~ and the sbom workflow. README: ~cargo install louis-rs~
+   becomes ~cargo install louis-cli~. Update the commands in
+   ~CLAUDE.md~. The CHANGELOG notes that ~louis-rs~ is library-only
+   from the next release on.
+6. *Verify.* ~cargo tree -p louis-rs -e normal~ lists only the five
+   library dependencies; the full YAML suite gives identical results;
+   the benches and the fuzz crate still build.
+
+*** Follow-up: shrink the internals
+
+Most of what the ~check~ harness needs is reasonable public API
+anyway: a display table on ~Translator~, inline table source with
+includes resolved against a search path, and the positions (already
+public). Once those are public, ~internals~ only has to cover ~trace~
+(~AnchoredRule~, ~trace~, ~ResolvedTranslation~, ~TranslationStage~).
+
+The ~parse~ subcommand, which dumped the parsed rules and had a REPL
+that parsed each line typed, was only ever a way to test the parser.
+It was replaced by ~check-table~, which does what liblouis's
+~lou_checktable~ does, so ~RuleParser~ left the internals.
+
+*** Open questions
+
+- ~metadata.rs~ needs no extra dependencies, and liblouis exposes the
+  same feature publicly (~lou_findTable~). It moves to the CLI for now
+  and can be promoted when a library user asks for it.
+  - Settled [2026-11-11 Wed]: it is public library API
+    (~louis::metadata~), as liblouis means to move away from table file
+    names towards metadata queries in the long run. The API stays;
+    only the matching is to improve, ranking tables by how well they
+    match like ~lou_findTables~ rather than requiring every pair. The
+    process-wide cache over ~LOUIS_TABLE_PATH~ stays in the CLI.
+- The API-review findings below are separate work and are not part of
+  the split.
+
 ** Related API-review findings (do alongside or after the split)
 
 From the same review. Most of these become easier once the public
-surface is explicit:
+surface is explicit. Done on [2026-11-11 Wed] unless marked open:
 
 - ~backwards_compatibility~ is a non-additive default feature (it changes
-  rule selection). It should be a runtime option.
+  rule selection). It should be a runtime option. /Done:/ deleted
+  instead; louis-rs always behaves like liblouis (first definition
+  wins). A ~base~ rule whose base character is not defined in either
+  direction is a ~CompileError~, not ignored as in liblouis.
 - ~parser::TableError~, ~parser::ParseError~ and
   ~translator::TranslationError~ are pub-in-private: users can see them
   but can't name them. Re-export them, and rename the two
-  ~TranslationError~ types (e.g. a top-level ~Error~).
+  ~TranslationError~ types (e.g. a top-level ~Error~). /Done:/ the
+  constructors return ~louis::Error~ (~Table~ or ~Compile~), with
+  ~TableError~ and ~CompileError~ public. ~ParseError~ stays internal:
+  it exposes ~Opcode~, ~Constraints~ and four nested error enums, so
+  ~TableError~ carries an opaque ~SyntaxError~ (a message, no
+  variants). ~translate~ and ~translate_with_options~ cannot fail and
+  no longer return a ~Result~.
 - Add ~#[non_exhaustive]~ to the public enums and to ~TranslationResult~.
+  /Done/, except ~Direction~, which will only ever have two.
 - ~TranslationResult~: ~emphasis~ is always ~None~, and the position
-  vectors are always ~Some~.
+  vectors are always ~Some~. /Done:/ the positions are plain ~Vec~s;
+  ~emphasis~ stays, documented as not implemented.
 - Document that positions and ~cursor_pos~ are char indices, not bytes.
   Add ~# Errors~ sections, and fill in the ~-W missing_docs~ gaps (~30
-  items).
+  items). /Done/ for the public API; the remaining gaps are in
+  ~internals~.
 - ~TranslationModes~: add ~PartialEq~ / ~Eq~ / ~BitOr~ / ~FromIterator~.
   ~CompbrlAtCursor~ / ~CompbrlLeftCursor~ are accepted but silently
+  ignored. /Done/ (~PartialEq~, ~Eq~, ~FromIterator~). Only
+  ~NoUndefined~ is implemented; the other modes are documented as
   ignored.
+- ~TranslationMode~ and ~Direction~ derive enumset's ~EnumSetType~,
+  which gives them a ~|~ that returns an ~enumset::EnumSet~. That puts
+  enumset in the public API, so a major enumset release would be a
+  breaking change for us. /Done/ [2026-11-12 Thu]: both derive it
+  with ~#[enumset(no_ops)]~, so neither has the ~|~; a set of modes is
+  built with ~insert~ or ~collect~. ~EnumSetType~ stays implemented, a
+  small, deliberate leak: enumset 1.x is stable, and the sets inside
+  louis-rs and the CLI keep using it.
 - Add a static assertion that ~Translator: Send + Sync~ (true today),
   and run ~cargo-semver-checks~ in CI once the API is declared stable.
+  /Done/ (the assertion, as a unit test like the API guidelines'
+  C-SEND-SYNC). No semver checks in CI: on main they would fail
+  between releases whenever it has breaking changes. Instead,
+  ~release.toml~ says to run ~cargo semver-checks~ before picking the
+  release level.
 
 ** Links
 

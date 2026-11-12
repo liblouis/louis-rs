@@ -92,7 +92,7 @@ Deliberately not replicated:
 The general shape here is that we did not set out to support tables
 outside the search path at all -- a caller that owns its tables passes
 their directory to ~Translator::with_search_path~. The prepend exists
-only so that ~louis parse /some/where/top.utb~ does not work or fail
+only so that ~louis check-table /some/where/top.utb~ does not work or fail
 depending on whether ~top.utb~ happens to contain an ~include~.
 
 ** Links

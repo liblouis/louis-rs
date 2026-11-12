@@ -2,7 +2,7 @@ use crate::{
     Direction,
     parser::{AnchoredRule, HasDirection, Rule},
     translator::{
-        PositionMap, ResolvedTranslation, TranslationError, TranslationOptions, TranslationStage,
+        CompileError, PositionMap, ResolvedTranslation, TranslationOptions, TranslationStage,
         table::{
             TableContext, display::DisplayTable, multipass::MultipassTable, primary::PrimaryTable,
         },
@@ -53,8 +53,18 @@ pub struct TranslationPipeline {
 }
 
 impl TranslationPipeline {
-    pub fn compile(rules: &[AnchoredRule], direction: Direction) -> Result<Self, TranslationError> {
+    pub fn compile(rules: &[AnchoredRule], direction: Direction) -> Result<Self, CompileError> {
         let ctx = TableContext::compile(rules)?;
+        // A base character has to be defined, but a definition for the other direction
+        // (`noback`, `nofor`) is enough. So check against all rules, before they are
+        // filtered by direction.
+        for rule in rules {
+            if let Rule::Base { derived, base, .. } = rule.rule
+                && ctx.character_definitions().get(&base).is_none()
+            {
+                return Err(CompileError::BaseCharacterNotDefined { base, derived });
+            }
+        }
         let mut steps = Vec::new();
 
         // ignore rules that aren't meant for the given direction
