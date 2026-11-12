@@ -8,13 +8,15 @@ This document says what it can do today, what it can't yet, and where the remain
 work is, so you can tell whether it's usable for your case and pick something up if
 it isn't.
 
-Measured at louis-rs `3a6e171` against liblouis `0d3be2c4`, which is `011cfb3b` plus
-[liblouis#2176](https://github.com/liblouis/liblouis/pull/2176). Without that fix four
-YAML files (`en-g3`, `en-ueb`, `it`, `de-g2-sbs`) don't parse and drop out:
+Measured at louis-rs `a7b8e47` against liblouis `011cfb3b` plus
+[liblouis#2176](https://github.com/liblouis/liblouis/pull/2176) and
+[liblouis#2190](https://github.com/liblouis/liblouis/pull/2190). Without the first, four
+YAML files (`en-g3`, `en-ueb`, `it`, `de-g2-sbs`) don't parse and drop out; without the
+second, `ht-g1.utb` doesn't compile and `ht.yaml` drops out:
 
 |                                |           |
 |--------------------------------|-----------|
-| Assertions run                 | 2 241 029 |
+| Assertions run                 | 2 241 031 |
 | Pass                           | **99.4%** |
 | Fail                           | 0.1%      |
 | Expected failure               | 0.5%      |
@@ -135,7 +137,7 @@ and are there so you can pick work by appetite, not to add up. Failure counts ar
 | `th`, `pa`                                          |    ≈150 | Unrelated to each other. `th`: tone marks and vowels come out in the wrong order (`ค่ะ` gives ⠥⠔⠁, not ⠥⠁⠔), from the table's reordering `correct` rules, plus a few `context` rules with a variable. `pa`: backward, the number sign ⠼ is read as the letter ਣ, which has the same cells; liblouis takes the number sign when a digit follows. | M    |
 | `de-g0-detailed-specs`, `de-g1-…`                   |    ≈140 | `capsletter` vs. `begcapsword` tier selection. Needs `uppercase.rs` and `emphasis.rs` unified into one tier model — a blanket engine fix was tried and disproven.                | L    |
 | `nl-g0_harness`                                     |    ≈110 | Emphasis tiers: a multi-word italic passage should open with ⠸⠸ once, louis-rs marks every word ⠸…⠠. Also indicator order (⠨⠰, not ⠰⠨) and a stray ⠠ after a capsletter that follows a digit ("1E" gives ⠼⠁⠨⠠⠑). | M    |
-| `ru`                                                |     ≈70 | Generic `begmode` alphabet indicators: the Latin lowercase sign ⠠ is never emitted ("x" gives ⠭, not ⠠⠭), and word tiers repeat per letter ("ABC" gives ⠨⠁⠨⠃⠨⠉, not ⠨⠁⠃⠉). Likely the same tier model as `de-g0`. | M    |
+| `ru`                                                |     ≈30 | Generic `begmode` alphabet indicators: word tiers repeat per letter ("ABC" gives ⠨⠁⠨⠃⠨⠉, not ⠨⠁⠃⠉), and a letter after one from another alphabet gets its sign twice ("HАH" gives ⠨⠓⠘⠘⠁⠨⠓). Likely the same tier model as `de-g0`. | M    |
 | all other files                                     |    ≈950 | Roughly 90 files, each contributing under 150.                                                                                                                                   | —    |
 
 Two cross-cutting items have no single file behind them:
