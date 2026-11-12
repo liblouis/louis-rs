@@ -53,6 +53,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   The rule dump and the rule-parsing REPL are gone.
 
 ### Fixed
+- Multipass and `context` variables work as in liblouis: `#1+` and `#1-`
+  increment and decrement, a test can compare with `<`, `>`, `<=` and
+  `>=` as well as `=`, and a variable that was never set is 0. Before,
+  `#1+` failed to parse, the other comparisons panicked, and an unset
+  variable matched nothing.
 - `louis trace` prints the attributes of a `match` rule in match syntax,
   `%[_~]`, not in the multipass letters without brackets (`s~`).
 

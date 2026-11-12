@@ -90,7 +90,7 @@ impl TryFrom<&Test> for String {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Operator {
     Eq,
     Gt,

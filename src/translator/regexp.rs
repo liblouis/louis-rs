@@ -62,10 +62,8 @@ pub enum Regexp {
     /// case-insensitive `validMatch`/`toLowercase` used for every other opcode, and only the
     /// `pre`/`post` context patterns go through the strictly case-sensitive pattern matcher.
     CaseInsensitiveString(String),
-    /// Check whether variable at index is equal to given value
-    VariableEqual(VariableIndex, u8),
-    /// Check whether variable at index is not equal to given value
-    NotVariableEqual(VariableIndex, u8),
+    /// Check whether the variable at index compares to the given value as given
+    VariableCompare(VariableIndex, Comparison, u8),
     Group(Box<Regexp>),
     /// To support empty captures, we need an empty AST
     Empty,
@@ -125,9 +123,9 @@ impl Regexp {
             // unreachable: only ever built from a match rule's `chars` operand, which is parsed
             // separately from `pre`/`post` as a plain string and never goes through `Pattern::Negate`
             Regexp::CaseInsensitiveString(_) => unreachable!(),
-            Regexp::VariableEqual(slot, value) => Regexp::NotVariableEqual(slot, value),
-            // unreachable: the parser rejects double negation before it reaches here
-            Regexp::NotVariableEqual(_, _) => unreachable!(),
+            Regexp::VariableCompare(slot, comparison, value) => {
+                Regexp::VariableCompare(slot, comparison.negate(), value)
+            }
             Regexp::Group(regexp) => Regexp::Group(Box::new(regexp.negate())),
             Regexp::Empty => Regexp::Never,
             Regexp::Never => Regexp::Empty,
@@ -167,8 +165,7 @@ impl Regexp {
             other @ (Regexp::Any
             | Regexp::CharacterClass(_)
             | Regexp::NotCharacterClass(_)
-            | Regexp::VariableEqual(..)
-            | Regexp::NotVariableEqual(..)
+            | Regexp::VariableCompare(..)
             | Regexp::Empty
             | Regexp::Never) => other,
         }
@@ -275,11 +272,8 @@ impl Regexp {
                     instructions.push(Instruction::CaseInsensitiveChar(c))
                 }
             }
-            Regexp::VariableEqual(index, value) => {
-                instructions.push(Instruction::VariableEqual(*index, *value))
-            }
-            Regexp::NotVariableEqual(index, value) => {
-                instructions.push(Instruction::NotVariableEqual(*index, *value))
+            Regexp::VariableCompare(index, comparison, value) => {
+                instructions.push(Instruction::VariableCompare(*index, *comparison, *value))
             }
             Regexp::Group(regexp) => {
                 regexp.emit(instructions, character_classes);
@@ -298,6 +292,41 @@ type InstructionIndex = usize;
 type CharacterClassIndex = usize;
 type TranslationIndex = usize;
 type VariableIndex = u8;
+
+/// How a variable is compared to a value in a `context` or multipass test
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Comparison {
+    Eq,
+    NotEq,
+    Lt,
+    Gt,
+    LtEq,
+    GtEq,
+}
+
+impl Comparison {
+    fn holds(self, actual: u8, value: u8) -> bool {
+        match self {
+            Comparison::Eq => actual == value,
+            Comparison::NotEq => actual != value,
+            Comparison::Lt => actual < value,
+            Comparison::Gt => actual > value,
+            Comparison::LtEq => actual <= value,
+            Comparison::GtEq => actual >= value,
+        }
+    }
+
+    fn negate(self) -> Self {
+        match self {
+            Comparison::Eq => Comparison::NotEq,
+            Comparison::NotEq => Comparison::Eq,
+            Comparison::Lt => Comparison::GtEq,
+            Comparison::Gt => Comparison::LtEq,
+            Comparison::LtEq => Comparison::Gt,
+            Comparison::GtEq => Comparison::Lt,
+        }
+    }
+}
 
 /// Virtual machine instruction set for pattern matching
 #[derive(Debug, Clone)]
@@ -329,10 +358,8 @@ pub enum Instruction {
     ConsumeStart,
     /// Where the actual match ends (before the lookahead)
     ConsumeEnd,
-    /// Test whether a variable is equal to a value
-    VariableEqual(VariableIndex, u8),
-    /// Test whether a variable is not equal to a value
-    NotVariableEqual(VariableIndex, u8),
+    /// Test whether a variable compares to a value as given
+    VariableCompare(VariableIndex, Comparison, u8),
     /// Zero-width assertion: succeeds only if there is no input left
     AssertEnd,
     /// Zero-width assertion: succeeds only if there is still input left
@@ -515,23 +542,9 @@ impl CompiledRegexp {
                 at_start,
                 env,
             ),
-            Instruction::VariableEqual(var, expected) => {
-                if env.get(var) == Some(&expected) {
-                    self.add_thread(
-                        list,
-                        pc + 1,
-                        captured,
-                        consumed,
-                        sp,
-                        cp,
-                        input_len,
-                        at_start,
-                        env,
-                    );
-                }
-            }
-            Instruction::NotVariableEqual(var, expected) => {
-                if env.get(var).is_some_and(|&actual| actual != expected) {
+            Instruction::VariableCompare(var, comparison, expected) => {
+                // as in liblouis, a variable that was never set is 0
+                if comparison.holds(env.get(var).copied().unwrap_or(0), expected) {
                     self.add_thread(
                         list,
                         pc + 1,
@@ -1056,7 +1069,7 @@ mod tests {
     fn variable_equal() {
         let mut env = Environment::new();
         let re = Regexp::Concat(
-            Box::new(Regexp::VariableEqual(1, 1)),
+            Box::new(Regexp::VariableCompare(1, Comparison::Eq, 1)),
             Box::new(Regexp::String("a".to_string())),
         )
         .compile();
@@ -1082,6 +1095,37 @@ mod tests {
         assert!(re.is_match("aaab", &env));
         assert!(!re.is_match("c", &env));
         assert!(!re.is_match("bbb", &env));
+    }
+
+    #[test]
+    fn variable_comparisons() {
+        let matches = |comparison, env: &Environment| {
+            Regexp::VariableCompare(1, comparison, 3)
+                .compile()
+                .is_match("", env)
+        };
+        let mut env = Environment::new();
+        // as in liblouis, a variable that was never set is 0
+        assert!(matches(Comparison::Lt, &env));
+        assert!(
+            Regexp::VariableCompare(1, Comparison::Eq, 0)
+                .compile()
+                .is_match("", &env)
+        );
+        env.apply(&Effect::new(1, 3));
+        assert!(matches(Comparison::Eq, &env));
+        assert!(matches(Comparison::LtEq, &env));
+        assert!(matches(Comparison::GtEq, &env));
+        assert!(!matches(Comparison::Lt, &env));
+        assert!(!matches(Comparison::Gt, &env));
+        assert!(!matches(Comparison::NotEq, &env));
+        // negating flips the comparison
+        assert!(
+            Regexp::VariableCompare(1, Comparison::Lt, 3)
+                .negate()
+                .compile()
+                .is_match("", &env)
+        );
     }
 
     #[test]

@@ -2,12 +2,12 @@
 
 use std::collections::HashSet;
 
-use crate::parser::multipass::test::Operator;
 use crate::parser::{Action, ActionInstruction, Quantifier, Test, TestInstruction};
 
+use crate::parser::multipass::test::Operator;
 use crate::parser::{AnchoredRule, Attribute, CharacterClass, CharacterClasses};
 use crate::translator::effect::{Effect, Environment};
-use crate::translator::regexp::{CompiledRegexp, Regexp};
+use crate::translator::regexp::{Comparison, CompiledRegexp, Regexp};
 use crate::translator::swap::SwapClasses;
 use crate::translator::table::TableContext;
 use crate::translator::translation::{
@@ -65,13 +65,9 @@ impl Regexp {
             // correct, not a stand-in for a real implementation — hence `Empty`, not some
             // "unimplemented" marker.
             TestInstruction::Lookback { .. } => Regexp::Empty,
-            TestInstruction::Variable { var, op, operand } => match op {
-                Operator::Eq => Regexp::VariableEqual(*var, *operand),
-                // FIXME: operands other than equal do not seem to exist in the wild (at least not
-                // in the tables that are shipped with liblouis), so maybe that feature should be
-                // removed
-                _ => todo!(),
-            },
+            TestInstruction::Variable { var, op, operand } => {
+                Regexp::VariableCompare(*var, (*op).into(), *operand)
+            }
             TestInstruction::String { s } => Regexp::String(s.to_string()),
             TestInstruction::Dots { dots } => Regexp::String(dots.to_string()),
             TestInstruction::Attributes { attrs, quantifier } => {
@@ -182,26 +178,29 @@ impl TranslationTargets {
     }
 }
 
-/// A sequence of [`Effect`]
-#[derive(Debug, Clone)]
-pub struct Effects(Vec<Effect>);
-
-impl Effects {
-    fn from_instructions(values: &[ActionInstruction]) -> Vec<Effect> {
-        values
-            .iter()
-            .cloned()
-            .flat_map(Effects::from_instruction)
-            .collect()
-    }
-
-    fn from_instruction(value: ActionInstruction) -> Option<Effect> {
-        if let ActionInstruction::Assignment { variable, value } = value {
-            Some(Effect::new(variable, value))
-        } else {
-            None
+impl From<Operator> for Comparison {
+    fn from(operator: Operator) -> Self {
+        match operator {
+            Operator::Eq => Comparison::Eq,
+            Operator::Lt => Comparison::Lt,
+            Operator::Gt => Comparison::Gt,
+            Operator::LtEq => Comparison::LtEq,
+            Operator::GtEq => Comparison::GtEq,
         }
     }
+}
+
+/// The effects of the instructions that change variables
+fn effects(instructions: &[ActionInstruction]) -> Vec<Effect> {
+    instructions
+        .iter()
+        .filter_map(|instruction| match *instruction {
+            ActionInstruction::Assignment { variable, value } => Some(Effect::new(variable, value)),
+            ActionInstruction::Increment { variable } => Some(Effect::increment(variable)),
+            ActionInstruction::Decrement { variable } => Some(Effect::decrement(variable)),
+            _ => None,
+        })
+        .collect()
 }
 
 #[derive(Debug)]
@@ -227,7 +226,7 @@ impl ContextPatternsBuilder {
     ) -> Result<UnresolvedTranslation, CompileError> {
         let targets =
             TranslationTargets::from_instructions(&action.actions(), swap_classes, capture_target)?;
-        let effects = Effects::from_instructions(&action.actions());
+        let effects = effects(&action.actions());
         Ok(UnresolvedTranslation::new(
             &targets,
             stage,

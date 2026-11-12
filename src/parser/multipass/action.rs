@@ -163,8 +163,14 @@ impl<'a> Parser<'a> {
                     value: self.chars.ascii_number()?,
                 })
             }
-            Some('+') => Ok(ActionInstruction::Increment { variable }),
-            Some('-') => Ok(ActionInstruction::Decrement { variable }),
+            Some('+') => {
+                self.chars.consume('+')?;
+                Ok(ActionInstruction::Increment { variable })
+            }
+            Some('-') => {
+                self.chars.consume('-')?;
+                Ok(ActionInstruction::Decrement { variable })
+            }
             c => Err(ParseError::InvalidOperator { found: c.copied() }),
         }
     }
@@ -361,6 +367,16 @@ mod tests {
         assert_eq!(
             Parser::new("#5-").action(),
             Ok(ActionInstruction::Decrement { variable: 5 })
+        );
+        // the action after an increment or decrement starts after its `+` or `-`
+        assert_eq!(
+            Parser::new("#1+#2-")
+                .actions()
+                .map(|action| action.actions()),
+            Ok(vec![
+                ActionInstruction::Increment { variable: 1 },
+                ActionInstruction::Decrement { variable: 2 }
+            ])
         );
         assert_ne!(
             Parser::new("#1=").action(),
