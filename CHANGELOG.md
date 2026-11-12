@@ -47,9 +47,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
     `translate_with_options` borrows its `TranslationOptions`.
   - `TranslationResult`'s fields are private, read with `output()`,
     `emphasis()`, `output_positions()`, `input_positions()` and
-    `cursor_pos()`. The positions are plain slices; they were always
+    `cursor_position()`. The positions are plain slices; they were always
     `Some`. Likewise `EmphasisSpan`'s, read with `class()` and `range()`.
   - The public enums are `#[non_exhaustive]`.
+  - `TranslationOptions::with_mode` and `mode()` are `with_modes` and
+    `modes()`, as they take a set of modes; `with_cursor_pos` and
+    `cursor_pos()` are `with_cursor_position` and `cursor_position()`,
+    like the positions.
   - `Translator::with_search_path` takes any list of paths, such as
     `["/usr/share/liblouis/tables"]`, not only a `Vec<PathBuf>`.
   - `TranslationResult` implements `Clone`, `PartialEq` and `Eq`, and so

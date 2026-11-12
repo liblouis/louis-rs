@@ -125,7 +125,7 @@ pub struct TranslationResult {
     emphasis: Option<Emphasis>,
     output_positions: Vec<usize>,
     input_positions: Vec<usize>,
-    cursor_pos: Option<usize>,
+    cursor_position: Option<usize>,
 }
 
 impl TranslationResult {
@@ -152,8 +152,8 @@ impl TranslationResult {
     }
 
     /// The cursor position given in the options, mapped to the output.
-    pub fn cursor_pos(&self) -> Option<usize> {
-        self.cursor_pos
+    pub fn cursor_position(&self) -> Option<usize> {
+        self.cursor_position
     }
 }
 
@@ -255,13 +255,13 @@ impl Translator {
         options: &TranslationOptions,
     ) -> TranslationResult {
         let (output, positions, emphasis) = self.0.translate_with_details(input, options);
-        let cursor_pos = options.cursor_pos().map(|cursor| positions.cursor(cursor));
+        let cursor_position = options.cursor_position().map(|cursor| positions.cursor(cursor));
         let (output_positions, input_positions) = positions.into_parts();
         TranslationResult {
             output,
             output_positions,
             input_positions,
-            cursor_pos,
+            cursor_position,
             emphasis,
         }
     }
@@ -445,19 +445,19 @@ mod tests {
     fn positions_with_number_sign() {
         let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
         let result = translator
-            .translate_with_options("a 42", &TranslationOptions::default().with_cursor_pos(2));
+            .translate_with_options("a 42", &TranslationOptions::default().with_cursor_position(2));
         assert_eq!(result.output(), "⠁⠀⠼⠙⠃");
         assert_eq!(result.output_positions(), [0, 1, 2, 4]);
         assert_eq!(result.input_positions(), [0, 1, 2, 2, 3]);
-        assert_eq!(result.cursor_pos(), Some(2));
+        assert_eq!(result.cursor_position(), Some(2));
     }
 
     #[test]
     fn cursor_past_the_end_maps_to_the_output_length() {
         let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
         let result = translator
-            .translate_with_options("a 42", &TranslationOptions::default().with_cursor_pos(4));
-        assert_eq!(result.cursor_pos(), Some(5));
+            .translate_with_options("a 42", &TranslationOptions::default().with_cursor_position(4));
+        assert_eq!(result.cursor_position(), Some(5));
     }
 
     #[test]
@@ -465,7 +465,7 @@ mod tests {
         let translator = Translator::from_table_source(NUMBER_TABLE, Direction::Forward).unwrap();
         let result = translator.translate_with_options("a 42", &TranslationOptions::default());
         assert_eq!(result.output(), translator.translate("a 42"));
-        assert_eq!(result.cursor_pos(), None);
+        assert_eq!(result.cursor_position(), None);
     }
 
     #[test]
@@ -473,11 +473,11 @@ mod tests {
         let table = "lowercase h 125\nlowercase i 24\nbase uppercase H h\ncapsletter 6\n";
         let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
         let result =
-            forward.translate_with_options("Hi", &TranslationOptions::default().with_cursor_pos(0));
+            forward.translate_with_options("Hi", &TranslationOptions::default().with_cursor_position(0));
         assert_eq!(result.output(), "⠠⠓⠊");
         assert_eq!(result.output_positions(), [0, 2]);
         assert_eq!(result.input_positions(), [0, 0, 1]);
-        assert_eq!(result.cursor_pos(), Some(0));
+        assert_eq!(result.cursor_position(), Some(0));
 
         let backward = Translator::from_table_source(table, Direction::Backward).unwrap();
         let result = backward.translate_with_options("⠠⠓⠊", &TranslationOptions::default());

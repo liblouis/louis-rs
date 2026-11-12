@@ -2657,7 +2657,7 @@ pub enum TableError {
     IncludesNotSupportedInMemory,
     /// A table was found but could not be read
     #[error("cannot read table {path}: {error}")]
-    TableNotReadable {
+    NotReadable {
         /// The table
         path: PathBuf,
         /// Why it could not be read
@@ -2665,13 +2665,13 @@ pub enum TableError {
     },
     /// A table is not on the search path
     #[error("cannot find table {0}")]
-    TableNotFound(PathBuf),
+    NotFound(PathBuf),
     /// A hyphenation table is not on the search path
     #[error("hyphenation table {0} not found")]
-    HyphenationTableNotFound(PathBuf),
+    HyphenationNotFound(PathBuf),
     /// A hyphenation table was found but could not be read
     #[error("cannot read hyphenation table {path}: {error}")]
-    HyphenationTableNotReadable {
+    HyphenationNotReadable {
         /// The hyphenation table
         path: PathBuf,
         /// Why it could not be read
@@ -2679,7 +2679,7 @@ pub enum TableError {
     },
     /// A hyphenation table could not be parsed
     #[error("cannot parse hyphenation table {path}: {error}")]
-    HyphenationTableNotParseable {
+    HyphenationSyntax {
         /// The hyphenation table
         path: PathBuf,
         /// What is wrong with it
@@ -2820,7 +2820,7 @@ pub fn table(table: &str, path: Option<PathBuf>) -> Result<Vec<AnchoredRule>, Ve
 
 pub fn table_file(path: &Path) -> Result<Vec<AnchoredRule>, Vec<TableError>> {
     let text = read_to_string(path).map_err(|error| {
-        vec![TableError::TableNotReadable {
+        vec![TableError::NotReadable {
             path: path.into(),
             error,
         }]
@@ -2852,7 +2852,7 @@ fn table_expanded_with(
     match search_path.find_file(file) {
         Some(path) => {
             let canonical = path.canonicalize().map_err(|error| {
-                vec![TableError::TableNotReadable {
+                vec![TableError::NotReadable {
                     path: path.clone(),
                     error,
                 }]
@@ -2869,7 +2869,7 @@ fn table_expanded_with(
             chain.push(canonical);
             table_file(path.as_path()).and_then(|rules| expand_includes(rules, search_path, &chain))
         }
-        None => Err(vec![TableError::TableNotFound(file.into())]),
+        None => Err(vec![TableError::NotFound(file.into())]),
     }
 }
 
@@ -2887,15 +2887,15 @@ fn expand_include(
                 // parse them with their own parser and embed the result.
                 let resolved = search_path
                     .find_file(path)
-                    .ok_or(vec![TableError::HyphenationTableNotFound(path.into())])?;
+                    .ok_or(vec![TableError::HyphenationNotFound(path.into())])?;
                 let source = read_to_string(&resolved).map_err(|error| {
-                    vec![TableError::HyphenationTableNotReadable {
+                    vec![TableError::HyphenationNotReadable {
                         path: resolved.clone(),
                         error,
                     }]
                 })?;
                 let table = HyphenationTable::parse(&source).map_err(|error| {
-                    vec![TableError::HyphenationTableNotParseable {
+                    vec![TableError::HyphenationSyntax {
                         path: resolved,
                         error: SyntaxError(SyntaxErrorKind::Hyphenation(error)),
                     }]

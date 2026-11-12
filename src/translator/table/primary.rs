@@ -2618,7 +2618,7 @@ impl PrimaryTable {
     }
 
     fn handle_undefined_char(&self, ch: char, options: &TranslationOptions) -> String {
-        if options.mode().contains(TranslationMode::NoUndefined) {
+        if options.modes().contains(TranslationMode::NoUndefined) {
             // the caller asked for undefined input to be dropped
             return String::new();
         }

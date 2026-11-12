@@ -68,16 +68,16 @@ impl FromIterator<TranslationMode> for TranslationModes {
 /// Positions are indices of characters (Unicode scalar values), not of bytes.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TranslationOptions {
-    mode: TranslationModes,
+    modes: TranslationModes,
     /// Which emphasis classes are active where in the input
     emphasis: Emphasis,
-    cursor_pos: Option<usize>,
+    cursor_position: Option<usize>,
 }
 
 impl TranslationOptions {
-    /// Translate with `mode`.
-    pub fn with_mode(mut self, mode: TranslationModes) -> Self {
-        self.mode = mode;
+    /// Translate with `modes`.
+    pub fn with_modes(mut self, modes: TranslationModes) -> Self {
+        self.modes = modes;
         self
     }
 
@@ -87,16 +87,16 @@ impl TranslationOptions {
         self
     }
 
-    /// Map the cursor at input position `cursor_pos` to the output, in
-    /// [`TranslationResult::cursor_pos`](crate::TranslationResult::cursor_pos).
-    pub fn with_cursor_pos(mut self, cursor_pos: usize) -> Self {
-        self.cursor_pos = Some(cursor_pos);
+    /// Map the cursor at input position `cursor_position` to the output, in
+    /// [`TranslationResult::cursor_position`](crate::TranslationResult::cursor_position).
+    pub fn with_cursor_position(mut self, cursor_position: usize) -> Self {
+        self.cursor_position = Some(cursor_position);
         self
     }
 
     /// The modes to translate with.
-    pub fn mode(&self) -> &TranslationModes {
-        &self.mode
+    pub fn modes(&self) -> &TranslationModes {
+        &self.modes
     }
 
     /// The emphasis of the input.
@@ -105,8 +105,8 @@ impl TranslationOptions {
     }
 
     /// The cursor position in the input, if there is one.
-    pub fn cursor_pos(&self) -> Option<usize> {
-        self.cursor_pos
+    pub fn cursor_position(&self) -> Option<usize> {
+        self.cursor_position
     }
 }
 

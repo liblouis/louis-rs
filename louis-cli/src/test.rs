@@ -398,12 +398,12 @@ pub struct Test {
 impl Test {
     fn check(&self, table: &TranslationPipeline, direction: Direction) -> TestResult {
         let mut options = TranslationOptions::default()
-            .with_mode(self.modes)
+            .with_modes(self.modes)
             .with_emphasis(self.emphasis.clone());
         if let Some(CursorPosition::Single(cursor) | CursorPosition::Tuple(cursor, _)) =
             self.cursor_pos
         {
-            options = options.with_cursor_pos(cursor);
+            options = options.with_cursor_position(cursor);
         }
         let (translated, positions, emphasis) = table.translate_with_details(&self.input, &options);
         let matched = translated == self.expected;
