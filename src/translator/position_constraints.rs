@@ -90,6 +90,7 @@ pub type Constraints = EnumSet<Constraint>;
 pub struct PositionConstraints(Vec<Constraints>);
 
 impl PositionConstraints {
+    #[cfg(test)]
     pub fn empty() -> Self {
         Self(Vec::new())
     }

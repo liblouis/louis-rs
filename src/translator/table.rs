@@ -16,7 +16,7 @@ pub struct TableContext {
 }
 
 impl TableContext {
-    // used for testing
+    #[cfg(test)]
     pub fn new(
         character_classes: CharacterClasses,
         dots_classes: CharacterClasses,

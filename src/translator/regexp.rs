@@ -34,7 +34,6 @@ fn chars_match_case_insensitive(actual: char, expected: char) -> bool {
 /// Abstract syntax tree representation of regular expressions
 #[derive(Debug, Clone)]
 pub enum Regexp {
-    Literal(char),
     Concat(Box<Regexp>, Box<Regexp>),
     Either(Box<Regexp>, Box<Regexp>),
     Optional(Box<Regexp>),
@@ -44,7 +43,6 @@ pub enum Regexp {
     CharacterClass(HashSet<char>),
     NotCharacterClass(HashSet<char>),
     RepeatExactly(u8, Box<Regexp>),
-    RepeatAtLeast(u8, Box<Regexp>),
     RepeatAtLeastAtMost(u8, u8, Box<Regexp>),
     /// The part of the regexp that is captured. Never nest one inside another: The VM
     /// instructions do not handle that.
@@ -95,7 +93,6 @@ impl Regexp {
 
     pub fn negate(self) -> Regexp {
         match self {
-            Regexp::Literal(_) => todo!(),
             Regexp::Concat(left, right) => {
                 // FIXME: Unfortunatelly this is wrong: !(e1e2) is not the same as (!e1!e2)
                 Regexp::Concat(Box::new(left.negate()), Box::new(right.negate()))
@@ -116,7 +113,6 @@ impl Regexp {
             // unreachable: the parser rejects double negation before it reaches here
             Regexp::NotCharacterClass(_) => unreachable!(),
             Regexp::RepeatExactly(n, regexp) => Regexp::RepeatExactly(n, Box::new(regexp.negate())),
-            Regexp::RepeatAtLeast(n, regexp) => Regexp::RepeatAtLeast(n, Box::new(regexp.negate())),
             Regexp::RepeatAtLeastAtMost(n, m, regexp) => {
                 Regexp::RepeatAtLeastAtMost(n, m, Box::new(regexp.negate()))
             }
@@ -155,7 +151,6 @@ impl Regexp {
             Regexp::ZeroOrMore(r) => Regexp::ZeroOrMore(rev(r)),
             Regexp::OneOrMore(r) => Regexp::OneOrMore(rev(r)),
             Regexp::RepeatExactly(n, r) => Regexp::RepeatExactly(n, rev(r)),
-            Regexp::RepeatAtLeast(n, r) => Regexp::RepeatAtLeast(n, rev(r)),
             Regexp::RepeatAtLeastAtMost(n, m, r) => Regexp::RepeatAtLeastAtMost(n, m, rev(r)),
             Regexp::Capture(r) => Regexp::Capture(rev(r)),
             Regexp::Consume(r) => Regexp::Consume(rev(r)),
@@ -169,8 +164,7 @@ impl Regexp {
             Regexp::EndAnchor => Regexp::StartAnchor,
             Regexp::NotStartAnchor => Regexp::NotEndAnchor,
             Regexp::NotEndAnchor => Regexp::NotStartAnchor,
-            other @ (Regexp::Literal(_)
-            | Regexp::Any
+            other @ (Regexp::Any
             | Regexp::CharacterClass(_)
             | Regexp::NotCharacterClass(_)
             | Regexp::VariableEqual(..)
@@ -198,7 +192,6 @@ impl Regexp {
     /// used in the RegExp.
     fn emit(&self, instructions: &mut Vec<Instruction>, character_classes: &mut Vec<CharacterSet>) {
         match self {
-            Regexp::Literal(c) => instructions.push(Instruction::Char(*c)),
             Regexp::Concat(left, right) => {
                 left.emit(instructions, character_classes);
                 right.emit(instructions, character_classes);
@@ -244,16 +237,6 @@ impl Regexp {
                 for _ in 0..*n {
                     regexp.emit(instructions, character_classes);
                 }
-            }
-            Regexp::RepeatAtLeast(min, regexp) => {
-                for _ in 0..*min {
-                    regexp.emit(instructions, character_classes);
-                }
-                let pos = instructions.len();
-                instructions.push(Instruction::Split(pos + 1, 0));
-                regexp.emit(instructions, character_classes);
-                instructions.push(Instruction::Jump(pos));
-                instructions[pos] = Instruction::Split(pos + 1, instructions.len());
             }
             Regexp::RepeatAtLeastAtMost(min, max, regexp) => {
                 for _ in 0..*min {
@@ -824,7 +807,7 @@ mod tests {
     #[test]
     fn character() {
         let env = Environment::new();
-        let re = Regexp::Literal('a').compile();
+        let re = Regexp::String("a".to_string()).compile();
         assert!(re.is_match("a", &env));
         assert!(!re.is_match("b", &env));
     }
@@ -833,8 +816,8 @@ mod tests {
     fn alteration() {
         let env = Environment::new();
         let re = Regexp::Either(
-            Box::new(Regexp::Literal('a')),
-            Box::new(Regexp::Literal('b')),
+            Box::new(Regexp::String("a".to_string())),
+            Box::new(Regexp::String("b".to_string())),
         )
         .compile();
         assert!(re.is_match("a", &env));
@@ -847,10 +830,10 @@ mod tests {
     fn multiple_alterations() {
         let env = Environment::new();
         let re = Regexp::Either(
-            Box::new(Regexp::Literal('a')),
+            Box::new(Regexp::String("a".to_string())),
             Box::new(Regexp::Either(
-                Box::new(Regexp::Literal('b')),
-                Box::new(Regexp::Literal('c')),
+                Box::new(Regexp::String("b".to_string())),
+                Box::new(Regexp::String("c".to_string())),
             )),
         )
         .compile();
@@ -868,9 +851,9 @@ mod tests {
         let re = Regexp::Concat(
             Box::new(Regexp::OneOrMore(Box::new(Regexp::Either(
                 Box::new(Regexp::String("ab".into())),
-                Box::new(Regexp::Literal('c')),
+                Box::new(Regexp::String("c".to_string())),
             )))),
-            Box::new(Regexp::Optional(Box::new(Regexp::Literal('d')))),
+            Box::new(Regexp::Optional(Box::new(Regexp::String("d".to_string())))),
         )
         .reverse();
         let re = re.compile();
@@ -885,8 +868,8 @@ mod tests {
     fn concatenation() {
         let env = Environment::new();
         let re = Regexp::Concat(
-            Box::new(Regexp::Literal('a')),
-            Box::new(Regexp::Literal('b')),
+            Box::new(Regexp::String("a".to_string())),
+            Box::new(Regexp::String("b".to_string())),
         )
         .compile();
         assert!(re.is_match("ab", &env));
@@ -909,9 +892,9 @@ mod tests {
         let env = Environment::new();
         let re = Regexp::Concat(
             Box::new(Regexp::OneOrMore(Box::new(Regexp::OneOrMore(Box::new(
-                Regexp::Literal('a'),
+                Regexp::String("a".to_string()),
             ))))),
-            Box::new(Regexp::Literal('b')),
+            Box::new(Regexp::String("b".to_string())),
         )
         .compile();
         let input = "a".repeat(10_000);
@@ -938,17 +921,12 @@ mod tests {
                 .compile()
                 .is_match("", &env)
         );
-        assert!(
-            Regexp::RepeatAtLeast(2, Box::new(Regexp::Empty))
-                .compile()
-                .is_match("", &env)
-        );
     }
 
     #[test]
     fn kleene() {
         let env = Environment::new();
-        let re = Regexp::ZeroOrMore(Box::new(Regexp::Literal('a'))).compile();
+        let re = Regexp::ZeroOrMore(Box::new(Regexp::String("a".to_string()))).compile();
         assert!(re.is_match("", &env));
         assert!(re.is_match("a", &env));
         assert!(re.is_match("aa", &env));
@@ -963,7 +941,7 @@ mod tests {
     #[test]
     fn one_or_more() {
         let env = Environment::new();
-        let re = Regexp::OneOrMore(Box::new(Regexp::Literal('a'))).compile();
+        let re = Regexp::OneOrMore(Box::new(Regexp::String("a".to_string()))).compile();
         assert!(!re.is_match("", &env));
         assert!(re.is_match("a", &env));
         assert!(re.is_match("aa", &env));
@@ -996,10 +974,10 @@ mod tests {
         let env = Environment::new();
         let re = Regexp::Concat(
             Box::new(Regexp::Optional(Box::new(Regexp::Concat(
-                Box::new(Regexp::Literal('a')),
+                Box::new(Regexp::String("a".to_string())),
                 Box::new(Regexp::Any),
             )))),
-            Box::new(Regexp::Literal('b')),
+            Box::new(Regexp::String("b".to_string())),
         )
         .compile();
         assert!(re.is_match("acb", &env));
@@ -1028,7 +1006,7 @@ mod tests {
     fn repeat_exactly() {
         let env = Environment::new();
         // exactly one 'a'
-        let re = Regexp::RepeatExactly(1, Box::new(Regexp::Literal('a'))).compile();
+        let re = Regexp::RepeatExactly(1, Box::new(Regexp::String("a".to_string()))).compile();
         assert!(re.is_match("a", &env));
         assert!(!re.is_match("c", &env));
         assert!(!re.is_match("bbb", &env));
@@ -1037,7 +1015,7 @@ mod tests {
         assert!(re.is_match("aaaa", &env));
 
         // exactly two 'a'
-        let re = Regexp::RepeatExactly(2, Box::new(Regexp::Literal('a'))).compile();
+        let re = Regexp::RepeatExactly(2, Box::new(Regexp::String("a".to_string()))).compile();
         assert!(re.is_match("aa", &env));
         assert!(!re.is_match("c", &env));
         assert!(!re.is_match("bbb", &env));
@@ -1047,59 +1025,21 @@ mod tests {
         assert!(re.is_match("aaaa", &env));
 
         // exactly three 'a'
-        let re = Regexp::RepeatExactly(3, Box::new(Regexp::Literal('a'))).compile();
+        let re = Regexp::RepeatExactly(3, Box::new(Regexp::String("a".to_string()))).compile();
         assert!(re.is_match("aaa", &env));
         assert!(!re.is_match("c", &env));
         assert!(!re.is_match("bbb", &env));
         assert!(!re.is_match("a", &env));
         assert!(!re.is_match("aa", &env));
         assert!(re.is_match("aaaa", &env));
-    }
-
-    #[test]
-    fn repeat_at_least() {
-        let env = Environment::new();
-        // at least one 'a'
-        let re = Regexp::RepeatAtLeast(1, Box::new(Regexp::Literal('a'))).compile();
-        assert!(re.is_match("a", &env));
-        assert!(re.is_match("aa", &env));
-        assert!(re.is_match("aaa", &env));
-        assert!(re.is_match("aaaaaaaaaaaaaaaaaaaaaa", &env));
-        assert!(re.is_match("aaab", &env));
-        assert!(!re.is_match("c", &env));
-        assert!(!re.is_match("bbb", &env));
-        assert!(!re.is_match("", &env));
-
-        // at least two 'a'
-        let re = Regexp::RepeatAtLeast(2, Box::new(Regexp::Literal('a'))).compile();
-        assert!(re.is_match("aa", &env));
-        assert!(re.is_match("aaa", &env));
-        assert!(re.is_match("aaaa", &env));
-        assert!(re.is_match("aaaaaaaaaaaaaaaaaaaaa", &env));
-        assert!(re.is_match("aaab", &env));
-        assert!(!re.is_match("c", &env));
-        assert!(!re.is_match("bbb", &env));
-        assert!(!re.is_match("", &env));
-        assert!(!re.is_match("a", &env));
-
-        // at least three 'a'
-        let re = Regexp::RepeatAtLeast(3, Box::new(Regexp::Literal('a'))).compile();
-        assert!(re.is_match("aaa", &env));
-        assert!(re.is_match("aaaa", &env));
-        assert!(re.is_match("aaaaa", &env));
-        assert!(re.is_match("aaaaaaaaaaaaaaaaaaaaaa", &env));
-        assert!(re.is_match("aaab", &env));
-        assert!(!re.is_match("c", &env));
-        assert!(!re.is_match("bbb", &env));
-        assert!(!re.is_match("a", &env));
-        assert!(!re.is_match("aa", &env));
     }
 
     #[test]
     fn repeat_at_least_at_most() {
         let env = Environment::new();
         // at least three and at most five 'a's
-        let re = Regexp::RepeatAtLeastAtMost(3, 5, Box::new(Regexp::Literal('a'))).compile();
+        let re =
+            Regexp::RepeatAtLeastAtMost(3, 5, Box::new(Regexp::String("a".to_string()))).compile();
         assert!(!re.is_match("a", &env));
         assert!(!re.is_match("aa", &env));
         assert!(re.is_match("aaa", &env));
@@ -1117,7 +1057,7 @@ mod tests {
         let mut env = Environment::new();
         let re = Regexp::Concat(
             Box::new(Regexp::VariableEqual(1, 1)),
-            Box::new(Regexp::Literal('a')),
+            Box::new(Regexp::String("a".to_string())),
         )
         .compile();
         // these should not match as the variable is not defined
@@ -1249,26 +1189,26 @@ mod tests {
             None,
         ));
         let re = Regexp::Concat(
-            Box::new(Regexp::Literal('f')),
+            Box::new(Regexp::String("f".to_string())),
             Box::new(Regexp::Concat(
-                Box::new(Regexp::Literal('o')),
+                Box::new(Regexp::String("o".to_string())),
                 Box::new(Regexp::Concat(
-                    Box::new(Regexp::Literal('o')),
+                    Box::new(Regexp::String("o".to_string())),
                     Box::new(Regexp::Concat(
                         Box::new(Regexp::Consume(Box::new(Regexp::Capture(Box::new(
                             Regexp::Concat(
-                                Box::new(Regexp::Literal('b')),
+                                Box::new(Regexp::String("b".to_string())),
                                 Box::new(Regexp::Concat(
-                                    Box::new(Regexp::Literal('a')),
-                                    Box::new(Regexp::Literal('r')),
+                                    Box::new(Regexp::String("a".to_string())),
+                                    Box::new(Regexp::String("r".to_string())),
                                 )),
                             ),
                         ))))),
                         Box::new(Regexp::Concat(
-                            Box::new(Regexp::Literal('f')),
+                            Box::new(Regexp::String("f".to_string())),
                             Box::new(Regexp::Concat(
-                                Box::new(Regexp::Literal('o')),
-                                Box::new(Regexp::Literal('o')),
+                                Box::new(Regexp::String("o".to_string())),
+                                Box::new(Regexp::String("o".to_string())),
                             )),
                         )),
                     )),
