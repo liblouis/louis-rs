@@ -19,7 +19,9 @@
 //!   export LOUIS_TABLE_PATH=~/src/liblouis/tables
 //!   cargo bench --bench parse_and_compile
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use std::hint::black_box;
+
+use criterion::{Criterion, criterion_group, criterion_main};
 use louis::{Direction, Translator};
 
 const TABLES: [&str; 3] = ["de-g2.ctb", "en-ueb-g2.ctb", "zh-tw.ctb"];
