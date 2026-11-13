@@ -582,7 +582,8 @@ mod tests {
         let result = translation.resolve("xyz", 0..8, 0, &CharacterDefinition::default());
 
         assert_eq!(result.input(), "xyz");
-        assert_eq!(result.output(), "<XYz>");
+        // like liblouis's swapReplace, a character the swap class lacks is dropped
+        assert_eq!(result.output(), "<XY>");
     }
 
     #[test]
