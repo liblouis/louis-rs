@@ -573,4 +573,15 @@ mod tests {
         assert_eq!(result.output_positions(), [0, 0, 1, 2]);
         assert_eq!(result.input_positions(), [1, 2, 3]);
     }
+
+    #[test]
+    fn a_cell_inside_a_longer_rule_is_no_letter_before_a_numsign() {
+        // en-us-g2: ⠼ is also `midendword ble`, and ⠶ is part of `always bedragg`, but at the
+        // start of a word `midword gg 2356` can't apply, so "⠶⠼⠁" is "(1". Inside a word
+        // ⠶ is "gg" and ⠼ "ble".
+        let table = "space \\s 0\nlowercase a 1\nlowercase b 12\nlowercase g 1245\npunctuation ( 2356\nlitdigit 1 1\nnumsign 3456\nmidendword ble 3456\nmidword gg 2356\nalways bagg 12-1-2356\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠶⠼⠁"), "(1");
+        assert_eq!(translator.translate("⠁⠶⠼⠁"), "aggblea");
+    }
 }

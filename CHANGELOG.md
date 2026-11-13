@@ -105,6 +105,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   variable matched nothing.
 - `louis trace` prints the attributes of a `match` rule in match syntax,
   `%[_~]`, not in the multipass letters without brackets (`s~`).
+- Back-translating, a numsign whose dots are also an in-word rule starts a
+  number unless the cell before it comes back ending in a letter, as far
+  as that cell's one-cell rules tell where it stands. Before, any cell of
+  a multi-letter `always` rule counted as a letter, so in en-us-g2, where
+  ⠶ is part of `always bedragg`, "⠠⠶⠼⠁⠶⠄" came back as "[a]", not "[1]".
 
 ## [0.3.1] - 2026-11-11
 
