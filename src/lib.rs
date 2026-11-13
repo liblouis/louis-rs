@@ -573,4 +573,13 @@ mod tests {
         assert_eq!(result.output_positions(), [0, 0, 1, 2]);
         assert_eq!(result.input_positions(), [1, 2, 3]);
     }
+
+    #[test]
+    fn a_word_can_follow_a_character_the_table_does_not_define() {
+        // Swedish `always ◌̹ 6-135` writes characters no rule defines, which liblouis takes
+        // for spaces, so `word man 134` applies after it: "⠠⠕⠍⠀" is "◌̹man ".
+        let table = "space \\s 0\nlowercase a 1\nlowercase m 134\nlowercase n 1345\nlowercase o 135\nalways ~ 6-135\nword man 134\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠠⠕⠍⠀"), "~man ");
+    }
 }

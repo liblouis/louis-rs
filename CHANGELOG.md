@@ -105,6 +105,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   variable matched nothing.
 - `louis trace` prints the attributes of a `match` rule in match syntax,
   `%[_~]`, not in the multipass letters without brackets (`s~`).
+- A rule's check on the character before it takes a character the table
+  doesn't define for a space, as liblouis does. Back-translating Swedish,
+  `word man 134` now applies after the phonetic `always ◌̹ 6-135`, whose
+  characters no rule defines: "⠠⠕⠍" is "◌̹man", as in liblouis, not "◌̹m".
 
 ## [0.3.1] - 2026-11-11
 
