@@ -573,4 +573,15 @@ mod tests {
         assert_eq!(result.output_positions(), [0, 0, 1, 2]);
         assert_eq!(result.input_positions(), [1, 2, 3]);
     }
+
+    #[test]
+    fn the_undefined_rule_is_only_for_forward_translation() {
+        // fr-bfu-comp6.utb's `undefined 0`: backward, liblouis still spells an undefined
+        // cell as its dots, which fr-bfu-g2's `correct "\s\\8/\s" ?` relies on
+        let table = "undefined 0\nspace \\s 0\nlowercase a 1\n";
+        let backward = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(backward.translate("⢀"), "\\8/");
+        let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(forward.translate("b"), "⠀");
+    }
 }

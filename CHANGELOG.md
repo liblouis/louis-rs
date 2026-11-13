@@ -105,6 +105,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   variable matched nothing.
 - `louis trace` prints the attributes of a `match` rule in match syntax,
   `%[_~]`, not in the multipass letters without brackets (`s~`).
+- The `undefined` rule only applies forward, as in liblouis. Back-
+  translating, an undefined cell is spelled as its dots, such as "\8/",
+  even when the table has one. Before, French `undefined 0` turned the
+  dot 8 cell that fr-bfu-g2's passes put between words into a blank cell,
+  which its `correct "\s\\8/\s" ?` then could not remove: "perdirent
+  dans" came back as "perdirent  ⠀ dans".
 
 ## [0.3.1] - 2026-11-11
 
