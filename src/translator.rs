@@ -90,6 +90,8 @@ pub enum CompileErrorKind {
     /// A rule refers to a swap class that no rule defines
     #[error("swap class {0} not defined")]
     SwapClassNotDefined(String),
+    #[error("{0} is neither a class nor a swap")]
+    ClassNotDefined(String),
 }
 
 impl CompileErrorKind {

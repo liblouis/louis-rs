@@ -573,4 +573,31 @@ mod tests {
         assert_eq!(result.output_positions(), [0, 0, 1, 2]);
         assert_eq!(result.input_positions(), [1, 2, 3]);
     }
+
+    const CORRECT_TABLE: &str = "letter a 1\nletter b 12\nletter c 14\nletter x 1346\n";
+
+    #[test]
+    fn test_naming_a_swap_matches_what_it_maps_from() {
+        let table = format!("{CORRECT_TABLE}swapcd sw x 12\nnoback correct \"a\"[%sw]\"c\" \"b\"\n");
+        let translator = Translator::from_table_source(&table, Direction::Forward).unwrap();
+        assert_eq!(translator.translate("axc"), "⠁⠃⠉");
+    }
+
+    #[test]
+    fn class_rule_defines_a_class_like_attribute() {
+        let table = format!("{CORRECT_TABLE}class foo x\nnoback correct \"a\"[%foo]\"c\" \"b\"\n");
+        let translator = Translator::from_table_source(&table, Direction::Forward).unwrap();
+        assert_eq!(translator.translate("axc"), "⠁⠃⠉");
+    }
+
+    #[test]
+    fn test_naming_no_class_or_swap_is_a_table_error() {
+        let table = format!("{CORRECT_TABLE}noback correct \"a\"[%typo]\"c\" \"b\"\n");
+        let error = Translator::from_table_source(&table, Direction::Forward).unwrap_err();
+        assert!(matches!(
+            error,
+            Error::Compile(translator::CompileError::ClassNotDefined(name))
+                if name == "typo"
+        ));
+    }
 }

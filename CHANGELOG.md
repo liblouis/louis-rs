@@ -43,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `endcomp`, as in liblouis (#20).
 
 ### Changed
+- A `%name` test in a `context`, `correct` or pass rule that names neither
+  a class nor a swap is now a table error, as in liblouis. It compiled to
+  a test that never matched, so the rule was silently dead. `$w` to `$z`
+  and `$^` still add no characters, but now log a warning.
 - louis-rs is in beta: translation matches liblouis closely, and the
   library API follows semantic versioning.
 - The library API, on the way to a stable one:
@@ -148,6 +152,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `context` rule that starts with a single character.
 
 ### Fixed
+- A `%name` test can now name a swap, and matches the characters the
+  swap maps from, as in liblouis. A class defined with the deprecated
+  `class` opcode now exists: it was parsed but never registered, so a
+  test naming it never matched.
 - Backward, a `base` character is no longer read from its base's dots,
   and a capital sign gives a letter's first `base uppercase` character
   rather than Unicode's uppercase, as in liblouis: with `tr-g1.ctb`,
