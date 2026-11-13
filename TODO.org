@@ -159,15 +159,23 @@
     and ~rev()~ before ~max_by_key~) fixes these 5 and also th-g0's
     ~pass2 @⠣ ...~ against an included ~$a~ rule. It is parked in a
     stash, to be settled together with the primary-table ranking.
-- [ ] ~_N~ lookback in a pass test is ignored: ~context_pattern.rs~
-  compiles ~TestInstruction::Lookback~ to ~Regexp::Empty~. That is
-  fine for checks before the brackets, but a lookback that rewinds
-  past the start of the input should make the rule fail.
-  ~multipass-forward.yaml~'s "lookback count" test has
-  ~correct [$d5]_6 "f"~ and ~correct [$d5]_5 "s"~: on "12345" the
-  first must fail, louis-rs matches both. Since ~1ff7b7f~ the tie goes
-  to the first-defined rule, so ~multipass-forward.yaml~ and
-  ~multipass-backward.yaml~ lose that test.
+- [ ] ~_N~ only before or after the tests it steps over: the parser
+  turns a leading ~_N~ into a look-behind and a trailing one into a
+  look-ahead (~Test~'s ~lookbehind~, ~body~, ~lookahead~), and rejects
+  any other with ~MisplacedLookback~.
+  - Three inline tables in liblouis's own unit tests use other shapes
+    and no longer load, so 5 tests don't run: ~[$d5]_6~ and
+    ~[$d5]_5~ (step back into the bracket) in ~multipass-forward.yaml~
+    and ~multipass-backward.yaml~, and ~_["fu"]~ ("should fail if _
+    goes negative") in ~multipass.yaml~. Propose a liblouis PR that
+    tests the same with the two supported shapes, e.g. ~_$a["u"]~ at
+    the start of the input.
+  - The real tables' three middle ~_N~s are fixed upstream in
+    liblouis#2196 (~it-it-comp6.utb~) and #2197 (~th-g2.ctb~); until
+    they land, those two tables don't load.
+  - The look-behind is still matched forward from an earlier position
+    and held as a delayed translation; compiling it as a reversed
+    program, like a ~match~ rule's ~pre~, is the next step.
 - [X] A ~match~ rule's ~pre~ is missed when the previous match consumed
   more than one character
   - ~match~ rules with a ~pre~ pattern are discovered at the position

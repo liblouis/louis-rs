@@ -1,75 +1,256 @@
 //! A Parser for the test operand of context and multipass opcodes
 use crate::parser::{Attribute, CharacterClass, attribute::ContextAttribute};
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 use crate::parser::multipass::{ConversionError, IsLiteral, ParseError, Scanner};
 
 use super::braille::{self, BrailleChars, is_braille_dot};
 
+/// The test operand of a `context` or multipass rule.
+///
+/// liblouis's `_N` steps its cursor back N characters, so a test can look at text that is
+/// not part of what the rule matches from its position. Only two uses of it make sense as
+/// a regular expression, and the parser turns them into parts of the test: a `_N` before
+/// anything that consumes characters looks behind the rule's position, and a `_N` after the
+/// last such test looks ahead of the match. Any other `_N` is rejected.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Test {
-    tests: Vec<TestInstruction>,
+    /// Checked before the rule's position, never consumed
+    lookbehind: Vec<TestInstruction>,
+    /// The N of the `_N` the look-behind steps back over, 0 without one
+    lookbehind_len: u8,
+    /// What the rule matches from its position, brackets included
+    body: Vec<TestInstruction>,
+    /// Checked after the match, never consumed
+    lookahead: Vec<TestInstruction>,
+    /// The N of the `_N` after the look-ahead, 0 without one
+    lookahead_len: u8,
 }
 
 impl Test {
-    pub fn new(tests: Vec<TestInstruction>) -> Self {
-        Self { tests }
+    pub fn new(body: Vec<TestInstruction>) -> Self {
+        Self {
+            lookbehind: Vec::new(),
+            lookbehind_len: 0,
+            body,
+            lookahead: Vec::new(),
+            lookahead_len: 0,
+        }
     }
 
-    pub fn tests(&self) -> &Vec<TestInstruction> {
-        &self.tests
+    pub fn lookbehind(&self) -> &[TestInstruction] {
+        &self.lookbehind
+    }
+
+    pub fn body(&self) -> &[TestInstruction] {
+        &self.body
+    }
+
+    pub fn lookahead(&self) -> &[TestInstruction] {
+        &self.lookahead
+    }
+
+    fn has_context(&self) -> bool {
+        !self.lookbehind.is_empty() || !self.lookahead.is_empty()
     }
 
     /// The text this test matches when it is only literals, ignoring the replacement
     /// brackets, so `[@5-46-3456]` gives ⠐⠨⠼.
     pub fn literal_text(&self) -> Option<String> {
-        self.tests
+        if self.has_context() {
+            return None;
+        }
+        self.body
             .iter()
             .map(TestInstruction::literal_text)
             .collect()
     }
 
     fn has_replace(&self) -> bool {
-        self.tests
+        self.body
             .iter()
             .any(|t| matches!(t, TestInstruction::Replace { .. }))
     }
 
     /// The length of the literal a forward `context` rule's test starts with at the rule's
     /// position. liblouis indexes the rule by these characters (`passFindCharacters`), and
-    /// it competes as a rule of that length. It is the first literal reaching past what `_N`
-    /// steps back, skipping variable tests, `!`, the brackets and anchors, and stepping over
-    /// fixed-width classes inside the look-back. Anything else first, such as a class, gives
-    /// 0, and the rule is then tried at every position, ahead of the rule chosen there.
+    /// it competes as a rule of that length. It is the first literal of the body, skipping
+    /// variable tests, `!`, the brackets and anchors. Anything else first, such as a class,
+    /// gives 0, and the rule is then tried at every position, ahead of the rule chosen there.
     pub fn leading_literal_len(&self) -> usize {
-        let mut lookback = 0;
-        self.tests
+        self.body
             .iter()
-            .find_map(|t| t.leading_literal_len(&mut lookback))
+            .find_map(TestInstruction::leading_literal_len)
             .unwrap_or(0)
     }
 
     /// How many characters the test spells out literally (`"..."` or `@...`), anywhere in it.
     pub fn literal_count(&self) -> usize {
-        self.tests.iter().map(TestInstruction::literal_count).sum()
+        [&self.lookbehind, &self.body, &self.lookahead]
+            .into_iter()
+            .flatten()
+            .map(TestInstruction::literal_count)
+            .sum()
     }
 
+    /// Without brackets, the whole body is replaced
     pub fn add_implicit_replace(self) -> Self {
-        if !self.has_replace() {
-            Self {
-                tests: vec![TestInstruction::Replace { tests: self.tests }],
+        if self.has_replace() {
+            return self;
+        }
+        Self {
+            body: vec![TestInstruction::Replace { tests: self.body }],
+            ..self
+        }
+    }
+
+    /// Turn the tests and `_N`s as written into a [`Test`]. Variable tests don't depend on
+    /// the position, so they go to the body wherever they are.
+    fn from_raw(raw: Vec<RawInstruction>) -> Result<Self, ParseError> {
+        let mut raw = VecDeque::from(raw);
+        let mut before = take_variables(&mut raw, Side::Front);
+        let (lookbehind, lookbehind_len) = match raw.front() {
+            Some(&RawInstruction::Lookback(len)) => {
+                raw.pop_front();
+                let (lookbehind, variables) = take_context(&mut raw, len, Side::Front)?;
+                before.extend(variables);
+                (lookbehind, len)
             }
-        } else {
-            self
+            _ => (Vec::new(), 0),
+        };
+        let mut after = take_variables(&mut raw, Side::Back);
+        let (lookahead, lookahead_len) = match raw.back() {
+            Some(&RawInstruction::Lookback(len)) => {
+                raw.pop_back();
+                let (lookahead, variables) = take_context(&mut raw, len, Side::Back)?;
+                after = variables.into_iter().chain(after).collect();
+                (lookahead, len)
+            }
+            _ => (Vec::new(), 0),
+        };
+        let mut body = before;
+        for instruction in raw {
+            match instruction {
+                RawInstruction::Test(test) => body.push(test),
+                RawInstruction::Lookback(_) => return Err(ParseError::MisplacedLookback),
+            }
+        }
+        body.extend(after);
+        Ok(Self {
+            lookbehind,
+            lookbehind_len,
+            body,
+            lookahead,
+            lookahead_len,
+        })
+    }
+}
+
+/// A test or a `_N` as written in the operand, before [`Test::from_raw`] sorts them
+#[derive(Debug)]
+enum RawInstruction {
+    Lookback(u8),
+    Test(TestInstruction),
+}
+
+impl RawInstruction {
+    fn into_test(self) -> Option<TestInstruction> {
+        match self {
+            RawInstruction::Test(test) => Some(test),
+            RawInstruction::Lookback(_) => None,
         }
     }
 }
 
+#[derive(Clone, Copy)]
+enum Side {
+    Front,
+    Back,
+}
+
+impl Side {
+    fn peek(self, raw: &VecDeque<RawInstruction>) -> Option<&RawInstruction> {
+        match self {
+            Side::Front => raw.front(),
+            Side::Back => raw.back(),
+        }
+    }
+
+    fn pop(self, raw: &mut VecDeque<RawInstruction>) -> Option<RawInstruction> {
+        match self {
+            Side::Front => raw.pop_front(),
+            Side::Back => raw.pop_back(),
+        }
+    }
+
+    fn push(self, raw: &mut VecDeque<RawInstruction>, test: TestInstruction) {
+        match self {
+            Side::Front => raw.push_front(RawInstruction::Test(test)),
+            Side::Back => raw.push_back(RawInstruction::Test(test)),
+        }
+    }
+
+    /// Put tests taken from this side back into the order they were written in
+    fn in_order(self, mut tests: Vec<TestInstruction>) -> Vec<TestInstruction> {
+        if let Side::Back = self {
+            tests.reverse();
+        }
+        tests
+    }
+}
+
+/// Take the variable tests at the `side` of `raw`, in the order they were written in
+fn take_variables(raw: &mut VecDeque<RawInstruction>, side: Side) -> Vec<TestInstruction> {
+    let mut variables = Vec::new();
+    while let Some(RawInstruction::Test(TestInstruction::Variable { .. })) = side.peek(raw) {
+        variables.push(side.pop(raw).and_then(RawInstruction::into_test).unwrap());
+    }
+    side.in_order(variables)
+}
+
+/// Take the tests spanning `len` characters from the `side` of `raw`: the look-behind or
+/// look-ahead, and the variable tests among them, both in the order they were written in.
+/// A string or dots that reach past `len` are split. Anything of open-ended width, a
+/// bracket, an anchor or another `_N` in the way, or too few tests, is a misplaced `_N`.
+fn take_context(
+    raw: &mut VecDeque<RawInstruction>,
+    len: u8,
+    side: Side,
+) -> Result<(Vec<TestInstruction>, Vec<TestInstruction>), ParseError> {
+    let mut context = Vec::new();
+    let mut variables = Vec::new();
+    let mut remaining = len as usize;
+    while remaining > 0 {
+        let Some(RawInstruction::Test(test)) = side.pop(raw) else {
+            return Err(ParseError::MisplacedLookback);
+        };
+        if let TestInstruction::Variable { .. } = test {
+            variables.push(test);
+            continue;
+        }
+        let width = test.width().ok_or(ParseError::MisplacedLookback)?;
+        if width <= remaining {
+            remaining -= width;
+            context.push(test);
+            continue;
+        }
+        let (inside, outside) = match side {
+            Side::Front => test.split_literal(remaining),
+            Side::Back => test
+                .split_literal(width - remaining)
+                .map(|(outside, inside)| (inside, outside)),
+        }
+        .ok_or(ParseError::MisplacedLookback)?;
+        context.push(inside);
+        side.push(raw, outside);
+        remaining = 0;
+    }
+    Ok((side.in_order(context), side.in_order(variables)))
+}
+
 impl IsLiteral for Test {
     fn is_literal(&self) -> bool {
-        self.tests
-            .iter()
-            .all(|instruction| instruction.is_literal())
+        !self.has_context() && self.body.iter().all(|instruction| instruction.is_literal())
     }
 }
 
@@ -79,7 +260,7 @@ impl TryFrom<&Test> for String {
     fn try_from(test: &Test) -> Result<String, Self::Error> {
         if test.is_literal() {
             Ok(test
-                .tests
+                .body
                 .iter()
                 .map(|instruction| instruction.try_into().unwrap())
                 .collect::<Vec<String>>()
@@ -108,9 +289,6 @@ pub enum Quantifier {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TestInstruction {
-    Lookback {
-        len: u8,
-    },
     Variable {
         var: u8,
         op: Operator,
@@ -152,8 +330,7 @@ impl TestInstruction {
             TestInstruction::String { s } => s.chars().count(),
             TestInstruction::Dots { dots } => dots.len(),
             TestInstruction::Replace { tests } => tests.iter().map(Self::literal_count).sum(),
-            TestInstruction::Lookback { .. }
-            | TestInstruction::Variable { .. }
+            TestInstruction::Variable { .. }
             | TestInstruction::Attributes { .. }
             | TestInstruction::Class { .. }
             | TestInstruction::Negate { .. }
@@ -162,45 +339,62 @@ impl TestInstruction {
         }
     }
 
-    /// [`Test::leading_literal_len`] for this instruction, `lookback` being how much of
-    /// the `_N` look-back the instructions before it left uncovered: `Some` once the
-    /// length is decided, `None` to go on with the next instruction.
-    fn leading_literal_len(&self, lookback: &mut usize) -> Option<usize> {
-        let n = match self {
+    /// [`Test::leading_literal_len`] for this instruction: `Some` once the length is
+    /// decided, `None` to go on with the next instruction.
+    fn leading_literal_len(&self) -> Option<usize> {
+        match self {
             TestInstruction::String { .. } | TestInstruction::Dots { .. } => {
-                let n = self.literal_count();
-                if n > *lookback {
-                    return Some(n - *lookback);
-                }
-                n
+                Some(self.literal_count())
             }
-            TestInstruction::Attributes { quantifier, .. }
-            | TestInstruction::Class { quantifier, .. } => {
-                let n = match quantifier {
-                    None => 1,
-                    Some(Quantifier::Number(n)) => *n as usize,
-                    Some(Quantifier::Range(min, max)) if min == max => *min as usize,
-                    Some(_) => return Some(0),
-                };
-                if n > *lookback {
-                    return Some(0);
-                }
-                n
-            }
-            TestInstruction::Lookback { len } => {
-                *lookback += *len as usize;
-                return None;
-            }
-            TestInstruction::Negate { test } => return test.leading_literal_len(lookback),
-            TestInstruction::Replace { tests } => {
-                return tests.iter().find_map(|t| t.leading_literal_len(lookback));
-            }
+            TestInstruction::Attributes { .. } | TestInstruction::Class { .. } => Some(0),
+            TestInstruction::Negate { test } => test.leading_literal_len(),
+            TestInstruction::Replace { tests } => tests.iter().find_map(Self::leading_literal_len),
             TestInstruction::Variable { .. }
             | TestInstruction::AtBeginning
-            | TestInstruction::AtEnd => 0,
-        };
-        *lookback -= n;
-        None
+            | TestInstruction::AtEnd => None,
+        }
+    }
+
+    /// How many characters this matches, if that is fixed. Not for a bracket or an anchor,
+    /// which a `_N` must not step over.
+    fn width(&self) -> Option<usize> {
+        match self {
+            TestInstruction::String { s } => Some(s.chars().count()),
+            TestInstruction::Dots { dots } => Some(dots.len()),
+            TestInstruction::Attributes { quantifier, .. }
+            | TestInstruction::Class { quantifier, .. } => match quantifier {
+                None => Some(1),
+                Some(Quantifier::Number(n)) => Some(*n as usize),
+                Some(_) => None,
+            },
+            TestInstruction::Negate { test } => test.width(),
+            TestInstruction::Variable { .. } => Some(0),
+            TestInstruction::AtBeginning
+            | TestInstruction::AtEnd
+            | TestInstruction::Replace { .. } => None,
+        }
+    }
+
+    /// A string or dots split into its first `at` characters and the rest
+    fn split_literal(self, at: usize) -> Option<(TestInstruction, TestInstruction)> {
+        match self {
+            TestInstruction::String { s } => {
+                let (head, tail) = s.split_at(s.char_indices().nth(at)?.0);
+                Some((
+                    TestInstruction::String { s: head.into() },
+                    TestInstruction::String { s: tail.into() },
+                ))
+            }
+            TestInstruction::Dots { dots } => {
+                let head = dots.iter().take(at).cloned().collect();
+                let tail = dots.iter().skip(at).cloned().collect();
+                Some((
+                    TestInstruction::Dots { dots: head },
+                    TestInstruction::Dots { dots: tail },
+                ))
+            }
+            _ => None,
+        }
     }
 
     /// The text this instruction matches when it is only literals, looking inside
@@ -354,13 +548,20 @@ impl<'a> Parser<'a> {
         Ok(TestInstruction::String { s })
     }
 
-    fn lookback(&mut self) -> Result<TestInstruction, ParseError> {
+    /// One or more `_N`, added up: `__` steps back 2
+    fn lookback(&mut self) -> Result<u8, ParseError> {
         self.chars.consume('_')?;
-        let n = match self.chars.peek() {
-            Some(c) if c.is_ascii_digit() => self.chars.ascii_number()?,
-            _ => 1,
-        };
-        Ok(TestInstruction::Lookback { len: n })
+        let mut len: u8 = 0;
+        loop {
+            let n = match self.chars.peek() {
+                Some(c) if c.is_ascii_digit() => self.chars.ascii_number()?,
+                _ => 1,
+            };
+            len = len.saturating_add(n);
+            if self.chars.next_if_eq(&'_').is_none() {
+                return Ok(len);
+            }
+        }
     }
 
     fn attribute(&mut self) -> Result<Attribute, ParseError> {
@@ -469,7 +670,8 @@ impl<'a> Parser<'a> {
 
     fn test(&mut self) -> Result<TestInstruction, ParseError> {
         match self.chars.peek() {
-            Some('_') => Ok(self.lookback()?),
+            // only at the top level of a test, see `raw_instructions`
+            Some('_') => Err(ParseError::MisplacedLookback),
             Some('%') => Ok(self.class()?),
             Some('@') => Ok(self.dots()?),
             Some('"') => Ok(self.string()?),
@@ -492,16 +694,29 @@ impl<'a> Parser<'a> {
         Ok(tests)
     }
 
+    /// The tests and `_N`s of the operand as written
+    fn raw_instructions(&mut self) -> Result<Vec<RawInstruction>, ParseError> {
+        let mut raw = Vec::new();
+        while self.chars.peek().filter(|&c| is_test(c)).is_some() {
+            if self.chars.peek() == Some(&'_') {
+                raw.push(RawInstruction::Lookback(self.lookback()?));
+            } else {
+                raw.push(RawInstruction::Test(self.test()?));
+            }
+        }
+        Ok(raw)
+    }
+
     /// Parse the test operand.
     pub fn tests(&mut self) -> Result<Test, ParseError> {
-        let tests = self.many_tests()?;
-        if tests.is_empty() {
+        let raw = self.raw_instructions()?;
+        if raw.is_empty() {
             Err(ParseError::EmptyTest)
         } else if let Some(c) = self.chars.next() {
             // we haven't consumed all the input. There are some invalid chars
             Err(ParseError::InvalidTest { found: Some(c) })
         } else {
-            Ok(Test { tests })
+            Test::from_raw(raw)
         }
     }
 }
@@ -510,10 +725,23 @@ impl<'a> Parser<'a> {
 mod display {
     use super::*;
 
+    /// Normalized: the look-behind as `_N` and its tests first, then the body, then the
+    /// look-ahead and its `_N`, whatever order the table wrote them in
     impl std::fmt::Display for Test {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            for instruction in &self.tests {
+            if self.lookbehind_len > 0 {
+                write!(f, "_{}", self.lookbehind_len)?;
+            }
+            for instruction in self
+                .lookbehind
+                .iter()
+                .chain(&self.body)
+                .chain(&self.lookahead)
+            {
                 write!(f, "{}", instruction)?;
+            }
+            if self.lookahead_len > 0 {
+                write!(f, "_{}", self.lookahead_len)?;
             }
             Ok(())
         }
@@ -545,9 +773,6 @@ mod display {
     impl std::fmt::Display for TestInstruction {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
-                TestInstruction::Lookback { len } => {
-                    write!(f, "_{}", len)
-                }
                 TestInstruction::Variable { var, op, operand } => {
                     write!(f, "#{}{}{}", var, op, operand)
                 }
@@ -610,7 +835,100 @@ mod tests {
         assert_eq!(chars(r#"[$l"z"]$s"lesz""#), 0);
         // `_2` steps back over a fixed-width class and part of the string
         assert_eq!(chars(r#"_2$l"abc""#), 2);
-        assert_eq!(chars(r#"_1$l."abc""#), 0);
+    }
+
+    #[test]
+    fn lookbehind_and_lookahead() {
+        let parts = |s| {
+            let test = Parser::new(s).tests().unwrap();
+            let show = |tests: &[TestInstruction]| tests.iter().map(|t| t.to_string()).collect();
+            (
+                show(test.lookbehind()),
+                show(test.body()),
+                show(test.lookahead()),
+            )
+        };
+        let strings = |v: &[&str]| -> Vec<String> { v.iter().map(|s| s.to_string()).collect() };
+        // th-g2.ctb
+        assert_eq!(
+            parts(r#""ใคร"!%ToneAndVowels_"#),
+            (
+                strings(&[]),
+                strings(&[r#""ใคร""#]),
+                strings(&["!%ToneAndVowels"])
+            )
+        );
+        // variable tests go to the body wherever they are, quotation-marks.uti
+        assert_eq!(
+            parts(r#"#1=0_$s["'"]!$s"#),
+            (
+                strings(&["$s"]),
+                strings(&["#1=0", r#"["'"]"#, "!$s"]),
+                strings(&[])
+            )
+        );
+        // consecutive `_`s add up, nl-NL-g0.utb
+        assert_eq!(
+            parts("__$d@2[@6]%digitletter"),
+            (
+                strings(&["$d", "@⠂"]),
+                strings(&["[@⠠]", "%digitletter"]),
+                strings(&[])
+            )
+        );
+        // a string or dots are split where the `_N` ends
+        assert_eq!(
+            parts(r#"_2$l"abc""#),
+            (
+                strings(&["$l", r#""a""#]),
+                strings(&[r#""bc""#]),
+                strings(&[])
+            )
+        );
+        assert_eq!(
+            parts(r#""ab"@1-2_1"#),
+            (strings(&[]), strings(&[r#""ab""#, "@⠁"]), strings(&["@⠂"]))
+        );
+        assert_eq!(
+            Parser::new(r#"#1=0_$s["'"]!$s"#)
+                .tests()
+                .unwrap()
+                .to_string(),
+            r#"_1$s#1=0["'"]!$s"#
+        );
+        assert_eq!(
+            Parser::new(r#""ใคร"!%ToneAndVowels_"#)
+                .tests()
+                .unwrap()
+                .to_string(),
+            r#""ใคร"!%ToneAndVowels_1"#
+        );
+    }
+
+    #[test]
+    fn misplaced_lookback() {
+        for test in [
+            // in the middle, it-it-comp6.utb before liblouis/liblouis#2196
+            "$s[@26a]@3456%mathnumber_$u.%mathop",
+            // into a bracket
+            r#"_["fu"]"#,
+            r#"[$d5]_5"#,
+            // over a class of open-ended width
+            r#"_1$l."abc""#,
+            // past the anchor
+            "`_$d[@1]",
+            // inside a bracket or negated
+            r#"["a"_]"#,
+            r#""a"!_"#,
+            // more than there is
+            r#""ab"_3"#,
+        ] {
+            assert_eq!(
+                Parser::new(test).tests(),
+                Err(ParseError::MisplacedLookback),
+                "{test}"
+            );
+        }
     }
 
     #[test]
@@ -709,26 +1027,13 @@ mod tests {
 
     #[test]
     fn lookback() {
-        assert_eq!(
-            Parser::new("_123").lookback(),
-            Ok(TestInstruction::Lookback { len: 123 })
-        );
-        assert_eq!(
-            Parser::new("_7").lookback(),
-            Ok(TestInstruction::Lookback { len: 7 })
-        );
-        assert_eq!(
-            Parser::new("_ ").lookback(),
-            Ok(TestInstruction::Lookback { len: 1 })
-        );
-        assert_eq!(
-            Parser::new("_abc").lookback(),
-            Ok(TestInstruction::Lookback { len: 1 })
-        );
-        assert_eq!(
-            Parser::new("_12abc").lookback(),
-            Ok(TestInstruction::Lookback { len: 12 })
-        );
+        assert_eq!(Parser::new("_123").lookback(), Ok(123));
+        assert_eq!(Parser::new("_7").lookback(), Ok(7));
+        assert_eq!(Parser::new("_ ").lookback(), Ok(1));
+        assert_eq!(Parser::new("_abc").lookback(), Ok(1));
+        assert_eq!(Parser::new("_12abc").lookback(), Ok(12));
+        assert_eq!(Parser::new("__$d").lookback(), Ok(2));
+        assert_eq!(Parser::new("_2_3").lookback(), Ok(5));
         assert_eq!(
             Parser::new(" _ ").lookback(),
             Err(ParseError::CharExpected {
@@ -952,21 +1257,19 @@ mod tests {
     fn test() {
         assert_eq!(
             Parser::new("$d[\"hello\"]%digitletter").tests(),
-            Ok(Test {
-                tests: vec![
-                    TestInstruction::Attributes {
-                        attrs: HashSet::from([Attribute::Class(CharacterClass::Digit)]),
-                        quantifier: None
-                    },
-                    TestInstruction::Replace {
-                        tests: vec![TestInstruction::String { s: "hello".into() }]
-                    },
-                    TestInstruction::Class {
-                        name: "digitletter".into(),
-                        quantifier: None
-                    }
-                ]
-            })
+            Ok(Test::new(vec![
+                TestInstruction::Attributes {
+                    attrs: HashSet::from([Attribute::Class(CharacterClass::Digit)]),
+                    quantifier: None
+                },
+                TestInstruction::Replace {
+                    tests: vec![TestInstruction::String { s: "hello".into() }]
+                },
+                TestInstruction::Class {
+                    name: "digitletter".into(),
+                    quantifier: None
+                }
+            ]))
         );
     }
 
@@ -982,56 +1285,46 @@ mod tests {
     fn at_beginning_and_at_end() {
         assert_eq!(
             Parser::new("`\"a\"").tests(),
-            Ok(Test {
-                tests: vec![
-                    TestInstruction::AtBeginning,
-                    TestInstruction::String { s: "a".into() }
-                ]
-            })
+            Ok(Test::new(vec![
+                TestInstruction::AtBeginning,
+                TestInstruction::String { s: "a".into() }
+            ]))
         );
         assert_eq!(
             Parser::new("\"a\"~").tests(),
-            Ok(Test {
-                tests: vec![
-                    TestInstruction::String { s: "a".into() },
-                    TestInstruction::AtEnd
-                ]
-            })
+            Ok(Test::new(vec![
+                TestInstruction::String { s: "a".into() },
+                TestInstruction::AtEnd
+            ]))
         );
         // liblouis/liblouis#2071: `quotation-marks.uti:26` places `` ` `` after `#1=0` rather
         // than first -- the manual says it must be first, but the compiler doesn't enforce
         // that, and this should still parse.
         assert_eq!(
             Parser::new("#1=0`[\"'\"]").tests(),
-            Ok(Test {
-                tests: vec![
-                    TestInstruction::Variable {
-                        var: 1,
-                        op: Operator::Eq,
-                        operand: 0
-                    },
-                    TestInstruction::AtBeginning,
-                    TestInstruction::Replace {
-                        tests: vec![TestInstruction::String { s: "'".into() }]
-                    }
-                ]
-            })
+            Ok(Test::new(vec![
+                TestInstruction::Variable {
+                    var: 1,
+                    op: Operator::Eq,
+                    operand: 0
+                },
+                TestInstruction::AtBeginning,
+                TestInstruction::Replace {
+                    tests: vec![TestInstruction::String { s: "'".into() }]
+                }
+            ]))
         );
         assert_eq!(
             Parser::new("!`").tests(),
-            Ok(Test {
-                tests: vec![TestInstruction::Negate {
-                    test: Box::new(TestInstruction::AtBeginning)
-                }]
-            })
+            Ok(Test::new(vec![TestInstruction::Negate {
+                test: Box::new(TestInstruction::AtBeginning)
+            }]))
         );
         assert_eq!(
             Parser::new("!~").tests(),
-            Ok(Test {
-                tests: vec![TestInstruction::Negate {
-                    test: Box::new(TestInstruction::AtEnd)
-                }]
-            })
+            Ok(Test::new(vec![TestInstruction::Negate {
+                test: Box::new(TestInstruction::AtEnd)
+            }]))
         );
     }
 }

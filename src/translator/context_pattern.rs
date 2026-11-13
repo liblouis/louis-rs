@@ -18,13 +18,24 @@ use crate::translator::{
 };
 
 impl Regexp {
+    /// The look-behind and look-ahead are matched but never consumed, see [`Test`]
     fn from_test(test: &Test, whole_match: bool, ctx: &CharacterClasses) -> Self {
-        let regexp = Regexp::from_instructions(test.tests(), whole_match, ctx);
-        if whole_match {
-            Regexp::Consume(Box::new(regexp))
+        let body = Regexp::from_instructions(test.body(), whole_match, ctx);
+        let body = if whole_match {
+            Regexp::Consume(Box::new(body))
         } else {
-            regexp
+            body
+        };
+        let mut regexp = body;
+        if !test.lookbehind().is_empty() {
+            let lookbehind = Regexp::from_instructions(test.lookbehind(), whole_match, ctx);
+            regexp = Regexp::Concat(Box::new(lookbehind), Box::new(regexp));
         }
+        if !test.lookahead().is_empty() {
+            let lookahead = Regexp::from_instructions(test.lookahead(), whole_match, ctx);
+            regexp = Regexp::Concat(Box::new(regexp), Box::new(lookahead));
+        }
+        regexp
     }
 
     fn from_instructions(
@@ -52,21 +63,6 @@ impl Regexp {
         ctx: &CharacterClasses,
     ) -> Self {
         match instruction {
-            // liblouis' `_N` rewinds a single mutable cursor by N so a later test can peek at
-            // already-consumed (or, at the end of a test, not-yet-consumed) text without that
-            // text becoming part of the replaceable span — its own matcher needs this because it
-            // has no other way to look outside the span it's currently walking. We don't: (1)
-            // `ResolvedTranslation::resolve` sets the reported length to the *captured bracket's*
-            // length alone, never however much surrounding "before"/"after" content was checked,
-            // so a check placed before or after the bracket is never mistakenly swallowed into
-            // the consumed span regardless of `_N`'s value; and (2) `context_candidates` is
-            // queried at every cursor position (like `match`'s `pre`), so a check placed before
-            // the bracket is naturally discovered starting at the earlier position and held via
-            // `delayed_translations`/`offset()` until the cursor catches up. Dropping `_N`
-            // entirely and just compiling the surrounding checks in place is therefore already
-            // correct, not a stand-in for a real implementation — hence `Empty`, not some
-            // "unimplemented" marker.
-            TestInstruction::Lookback { .. } => Regexp::Empty,
             TestInstruction::Variable { var, op, operand } => {
                 Regexp::VariableCompare(*var, (*op).into(), *operand)
             }
@@ -886,13 +882,11 @@ mod tests {
     }
 
     #[test]
-    fn context_lookback_before_bracket_is_ignored_not_consumed() {
-        // liblouis' `_1$d[...]` rewinds 1, checks the preceding char is a digit, then advances
-        // back to the bracket. We drop the `_1` (see the comment at
-        // `TestInstruction::Lookback`'s match arm) and just check `$d` in place instead. This
-        // still requires a digit immediately before the bracket — discovered when the cursor
-        // sits at that digit, held via `offset()`/`delayed_translations` until it catches up —
-        // and the reported length only ever covers the bracket itself, never the digit.
+    fn context_lookbehind_is_not_consumed() {
+        // `_1$d[...]`: the parser makes `$d` a look-behind. It is matched in front of the
+        // bracket, so the rule is found when the cursor sits at that digit and held via
+        // `offset()`/`delayed_translations` until it catches up, and the reported length only
+        // covers the bracket, never the digit.
         let env = Environment::new();
         let tests = test::Parser::new(r#"_1$d["b"]"#).tests().unwrap();
         let action = action::Parser::new(r#""X""#).actions().unwrap();
@@ -935,13 +929,9 @@ mod tests {
     }
 
     #[test]
-    fn context_lookback_after_bracket_is_ignored_not_consumed() {
-        // liblouis' `[...]!$d_` checks the trailing character then rewinds so it isn't counted
-        // as part of the consumed span. We drop the trailing `_` and just check `!$d` in place —
-        // the reported length is always the bracket's own length (see
-        // `ResolvedTranslation::resolve`), never however much trailing context was checked, so
-        // the checked-but-not-bracketed character is correctly left for the next position to
-        // translate on its own.
+    fn context_lookahead_is_not_consumed() {
+        // `[...]!$d_`: the parser makes `!$d` a look-ahead, checked after the bracket and
+        // left for the next position to translate on its own.
         let env = Environment::new();
         let tests = test::Parser::new(r#"["b"]!$d_"#).tests().unwrap();
         let action = action::Parser::new(r#""X""#).actions().unwrap();
@@ -977,6 +967,57 @@ mod tests {
                 .find("b1", &env, true, &CharacterDefinition::default())
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn context_lookbehind_and_lookahead_without_brackets_or_with_star() {
+        // th-g2.ctb: `"ใคร"!%ToneAndVowels_` has no brackets and `"เ"[...]"ีย"!"์"_ *...`
+        // copies with `*`, so both consume the whole body, but not the look-ahead or
+        // look-behind
+        let env = Environment::new();
+        let ctx = TableContext::new(
+            CharacterClasses::new(&[(CharacterClass::Digit, &['1'])]),
+            CharacterClasses::default(),
+            SwapClasses::default(),
+        );
+        let find = |test: &str, action: &str, input: &str| {
+            let origin = origin(&format!("context {test} {action}"));
+            let tests = test::Parser::new(test).tests().unwrap();
+            let action = action::Parser::new(action).actions().unwrap();
+            let mut builder = ContextPatternsBuilder::new();
+            builder
+                .insert(
+                    &tests,
+                    &action,
+                    &origin,
+                    TranslationStage::Main,
+                    &ctx,
+                    &TranslationTarget::Capture,
+                )
+                .unwrap();
+            builder
+                .build()
+                .find(input, &env, true, &CharacterDefinition::default())
+                .iter()
+                .map(|t| (t.output(), t.length()))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(find(r#""b"!$d_"#, r#""X""#, "bz"), [("X".into(), 1)]);
+        assert_eq!(find(r#""b"!$d_"#, r#""X""#, "b1"), []);
+        assert_eq!(
+            find(r#""a"["b"]!$d_"#, r#"*"Y""#, "abz"),
+            [("bY".into(), 2)]
+        );
+        // a look-back spanning more than the last instruction
+        assert_eq!(find(r#""b"!$d"c"_2"#, r#""X""#, "bzc"), [("X".into(), 1)]);
+        // one that ends inside a string splits it
+        assert_eq!(find(r#""b""cd"_1"#, r#""X""#, "bcd"), [("X".into(), 2)]);
+        // a look-behind with `*`, as da-dk-g26.ctb's `_$D[@6-46-6] *`, is found starting
+        // at the digit but consumes only the bracket
+        assert_eq!(find(r#"_$d["b"]"#, r#"*"Y""#, "1b"), [("bY".into(), 1)]);
+        assert_eq!(find(r#"_$d["b"]"#, r#"*"Y""#, "zb"), []);
+        // and at the start of the input there is nothing to look behind at
+        assert_eq!(find(r#"_$d["b"]"#, r#"*"Y""#, "b"), []);
     }
 
     #[test]

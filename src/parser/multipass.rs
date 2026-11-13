@@ -44,6 +44,10 @@ pub enum ParseError {
     DoubleNegation,
     #[error("negating a replacement ('![...]') is not allowed")]
     NegatedReplacement,
+    #[error(
+        "'_' must come before the tests it steps back over, or after them at the end, and step over tests of fixed width only"
+    )]
+    MisplacedLookback,
 }
 
 /// The characters of a test or action operand, read one at a time by both operand
