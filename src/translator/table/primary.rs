@@ -2122,10 +2122,60 @@ impl PrimaryTable {
                 let mut cells = dots.chars();
                 cells.next().filter(|_| cells.next().is_none())
             };
+            // A cell that several characters share back-translates to the one defined
+            // first, and liblouis continues a number only after a character it wrote that
+            // is a numeric mode character. Swedish lists the no-break space, whose cell is
+            // the blank cell, but the blank cell comes back as a space, which ends the number.
+            let mut first_character: HashMap<char, char> = HashMap::new();
+            for rule in rules {
+                let (Rule::Space {
+                    character, dots, ..
+                }
+                | Rule::Hyphen {
+                    character, dots, ..
+                }
+                | Rule::Punctuation {
+                    character, dots, ..
+                }
+                | Rule::Digit {
+                    character, dots, ..
+                }
+                | Rule::Litdigit {
+                    character, dots, ..
+                }
+                | Rule::Letter {
+                    character, dots, ..
+                }
+                | Rule::Lowercase {
+                    character, dots, ..
+                }
+                | Rule::Uppercase {
+                    character, dots, ..
+                }
+                | Rule::Sign {
+                    character, dots, ..
+                }
+                | Rule::Math {
+                    character, dots, ..
+                }) = &rule.rule
+                else {
+                    continue;
+                };
+                if rule.rule.is_direction(Direction::Backward)
+                    && let Some(cell) = single_cell(&dots.to_string())
+                {
+                    first_character.entry(cell).or_insert(*character);
+                }
+            }
             let char_cells: HashSet<char> = numeric_mode_chars
                 .iter()
                 .filter_map(|c| ctx.character_definitions().get(c))
                 .filter_map(|dots| single_cell(dots))
+                .filter(|cell| {
+                    first_character
+                        .get(cell)
+                        .is_none_or(|c| numeric_mode_chars.contains(c))
+                })
                 .collect();
             let decpoint_cells: HashSet<char> = decpoint_dots
                 .filter_map(|dots| single_cell(&dots))
