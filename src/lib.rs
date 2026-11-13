@@ -573,4 +573,22 @@ mod tests {
         assert_eq!(result.output_positions(), [0, 0, 1, 2]);
         assert_eq!(result.input_positions(), [1, 2, 3]);
     }
+
+    #[test]
+    fn a_joinword_joins_a_word_whose_first_cell_is_also_punctuation() {
+        // en-us-g2 `joinword to 235` before `begword com 36`, whose cell is also the hyphen:
+        // liblouis only asks that no space follows, so "⠖⠤⠑" is "to come", not "!come".
+        let table = "space \\s 0\nhyphen - 36\npunctuation ! 235\nlowercase a 1\nbegword com 36\njoinword to 235\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠖⠤⠁"), "to coma");
+    }
+
+    #[test]
+    fn a_joinnum_ranks_by_its_characters_without_the_space_it_puts_back() {
+        // no-no-g2 `joinnum § 346` and `word et 346`: liblouis tries the longer "et" first,
+        // so "⠬⠂" is "et,", not "§ ,".
+        let table = "space \\s 0\npunctuation , 2\nlowercase e 15\nlowercase t 2345\nsign § 346\njoinnum § 346\nword et 346\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠬⠂"), "et,");
+    }
 }

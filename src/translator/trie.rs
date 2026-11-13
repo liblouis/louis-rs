@@ -67,6 +67,10 @@ pub enum Transition {
     /// Non-consuming lookahead: the character immediately after the match must be in one of
     /// these classes. Inserted at the end of the path (after character transitions).
     End(Vec<CharacterClass>),
+    /// The negation of [`Transition::End`]: the character after the match must be in none
+    /// of these classes. The end of the input counts as a space, unless the input is
+    /// partial and may go on (`partialTrans`).
+    NotEnd(Vec<CharacterClass>),
     /// Non-consuming lookbehind for backward translation: a word begins before the match
     /// (see [`BegWordScanner`]).
     ///
@@ -95,6 +99,7 @@ enum ResolvedTransition {
     Start(ResolvedClasses),
     NotStart(ResolvedClasses),
     End(ResolvedClasses),
+    NotEnd(ResolvedClasses),
     BegWord,
     EndWord,
     ContinuesWord,
@@ -239,6 +244,10 @@ impl Trie {
             Transition::End(classes) => {
                 ResolvedTransition::End(ResolvedClasses::resolve(&self.lookahead_classes, &classes))
             }
+            Transition::NotEnd(classes) => ResolvedTransition::NotEnd(ResolvedClasses::resolve(
+                &self.lookahead_classes,
+                &classes,
+            )),
             Transition::BegWord => ResolvedTransition::BegWord,
             Transition::EndWord => ResolvedTransition::EndWord,
             Transition::ContinuesWord => ResolvedTransition::ContinuesWord,
@@ -385,6 +394,9 @@ impl Trie {
                     !resolved.matches(preceding.chars().last())
                 }
                 ResolvedTransition::End(resolved) => resolved.matches(c),
+                ResolvedTransition::NotEnd(resolved) => {
+                    (partial && c.is_none()) || !resolved.matches(c)
+                }
                 ResolvedTransition::BegWord => self.beg_word.is_beg_word(preceding),
                 // in a partial input no word ends: it may go on (`partialTrans`)
                 ResolvedTransition::EndWord => !partial && self.end_word.is_end_word(input),
