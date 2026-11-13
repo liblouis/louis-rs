@@ -409,6 +409,16 @@ mod tests {
     }
 
     #[test]
+    fn a_definition_after_a_base_rule_gives_the_dots() {
+        // nl-NL-g0.utb: a capital is its letter with a virtual dot, after a shared
+        // `base uppercase`; the `base` rule still makes it a capital
+        let table = "space \\s 0\nlowercase a 1\nlowercase v 1236\ncapsletter 46\n\
+                     base uppercase V v\nnoback letter V 12367\n";
+        let translator = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(translator.translate("Va"), "⠨⡧⠁");
+    }
+
+    #[test]
     fn no_contractions_spells_everything_out() {
         let table = "space \\s 0\nlowercase a 1\nlowercase b 12\nlowercase c 14\n\
                      word ab 1246\nalways bc 123456\nmatch - ca - 25\n";

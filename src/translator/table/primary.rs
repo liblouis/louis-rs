@@ -683,6 +683,27 @@ impl PrimaryTable {
         // liblouis decides by table order, and tables put the `always` rule first to override
         // the punctuation (`pu-in-g1.utb`: "needed to override ! in en-in-g1.ctb"); without
         // this the word-boundary transition would give the punctuation rule the higher weight
+        // liblouis looks for a character's own rules before it derives it from a `base`
+        // rule, so a character defined in its own right translates by that definition,
+        // whatever the order; the `base` rule only adds its class
+        let defined_characters: HashSet<char> = rules
+            .iter()
+            .filter(|rule| rule.rule.is_direction(direction))
+            .filter_map(|rule| match &rule.rule {
+                Rule::Space { character, .. }
+                | Rule::Punctuation { character, .. }
+                | Rule::Digit { character, .. }
+                | Rule::Litdigit { character, .. }
+                | Rule::Letter { character, .. }
+                | Rule::Lowercase { character, .. }
+                | Rule::Uppercase { character, .. }
+                | Rule::Sign { character, .. }
+                | Rule::Math { character, .. }
+                | Rule::Hyphen { character, .. }
+                | Rule::Decpoint { character, .. } => Some(*character),
+                _ => None,
+            })
+            .collect();
         let always_cells: HashSet<String> = rules
             .iter()
             .filter_map(|rule| match &rule.rule {
@@ -1261,6 +1282,7 @@ impl PrimaryTable {
                         // Backward, as in liblouis, the derived character has no dots of
                         // its own: the dots give the base, which a capital sign uppercases.
                         match direction {
+                            Direction::Forward if defined_characters.contains(derived) => {}
                             Direction::Forward => builder.insert_character(
                                 *derived,
                                 &translation,

@@ -109,6 +109,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   The rule dump and the rule-parsing REPL are gone.
 
 ### Fixed
+- A character defined after a `base` rule for it is translated with its
+  own dots, and the `base` rule only adds its class, as in liblouis: a
+  capital of `nl-NL-g0.utb` keeps its virtual dot, and `vi-cb8.utb`'s
+  capitals and Swedish Į and Ų come out as in liblouis.
 - `match` rules don't contract in a word with a `nocont` string, or
   after capitals with `capsnocont`, as in liblouis.
 - A trailing `_N` leaves the characters it steps back over for the next

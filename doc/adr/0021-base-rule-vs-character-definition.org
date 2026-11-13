@@ -20,13 +20,19 @@ class ~uppercase~, so it is written with a capital sign.
 What should happen when a ~base~ rule and a character definition
 disagree about the dots of the same character?
 
-- liblouis: whichever comes first wins. A definition before the ~base~
-  rule makes liblouis ignore the rule entirely; a ~base~ rule before
-  the definition makes it drop the definition. Equal dots are no
-  conflict, and both apply.
-- louis-rs today: the definition's dots always win, whatever the
-  order, but the ~base~ rule still adds its class. So Ø is translated
-  ⠨⠼ where liblouis gives ⠼.
+- liblouis: a definition before the ~base~ rule makes liblouis ignore
+  the rule entirely. A ~base~ rule before the definition takes over as
+  the character's definition, with its class, but the definition's
+  rule stays in the forward rules, and liblouis looks for a
+  character's own rules before deriving it from its base: the
+  character is translated with the definition's dots and the ~base~
+  rule's class. Equal dots are no conflict, and both apply.
+- louis-rs: forward, the definition's dots always win, whatever the
+  order, and the ~base~ rule adds its class (since the change that
+  made a ~base~ rule skip a character with its own definition; before
+  it, the ~base~ rule's dots won when it came first). So in the
+  ~base~-first order louis-rs does what liblouis does, but Ø, defined
+  first, is translated ⠨⠼ where liblouis gives ⠼.
 
 Measured over ~tables/~ on [2026-11-12 Thu], forward:
 
@@ -36,7 +42,15 @@ Measured over ~tables/~ on [2026-11-12 Thu], forward:
   ~en-ueb-chardefs.uti~, ~nl-chardefs.uti~, ~no-no-chardefs6.uti~ and
   ~vi-lettersdef.uti~ are included after a table's own forms.
 - ~base~ rule first: 82 hits, in ~vi-cb8.utb~, the ~sv-6*d~ tables,
-  ~sv-6g0p.utb~ and ~da-dk-g28.ctb~. Not looked at yet.
+  ~sv-6g0p.utb~ and ~da-dk-g28.ctb~, and the capitals of
+  ~nl-NL-g0.utb~ (~noback letter V 1236f~ after
+  ~latinLetterDef6Dots.uti~'s ~base uppercase V v~), whose virtual dot
+  keeps the case for ~nl-print.dis~. Measured [2026-11-13 Fri]: with
+  the definition's dots and the ~base~ rule's class, every affected
+  character translates as in liblouis, alone, in a word and before its
+  lowercase form, where before ~vi-cb8.utb~ matched none, the Swedish
+  tables got Į and Ų wrong, and 64 tests of ~nl-g0_harness.yaml~
+  failed. This order is settled; what follows is about the other.
 
 ** Decision Drivers
 
@@ -48,14 +62,18 @@ Measured over ~tables/~ on [2026-11-12 Thu], forward:
 
 ** Considered Options
 
-1. Follow liblouis: a ~base~ rule is a character definition, and the
-   first definition wins (the parked patch does the definition-first
-   half).
-2. A definition always beats a ~base~ rule, whatever the order: the
-   ~base~ rule only applies to a character without a definition.
+All about the definition-first order; the other is settled above.
+
+1. Follow liblouis: a definition before the ~base~ rule makes the
+   rule not apply at all, neither its dots nor its class (the parked
+   patch).
+2. The definition gives the dots, the ~base~ rule only applies to a
+   character without a definition, so it adds no class either.
+   In this order the same as option 1.
 3. Make a conflict a table error, like a ~base~ rule whose base is not
    defined at all.
-4. Keep today's behaviour.
+4. Keep today's behaviour: the definition's dots and the ~base~ rule's
+   class, as in the other order.
 
 ** Decision Outcome
 
@@ -63,24 +81,18 @@ Open.
 
 ** Pros and Cons of the Options
 
-*** Option 1: first definition wins
+*** Options 1 and 2: the ~base~ rule does not apply
 
-- Good, because it is the rule louis-rs already uses for every other
-  character opcode, and liblouis behaves the same.
+- Good, because liblouis behaves the same.
 - Good, because the definition-first case is the override pattern the
-  tables rely on.
+  tables rely on: the table's own definition replaces the shared
+  include's ~base~ rule as a whole.
 - Good, because the YAML suite agrees: ~grc-international-common~
   "Χριστος" passes, and ~tr.yaml~ backward Æ and Œ fail as liblouis
   does (they are ~xfail~).
-- Bad, because in the reverse order a later explicit definition is
-  silently dropped, which is unlikely to be what the author meant.
-
-*** Option 2: a definition always wins
-
-- Good, because an explicit definition is the more specific statement.
-- Bad, because order no longer decides, unlike everywhere else.
-- Bad, because it differs from liblouis in the reverse case, so it
-  needs a migration path.
+- Bad, because the two orders then differ: a ~base~ rule first still
+  adds its class to a later definition, a ~base~ rule after one adds
+  nothing.
 
 *** Option 3: an error
 
@@ -89,4 +101,8 @@ Open.
 
 *** Option 4: keep today's behaviour
 
-- Bad, because half a rule applies, which nobody intends.
+- Good, because both orders then give the same result: the
+  definition's dots and the ~base~ rule's class.
+- Bad, because it differs from liblouis in this order, so it needs a
+  migration path, and the override pattern then keeps the shared
+  include's class: Ø in ~fr-bfu-comp6.utb~ gets a capital sign.
