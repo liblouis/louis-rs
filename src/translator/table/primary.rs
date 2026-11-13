@@ -2273,6 +2273,12 @@ impl PrimaryTable {
         if let Some(word) = &cursor_word {
             constraints.use_comp6_in(word.clone());
         }
+        // liblouis honours `noContractions` forward only
+        if self.direction == Direction::Forward
+            && options.modes().contains(TranslationMode::NoContractions)
+        {
+            constraints.uncontract_all();
+        }
         let in_cursor_word = |pos: usize| cursor_word.as_ref().is_some_and(|w| w.contains(&pos));
 
         loop {
@@ -2564,8 +2570,9 @@ impl PrimaryTable {
     }
 
     /// Whether `t` comes from an opcode that liblouis switches off in a word with a
-    /// `nocont` string (its dontContract). Character definitions, `prepunc`/`postpunc`,
-    /// `context` and the number opcodes still apply there.
+    /// `nocont` string or with `noContractions` (its dontContract). Character
+    /// definitions, `prepunc`/`postpunc`, `context` and the number opcodes still apply
+    /// there.
     fn contracts(t: &ResolvedTranslation) -> bool {
         matches!(
             t.rule(),
@@ -2588,6 +2595,7 @@ impl PrimaryTable {
                     | Rule::Midword { .. }
                     | Rule::Midendword { .. }
                     | Rule::Endword { .. }
+                    | Rule::Match { .. }
             )
         )
     }

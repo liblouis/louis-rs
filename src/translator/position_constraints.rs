@@ -97,6 +97,13 @@ impl PositionConstraints {
         }
     }
 
+    /// Switch contractions off everywhere, for `noContractions`
+    pub fn uncontract_all(&mut self) {
+        for constraints in &mut self.0 {
+            constraints.insert(Constraint::Uncontracted);
+        }
+    }
+
     #[cfg(test)]
     pub fn empty() -> Self {
         Self(Vec::new())

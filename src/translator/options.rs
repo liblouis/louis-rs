@@ -17,20 +17,15 @@ use crate::emphasis::Emphasis;
 #[enumset(no_ops)]
 #[non_exhaustive]
 pub enum TranslationMode {
-    /// Translate without contractions (liblouis's `noContractions`). Not implemented yet:
-    /// ignored.
+    /// Translate without contractions (liblouis's `noContractions`): no `word`, `always`,
+    /// `match` or other contracting rule applies. Backward: ignored.
     NoContractions,
     /// Show the word at the cursor uncontracted, in computer braille without `begcomp` and
     /// `endcomp` (`compbrlAtCursor`). Needs a cursor position; backward: ignored.
     CompbrlAtCursor,
-    /// Read and write braille as dot patterns rather than characters (`dotsIO`). Not
-    /// implemented yet: ignored.
-    DotsIo,
     /// Like [`CompbrlAtCursor`](Self::CompbrlAtCursor), but only the part of the word
     /// before the cursor (`compbrlLeftCursor`).
     CompbrlLeftCursor,
-    /// Write computer braille with uppercase letters (`ucBrl`). Not implemented yet: ignored.
-    UcBrl,
     /// Drop characters the tables don't define rather than writing them out (`noUndefined`)
     NoUndefined,
     /// Back-translate input that may end in the middle of a word, such as braille typed so

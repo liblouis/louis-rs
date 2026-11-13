@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   position, the word at the cursor, or its part before the cursor, is
   shown uncontracted in computer braille, without `begcomp` and
   `endcomp`, as in liblouis (#20).
+- The `noContractions` mode: no contracting rule applies, as in
+  liblouis. Like liblouis, back-translation ignores it.
 
 ### Changed
 - louis-rs is in beta: translation matches liblouis closely, and the
@@ -78,6 +80,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   - `TranslationMode` and `Direction` lose the `|` that returned an
     `enumset::EnumSet`. Build a set of modes with
     `TranslationModes::insert` or `collect`.
+  - `TranslationMode::DotsIo` and `UcBrl` are gone. In liblouis they
+    choose the output encoding; louis-rs writes Unicode braille, which is
+    what `dotsIO | ucBrl` gives, unless given a `BrailleEncoding`.
 - The `backwards_compatibility` feature is gone. louis-rs always behaves
   as it did with it, like liblouis: the first definition of a character
   wins.
@@ -98,6 +103,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   The rule dump and the rule-parsing REPL are gone.
 
 ### Fixed
+- `match` rules don't contract in a word with a `nocont` string, or
+  after capitals with `capsnocont`, as in liblouis.
 - Multipass and `context` variables work as in liblouis: `#1+` and `#1-`
   increment and decrement, a test can compare with `<`, `>`, `<=` and
   `>=` as well as `=`, and a variable that was never set is 0. Before,

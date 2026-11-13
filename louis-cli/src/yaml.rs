@@ -321,9 +321,7 @@ impl YAMLParser {
         let mode = match &*value {
             "noContractions" => TranslationMode::NoContractions,
             "compbrlAtCursor" => TranslationMode::CompbrlAtCursor,
-            "dotsIO" => TranslationMode::DotsIo,
             "compbrlLeftCursor" => TranslationMode::CompbrlLeftCursor,
-            "ucBrl" => TranslationMode::UcBrl,
             "noUndefined" => TranslationMode::NoUndefined,
             "partialTrans" => TranslationMode::PartialTrans,
             v => {

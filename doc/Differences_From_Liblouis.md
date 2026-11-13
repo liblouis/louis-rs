@@ -98,6 +98,18 @@ on the fallback are being changed to name theirs (liblouis
 For an application, none yet: louis-rs does not say when a translation table
 brings display rules that it is ignoring.
 
+## The `dotsIO` and `ucBrl` modes
+
+In liblouis, `dotsIO` makes a translation write, or read back, dot patterns rather than
+the display table's characters, and `ucBrl` with it makes those dot patterns Unicode
+braille. louis-rs has no such modes: braille is Unicode braille unless a
+`BrailleEncoding` is named, so every translation already does what `dotsIO | ucBrl`
+does. `dotsIO` alone gives liblouis's internal dot values, which mean nothing outside
+its C API.
+
+**Migration path:** drop the modes. For Unicode braille, use a `Translator` without a
+`BrailleEncoding`; for a display table's characters, use one with it.
+
 ## Attributes `$w`, `$x`, `$y` and `$z`
 
 In multipass and `correct`/`context` rules, `$w` to `$z` name the first four

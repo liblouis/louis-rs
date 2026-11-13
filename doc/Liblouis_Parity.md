@@ -86,9 +86,10 @@ There is **no C ABI** yet. Python bindings live in
 | Logging (`lou_registerLogCallback`, `lou_setLogLevel`, …) | The [`log`](https://docs.rs/log) crate                                                    |
 | `lou_free`, `lou_version`, `lou_charSize`, …          | Not needed in Rust                                                                             |
 
-**Translation modes** (`TranslationMode`): `compbrlAtCursor`, `compbrlLeftCursor`,
-`noUndefined` and `partialTrans` work. **`noContractions`, `dotsIO` and `ucBrl` are
-accepted but ignored.**
+**Translation modes** (`TranslationMode`): `noContractions`, `compbrlAtCursor`,
+`compbrlLeftCursor`, `noUndefined` and `partialTrans` work. `dotsIO` and `ucBrl` choose
+liblouis's output encoding and have no counterpart: louis-rs writes Unicode braille,
+which is what `dotsIO | ucBrl` gives, unless given a `BrailleEncoding`.
 
 ## Known wrong output
 

@@ -409,6 +409,28 @@ mod tests {
     }
 
     #[test]
+    fn no_contractions_spells_everything_out() {
+        let table = "space \\s 0\nlowercase a 1\nlowercase b 12\nlowercase c 14\n\
+                     word ab 1246\nalways bc 123456\nmatch - ca - 25\n";
+        let no_contractions = TranslationOptions::default()
+            .with_modes([TranslationMode::NoContractions].into_iter().collect());
+        let translate = |direction, input, options: &TranslationOptions| {
+            Translator::from_table_source(table, direction)
+                .unwrap()
+                .translate_with_options(input, options)
+                .output()
+                .to_string()
+        };
+        let forward =
+            |options: &TranslationOptions| translate(Direction::Forward, "ab bc ca", options);
+        assert_eq!(forward(&TranslationOptions::default()), "⠫⠀⠿⠀⠒");
+        // no `word`, `always` or `match` contraction
+        assert_eq!(forward(&no_contractions), "⠁⠃⠀⠃⠉⠀⠉⠁");
+        // liblouis ignores it backward
+        assert_eq!(translate(Direction::Backward, "⠫", &no_contractions), "ab");
+    }
+
+    #[test]
     fn the_word_at_the_cursor_is_computer_braille() {
         let table = "space \\s 0\nlowercase a 1\nlowercase b 12\nlowercase c 14\n\
                      always abc 123456\ncomp6 a 2\ncomp6 b 23\ncomp6 c 25\n\
