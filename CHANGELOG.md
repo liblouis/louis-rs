@@ -83,6 +83,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   - `TranslationMode::DotsIo` and `UcBrl` are gone. In liblouis they
     choose the output encoding; louis-rs writes Unicode braille, which is
     what `dotsIO | ucBrl` gives, unless given a `BrailleEncoding`.
+- In a multipass, `correct` or `context` test, `_N` is accepted only
+  before the tests that consume characters, as a look-behind, or after
+  them at the end, as a look-ahead, and must step over tests of fixed
+  width. Any other `_N` is a syntax error. In liblouis's tables this
+  affects three rules, in `it-it-comp6.utb` and `th-g2.ctb`, which load
+  again with liblouis#2196 and #2197.
 - The `backwards_compatibility` feature is gone. louis-rs always behaves
   as it did with it, like liblouis: the first definition of a character
   wins.
@@ -105,6 +111,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - `match` rules don't contract in a word with a `nocont` string, or
   after capitals with `capsnocont`, as in liblouis.
+- A trailing `_N` leaves the characters it steps back over for the next
+  rule. In a rule without brackets or with a `*` action they were
+  consumed and lost, as in `th-g2.ctb`'s `"ใคร"!%ToneAndVowels_`.
+- A leading `_N` is a look-behind, checked backwards from the cursor. A
+  rule with a `*` action no longer consumes it, and the rule is no
+  longer lost when another rule consumes the look-behind together with
+  the text before it, as `always ar` does in "around" with
+  `context _$l["ound"]`.
+- A swap class in a multipass action drops the characters it doesn't
+  cover, as liblouis does, instead of keeping them.
 - Multipass and `context` variables work as in liblouis: `#1+` and `#1-`
   increment and decrement, a test can compare with `<`, `>`, `<=` and
   `>=` as well as `=`, and a variable that was never set is 0. Before,
