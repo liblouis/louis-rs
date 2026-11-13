@@ -581,6 +581,11 @@ pub struct BackwardNumericConstrainer {
     after_letter_dots: HashSet<String>,
     /// The dots of the backward rules that contain a numsign after their first cell.
     covering_dots: Vec<String>,
+    /// The dots of the characters other than letters that are a numsign and more, such as
+    /// Portuguese `sign # 3456-13` or Danish `punctuation # 45-3456`, which liblouis takes
+    /// before the shorter numsign. Not on a digit inside a number, where liblouis tries no
+    /// rule of several cells.
+    sign_dots: Vec<String>,
 }
 
 impl BackwardNumericConstrainer {
@@ -598,9 +603,21 @@ impl BackwardNumericConstrainer {
         let mut constraints: Vec<Constraints> = vec![Constraints::empty(); n];
         let mut pos = 0;
         let mut in_number = false;
+        // where the last such sign ended: its last cell can be a letter's, as ⠅ is "k", but
+        // the text before the next cell ends in the sign, not in a letter
+        let mut sign_end = None;
         while pos < n {
+            if !(in_number && self.digit_cells.contains(&chars[pos]))
+                && let Some(len) = longest_match_at(&chars, pos, &self.sign_dots)
+            {
+                pos += len;
+                in_number = false;
+                sign_end = Some(pos);
+                continue;
+            }
             if let Some(len) = longest_match_at(&chars, pos, &self.numsign_dots)
                 && !(pos > 0
+                    && sign_end != Some(pos)
                     && self.letter_cells.contains(&chars[pos - 1])
                     && self
                         .after_letter_dots
@@ -933,6 +950,7 @@ pub struct BackwardNumericConstrainerBuilder {
     letter_cells: HashSet<char>,
     after_letter_dots: HashSet<String>,
     rule_dots: Vec<String>,
+    sign_dots: Vec<String>,
 }
 
 impl BackwardNumericConstrainerBuilder {
@@ -978,6 +996,12 @@ impl BackwardNumericConstrainerBuilder {
         self.rule_dots.push(dots.to_string());
     }
 
+    /// Registers the dots of a backward definition of a character other than a letter, see
+    /// [`BackwardNumericConstrainer::sign_dots`].
+    pub fn sign_dots(&mut self, dots: &str) {
+        self.sign_dots.push(dots.to_string());
+    }
+
     pub fn build(self) -> Option<BackwardNumericConstrainer> {
         let numsign_dots: Vec<String> = self
             .numsign_dots
@@ -996,6 +1020,15 @@ impl BackwardNumericConstrainerBuilder {
                         .any(|offset| numsign_dots.iter().any(|n| matches_at(&cells, offset, n)))
                 })
                 .collect();
+            let sign_dots = self
+                .sign_dots
+                .into_iter()
+                .filter(|dots| {
+                    numsign_dots
+                        .iter()
+                        .any(|n| dots.contains(n.as_str()) && dots.len() > n.len())
+                })
+                .collect();
             Some(BackwardNumericConstrainer {
                 numsign_dots,
                 nonumsign_dots: self.nonumsign_dots,
@@ -1005,6 +1038,7 @@ impl BackwardNumericConstrainerBuilder {
                 letter_cells: self.letter_cells,
                 after_letter_dots: self.after_letter_dots,
                 covering_dots,
+                sign_dots,
             })
         }
     }

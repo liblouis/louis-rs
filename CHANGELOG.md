@@ -105,6 +105,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   variable matched nothing.
 - `louis trace` prints the attributes of a `match` rule in match syntax,
   `%[_~]`, not in the multipass letters without brackets (`s~`).
+- Back-translating, a character other than a letter whose dots contain
+  the numsign and more, such as Portuguese `sign # 3456-13` or Danish
+  `punctuation # 45-3456`, is not taken as a numsign, and a numsign right
+  after it starts a number although its last cell is also a letter.
+  Before, Portuguese "⠼⠅⠼⠃⠚" came back as "#bj", not "#20".
 
 ## [0.3.1] - 2026-11-11
 
