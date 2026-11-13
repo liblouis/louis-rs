@@ -77,15 +77,22 @@ impl MultipassTable {
         self.trace(input).iter().map(|t| t.output()).collect()
     }
 
+    /// `preceding` is the text before the cursor, reversed
     fn translation_candidates(
         &self,
         input: &str,
-        _prev: Option<char>,
+        preceding: &str,
         env: &Environment,
         at_start: bool,
     ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
         self.patterns
-            .find(input, env, at_start, &CharacterDefinition::default())
+            .find(
+                input,
+                preceding,
+                env,
+                at_start,
+                &CharacterDefinition::default(),
+            )
             .into_iter()
             .partition(|t| t.offset() == 0)
     }
@@ -115,15 +122,16 @@ impl MultipassTable {
         let mut delayed_translations: Vec<ResolvedTranslation> = Vec::new();
         let mut env = Environment::new();
         let mut chars = input.chars();
-        let mut prev: Option<char> = None;
+        let reversed: String = input.chars().rev().collect();
         let mut seen: HashSet<TranslationSubset> = HashSet::default();
 
         loop {
             // given an input query the patterns for matching translations. Then split off the
             // translations that are delayed, i.e. have an offset because they have a pre-pattern
             let at_start = chars.as_str().len() == input.len();
+            let preceding = &reversed[chars.as_str().len()..];
             let (mut candidates, delayed) =
-                self.translation_candidates(chars.as_str(), prev, &env, at_start);
+                self.translation_candidates(chars.as_str(), preceding, &env, at_start);
             delayed_translations.extend(delayed);
 
             // move delayed_translations with zero offset into candidates
@@ -148,7 +156,6 @@ impl MultipassTable {
                     seen.clear();
                     // move the iterator forward by the number of characters in the translation
                     chars.nth(t.length() - 1);
-                    prev = t.input().chars().last();
                 }
                 // there is a matching translation rule
                 let translation = t.clone();
@@ -162,7 +169,6 @@ impl MultipassTable {
                     }
                 }
             } else if let Some(next_char) = chars.next() {
-                prev = Some(next_char);
                 // no translation rule found, just pass the character through
                 let translation = ResolvedTranslation::new(
                     &next_char.to_string(),

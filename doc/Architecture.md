@@ -80,9 +80,10 @@ reaches into it.
      and another the `comp6` rules;
    - **match patterns** (`match_pattern.rs`) for `match` rules, and **context patterns**
      (`context_pattern.rs`) for `context` rules, both compiled to the **regexp VM**
-     (`regexp.rs`, ADR-0007). A `match` rule's `pre` is checked backwards from the cursor.
-     A `context` rule whose test starts before its `[` is found early and kept as a
-     **delayed translation** until the cursor reaches the `[`;
+     (`regexp.rs`, ADR-0007). A `match` rule's `pre` and a `context` rule's look-behind
+     (a leading `_N`) are checked backwards from the cursor. A `context` rule with text
+     before its `[` is found early and kept as a **delayed translation** until the cursor
+     reaches the `[`;
 3. **filters** the candidates by the constraints at this position, and by checks the trie
    can't express (`prepunc`, `joinnum`, `repword`, ...);
 4. picks the best candidate by **`Rank`** (`translation.rs`, ADR-0016), applies it, records
@@ -127,8 +128,10 @@ kept for `Rank` to choose from.
 **Regexp VM, match and context patterns.** A small regexp engine after Russ Cox's virtual
 machine, with liblouis's extras: attribute classes, swaps, variables. `match` and `context`
 rules, and every multipass rule, compile to it. The VM only runs forward; a look-behind, such
-as a `match` rule's `pre`, is compiled from the reversed pattern (`Regexp::reverse`) and
-run over the reversed text before the cursor, as liblouis does.
+as a `match` rule's `pre` or a `context` rule's leading `_N`, is compiled from the reversed
+pattern (`Regexp::reverse`) and run over the reversed text before the cursor, as liblouis
+does for `pre`. A trailing `_N` is a look-ahead: matched after the consumed span. The parser
+turns `_N` into these two (`Test`'s `lookbehind`, `body`, `lookahead`) and rejects any other.
 
 **Indicator.** Decides from the text alone where indication cells go, before translation.
 One per kind of indication: `uppercase`, `numeric`, `emphasis`, `computer_braille`,

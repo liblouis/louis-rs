@@ -18,7 +18,8 @@ use crate::translator::{
 };
 
 impl Regexp {
-    /// The look-behind and look-ahead are matched but never consumed, see [`Test`]
+    /// The body and the look-ahead, which is matched but never consumed, see [`Test`]. The
+    /// look-behind is a program of its own, see [`ContextRegexp`].
     fn from_test(test: &Test, whole_match: bool, ctx: &CharacterClasses) -> Self {
         let body = Regexp::from_instructions(test.body(), whole_match, ctx);
         let body = if whole_match {
@@ -27,10 +28,6 @@ impl Regexp {
             body
         };
         let mut regexp = body;
-        if !test.lookbehind().is_empty() {
-            let lookbehind = Regexp::from_instructions(test.lookbehind(), whole_match, ctx);
-            regexp = Regexp::Concat(Box::new(lookbehind), Box::new(regexp));
-        }
         if !test.lookahead().is_empty() {
             let lookahead = Regexp::from_instructions(test.lookahead(), whole_match, ctx);
             regexp = Regexp::Concat(Box::new(regexp), Box::new(lookahead));
@@ -203,7 +200,16 @@ fn effects(instructions: &[ActionInstruction]) -> Vec<Effect> {
 
 #[derive(Debug)]
 pub struct ContextPatternsBuilder {
-    regexps: Vec<CompiledRegexp>,
+    regexps: Vec<ContextRegexp>,
+}
+
+/// A rule's test as two programs, like a `match` rule's: the look-behind reversed, to run
+/// over the reversed text before the cursor (`None` when there is none), and the body
+/// followed by the look-ahead, to run from the cursor.
+#[derive(Debug)]
+struct ContextRegexp {
+    lookbehind: Option<CompiledRegexp>,
+    main: CompiledRegexp,
 }
 
 impl ContextPatternsBuilder {
@@ -267,9 +273,14 @@ impl ContextPatternsBuilder {
             // a display table is a plain character mapping, it has no context rules
             TranslationStage::Display => unreachable!(),
         };
-        let regexp = Regexp::from_test(&test, action.consumes_whole_match(), character_classes)
+        let main = Regexp::from_test(&test, action.consumes_whole_match(), character_classes)
             .compile_with_payload(translation);
-        self.regexps.push(regexp);
+        let lookbehind = (!test.lookbehind().is_empty()).then(|| {
+            Regexp::from_instructions(test.lookbehind(), false, character_classes)
+                .reverse()
+                .compile()
+        });
+        self.regexps.push(ContextRegexp { lookbehind, main });
         Ok(())
     }
 
@@ -282,10 +293,14 @@ impl ContextPatternsBuilder {
 
 #[derive(Debug)]
 pub struct ContextPatterns {
-    regexps: Vec<CompiledRegexp>,
+    regexps: Vec<ContextRegexp>,
 }
 
 impl ContextPatterns {
+    /// The rules that match at the cursor: their body and look-ahead match `input`, the text
+    /// from the cursor on, and their look-behind matches `preceding`, the text before the
+    /// cursor, which must be reversed so that it reads backwards from the cursor.
+    ///
     /// `at_start` tells whether `input` begins at position 0 of the whole string being
     /// translated — needed to honor liblouis' `` ` `` ("beginning of input") test anchor,
     /// which can appear anywhere in a compiled pattern (see [`Regexp::StartAnchor`]).
@@ -295,13 +310,28 @@ impl ContextPatterns {
     pub fn find(
         &self,
         input: &str,
+        preceding: &str,
         env: &Environment,
         at_start: bool,
         fallback_definitions: &CharacterDefinition,
     ) -> Vec<ResolvedTranslation> {
         self.regexps
             .iter()
-            .flat_map(|r| r.find_anchored(input, env, at_start, fallback_definitions))
+            .filter_map(|r| {
+                let found = r
+                    .main
+                    .find_anchored(input, env, at_start, fallback_definitions)?;
+                match &r.lookbehind {
+                    // the weight counts the look-behind too, as in a single forward run
+                    Some(lookbehind) => lookbehind
+                        .find_anchored(preceding, env, false, fallback_definitions)
+                        .map(|l| {
+                            let weight = found.weight() + l.weight();
+                            found.with_weight(weight)
+                        }),
+                    None => Some(found),
+                }
+            })
             .collect()
     }
 }
@@ -702,11 +732,11 @@ mod tests {
             ResolvedTranslation::new("abc", "A_B_C", 3, TranslationStage::Main, origin.clone());
         let patterns = builder.build();
         assert_eq!(
-            patterns.find("abc", &env, true, &CharacterDefinition::default()),
+            patterns.find("abc", "", &env, true, &CharacterDefinition::default()),
             [translation]
         );
         assert_eq!(
-            patterns.find("def", &env, true, &CharacterDefinition::default()),
+            patterns.find("def", "", &env, true, &CharacterDefinition::default()),
             []
         );
     }
@@ -733,12 +763,12 @@ mod tests {
             ResolvedTranslation::new("abc", "<abc>", 3, TranslationStage::Main, origin.clone());
         let patterns = builder.build();
         assert_eq!(
-            patterns.find("abc", &env, true, &CharacterDefinition::default()),
+            patterns.find("abc", "", &env, true, &CharacterDefinition::default()),
             [translation]
         );
         assert!(
             patterns
-                .find("def", &env, true, &CharacterDefinition::default())
+                .find("def", "", &env, true, &CharacterDefinition::default())
                 .is_empty()
         );
     }
@@ -766,13 +796,13 @@ mod tests {
         let patterns = builder.build();
         // matches when `input` truly starts at position 0 of the whole string being translated
         assert_eq!(
-            patterns.find("a", &env, true, &CharacterDefinition::default()),
+            patterns.find("a", "", &env, true, &CharacterDefinition::default()),
             [translation]
         );
         // does not match when we are mid-string, even though the substring looks identical
         assert!(
             patterns
-                .find("a", &env, false, &CharacterDefinition::default())
+                .find("a", "", &env, false, &CharacterDefinition::default())
                 .is_empty()
         );
     }
@@ -800,13 +830,13 @@ mod tests {
         let patterns = builder.build();
         // matches when "a" is exactly the whole remaining input
         assert_eq!(
-            patterns.find("a", &env, true, &CharacterDefinition::default()),
+            patterns.find("a", "", &env, true, &CharacterDefinition::default()),
             [translation]
         );
         // does not match when there is trailing input after "a"
         assert!(
             patterns
-                .find("ab", &env, true, &CharacterDefinition::default())
+                .find("ab", "", &env, true, &CharacterDefinition::default())
                 .is_empty()
         );
     }
@@ -838,12 +868,12 @@ mod tests {
             ResolvedTranslation::new("a", "X", 1, TranslationStage::Main, origin.clone());
         let patterns = builder.build();
         assert_eq!(
-            patterns.find("a", &env, true, &CharacterDefinition::default()),
+            patterns.find("a", "", &env, true, &CharacterDefinition::default()),
             [translation]
         );
         assert!(
             patterns
-                .find("a", &env, false, &CharacterDefinition::default())
+                .find("a", "", &env, false, &CharacterDefinition::default())
                 .is_empty()
         );
     }
@@ -872,21 +902,19 @@ mod tests {
         // "not at the beginning" -- opposite of `context_at_beginning_anchor`
         assert!(
             patterns
-                .find("a", &env, true, &CharacterDefinition::default())
+                .find("a", "", &env, true, &CharacterDefinition::default())
                 .is_empty()
         );
         assert_eq!(
-            patterns.find("a", &env, false, &CharacterDefinition::default()),
+            patterns.find("a", "", &env, false, &CharacterDefinition::default()),
             [translation]
         );
     }
 
     #[test]
     fn context_lookbehind_is_not_consumed() {
-        // `_1$d[...]`: the parser makes `$d` a look-behind. It is matched in front of the
-        // bracket, so the rule is found when the cursor sits at that digit and held via
-        // `offset()`/`delayed_translations` until it catches up, and the reported length only
-        // covers the bracket, never the digit.
+        // `_1$d[...]`: the parser makes `$d` a look-behind, checked backwards from the
+        // cursor, so the rule is found at the bracket and only the bracket is consumed
         let env = Environment::new();
         let tests = test::Parser::new(r#"_1$d["b"]"#).tests().unwrap();
         let action = action::Parser::new(r#""X""#).actions().unwrap();
@@ -909,21 +937,24 @@ mod tests {
             )
             .unwrap();
         let patterns = builder.build();
-        // "a" is a digit here, so the rule fires on "b" once found starting at "a"; the digit
-        // itself is not part of the reported match: `length()` is 1 (just "b", derived from
-        // `input`/capture below), even though `weight()` — used only to rank competing
-        // candidates, per the established convention in `context_capture_advanced` above —
-        // reflects the whole 2-char span that was actually checked ("a" + "b")
-        let translation =
-            ResolvedTranslation::new("b", "X", 2, stage, origin.clone()).with_offset(1);
+        // "a" is a digit here, so the rule fires on "b", the look-behind checked backwards
+        // from it: `length()` is 1, just "b", while `weight()`, used only to rank competing
+        // candidates, counts the digit too
+        let translation = ResolvedTranslation::new("b", "X", 2, stage, origin.clone());
         assert_eq!(
-            patterns.find("ab", &env, true, &CharacterDefinition::default()),
+            patterns.find("b", "a", &env, false, &CharacterDefinition::default()),
             [translation]
         );
         // does not fire when the preceding character isn't a digit
         assert!(
             patterns
-                .find("bb", &env, true, &CharacterDefinition::default())
+                .find("b", "b", &env, false, &CharacterDefinition::default())
+                .is_empty()
+        );
+        // nor at the start of the input, with nothing before it
+        assert!(
+            patterns
+                .find("b", "", &env, true, &CharacterDefinition::default())
                 .is_empty()
         );
     }
@@ -958,13 +989,13 @@ mod tests {
         // is 2, reflecting the whole "b"+"z" span that was checked
         let translation = ResolvedTranslation::new("b", "X", 2, stage, origin.clone());
         assert_eq!(
-            patterns.find("bz", &env, true, &CharacterDefinition::default()),
+            patterns.find("bz", "", &env, true, &CharacterDefinition::default()),
             [translation]
         );
         // does not fire when followed by a digit
         assert!(
             patterns
-                .find("b1", &env, true, &CharacterDefinition::default())
+                .find("b1", "", &env, true, &CharacterDefinition::default())
                 .is_empty()
         );
     }
@@ -980,7 +1011,7 @@ mod tests {
             CharacterClasses::default(),
             SwapClasses::default(),
         );
-        let find = |test: &str, action: &str, input: &str| {
+        let find_after = |test: &str, action: &str, preceding: &str, input: &str| {
             let origin = origin(&format!("context {test} {action}"));
             let tests = test::Parser::new(test).tests().unwrap();
             let action = action::Parser::new(action).actions().unwrap();
@@ -997,11 +1028,18 @@ mod tests {
                 .unwrap();
             builder
                 .build()
-                .find(input, &env, true, &CharacterDefinition::default())
+                .find(
+                    input,
+                    preceding,
+                    &env,
+                    preceding.is_empty(),
+                    &CharacterDefinition::default(),
+                )
                 .iter()
                 .map(|t| (t.output(), t.length()))
                 .collect::<Vec<_>>()
         };
+        let find = |test: &str, action: &str, input: &str| find_after(test, action, "", input);
         assert_eq!(find(r#""b"!$d_"#, r#""X""#, "bz"), [("X".into(), 1)]);
         assert_eq!(find(r#""b"!$d_"#, r#""X""#, "b1"), []);
         assert_eq!(
@@ -1012,10 +1050,13 @@ mod tests {
         assert_eq!(find(r#""b"!$d"c"_2"#, r#""X""#, "bzc"), [("X".into(), 1)]);
         // one that ends inside a string splits it
         assert_eq!(find(r#""b""cd"_1"#, r#""X""#, "bcd"), [("X".into(), 2)]);
-        // a look-behind with `*`, as da-dk-g26.ctb's `_$D[@6-46-6] *`, is found starting
-        // at the digit but consumes only the bracket
-        assert_eq!(find(r#"_$d["b"]"#, r#"*"Y""#, "1b"), [("bY".into(), 1)]);
-        assert_eq!(find(r#"_$d["b"]"#, r#"*"Y""#, "zb"), []);
+        // a look-behind with `*`, as da-dk-g26.ctb's `_$D[@6-46-6] *`, consumes only the
+        // bracket
+        assert_eq!(
+            find_after(r#"_$d["b"]"#, r#"*"Y""#, "1", "b"),
+            [("bY".into(), 1)]
+        );
+        assert_eq!(find_after(r#"_$d["b"]"#, r#"*"Y""#, "z", "b"), []);
         // and at the start of the input there is nothing to look behind at
         assert_eq!(find(r#"_$d["b"]"#, r#"*"Y""#, "b"), []);
     }
@@ -1046,17 +1087,17 @@ mod tests {
             ResolvedTranslation::new("-", "-", 1, TranslationStage::Main, origin.clone());
         let patterns = builder.build();
         assert_eq!(
-            patterns.find("-", &env, true, &CharacterDefinition::default()),
+            patterns.find("-", "", &env, true, &CharacterDefinition::default()),
             [translation]
         );
         assert!(
             patterns
-                .find("-0", &env, true, &CharacterDefinition::default())
+                .find("-0", "", &env, true, &CharacterDefinition::default())
                 .is_empty()
         );
         assert!(
             patterns
-                .find("-", &env, false, &CharacterDefinition::default())
+                .find("-", "", &env, false, &CharacterDefinition::default())
                 .is_empty()
         );
     }
@@ -1090,12 +1131,12 @@ mod tests {
 	    .with_length(3);
         let patterns = builder.build();
         assert_eq!(
-            patterns.find("⠕⠐⠽", &env, true, &CharacterDefinition::default()),
+            patterns.find("⠕⠐⠽", "", &env, true, &CharacterDefinition::default()),
             [translation]
         );
         assert!(
             patterns
-                .find("⠕", &env, true, &CharacterDefinition::default())
+                .find("⠕", "", &env, true, &CharacterDefinition::default())
                 .is_empty()
         );
     }
@@ -1129,12 +1170,12 @@ mod tests {
                 .with_length(9);
         let patterns = builder.build();
         assert_eq!(
-            patterns.find("{{{abc}}}", &env, true, &CharacterDefinition::default()),
+            patterns.find("{{{abc}}}", "", &env, true, &CharacterDefinition::default()),
             [translation]
         );
         assert!(
             patterns
-                .find("def", &env, true, &CharacterDefinition::default())
+                .find("def", "", &env, true, &CharacterDefinition::default())
                 .is_empty()
         );
     }
@@ -1168,12 +1209,12 @@ mod tests {
                 .with_length(3);
         let patterns = builder.build();
         assert_eq!(
-            patterns.find("{{{abc}}}", &env, true, &CharacterDefinition::default()),
+            patterns.find("{{{abc}}}", "", &env, true, &CharacterDefinition::default()),
             [translation]
         );
         assert!(
             patterns
-                .find("def", &env, true, &CharacterDefinition::default())
+                .find("def", "", &env, true, &CharacterDefinition::default())
                 .is_empty()
         );
     }

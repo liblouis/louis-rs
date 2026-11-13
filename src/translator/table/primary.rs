@@ -2217,11 +2217,12 @@ impl PrimaryTable {
     fn context_candidates(
         &self,
         input: &str,
+        preceding: &str,
         env: &Environment,
         at_start: bool,
     ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
         self.context_patterns
-            .find(input, env, at_start, &self.fallback_definitions)
+            .find(input, preceding, env, at_start, &self.fallback_definitions)
             .into_iter()
             .partition(|t| t.offset() == 0)
     }
@@ -2347,10 +2348,11 @@ impl PrimaryTable {
             let reversed_preceding = &reversed[input.len() - cursor_byte..];
             candidates.extend(self.match_patterns.find(chars.as_str(), reversed_preceding));
 
-            // then search for context patterns. Unless they have empty pre patterns they will all
-            // have an offset. Split those off.
+            // then search for context patterns, their look-behind checked backwards from the
+            // cursor like `pre`. Those with text before the brackets have an offset. Split
+            // those off.
             let (context_candidates, context_delayed) =
-                self.context_candidates(chars.as_str(), &env, at_start);
+                self.context_candidates(chars.as_str(), reversed_preceding, &env, at_start);
             delayed_translations.extend(context_delayed);
             // merge the candidates from the context patters with the candidates from the plain translations
             candidates.extend(context_candidates);

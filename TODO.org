@@ -173,9 +173,6 @@
   - The real tables' three middle ~_N~s are fixed upstream in
     liblouis#2196 (~it-it-comp6.utb~) and #2197 (~th-g2.ctb~); until
     they land, those two tables don't load.
-  - The look-behind is still matched forward from an earlier position
-    and held as a delayed translation; compiling it as a reversed
-    program, like a ~match~ rule's ~pre~, is the next step.
 - [X] A ~match~ rule's ~pre~ is missed when the previous match consumed
   more than one character
   - ~match~ rules with a ~pre~ pattern are discovered at the position
