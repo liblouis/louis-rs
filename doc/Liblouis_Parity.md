@@ -11,22 +11,27 @@ behave the same as liblouis, and if it doesn't, that's a bug:
 
 ## How close
 
-Measured at louis-rs `a7b8e47` against liblouis `011cfb3b` plus
-[liblouis#2176](https://github.com/liblouis/liblouis/pull/2176) and
-[liblouis#2190](https://github.com/liblouis/liblouis/pull/2190).
+Measured at louis-rs `b2134ba` against liblouis `011cfb3b` plus the open pull requests
+[#2176](https://github.com/liblouis/liblouis/pull/2176),
+[#2190](https://github.com/liblouis/liblouis/pull/2190),
+[#2194](https://github.com/liblouis/liblouis/pull/2194),
+[#2195](https://github.com/liblouis/liblouis/pull/2195),
+[#2196](https://github.com/liblouis/liblouis/pull/2196) and
+[#2197](https://github.com/liblouis/liblouis/pull/2197). Without #2196 and #2197,
+`it-it-comp6.utb` and `th-g2.ctb` don't load (see `_N` in
+[Differences_From_Liblouis.md](Differences_From_Liblouis.md)).
 
-|                                |           |
-|--------------------------------|-----------|
-| Assertions run                 | 2 241 031 |
-| Pass                           | **99.4%** |
-| Fail                           | 0.1%      |
-| Expected failure               | 0.5%      |
-| Tables that compile            | all       |
+|                                |                |
+|--------------------------------|----------------|
+| Assertions run                 | 2 241 030      |
+| Pass                           | **99.4%**      |
+| Fail                           | 1 021 (0.05%)  |
+| Expected failure               | 0.5%           |
+| Tables that compile            | all            |
 
 Forward and backward combined. "Expected failure" means tests liblouis itself marks as
-failing (`xfail`), and louis-rs fails them too. Going the other way, about 40 tests
-that liblouis marks as failing pass in louis-rs (measured at `25574c5`), spread over
-16 files.
+failing (`xfail`), and louis-rs fails them too. Going the other way, 42 tests that
+liblouis marks as failing pass in louis-rs, spread over 16 files.
 
 Reproduce the assertion figures with:
 
@@ -55,8 +60,8 @@ liblouis can't compile them on their own either.
 
 Some differences are decisions rather than gaps: table lookup through
 `LOUIS_TABLE_PATH`, display tables that must be named explicitly, `$w`–`$z`
-attributes, backward word emphasis that stops before the space, and the six
-unimplemented opcodes. They're collected in
+attributes, `_N` only before or after the tests it steps over, backward word emphasis
+that stops before the space, and the six unimplemented opcodes. They're collected in
 [Differences_From_Liblouis.md](Differences_From_Liblouis.md), each with a migration path.
 
 ## The liblouis API in louis-rs
@@ -92,12 +97,11 @@ counts are the `Failure` lines `check` prints for each file, rounded.
 
 | Tables                                | Failing | What goes wrong                                                                                                                                                                       |
 |---------------------------------------|--------:|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Thai (`th`)                           |    ≈140 | Tone marks and vowels come out in the wrong order (`ค่ะ` gives ⠥⠔⠁, not ⠥⠁⠔), from the table's reordering `correct` rules, plus a few `context` rules with a variable.                 |
-| German detailed (`de-g0-detailed`, `de-g1-detailed`) |    ≈140 | `capsletter` is used where `begcapsword` should be, or the other way round. Fixing it needs `uppercase.rs` and `emphasis.rs` unified into one tier model ([ADR-0009](adr/0009-capsletter-vs-begcapsword.org)); a blanket engine fix was tried and disproven. |
 | Dutch (`nl-g0`)                       |    ≈110 | A multi-word italic passage should open with ⠸⠸ once, louis-rs marks every word ⠸…⠠. Indicators also come out in the wrong order (⠰⠨, not ⠨⠰), and a stray ⠠ appears after a capsletter that follows a digit ("1E" gives ⠼⠁⠨⠠⠑). |
-| Russian (`ru`)                        |     ≈30 | Generic `begmode` alphabet indicators: word tiers repeat per letter ("ABC" gives ⠨⠁⠨⠃⠨⠉, not ⠨⠁⠃⠉), and a letter after one from another alphabet gets its sign twice ("HАH" gives ⠨⠓⠘⠘⠁⠨⠓). Likely the same tier model as German detailed. |
+| Russian (`ru`)                        |     ≈30 | Generic `begmode` alphabet indicators: word tiers repeat per letter ("ABC" gives ⠨⠁⠨⠃⠨⠉, not ⠨⠁⠃⠉), and a letter after one from another alphabet gets its sign twice ("HАH" gives ⠨⠓⠘⠘⠁⠨⠓). Likely needs indication tiers unified across capitals, emphasis and modes ([ADR-0009](adr/0009-capsletter-vs-begcapsword.org)). |
+| German detailed (`de-g0-detailed`, `de-g1-detailed`), backward |     ≈15 | After a number, ⠠ is read as an apostrophe (⠼⠓⠠⠋⠁⠉⠓ gives "8'fach", not "8fach"), and a few quotation marks and ¦ come back as other characters. |
 | Punjabi (`pa`), backward              |     ≈10 | The number sign ⠼ is read as the letter ਣ, which has the same cells; liblouis takes the number sign when a digit follows.                                                             |
-| everything else                       |    ≈950 | Roughly 90 files, each with fewer than 100 failures.                                                                                                                                   |
+| everything else                       |    ≈820 | Roughly 85 files, each with fewer than 80 failures.                                                                                                                                    |
 
 **Backward translation** is where louis-rs is weakest. The word-boundary checks
 (`word_start` and friends) only work forward, caps passages have no backward path at
@@ -110,8 +114,9 @@ is wrong: `!(e1e2)` is taken as `(!e1!e2)`, and `!(e1|e2)` as `(!e1|!e2)`.
 ## Not yet measured
 
 About 40 blocks in liblouis's YAML files don't run, because their table or include
-can't be found or their YAML doesn't parse, and the `hyphenate`, `hyphenateBraille`
-and `display` test modes aren't run at all. Those tests report neither pass nor fail;
+can't be found, their YAML doesn't parse, or, in three of liblouis's own multipass
+tests, a `_N` steps back into a bracket. The `hyphenate`, `hyphenateBraille` and
+`display` test modes aren't run at all. Those tests report neither pass nor fail;
 the list is under "Test suite gaps" in [TODO.org](../TODO.org).
 
 ---

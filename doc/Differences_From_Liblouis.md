@@ -106,10 +106,35 @@ does not implement them. They are slated for removal upstream
 ([liblouis#948](https://github.com/liblouis/liblouis/issues/948)), because a rule
 whose meaning depends on declaration order is brittle.
 
-**Migration path:** rewrite the rules with the class's own name. Still to be done
+**Migration path:** rewrite the rules with the class's own name. Proposed for
+`th-g1.utb`, `th-g1.uti` and `th-g2.ctb` in
+[liblouis#2195](https://github.com/liblouis/liblouis/pull/2195); still to be done
 upstream for `da-dk-g16`, `da-dk-g26` and their variants, `es-g2.ctb`,
-`sv-6common.uti`, `th-g1.utb`, `th-g1.uti`, `th-g2.ctb` and the `zhcn` tables.
-Until then those rules are silently dropped.
+`sv-6common.uti` and the `zhcn` tables. Until then those rules are silently dropped.
+
+## `_N` only before or after the tests it steps over
+
+In a multipass, `correct` or `context` test, liblouis's `_N` steps the cursor back N
+characters, anywhere in the test. louis-rs accepts it in two places only, where it
+means something a regular expression can say: before the tests that consume
+characters, as a look-behind (`_$l["ound"]`: "ound" after a letter), and after them at
+the end, as a look-ahead (`"ใคร"!%ToneAndVowels_`: "ใคร" not followed by a vowel or
+tone mark, which stays unconsumed). Variable tests may stand anywhere, and the
+characters stepped over must be covered by tests of fixed width. Anything else, a `_N`
+between consuming tests or one that steps into a bracket, is a parse error, and the
+table does not load.
+
+In liblouis's corpus three rules used `_N` otherwise, and in each case the rule was
+either redundant or a fragile way of saying something simpler.
+
+**Migration path:** upstream fixes for the tables:
+[liblouis#2196](https://github.com/liblouis/liblouis/pull/2196) for
+`it-it-comp6.utb` and [#2197](https://github.com/liblouis/liblouis/pull/2197) for
+`th-g2.ctb`. Three inline tables in liblouis's own multipass tests still step back
+into a bracket and don't load; a liblouis change to test the same with the two
+supported forms is still owed. A table outside the corpus fails with
+`'_' must come before the tests it steps back over, or after them at the end, and step
+over tests of fixed width only`, naming the line.
 
 ## A word's emphasis ends before the space
 

@@ -18,9 +18,10 @@ Use the Linux kernel's coding-assistants trailer format (https://docs.kernel.org
   to fail were table-authoring bugs, not louis-rs gaps, and have since been fixed
   upstream (liblouis/liblouis#2070, #2071, #2072); the last one was ours, an
   escaped `"\\"` multipass operand in `it-it-comp6.utb:248`, fixed in 4980ced
-- Figures above measured at louis-rs `a7b8e47` against liblouis `011cfb3b` plus
-  liblouis#2176 and #2190; see
-  `doc/Liblouis_Parity.md`, which is the one place to update them
+- `it-it-comp6.utb` and `th-g2.ctb` load only with liblouis#2196 and #2197, which
+  remove a `_N` in the middle of a test
+- Figures above: `doc/Liblouis_Parity.md` says at which commits and against which
+  liblouis pull requests they were measured, and is the one place to update them
 - Library API: follows semver, breaking changes only in a new 0.x minor version;
   `louis::internals` is not covered
 
