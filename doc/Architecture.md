@@ -211,5 +211,5 @@ Backward translation runs the same machinery over braille, with these difference
   VM), ADR-0016 (`Rank`).
 - [Differences from liblouis](Differences_From_Liblouis.md): where louis-rs deliberately
   does something else.
-- [Liblouis parity](Liblouis_Parity.md): what works, what doesn't, and where the remaining
-  failures are.
+- [Liblouis parity](Liblouis_Parity.md): how close louis-rs is to liblouis, and what it
+  still does differently.

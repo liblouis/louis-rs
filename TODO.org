@@ -443,3 +443,30 @@
   implemented — mode flags in ~TranslationOptions~ meant to expand the
   current word into computer braille without ~begcomp~/~endcomp~
   indicators
+
+* Test suite gaps
+Tests in liblouis's YAML files that louis-rs never runs, so they report
+neither pass nor fail. Moved here from ~doc/Liblouis_Parity.md~.
+- [ ] Forty blocks across twelve files are skipped because their table
+  won't load (reported on stderr):
+  - 25: ~multipass-vs-match_common.uti~ not found. The include sits
+    next to the YAML file rather than on ~LOUIS_TABLE_PATH~, which takes
+    out every block of ~multipass-vs-match.yaml~.
+  - 4: parser gaps. An ~EmptyTest~ in each of ~multipass-forward.yaml~
+    and ~multipass-backward.yaml~, an ~OpcodeExpected~ and a
+    surrogate-pair escape.
+  - 7: ambiguous metadata queries. ~language:grc region:en~ matches two
+    tables and ~system:cmn-traditional~ three; ~lou_findTable~ scores
+    its candidates and always lands on one, we intersect and insist on
+    exactly one.
+  - 2: hyphenation dictionaries. ~hyph_en_US.dic~ rejected for its
+    ISO-8859-1 encoding; ~hyphenation.dic~ not found.
+  - 1: ~macro.utb~ not found. Deliberate non-goal.
+  - 1: ~language:grc region:es~ finds no table. Possibly a bug in the
+    spec rather than in us.
+- [ ] The ~hyphenate~, ~hyphenateBraille~ and ~display~ test modes fall
+  through a catch-all arm in ~louis-cli/src/test.rs~ and report
+  nothing. ~de-eurobrl6.yaml~, ~hu-hu-g1-hyph_harness.yaml~ and
+  ~no_8dot_harness.yaml~ consist only of such tests; ~issue-332.yaml~
+  has its ~hyphenate~ block skipped while its other 19 tests all fail.
+  The hyphenate modes are wired up on branch ~hyphenate-testmode~.
