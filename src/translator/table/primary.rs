@@ -135,12 +135,12 @@ impl CompbrlScanner {
 
         let mut pos = 0;
         while pos < n {
-            // Check if any trigger matches at this character position.
-            let remaining: String = chars[pos..].iter().collect();
-            let matched = self
-                .triggers
-                .iter()
-                .any(|t| remaining.starts_with(t.as_str()));
+            // Check if any trigger matches at this character position, without copying
+            // the rest of the input, which made this quadratic in its length.
+            let matched = self.triggers.iter().any(|t| {
+                let mut rest = chars[pos..].iter();
+                t.chars().all(|c| rest.next() == Some(&c))
+            });
             if matched {
                 // Expand to surrounding word: scan backward for whitespace.
                 let mut word_start = pos;
@@ -2853,6 +2853,27 @@ mod tests {
 
     fn parse_rule(source: &str) -> AnchoredRule {
         RuleParser::new(source).rule().unwrap().into()
+    }
+
+    #[test]
+    fn compbrl_marks_the_word_with_its_trigger_up_to_the_end_of_the_input() {
+        let rules = [
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase w 2456"),
+            parse_rule("space \\s 0"),
+            parse_rule("compbrl www"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        let scanner = table.compbrl_scanner.as_ref().unwrap();
+        assert_eq!(
+            scanner.enrich("a awww", &[]),
+            [EmphasisSpan::new("computer_braille", 2..6)]
+        );
+        // fewer characters are left than the trigger has
+        assert_eq!(scanner.enrich("a ww", &[]), []);
     }
 
     /// A [`SearchPath`] rooted at the crate directory, for tests that `include` one of the
