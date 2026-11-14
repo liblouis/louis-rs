@@ -370,9 +370,10 @@ impl ResolvedTranslation {
                 .filter(|&n| n > 0)
                 .unwrap_or(self.length),
             literals,
-            precedence: match precedence {
-                Precedence::Always if self.length < 2 => Precedence::Translation,
-                p => p,
+            precedence: match (direction, self.rule(), precedence) {
+                (_, _, Precedence::Always) if self.length < 2 => Precedence::Translation,
+                (Direction::Backward, Some(Rule::Decpoint { .. }), _) => Precedence::Decpoint,
+                (_, _, p) => p,
             },
             output_length: match (direction, self.stage) {
                 (Direction::Backward, TranslationStage::Main) => self.output.chars().count(),

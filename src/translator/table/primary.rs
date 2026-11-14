@@ -388,8 +388,12 @@ impl PrimaryTableBuilder {
     /// louis-rs does not report yet. Only meaningful for `Direction::Backward`.
     ///
     /// When the dots are also those of a character that isn't a letter, as with
-    /// `begemphphrase italic 56` and "¨" in the Danish 1993 tables, the indicator is
-    /// only consumed in front of a letter, like `letsign`.
+    /// `begemphphrase italic 56` and "¨" in the Danish 1993 tables, the indicator is not
+    /// consumed right after a digit, where EBAE's italic sign, 46, is its decimal point.
+    /// One that opens emphasis is consumed where its word goes on, as EBAE's goes in front
+    /// of a capital sign as often as a letter, and one that closes it only in front of a
+    /// letter, like `letsign`. One that opens a word or phrase is not consumed after a
+    /// letter either, inside a word, where French grade 2's 456 is part of a contraction.
     fn insert_backward_emphasis_indicator(
         &mut self,
         opcode: &str,
@@ -400,7 +404,20 @@ impl PrimaryTableBuilder {
     ) {
         if Self::backward_indicator_dots_available(opcode, dots, letter_dots) {
             if ctx.character_definitions().defines_dots(dots) {
-                self.insert_backward_indicator_before_letter(dots, rule);
+                let (not_after, after) = match opcode {
+                    "emphletter" => (vec![CharacterClass::Digit], Transition::ContinuesWord),
+                    "begemphword" | "begemphphrase" | "begemph" => (
+                        vec![CharacterClass::Digit, CharacterClass::Letter],
+                        Transition::ContinuesWord,
+                    ),
+                    _ => (vec![CharacterClass::Digit], Self::before_letter()),
+                };
+                self.insert_backward_indicator_between(
+                    dots,
+                    Some(Transition::NotStart(not_after)),
+                    Some(after),
+                    rule,
+                );
             } else {
                 self.insert_backward_indicator(dots, rule);
             }
@@ -3746,6 +3763,35 @@ mod tests {
         assert_eq!(table.translate("⠁⠂⠃⠆"), "a,b;");
         assert_eq!(table.translate("⠰"), "¨");
         assert_eq!(table.translate("⠰⠁⠃"), "ab");
+    }
+
+    #[test]
+    fn backward_italic_sign_on_the_decimal_point() {
+        // as in en-us-g2.ctb, where EBAE's italic sign is also the decimal point
+        let rules = [
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 12"),
+            parse_rule("base uppercase A a"),
+            parse_rule("capsletter 6"),
+            parse_rule("digit 1 2"),
+            parse_rule("litdigit 1 1"),
+            parse_rule("numsign 3456"),
+            parse_rule("decpoint . 46"),
+            parse_rule("emphclass italic"),
+            parse_rule("begemphword italic 46"),
+            parse_rule("endemphphrase italic before 46"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table = PrimaryTable::compile(
+            &rules,
+            Direction::Backward,
+            TranslationStage::Main,
+            &context,
+        )
+        .unwrap();
+        assert_eq!(table.translate("⠨⠁⠃"), "ab");
+        assert_eq!(table.translate("⠨⠠⠁⠃"), "Ab");
+        assert_eq!(table.translate("⠼⠁⠨⠁"), "1.a");
     }
 
     #[test]
