@@ -109,6 +109,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   The rule dump and the rule-parsing REPL are gone.
 
 ### Fixed
+- With a table that has `compbrl` rules, translating no longer takes time
+  growing with the square of the input's length: the scan for their
+  triggers copied the rest of the input at every character. Backward,
+  40,000 cells of `de-g0.utb` took 1.4 seconds, and now take 0.2.
 - A character defined after a `base` rule for it is translated with its
   own dots, and the `base` rule only adds its class, as in liblouis: a
   capital of `nl-NL-g0.utb` keeps its virtual dot, and `vi-cb8.utb`'s
