@@ -1178,6 +1178,10 @@ pub enum Precedence {
     /// the fallback when no other rule matches, which liblouis expresses by putting them
     /// at the end of its rule chains.
     CharacterDefinition,
+    /// Backward, `decpoint`: read as its character wherever it is, beating the other
+    /// characters on its cells, as "." does Vietnamese's "'", but not an indicator on them,
+    /// as EBAE's italic sign is. Forward it is a [`Precedence::Translation`].
+    Decpoint,
     /// Backward-only emphasis indicators (`begemphword`, `endemphphrase`, ...). Any other
     /// rule with the same dots wins over them, as `endcapsword 6-3` does over
     /// `endemphword italic 6-3` in `fr-bfu-comp6.utb`.
