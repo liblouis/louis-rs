@@ -109,6 +109,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   The rule dump and the rule-parsing REPL are gone.
 
 ### Fixed
+- Backward, an emphasis indicator on the cells of a `decpoint` is read
+  as the indicator, and the decimal point only right after a digit:
+  with `en-us-g2.ctb`, EBAE's italic sign gave "⠨⠠⠠⠎⠊⠇⠧⠊⠕" as
+  ".SILVIO" instead of "SILVIO". An indicator that opens emphasis on a
+  character's cells is read as one wherever its word goes on, as in
+  front of a capital sign, not only in front of a letter.
 - A character defined after a `base` rule for it is translated with its
   own dots, and the `base` rule only adds its class, as in liblouis: a
   capital of `nl-NL-g0.utb` keeps its virtual dot, and `vi-cb8.utb`'s
