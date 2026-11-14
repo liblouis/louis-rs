@@ -175,6 +175,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `context` rule that starts with a single character.
 
 ### Fixed
+- An undefined character is now escaped as liblouis does: between
+  quotes, with at least four hex digits after `\x` and `\y` or `\z` for
+  longer code points, and in the table's dots only where a character
+  takes one cell. With `en-ueb-g1.ctb`, "a中b" gave ⠁⠸⠡⠭⠲⠑⠆⠙⠃ instead
+  of ⠁⠄⡳⠭⠲⠑⠆⠙⠄⠃.
 - Backward, a `base` character is no longer read from its base's dots,
   and a capital sign gives a letter's first `base uppercase` character
   rather than Unicode's uppercase, as in liblouis: with `tr-g1.ctb`,

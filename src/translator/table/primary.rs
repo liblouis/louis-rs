@@ -44,12 +44,17 @@ use crate::{
 ///
 /// The counterpart of [`unknown_dots`], for the forward direction. Every character
 /// has one, so this cannot fail. The result is still text: the caller renders it
-/// into braille, since that is the direction's output.
+/// into braille, since that is the direction's output. Like liblouis' `_lou_showString`,
+/// the escape is quoted, and a code point takes `x` and at least four hex digits, `y`
+/// and five, or `z` and eight, so "…" is `'\x2026'`.
 fn unknown_hex(ch: char) -> String {
-    ch.escape_unicode()
-        .to_string()
-        .replace(r"\u", r"\x") // replace \u by \x
-        .replace(['{', '}'], "") // drop the curly braces
+    let code = u32::from(ch);
+    let escape = match format!("{code:x}").len() {
+        0..=4 => format!("x{code:04x}"),
+        5 => format!("y{code:x}"),
+        _ => format!("z{code:08x}"),
+    };
+    format!(r"'\{escape}'")
 }
 
 /// Spell an undefined braille cell as the dot numbers liblouis prints for it
@@ -2785,16 +2790,19 @@ impl PrimaryTable {
     }
 
     /// Render the characters of an escape as braille, preferring the table's own
-    /// definitions and falling back to [`fallback`] for what it does not define
+    /// definitions and falling back to [`fallback`] for what it does not define. As in
+    /// liblouis, only a definition of one cell counts, so the escape keeps one cell per
+    /// character: `en-ueb-g1.ctb` writes a backslash as two cells, and the escape uses
+    /// the fallback's instead.
     fn escape_to_braille(&self, escape: &str) -> String {
         escape
             .chars()
             .map(|c| {
-                if let Some(t) = self.fallback_definitions.get(&c) {
-                    t.clone()
-                } else {
-                    fallback(c).to_string()
-                }
+                self.fallback_definitions
+                    .get(&c)
+                    .filter(|t| t.chars().count() == 1)
+                    .cloned()
+                    .unwrap_or_else(|| fallback(c).to_string())
             })
             .collect()
     }
@@ -2825,8 +2833,12 @@ fn fallback(ch: char) -> BrailleChars {
         'd' => "145",
         'e' => "15",
         'f' => "124",
-        '\\' => "1256",
+        '\'' => "3",
+        // NABCC's backslash plus dot 7, as in liblouis' `_lou_charToFallbackDots`
+        '\\' => "12567",
         'x' => "1346",
+        'y' => "13456",
+        'z' => "1356",
         _ => unreachable!("no NABCC fallback for {ch:?}"),
     };
     BrailleChars::try_from(dots).expect("NABCC dot pattern is valid")
@@ -2842,9 +2854,9 @@ mod tests {
 
     #[test]
     fn fallback_covers_every_escaped_char() {
-        // handle_undefined_char emits `\x` plus lowercase hex digits, so
-        // fallback must map all of them without hitting the unreachable arm
-        for c in r"\x0123456789abcdef".chars() {
+        // handle_undefined_char emits a quoted `\x`, `\y` or `\z` plus lowercase hex
+        // digits, so fallback must map all of them without hitting the unreachable arm
+        for c in r"'\xyz0123456789abcdef".chars() {
             assert_eq!(fallback(c).len(), 1);
         }
         assert_eq!(fallback('a').to_string(), "\u{2801}"); // dot 1
@@ -2863,14 +2875,10 @@ mod tests {
 
     #[test]
     fn test_unknown_hex() {
-        assert_eq!(unknown_hex('\u{4e2d}'), r"\x4e2d");
-        assert_eq!(unknown_hex('a'), r"\x61");
-        // the escape is spelled with the same characters fallback maps
-        assert!(
-            unknown_hex('\u{10ffff}')
-                .chars()
-                .all(|c| c == '\\' || c == 'x' || c.is_ascii_hexdigit())
-        );
+        assert_eq!(unknown_hex('\u{4e2d}'), r"'\x4e2d'");
+        assert_eq!(unknown_hex('a'), r"'\x0061'");
+        assert_eq!(unknown_hex('\u{1f402}'), r"'\y1f402'");
+        assert_eq!(unknown_hex('\u{10ffff}'), r"'\z0010ffff'");
     }
 
     #[test]
@@ -2896,7 +2904,7 @@ mod tests {
                 .unwrap();
         assert_eq!(table.translate("foobar"), "⠇⠸");
         assert_eq!(table.translate("  "), "⠀⠀");
-        assert_eq!(table.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
+        assert_eq!(table.translate("🐂"), "⠄⡳⠽⠂⠋⠲⠴⠆⠄");
     }
 
     #[test]
