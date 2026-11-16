@@ -88,8 +88,8 @@ $ louis trace --braille-encoding da-dk-octobraille.dis da-dk-g28.ctb "ørene"
 └───┴──────┴────┴───────────────┴─────────┘
 ```
 
-Without an encoding there is no such stage, so the trace is unchanged and the
-output stays Unicode braille.
+Without an encoding, translating to braille ends in a Unicode braille stage instead.
+It has no rules, so the trace doesn't show it.
 
 **Migration path:** name the display table, as a `BrailleEncoding`. The liblouis
 YAML tests that relied
@@ -104,7 +104,8 @@ In liblouis, `dotsIO` makes a translation write, or read back, dot patterns rath
 the display table's characters, and `ucBrl` with it makes those dot patterns Unicode
 braille. louis-rs has no such modes: braille is Unicode braille unless a
 `BrailleEncoding` is named, so every translation already does what `dotsIO | ucBrl`
-does. `dotsIO` alone gives liblouis's internal dot values, which mean nothing outside
+does. That includes dropping the virtual dots (9 to F) a table writes, which Unicode
+braille has no room for, while a `BrailleEncoding` still gets them. `dotsIO` alone gives liblouis's internal dot values, which mean nothing outside
 its C API.
 
 **Migration path:** drop the modes. For Unicode braille, use a `Translator` without a
