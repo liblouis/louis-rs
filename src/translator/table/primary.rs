@@ -22,7 +22,9 @@ use crate::{
         indication::{
             Indicator, Indicators, PrecomputedIndications, Rewriter, Rewriters, computer_braille,
             contraction::ContractionSignsBuilder,
-            emphasis, lettersign, mode, numeric,
+            emphasis,
+            largesign::LargeSigns,
+            lettersign, mode, numeric,
             uppercase::{self, BackwardCapsBuilder},
         },
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
@@ -240,6 +242,8 @@ struct PrimaryTableBuilder {
     mode_indicator: mode::IndicatorBuilder,
     lettersign_indicator: lettersign::IndicatorBuilder,
     contraction_signs: ContractionSignsBuilder,
+    /// Whether the table has `largesign` rules, whose spaces `LargeSigns` drops
+    largesigns: bool,
     emphasis_indicator: emphasis::IndicatorBuilder,
     computer_braille_indicator: computer_braille::IndicatorBuilder,
     numeric_constrainer: NumericConstrainerBuilder,
@@ -302,6 +306,7 @@ impl PrimaryTableBuilder {
             mode_indicator: mode::IndicatorBuilder::new(),
             lettersign_indicator: lettersign::IndicatorBuilder::new(),
             contraction_signs: ContractionSignsBuilder::new(),
+            largesigns: false,
             emphasis_indicator: emphasis::IndicatorBuilder::new(),
             computer_braille_indicator: computer_braille::IndicatorBuilder::new(),
             numeric_constrainer: NumericConstrainerBuilder::new(),
@@ -518,12 +523,16 @@ impl PrimaryTableBuilder {
         .collect();
         PrimaryTable {
             rewriters: Rewriters::new(match direction {
-                Direction::Forward => self
-                    .contraction_signs
-                    .build()
-                    .map(Rewriter::ContractionSigns)
-                    .into_iter()
-                    .collect(),
+                Direction::Forward => {
+                    self.contraction_signs
+                        .build()
+                        .map(Rewriter::ContractionSigns)
+                        .into_iter()
+                        .chain(self.largesigns.then(|| {
+                            Rewriter::LargeSigns(LargeSigns::new(ctx.character_classes()))
+                        }))
+                        .collect()
+                }
                 Direction::Backward => {
                     vec![Rewriter::BackwardCaps(
                         self.backward_caps.build(ctx, self.uppercase_letters),
@@ -1396,6 +1405,7 @@ impl PrimaryTable {
                     builder.compbrl_triggers.push(chars.clone());
                 }
                 Rule::Largesign { chars, dots } => {
+                    builder.largesigns = true;
                     builder.lettersign_indicator.single_letter_word(chars);
                     builder.get_trie_mut(rule).insert(
                         chars,
