@@ -97,7 +97,8 @@ impl CharacterClasses {
     }
 
     pub fn is_whitespace(&self, c: char) -> bool {
-        self.get(&CharacterClass::Space)
+        self.0
+            .get(&CharacterClass::Space)
             .is_some_and(|class| class.contains(&c))
     }
 }
