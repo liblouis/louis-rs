@@ -109,6 +109,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   The rule dump and the rule-parsing REPL are gone.
 
 ### Fixed
+- A `lowword` doesn't apply after a `joinword`, as in liblouis:
+  `en-us-g2.ctb`'s "to be" is ⠖⠃⠑, not ⠖⠆.
 - Two large signs that only spaces separate are written without the
   space between them, as in liblouis: `en-us-g2.ctb`'s "of the" is ⠷⠮,
   not ⠷⠀⠮.
