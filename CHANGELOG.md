@@ -109,6 +109,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   The rule dump and the rule-parsing REPL are gone.
 
 ### Fixed
+- A letter standing alone after a space gets its letter sign, as in
+  liblouis: `en-us-g2.ctb`'s "x y" is ⠰⠭⠀⠰⠽, not ⠰⠭⠀⠽. So does a letter
+  after a digit with letters after it, as in "2bc", except before an
+  `endnum` rule, so "1st" stays ⠼⠁⠌.
 - Two large signs that only spaces separate are written without the
   space between them, as in liblouis: `en-us-g2.ctb`'s "of the" is ⠷⠮,
   not ⠷⠀⠮.
