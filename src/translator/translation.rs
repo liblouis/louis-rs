@@ -374,8 +374,14 @@ impl ResolvedTranslation {
                 Precedence::Always if self.length < 2 => Precedence::Translation,
                 p => p,
             },
-            output_length: match (direction, self.stage) {
-                (Direction::Backward, TranslationStage::Main) => self.output.chars().count(),
+            output_length: match (direction, self.stage, self.rule()) {
+                // the space a `joinword` or `joinnum` puts back is not part of its characters
+                (
+                    Direction::Backward,
+                    TranslationStage::Main,
+                    Some(Rule::Joinword { chars, .. } | Rule::Joinnum { chars, .. }),
+                ) => chars.chars().count(),
+                (Direction::Backward, TranslationStage::Main, _) => self.output.chars().count(),
                 _ => 0,
             },
             nocross: self.origin.as_ref().is_some_and(|o| o.is_nocross()),
