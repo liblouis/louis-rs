@@ -17,7 +17,8 @@ table files ──parse──▶ rules ──TableContext──▶ TranslationPi
                                                  │
    text ──▶ [correct] ──▶ main stage ──▶ [pass2] ──▶ [pass3] ──▶ [pass4] ──▶ [display] ──▶ braille
                              │
-                             ├─ before the loop:  indicators ─▶ indications per position
+                             ├─ before the loop:  spans: the caller's emphasis + compbrl words
+                             │                    indicators ─▶ indications per position
                              │                    constrainers ─▶ constraints per position
                              ├─ the loop, at each position:
                              │      candidates (trie, match, context, ...)
@@ -50,7 +51,9 @@ Backward (braille to text) runs the same stages in reverse order, the display ta
 `translator/table/primary.rs` holds nearly all of liblouis's opcodes. Translating with it
 has three phases.
 
-**Before the loop**, two kinds of precomputation run over the whole input:
+**Before the loop**, the emphasis spans the caller gave are joined, forward, by a
+`computer_braille` span for each word with a `compbrl` string in it (`CompbrlWords`). Then
+two kinds of precomputation run over the whole input:
 
 - **Indicators** (`indication/`) decide which indication *cells* go where: capital signs,
   number signs, emphasis, computer braille, mode and letter signs. The result,
@@ -61,10 +64,11 @@ has three phases.
   rule starts here" (`SyllableStart`) or "a hyphenation break falls here"
   (`HyphenationBreak`).
 
-Both read only the input text, and the options. Neither knows which rules will be chosen.
-Forward, with `compbrlAtCursor` or `compbrlLeftCursor`, the word at the cursor
-(`CursorWordScanner`) is computer braille (`UseComp6`) without indicators, and no rule
-reaches into it.
+Both read only the input text, the spans and the options. Neither knows which rules will
+be chosen. The modes are constrainers too: `noContractions` sets `Uncontracted`
+everywhere, and forward, with `compbrlAtCursor` or `compbrlLeftCursor`, the word at the
+cursor is computer braille (`UseComp6`) without indicators (`CursorWord`), and no rule
+reaches into it or joins onto it (`SpaceBeforeCursorWord`).
 
 **The loop** walks the input. At each position it:
 
@@ -164,9 +168,7 @@ variable that was never set is 0.
 
 **Scanners.** Small helpers that look further than the neighbouring character. The trie
 consults `BegWordScanner` and `EndWordScanner` (backward word boundaries) and
-`StandingAloneScanner` (`seqdelimiter` sequences) for its transitions; the main stage uses
-`CompbrlScanner` (words with a `compbrl` string become computer braille) and
-`CursorWordScanner` (the word at the cursor) before the loop.
+`StandingAloneScanner` (`seqdelimiter` sequences) for its transitions.
 
 ## Where does new logic go?
 

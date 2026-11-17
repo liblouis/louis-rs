@@ -1,9 +1,61 @@
 //! Computer braille indication (begcomp/endcomp).
 //!
-//! Analyses the `computer_braille` emphasis spans and emits `begcomp` before
-//! each span and `endcomp` after each span.
+//! [`CompbrlWords`] adds the words a `compbrl` string puts in computer braille to the
+//! `computer_braille` emphasis spans; [`Indicator`] emits `begcomp` before each span and
+//! `endcomp` after each span.
 
-use crate::{emphasis::EmphasisSpan, parser::AnchoredRule, translator::ResolvedTranslation};
+use std::ops::Range;
+
+use crate::{
+    emphasis::EmphasisSpan,
+    parser::{AnchoredRule, CharacterClasses},
+    translator::ResolvedTranslation,
+};
+
+/// The words that a `compbrl` string puts in computer braille: any word of the input that
+/// contains one, forward only.
+#[derive(Debug, Clone)]
+pub struct CompbrlWords {
+    pub triggers: Vec<String>,
+    pub character_classes: CharacterClasses,
+}
+
+impl CompbrlWords {
+    /// The caller's spans, and a `computer_braille` span for each word with a `compbrl`
+    /// string in it
+    pub fn spans(&self, input: &str, caller_spans: &[EmphasisSpan]) -> Vec<EmphasisSpan> {
+        let is_space = |c| self.character_classes.is_whitespace(c);
+        // the words with a trigger in them, as byte ranges
+        let mut words: Vec<Range<usize>> = self
+            .triggers
+            .iter()
+            .flat_map(|trigger| input.match_indices(trigger.as_str()))
+            .map(|(at, _)| {
+                let start = input[..at].trim_end_matches(|c| !is_space(c)).len();
+                let end = input[at..]
+                    .find(is_space)
+                    .map_or(input.len(), |len| at + len);
+                start..end
+            })
+            .collect();
+        words.sort_by_key(|word| word.start);
+        words.dedup();
+        // the spans count characters, not bytes; the words are in order, so count on
+        let (mut bytes, mut chars) = (0, 0);
+        let mut char_at = |byte: usize| {
+            chars += input[bytes..byte].chars().count();
+            bytes = byte;
+            chars
+        };
+        let words = words
+            .into_iter()
+            .map(|word| {
+                EmphasisSpan::new("computer_braille", char_at(word.start)..char_at(word.end))
+            })
+            .filter(|span| !caller_spans.contains(span));
+        caller_spans.iter().cloned().chain(words).collect()
+    }
+}
 
 // ── Builder ──────────────────────────────────────────────────────────────────
 

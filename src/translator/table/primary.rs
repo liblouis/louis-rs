@@ -1,13 +1,9 @@
-use std::{
-    collections::{HashMap, HashSet},
-    ops::Range,
-};
+use std::collections::{HashMap, HashSet};
 
 use log::warn;
 
 use crate::{
     Direction,
-    emphasis::EmphasisSpan,
     parser::{
         AnchoredRule, Braille, BrailleChar, BrailleChars, CharacterClass, CharacterClasses,
         HasDirection, HasNocross, WithClass, in_definition_order,
@@ -29,9 +25,10 @@ use crate::{
         position_constraints::{
             BackwardNoContractConstrainerBuilder, BackwardNumericConstrainerBuilder,
             CapsNoContConstrainerBuilder, ComputerBrailleConstrainer, Constrainer, Constrainers,
-            Constraint, HyphenationConstrainerBuilder, JoinConstrainerBuilder,
-            NoContConstrainerBuilder, NumericConstrainerBuilder, PositionConstraints,
-            PunctuationConstrainerBuilder, RepwordConstrainerBuilder, SyllableConstrainerBuilder,
+            Constraint, CursorWordConstrainer, HyphenationConstrainerBuilder,
+            JoinConstrainerBuilder, NoContConstrainerBuilder, NoContractionsConstrainer,
+            NumericConstrainerBuilder, PositionConstraints, PunctuationConstrainerBuilder,
+            RepwordConstrainerBuilder, SyllableConstrainerBuilder,
         },
         standing_alone::StandingAloneScanner,
         table::TableContext,
@@ -60,106 +57,6 @@ fn unknown_hex(ch: char) -> String {
 /// dots. Returns `None` for a character that is not a braille cell.
 fn unknown_dots(ch: char) -> Option<String> {
     BrailleChar::from_unicode(ch).map(|cell| format!("\\{}/", cell.dot_numbers()))
-}
-
-/// Finds the word at the cursor to show uncontracted, in computer braille, with
-/// `compbrlAtCursor` or `compbrlLeftCursor`, as liblouis does: the word the cursor is in, up
-/// to the next space, or only up to the cursor with `compbrlLeftCursor`; the space itself if
-/// the cursor is on one.
-///
-/// Unlike liblouis, `repeated` rules next to the word are left alone: liblouis's limits
-/// there are off by one, so a `repeated \s 0` expands spaces inconsistently (its own
-/// `present_progressive.yaml` marks this `xfail`), and a `repword` can't reach into the word.
-#[derive(Debug)]
-struct CursorWordScanner {
-    character_classes: CharacterClasses,
-}
-
-impl CursorWordScanner {
-    fn scan(&self, input: &str, options: &TranslationOptions) -> Option<Range<usize>> {
-        let modes = options.modes();
-        let left = modes.contains(TranslationMode::CompbrlLeftCursor);
-        if !(left || modes.contains(TranslationMode::CompbrlAtCursor)) {
-            return None;
-        }
-        let cursor = options.cursor_position()?;
-        let chars: Vec<char> = input.chars().collect();
-        if cursor > chars.len() {
-            return None;
-        }
-        let is_space = |c: &char| self.character_classes.is_whitespace(*c);
-        if chars.get(cursor).is_some_and(is_space) {
-            return Some(cursor..cursor + 1);
-        }
-        let start = chars[..cursor]
-            .iter()
-            .rposition(is_space)
-            .map_or(0, |p| p + 1);
-        let end = if left {
-            cursor
-        } else {
-            chars[cursor..]
-                .iter()
-                .position(is_space)
-                .map_or(chars.len(), |p| cursor + p)
-        };
-        Some(start..end)
-    }
-
-    /// Whether the characters of `input` in `range` are all spaces, as between a
-    /// `joinword` and the word at the cursor it would join
-    fn only_spaces(&self, input: &str, range: Range<usize>) -> bool {
-        input
-            .chars()
-            .skip(range.start)
-            .take(range.len())
-            .all(|c| self.character_classes.is_whitespace(c))
-    }
-}
-
-/// Detects compbrl-triggered computer braille regions and adds `computer_braille` spans.
-///
-/// When a table contains `compbrl` rules, any word in the input that contains one
-/// of the trigger strings is treated as a computer braille span.
-#[derive(Debug, Clone)]
-struct CompbrlScanner {
-    triggers: Vec<String>,
-    character_classes: CharacterClasses,
-}
-
-impl CompbrlScanner {
-    fn enrich(&self, input: &str, caller_spans: &[EmphasisSpan]) -> Vec<EmphasisSpan> {
-        let is_space = |c| self.character_classes.is_whitespace(c);
-        // the words with a trigger in them, as byte ranges
-        let mut words: Vec<Range<usize>> = self
-            .triggers
-            .iter()
-            .flat_map(|trigger| input.match_indices(trigger.as_str()))
-            .map(|(at, _)| {
-                let start = input[..at].trim_end_matches(|c| !is_space(c)).len();
-                let end = input[at..]
-                    .find(is_space)
-                    .map_or(input.len(), |len| at + len);
-                start..end
-            })
-            .collect();
-        words.sort_by_key(|word| word.start);
-        words.dedup();
-        // the spans count characters, not bytes; the words are in order, so count on
-        let (mut bytes, mut chars) = (0, 0);
-        let mut char_at = |byte: usize| {
-            chars += input[bytes..byte].chars().count();
-            bytes = byte;
-            chars
-        };
-        let words = words
-            .into_iter()
-            .map(|word| {
-                EmphasisSpan::new("computer_braille", char_at(word.start)..char_at(word.end))
-            })
-            .filter(|span| !caller_spans.contains(span));
-        caller_spans.iter().cloned().chain(words).collect()
-    }
 }
 
 #[derive(Debug)]
@@ -204,9 +101,8 @@ pub struct PrimaryTable {
     indicators: Indicators,
     constrainers: Constrainers,
     /// Detects compbrl-triggered computer braille regions.
-    compbrl_scanner: Option<CompbrlScanner>,
+    compbrl_words: Option<computer_braille::CompbrlWords>,
     /// Forward, finds the word at the cursor (`compbrlAtCursor`)
-    cursor_word_scanner: Option<CursorWordScanner>,
     direction: Direction,
     /// Backward-only: overrides the trie's default (letter) reading for a braille cell
     /// that is shared between a digit and a letter, keyed by the cell itself. Consulted
@@ -577,20 +473,25 @@ impl PrimaryTableBuilder {
                         .then(|| self.repword_constrainer.build())
                         .flatten()
                         .map(Constrainer::Repword),
+                    // liblouis honours `noContractions` forward only
+                    (direction == Direction::Forward)
+                        .then_some(Constrainer::NoContractions(NoContractionsConstrainer)),
+                    (direction == Direction::Forward).then(|| {
+                        Constrainer::CursorWord(CursorWordConstrainer {
+                            character_classes: ctx.character_classes.clone(),
+                        })
+                    }),
                 ]
                 .into_iter()
                 .flatten()
                 .collect(),
             ),
             // forward only, as in liblouis, whose back-translation has no compbrl
-            compbrl_scanner: (direction == Direction::Forward && !triggers.is_empty()).then(|| {
-                CompbrlScanner {
+            compbrl_words: (direction == Direction::Forward && !triggers.is_empty()).then(|| {
+                computer_braille::CompbrlWords {
                     triggers,
                     character_classes: ctx.character_classes.clone(),
                 }
-            }),
-            cursor_word_scanner: (direction == Direction::Forward).then(|| CursorWordScanner {
-                character_classes: ctx.character_classes.clone(),
             }),
             backward_digit_overrides: self.backward_digit_overrides,
         }
@@ -2275,34 +2176,19 @@ impl PrimaryTable {
         // read backwards: the end of this, see `MatchPatterns::find`.
         let reversed: String = input.chars().rev().collect();
 
-        // Enrich spans with compbrl-detected regions.
-        let enriched_spans = match &self.compbrl_scanner {
-            Some(scanner) => scanner.enrich(input, options.emphasis().spans()),
+        // the caller's emphasis, and the words a `compbrl` string puts in computer braille
+        let spans = match &self.compbrl_words {
+            Some(words) => words.spans(input, options.emphasis().spans()),
             None => options.emphasis().spans().to_vec(),
         };
 
-        let indications = self.indicators.precompute(input, &enriched_spans);
-        let mut constraints = self.constrainers.precompute(input, &enriched_spans);
-        // the word at the cursor is computer braille, but without begcomp and endcomp
-        let cursor_word = self
-            .cursor_word_scanner
-            .as_ref()
-            .and_then(|scanner| scanner.scan(input, options));
-        if let Some(word) = &cursor_word {
-            constraints.use_comp6_in(word.clone());
-        }
-        // liblouis honours `noContractions` forward only
-        if self.direction == Direction::Forward
-            && options.modes().contains(TranslationMode::NoContractions)
-        {
-            constraints.uncontract_all();
-        }
-        let in_cursor_word = |pos: usize| cursor_word.as_ref().is_some_and(|w| w.contains(&pos));
+        let indications = self.indicators.precompute(input, &spans);
+        let constraints = self.constrainers.precompute(input, &spans, options);
 
         loop {
             if last_pos != Some(char_pos) {
                 // nor any other indicator in the word at the cursor
-                if !in_cursor_word(char_pos) {
+                if !constraints.in_cursor_word_at(char_pos) {
                     translations.extend(indications.translations_at(char_pos));
                 }
                 seen.clear();
@@ -2333,9 +2219,8 @@ impl PrimaryTable {
                 .filter(|t| !(constraints.uncontracted_at(char_pos) && Self::contracts(t)))
                 // not in or into the word at the cursor, which is computer braille
                 .filter(|t| {
-                    cursor_word
-                        .as_ref()
-                        .is_none_or(|w| char_pos + t.length() <= w.start || char_pos >= w.end)
+                    !constraints.in_cursor_word_at(char_pos)
+                        && !constraints.reaches_into_cursor_word(char_pos, t.length())
                 })
                 .max_by_key(|t| t.rank(self.direction));
 
@@ -2469,17 +2354,13 @@ impl PrimaryTable {
             }
 
             // No rule reaches into the word at the cursor, and none joins onto it
-            if let Some(word) = &cursor_word
-                && let Some(scanner) = &self.cursor_word_scanner
-                && char_pos < word.start
-            {
-                let before_word = |t: &ResolvedTranslation| char_pos + t.length() <= word.start;
-                let joins_word = |t: &ResolvedTranslation| {
-                    matches!(t.rule(), Some(Rule::Joinword { .. } | Rule::Joinnum { .. }))
-                        && scanner.only_spaces(input, char_pos + t.length()..word.start)
-                };
-                candidates.retain(|t| before_word(t) && !joins_word(t));
-            }
+            let joins_cursor_word = |t: &ResolvedTranslation| {
+                matches!(t.rule(), Some(Rule::Joinword { .. } | Rule::Joinnum { .. }))
+                    && constraints.joins_cursor_word_at(char_pos + t.length())
+            };
+            candidates.retain(|t| {
+                !constraints.reaches_into_cursor_word(char_pos, t.length()) && !joins_cursor_word(t)
+            });
 
             // In computer braille mode, discard normal candidates and use comp6 rules only.
             // comp6 rules have no pre-pattern so offset() is always 0 — no delayed handling needed.
@@ -2832,6 +2713,7 @@ fn fallback(ch: char) -> BrailleChars {
 mod tests {
     use super::*;
 
+    use crate::emphasis::EmphasisSpan;
     use search_path::SearchPath;
 
     use crate::parser::{RuleParser, expand_includes};
@@ -2863,13 +2745,13 @@ mod tests {
         let table =
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
                 .unwrap();
-        let scanner = table.compbrl_scanner.as_ref().unwrap();
+        let words = table.compbrl_words.as_ref().unwrap();
         assert_eq!(
-            scanner.enrich("a awww", &[]),
+            words.spans("a awww", &[]),
             [EmphasisSpan::new("computer_braille", 2..6)]
         );
         // fewer characters are left than the trigger has
-        assert_eq!(scanner.enrich("a ww", &[]), []);
+        assert_eq!(words.spans("a ww", &[]), []);
     }
 
     /// A [`SearchPath`] rooted at the crate directory, for tests that `include` one of the
