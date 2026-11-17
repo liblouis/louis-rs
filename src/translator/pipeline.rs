@@ -135,7 +135,11 @@ impl TranslationPipeline {
             }
         }
         let steps = match direction {
-            Direction::Forward => steps,
+            Direction::Forward => {
+                // Unicode braille, until a braille encoding replaces it (`with_display`)
+                steps.push(Transformation::Display(DisplayTable::unicode_braille()));
+                steps
+            }
             Direction::Backward => steps.into_iter().rev().collect(),
         };
         Ok(Self {

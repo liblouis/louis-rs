@@ -109,6 +109,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   The rule dump and the rule-parsing REPL are gone.
 
 ### Fixed
+- Unicode braille has only dots 1 to 8, as in liblouis: a cell a table
+  gives virtual dots, such as `ru-litbrl.ctb`'s Cyrillic letters, came
+  out as a private use character instead. A braille encoding still gets
+  the virtual dots.
 - Two large signs that only spaces separate are written without the
   space between them, as in liblouis: `en-us-g2.ctb`'s "of the" is ⠷⠮,
   not ⠷⠀⠮.

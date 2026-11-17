@@ -378,6 +378,23 @@ mod tests {
     }
 
     #[test]
+    fn unicode_braille_has_no_virtual_dots() {
+        // ru-litbrl.ctb: Cyrillic а is ⠁ with a virtual dot 9, which its display table shows
+        let table = "space \\s 0\nlowercase a 19\nlowercase b 12\n";
+        let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(forward.translate("ab ba"), "⠁⠃⠀⠃⠁");
+        let result = forward.translate_with_options("ab", &TranslationOptions::default());
+        assert_eq!(result.output(), "⠁⠃");
+        assert_eq!(result.output_positions(), [0, 1]);
+        // a braille encoding still gets the virtual dot
+        let encoding = BrailleEncoding::from_table_source("display x 19\ndisplay y 1\n").unwrap();
+        assert_eq!(
+            forward.with_braille_encoding(&encoding).translate("aa"),
+            "xx"
+        );
+    }
+
+    #[test]
     fn a_translator_lists_its_emphasis_classes() {
         let table = "emphclass italic\nemphclass bold\nemphclass italic\nletter a 1\n";
         let translator = Translator::from_table_source(table, Direction::Forward).unwrap();
