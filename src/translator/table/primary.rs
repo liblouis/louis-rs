@@ -76,6 +76,16 @@ impl CharacterTranslation {
         self.0.entry(from).or_insert(translation);
     }
 
+    /// Like [`Self::insert`], but for a `hyphen` rule, which liblouis doesn't take for a
+    /// character definition: it tries it before the character's definitions, wherever the
+    /// table defines them, so it replaces one already here. The first `hyphen` still wins.
+    fn insert_hyphen(&mut self, from: char, translation: ResolvedTranslation) {
+        let hyphen = |t: &ResolvedTranslation| matches!(t.rule(), Some(Rule::Hyphen { .. }));
+        if !self.0.get(&from).is_some_and(hyphen) {
+            self.0.insert(from, translation);
+        }
+    }
+
     fn get(&self, from: &char) -> Option<&ResolvedTranslation> {
         self.0.get(from)
     }
@@ -235,7 +245,11 @@ impl PrimaryTableBuilder {
                     TranslationStage::Main,
                     rule.clone(),
                 );
-                self.character_translations.insert(c, translation);
+                if matches!(rule.rule, Rule::Hyphen { .. }) {
+                    self.character_translations.insert_hyphen(c, translation);
+                } else {
+                    self.character_translations.insert(c, translation);
+                }
             }
             Direction::Backward => {
                 // Backward translation is not case sensitive, so we do not need a separate case
@@ -3494,6 +3508,23 @@ mod tests {
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
                 .unwrap();
         assert_eq!(table.translate("fff"), "⠸");
+    }
+
+    #[test]
+    fn a_hyphen_rule_beats_the_characters_definition() {
+        let translate = |rules: &[&str]| {
+            let rules: Vec<_> = rules.iter().map(|r| parse_rule(r)).collect();
+            let context = TableContext::compile(&rules).unwrap();
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap()
+                .translate("-")
+        };
+        // as in liblouis, which tries a `hyphen` before the character's definitions: en-gb-g1.utb
+        // has `hyphen \x2010 36` after ukchardefs.cti's `punctuation \x2010 36-36`
+        assert_eq!(translate(&["punctuation - 36-36", "hyphen - 36"]), "⠤");
+        assert_eq!(translate(&["hyphen - 36", "punctuation - 36-36"]), "⠤");
+        // of two `hyphen` rules, the first
+        assert_eq!(translate(&["hyphen - 36", "hyphen - 36-36"]), "⠤");
     }
 
     #[test]

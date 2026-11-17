@@ -109,6 +109,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   The rule dump and the rule-parsing REPL are gone.
 
 ### Fixed
+- A `hyphen` rule translates its character even after a definition of
+  it, as in liblouis: `en-gb-g1.utb` writes U+2010 as ⠤, not as the ⠤⠤
+  of the `punctuation` rule it includes first.
 - Two large signs that only spaces separate are written without the
   space between them, as in liblouis: `en-us-g2.ctb`'s "of the" is ⠷⠮,
   not ⠷⠀⠮.
