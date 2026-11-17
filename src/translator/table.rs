@@ -47,6 +47,18 @@ impl TableContext {
     }
 
     pub fn compile(rules: &[AnchoredRule]) -> Result<TableContext, CompileError> {
+        Self::compile_with_fallback(rules, None)
+    }
+
+    /// As [`Self::compile`], for `rules` filtered to one direction, with `fallback` holding the
+    /// character definitions of all of the table's rules. A class member this direction leaves
+    /// undefined still finds its cell through them, such as a braille pattern that
+    /// `braille-patterns.cti` defines with `noback sign`: in liblouis, `noback` and `nofor` keep a
+    /// rule from translating in one direction, not a character from being defined.
+    pub fn compile_with_fallback(
+        rules: &[AnchoredRule],
+        fallback: Option<&CharacterDefinition>,
+    ) -> Result<TableContext, CompileError> {
         let mut character_definitions = CharacterDefinition::new();
         let mut character_classes = CharacterClasses::default();
         let mut dots_classes = CharacterClasses::default();
@@ -181,11 +193,11 @@ impl TableContext {
                     let class = CharacterClass::from(name.as_str());
                     for c in chars.chars() {
                         character_classes.insert(class.clone(), c);
-                        dots_classes.insert_associated_dot(
-                            class.clone(),
-                            c,
-                            &character_definitions,
-                        );
+                        let definitions = match fallback {
+                            Some(fallback) if character_definitions.get(&c).is_none() => fallback,
+                            _ => &character_definitions,
+                        };
+                        dots_classes.insert_associated_dot(class.clone(), c, definitions);
                     }
                 }
                 Rule::Seqdelimiter { chars } => {
