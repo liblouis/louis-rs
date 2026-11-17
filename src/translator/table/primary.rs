@@ -129,43 +129,36 @@ struct CompbrlScanner {
 
 impl CompbrlScanner {
     fn enrich(&self, input: &str, caller_spans: &[EmphasisSpan]) -> Vec<EmphasisSpan> {
-        let chars: Vec<char> = input.chars().collect();
-        let n = chars.len();
-        let mut spans = caller_spans.to_vec();
-
-        let mut pos = 0;
-        while pos < n {
-            // Check if any trigger matches at this character position.
-            let remaining: String = chars[pos..].iter().collect();
-            let matched = self
-                .triggers
-                .iter()
-                .any(|t| remaining.starts_with(t.as_str()));
-            if matched {
-                // Expand to surrounding word: scan backward for whitespace.
-                let mut word_start = pos;
-                while word_start > 0 && !self.character_classes.is_whitespace(chars[word_start - 1])
-                {
-                    word_start -= 1;
-                }
-                // Scan forward for whitespace.
-                let mut word_end = pos;
-                while word_end < n && !self.character_classes.is_whitespace(chars[word_end]) {
-                    word_end += 1;
-                }
-                let new_span = EmphasisSpan::new("computer_braille", word_start..word_end);
-                // Avoid exact duplicates.
-                if !spans.contains(&new_span) {
-                    spans.push(new_span);
-                }
-                // Skip to end of word to avoid adding duplicate spans for the same word.
-                pos = word_end;
-            } else {
-                pos += 1;
-            }
-        }
-
-        spans
+        let is_space = |c| self.character_classes.is_whitespace(c);
+        // the words with a trigger in them, as byte ranges
+        let mut words: Vec<Range<usize>> = self
+            .triggers
+            .iter()
+            .flat_map(|trigger| input.match_indices(trigger.as_str()))
+            .map(|(at, _)| {
+                let start = input[..at].trim_end_matches(|c| !is_space(c)).len();
+                let end = input[at..]
+                    .find(is_space)
+                    .map_or(input.len(), |len| at + len);
+                start..end
+            })
+            .collect();
+        words.sort_by_key(|word| word.start);
+        words.dedup();
+        // the spans count characters, not bytes; the words are in order, so count on
+        let (mut bytes, mut chars) = (0, 0);
+        let mut char_at = |byte: usize| {
+            chars += input[bytes..byte].chars().count();
+            bytes = byte;
+            chars
+        };
+        let words = words
+            .into_iter()
+            .map(|word| {
+                EmphasisSpan::new("computer_braille", char_at(word.start)..char_at(word.end))
+            })
+            .filter(|span| !caller_spans.contains(span));
+        caller_spans.iter().cloned().chain(words).collect()
     }
 }
 
@@ -2856,6 +2849,27 @@ mod tests {
 
     fn parse_rule(source: &str) -> AnchoredRule {
         RuleParser::new(source).rule().unwrap().into()
+    }
+
+    #[test]
+    fn compbrl_marks_the_word_with_its_trigger_up_to_the_end_of_the_input() {
+        let rules = [
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase w 2456"),
+            parse_rule("space \\s 0"),
+            parse_rule("compbrl www"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        let scanner = table.compbrl_scanner.as_ref().unwrap();
+        assert_eq!(
+            scanner.enrich("a awww", &[]),
+            [EmphasisSpan::new("computer_braille", 2..6)]
+        );
+        // fewer characters are left than the trigger has
+        assert_eq!(scanner.enrich("a ww", &[]), []);
     }
 
     /// A [`SearchPath`] rooted at the crate directory, for tests that `include` one of the

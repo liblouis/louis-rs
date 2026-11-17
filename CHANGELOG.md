@@ -109,6 +109,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   The rule dump and the rule-parsing REPL are gone.
 
 ### Fixed
+- With a table that has `compbrl` rules, translating no longer takes time
+  growing with the square of the input's length: the scan for their
+  triggers copied the rest of the input at every character, and
+  compared every word it found with all the words before it.
 - Back-translation no longer looks for `compbrl` triggers, which are
   print text and never match braille cells; liblouis uses them forward
   only too. The scan took most of the time of back-translating a long
