@@ -9,7 +9,9 @@ idea records its own numbers so a future attempt can tell whether it is re-tread
 disproven ground.
 
 Idea 3 is on `main`. Ideas 1 and 2 are prototyped on the `regexp-prefilter` branch and
-have not been reviewed for merge; idea 4 is a sketch.
+have not been reviewed for merge; idea 4 is a sketch. They stay parked on purpose:
+once the `compbrl` scan was fixed (see [Long inputs](#long-inputs)), no reported
+slowness was left for them to fix.
 
 ## Measuring
 
@@ -48,8 +50,8 @@ best case louis-rs will ever see.
 
 ### Profiling
 
-Where `perf` is unavailable — a `perf_event_paranoid` setting of 2 or higher refuses
-to open any events — callgrind needs no privileges:
+Where `perf` is unavailable — Ubuntu's default `perf_event_paranoid` of 4 refuses to
+open any events — callgrind needs no privileges:
 
 ```sh
 valgrind --tool=callgrind --cache-sim=no --callgrind-out-file=cg.out <binary>
@@ -65,6 +67,17 @@ Two traps:
 - `callgrind_annotate --tree=caller` attributes inlined code to the callee's symbol,
   so a caller list that doesn't add up to the self cost is expected. Don't read the
   gap as a missing caller.
+
+With `perf_event_paranoid` at 1, sampling works and is fast enough for long inputs.
+`samply` refuses anything higher; at 2, `perf record` gives only a flat profile, with
+no call stacks. Where the machine has no hardware counters, sample the `cpu-clock`
+event, and build with frame pointers, as DWARF unwinding stops inside the regexp VM:
+
+```sh
+RUSTFLAGS=-Cforce-frame-pointers=yes CARGO_PROFILE_RELEASE_DEBUG=true cargo build --release
+perf record -e cpu-clock:u --call-graph fp -o long.data target/release/louis translate de-g0.utb "$text"
+perf report -i long.data --children --stdio -g none
+```
 
 ## Where the time goes
 
@@ -93,6 +106,42 @@ self.regexps
 For `en-ueb-g2` the main stage compiles 444 `match` patterns and 57 `context`
 patterns, so a 600-character paragraph set up and ran the VM about 300 000 times, and
 almost every one of those runs could not possibly have matched.
+
+## Long inputs
+
+The benchmarks translate a word, a sentence and a paragraph, so a cost that grows with
+the square of the input never shows in them. It showed when Paperback opened a DAISY
+Pipeline BRF with no paragraph indents: the whole 436 KB book was one paragraph, and
+back-translating it took over twenty minutes (#63).
+
+`de-g0.utb` on 40 000 characters, user CPU, best of three, `codegen-units = 1`:
+
+|                                              | forward | backward |
+|----------------------------------------------|---------|----------|
+| before                                       | 1.71 s  | 2.30 s   |
+| #63's scan                                   | 0.56 s  | 0.12 s   |
+| `compbrl` forward only (`7d87df0`)           |         | 0.11 s   |
+
+The profile before: `CompbrlScanner::enrich` was 90% of backward and 54% of forward
+time. It looks for the `compbrl` triggers (`de-g0-core.uti` has 20: `www.`, `.com`,
+`@`, …) and turns each word holding one into a `computer_braille` span. Once per
+translation, but at every character it collected the rest of the input into a new
+`String` to call `starts_with` on, and it compared each span it found with all the ones
+before it. And it ran backward too, where the triggers are print text and can never be
+found in braille cells; liblouis has `compbrl` in `lou_translateString.c` only.
+
+What landed (`58ad3c1`) finds each trigger with `str::match_indices` over the whole
+input, widens each occurrence to its word, and sorts and deduplicates the words. On
+`enrich` alone, 400 000 characters: 3.7 ms on prose against 11.3 ms for #63's scan,
+and 10 ms against 50 ms on text with a URL every fifteen words, where comparing each
+span with all the earlier ones made #63's quadratic again.
+
+What is left forward grows linearly, about 14 µs per character with `de-g0.utb`
+(10 000 characters 0.15 s, 20 000 0.29 s, 40 000 0.57 s, 80 000 1.14 s). 92% of it
+is in `MultipassTable`, 87% in `ContextPatterns::find`: `de-g0.utb` has 446 `correct`
+rules and 31 `pass2` rules, each run at every position. That is idea 2's ground, for
+`context` rules; see [Measured and rejected](#measured-and-rejected) for what it is
+worth.
 
 ## Idea 1 — reject a pattern by its first character
 
@@ -402,6 +451,29 @@ let (offset, length) = match self.consumed {
 ## Measured and rejected
 
 Do not re-attempt these without a reason to think something has changed.
+
+- **An index of the `context`, `correct` and pass rules by first character, on its
+  own.** Measured, and deliberately not taken. A `Regexp::first_chars` over the AST
+  and a per-character list of rules in `ContextPatterns` cut the YAML suite from 491 s
+  to 144 s of user CPU (63 s to 18.7 s wall), with byte-identical output, and
+  `de-g0.utb` forward on 40 000 characters from 0.56 s to 0.09 s (`de-g2.ctb` 0.61 s
+  to 0.12 s, `en-us-g2.ctb` and backward unchanged). It is idea 2 again, for `context`
+  rules only, and `regexp-prefilter` does it on the compiled program for `match` rules
+  too. Not taken because nothing reported is slow enough to need it: take
+  `regexp-prefilter` when something is.
+- **FxHash for the maps and sets keyed by `char`.** A `BuildHasherDefault` with
+  rustc's multiply-and-rotate hash over the 115 `HashSet<char>` and `HashMap<char, _>`
+  saved about 2% of a suite run (491/494/493 s of user CPU against 483/482/485 s), and
+  nothing on 40 000 characters. Safe, as these are filled from the table, never from
+  the input, but not worth a 21-file change. A lookup in a three-member set costs
+  6.6 ns with SipHash, 1.6 ns with Fx and 0.13 ns as a `Vec::contains`, so for a
+  class as small as the space characters a `Vec` beats any hash. What did matter:
+  `CharacterClasses::is_whitespace` cloned the whole set of space characters at every
+  call (fixed in `c73f1e6`).
+- **Splitting the input into words to look for the `compbrl` triggers.** Readable, but
+  2.5 times slower than #63's scan: it asks every character whether it is a space,
+  and runs `str::contains` for every word and trigger, each of which sets up a
+  searcher. `match_indices` over the whole input is both shorter and faster.
 
 - **Sorted `Vec` + `binary_search` for the VM's character classes, with no bitmap.**
   8% *slower* than the `HashSet<char>` it replaced, on forward `en-ueb-g2`. The win in
