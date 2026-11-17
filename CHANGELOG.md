@@ -109,6 +109,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   The rule dump and the rule-parsing REPL are gone.
 
 ### Fixed
+- Two large signs that only spaces separate are written without the
+  space between them, as in liblouis: `en-us-g2.ctb`'s "of the" is ⠷⠮,
+  not ⠷⠀⠮.
 - With a table that has `compbrl` rules, translating no longer takes time
   growing with the square of the input's length: the scan for their
   triggers copied the rest of the input at every character, and
