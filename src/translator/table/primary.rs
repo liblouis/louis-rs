@@ -2299,6 +2299,8 @@ impl PrimaryTable {
                     Some(Rule::Joinword { .. }) => {
                         constraints.space_before_letter_at(char_pos + t.length())
                     }
+                    // not after a joined word, which liblouis spells a lower word out after
+                    Some(Rule::Lowword { .. }) => !Self::follows_joinword(&translations),
                     // a repetition of the word that follows, see ADR-0020
                     Some(Rule::Repword { .. } | Rule::Rependword { .. }) => self
                         .repeated_word(t, char_pos, &translations, &constraints, &indications)
@@ -2560,6 +2562,18 @@ impl PrimaryTable {
     /// rule doesn't apply: there is no such word, it starts inside an earlier
     /// translation (a contraction), or capitals or emphasis change inside the word or
     /// its repetition.
+    /// Whether the rule translated last, as liblouis's `prevTransOpcode` sees it, is a
+    /// `joinword`: the last translation of some input, spaces aside. A `lowword` doesn't
+    /// apply after one (`CTO_LowWord` in `for_selectRule`), so `en-us-g2.ctb`'s "to be" is
+    /// ⠖⠃⠑, not ⠖⠆.
+    fn follows_joinword(translations: &[ResolvedTranslation]) -> bool {
+        translations
+            .iter()
+            .rev()
+            .find(|t| t.length() > 0 && !matches!(t.rule(), Some(Rule::Space { .. })))
+            .is_some_and(|t| matches!(t.rule(), Some(Rule::Joinword { .. })))
+    }
+
     fn repeated_word(
         &self,
         t: &ResolvedTranslation,
@@ -3516,6 +3530,31 @@ mod tests {
         assert_eq!(table.translate("to"), "⠞⠕");
         assert_eq!(table.translate("to. b"), "⠞⠕⠲⠀⠃");
         assert_eq!(table.translate("to 1"), "⠞⠕⠀⠁");
+    }
+
+    #[test]
+    fn lowword_is_spelled_out_after_a_joinword() {
+        let rules = [
+            parse_rule("lowercase t 2345"),
+            parse_rule("lowercase o 135"),
+            parse_rule("lowercase b 12"),
+            parse_rule("lowercase e 15"),
+            parse_rule("lowercase x 1346"),
+            parse_rule("space \\s 0"),
+            parse_rule("joinword to 235"),
+            parse_rule("lowword be 23"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table =
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap();
+        // as in liblouis: "to be" is ⠖⠃⠑, not ⠖⠆
+        assert_eq!(table.translate("to be"), "⠖⠃⠑");
+        assert_eq!(table.translate("to  be"), "⠖⠃⠑");
+        // after anything else it is the lower word
+        assert_eq!(table.translate("be"), "⠆");
+        assert_eq!(table.translate("x be"), "⠭⠀⠆");
+        assert_eq!(table.translate("to x be"), "⠖⠭⠀⠆");
     }
 
     #[test]
