@@ -124,7 +124,8 @@ current figures and the reproduction steps.
 Reports from real use are the most useful contribution right now: a text that
 comes out wrong, a table that doesn't load, an API that gets in the way. Please
 [file an issue](https://github.com/liblouis/louis-rs/issues); pull requests are
-welcome too.
+welcome too. [CONTRIBUTING.md](CONTRIBUTING.md) says what makes a report or a
+change easy to take.
 
 ## Acknowledgments
 
