@@ -109,6 +109,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   The rule dump and the rule-parsing REPL are gone.
 
 ### Fixed
+- Back-translation no longer looks for `compbrl` triggers, which are
+  print text and never match braille cells; liblouis uses them forward
+  only too. The scan took most of the time of back-translating a long
+  input.
 - A character defined after a `base` rule for it is translated with its
   own dots, and the `base` rule only adds its class, as in liblouis: a
   capital of `nl-NL-g0.utb` keeps its virtual dot, and `vi-cb8.utb`'s

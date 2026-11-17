@@ -589,9 +589,12 @@ impl PrimaryTableBuilder {
                 .flatten()
                 .collect(),
             ),
-            compbrl_scanner: (!triggers.is_empty()).then(|| CompbrlScanner {
-                triggers,
-                character_classes: ctx.character_classes.clone(),
+            // forward only, as in liblouis, whose back-translation has no compbrl
+            compbrl_scanner: (direction == Direction::Forward && !triggers.is_empty()).then(|| {
+                CompbrlScanner {
+                    triggers,
+                    character_classes: ctx.character_classes.clone(),
+                }
             }),
             cursor_word_scanner: (direction == Direction::Forward).then(|| CursorWordScanner {
                 character_classes: ctx.character_classes.clone(),
