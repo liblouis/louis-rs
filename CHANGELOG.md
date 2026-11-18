@@ -107,6 +107,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   in both directions and reports its errors, like liblouis's
   `lou_checktable`. It prints "No errors found." unless given `--quiet`.
   The rule dump and the rule-parsing REPL are gone.
+- Translation is faster, several times so for tables with many `match`,
+  `context`, `correct` or `pass2`-`pass4` rules: at each position only the
+  rules that can start with the character there are tried, not all of
+  them.
 
 ### Fixed
 - Two large signs that only spaces separate are written without the
