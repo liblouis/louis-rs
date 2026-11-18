@@ -14,7 +14,7 @@ name = "louis"
 path = "src/main.rs"
 
 [dependencies]
-louis-rs = { path = "..", version = "0.3.1" }
+louis-rs = { path = "..", version = "0.4.0" }
 thiserror = "2"
 search_path = "0.1.4"
 clap = { version = "4.4.11", features = ["derive"] }

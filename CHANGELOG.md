@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - ReleaseDate
 
+## [0.4.0] - 2026-11-18
+
 ### Added
 - `louis::metadata` finds tables by their `#+key: value` metadata, like
   liblouis's `lou_findTables`: `Index::new()` indexes the tables on
@@ -727,7 +729,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 -   Make it clear that the library API is unstable.
 
 <!-- next-url -->
-[Unreleased]: https://github.com/liblouis/louis-rs/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/liblouis/louis-rs/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/liblouis/louis-rs/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/liblouis/louis-rs/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/liblouis/louis-rs/compare/v0.2.8...v0.3.0
 [0.2.8]: https://github.com/liblouis/louis-rs/compare/v0.2.7...v0.2.8
