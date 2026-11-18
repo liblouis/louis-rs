@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use crate::parser::{AnchoredRule, Attribute, CharacterClasses, Pattern, Patterns, Side};
 
 use crate::translator::effect::Environment;
-use crate::translator::regexp::{CompiledRegexp, Regexp};
+use crate::translator::regexp::{CompiledRegexp, FirstCharIndex, Regexp};
 use crate::translator::translation::Translation;
 use crate::translator::{CharacterDefinition, ResolvedTranslation, TranslationStage};
 
@@ -160,6 +160,7 @@ impl MatchPatternsBuilder {
 
     pub fn build(self) -> MatchPatterns {
         MatchPatterns {
+            index: FirstCharIndex::new(self.regexps.iter().map(|r| &r.main)),
             regexps: self.regexps,
         }
     }
@@ -168,6 +169,7 @@ impl MatchPatternsBuilder {
 #[derive(Debug)]
 pub struct MatchPatterns {
     regexps: Vec<MatchRegexp>,
+    index: FirstCharIndex,
 }
 
 impl MatchPatterns {
@@ -179,9 +181,11 @@ impl MatchPatterns {
     pub fn find(&self, input: &str, preceding: &str) -> Vec<ResolvedTranslation> {
         let env = Environment::new();
         let definitions = CharacterDefinition::default();
-        self.regexps
+        self.index
+            .candidates(input)
             .iter()
-            .filter_map(|r| {
+            .filter_map(|&i| {
+                let r = &self.regexps[i];
                 let found = r.main.find_anchored(input, &env, false, &definitions)?;
                 match &r.pre {
                     // the weight counts the whole match, `pre` included, as in a

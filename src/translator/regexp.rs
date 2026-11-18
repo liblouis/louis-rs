@@ -12,6 +12,9 @@
 //! captures.
 
 mod character_set;
+mod first_char_index;
+
+pub use first_char_index::FirstCharIndex;
 
 use std::{collections::HashSet, ops::Range};
 

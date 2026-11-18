@@ -8,10 +8,7 @@ Everything here is measured, including the things that turned out not to work. E
 idea records its own numbers so a future attempt can tell whether it is re-treading
 disproven ground.
 
-Idea 3 is on `main`. Ideas 1 and 2 are prototyped on the `regexp-prefilter` branch and
-have not been reviewed for merge; idea 4 is a sketch. They stay parked on purpose:
-once the `compbrl` scan was fixed (see [Long inputs](#long-inputs)), no reported
-slowness was left for them to fix.
+Ideas 2 and 3 have landed. Idea 1 is superseded by idea 2. Idea 4 is still a sketch.
 
 ## Measuring
 
@@ -219,8 +216,10 @@ Two things that are load-bearing:
   exactly right, with no reverse-case-mapping table and no second lookup to dedupe.
 - **Order.** The union must stay in ascending pattern order. Candidate order decides
   equal-rank ties in `PrimaryTable::trace` (`max_by_key` returns the last maximum), so
-  reordering the candidate list silently changes which rule wins. Hence the
-  two-pointer merge of bucket and `unfiltered` rather than chaining them.
+  reordering the candidate list silently changes which rule wins. `unfiltered` is merged
+  into every bucket once, at build time, so a lookup is one slice.
+  `Rank::definition_order` has since made the order matter less, but keeping it costs
+  nothing.
 
 ### Result
 
@@ -459,8 +458,7 @@ Do not re-attempt these without a reason to think something has changed.
   `de-g0.utb` forward on 40 000 characters from 0.56 s to 0.09 s (`de-g2.ctb` 0.61 s
   to 0.12 s, `en-us-g2.ctb` and backward unchanged). It is idea 2 again, for `context`
   rules only, and `regexp-prefilter` does it on the compiled program for `match` rules
-  too. Not taken because nothing reported is slow enough to need it: take
-  `regexp-prefilter` when something is.
+  too. Not taken then; idea 2 has since landed and covers it.
 - **FxHash for the maps and sets keyed by `char`.** A `BuildHasherDefault` with
   rustc's multiply-and-rotate hash over the 115 `HashSet<char>` and `HashMap<char, _>`
   saved about 2% of a suite run (491/494/493 s of user CPU against 483/482/485 s), and

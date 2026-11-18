@@ -39,6 +39,14 @@ impl CharacterSet {
             self.chars.binary_search(&c).is_ok()
         }
     }
+
+    /// Every character in the set: the ASCII ones found by testing all 128, then the rest.
+    pub fn members(&self) -> impl Iterator<Item = char> {
+        (0..128u8)
+            .map(char::from)
+            .filter(|&c| self.contains(c))
+            .chain(self.chars.iter().copied())
+    }
 }
 
 #[cfg(test)]

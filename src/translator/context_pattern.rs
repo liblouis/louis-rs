@@ -7,7 +7,7 @@ use crate::parser::{Action, ActionInstruction, Quantifier, Test, TestInstruction
 use crate::parser::multipass::test::Operator;
 use crate::parser::{AnchoredRule, Attribute, CharacterClass, CharacterClasses};
 use crate::translator::effect::{Effect, Environment};
-use crate::translator::regexp::{Comparison, CompiledRegexp, Regexp};
+use crate::translator::regexp::{Comparison, CompiledRegexp, FirstCharIndex, Regexp};
 use crate::translator::swap::SwapClasses;
 use crate::translator::table::TableContext;
 use crate::translator::translation::{
@@ -286,6 +286,7 @@ impl ContextPatternsBuilder {
 
     pub fn build(self) -> ContextPatterns {
         ContextPatterns {
+            index: FirstCharIndex::new(self.regexps.iter().map(|r| &r.main)),
             regexps: self.regexps,
         }
     }
@@ -294,6 +295,7 @@ impl ContextPatternsBuilder {
 #[derive(Debug)]
 pub struct ContextPatterns {
     regexps: Vec<ContextRegexp>,
+    index: FirstCharIndex,
 }
 
 impl ContextPatterns {
@@ -315,9 +317,11 @@ impl ContextPatterns {
         at_start: bool,
         fallback_definitions: &CharacterDefinition,
     ) -> Vec<ResolvedTranslation> {
-        self.regexps
+        self.index
+            .candidates(input)
             .iter()
-            .filter_map(|r| {
+            .filter_map(|&i| {
+                let r = &self.regexps[i];
                 let found = r
                     .main
                     .find_anchored(input, env, at_start, fallback_definitions)?;
