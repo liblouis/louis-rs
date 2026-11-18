@@ -11,7 +11,7 @@ behave the same as liblouis, and if it doesn't, that's a bug:
 
 ## How close
 
-Measured at louis-rs `b2134ba` against liblouis `011cfb3b` plus the open pull requests
+Measured at louis-rs `a542e24` against liblouis `f4627636` plus the open pull requests
 [#2176](https://github.com/liblouis/liblouis/pull/2176),
 [#2190](https://github.com/liblouis/liblouis/pull/2190),
 [#2194](https://github.com/liblouis/liblouis/pull/2194),
@@ -25,7 +25,7 @@ Measured at louis-rs `b2134ba` against liblouis `011cfb3b` plus the open pull re
 |--------------------------------|----------------|
 | Assertions run                 | 2 241 030      |
 | Pass                           | **99.4%**      |
-| Fail                           | 1 021 (0.05%)  |
+| Fail                           | 957 (0.04%)    |
 | Expected failure               | 0.5%           |
 | Tables that compile            | all            |
 
@@ -98,11 +98,11 @@ counts are the `Failure` lines `check` prints for each file, rounded.
 
 | Tables                                | Failing | What goes wrong                                                                                                                                                                       |
 |---------------------------------------|--------:|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Dutch (`nl-g0`)                       |     ≈45 | A multi-word italic passage should open with ⠸⠸ once, louis-rs marks every word ⠸…⠠; a word's emphasis gets a closing ⠠ where it simply ends ("Amsterdam" gives ⠸⠨…⠍⠠ before a space); after a hyphen, emphasis and capitals aren't marked again ("Zuid-Afrika"). Indicators come out in the wrong order (⠨⠰, not ⠰⠨), and a stray ⠠ appears after a capital or emphasis indicator that follows a digit ("1E" gives ⠼⠁⠨⠠⠑). |
-| Russian (`ru`)                        |     ≈30 | Generic `begmode` alphabet indicators: word tiers repeat per letter ("ABC" gives ⠨⠁⠨⠃⠨⠉, not ⠨⠁⠃⠉), and a letter after one from another alphabet gets its sign twice ("HАH" gives ⠨⠓⠘⠘⠁⠨⠓). Likely needs indication tiers unified across capitals, emphasis and modes ([ADR-0009](adr/0009-capsletter-vs-begcapsword.org)). |
-| German detailed (`de-g0-detailed`, `de-g1-detailed`), backward |     ≈15 | After a number, ⠠ is read as an apostrophe (⠼⠓⠠⠋⠁⠉⠓ gives "8'fach", not "8fach"), and a few quotation marks and ¦ come back as other characters. |
+| Dutch (`nl-g0`)                       |     ≈46 | A multi-word italic passage should open with ⠸⠸ once, louis-rs marks every word ⠸…⠠; a word's emphasis gets a closing ⠠ where it simply ends ("Amsterdam" gives ⠸⠨…⠍⠠ before a space); after a hyphen, emphasis and capitals aren't marked again ("Zuid-Afrika"). Indicators come out in the wrong order (⠨⠰, not ⠰⠨), and a stray ⠠ appears after a capital or emphasis indicator that follows a digit ("1E" gives ⠼⠁⠨⠠⠑). |
+| Russian (`ru`)                        |     ≈32 | Generic `begmode` alphabet indicators: word tiers repeat per letter ("ABC" gives ⠨⠁⠨⠃⠨⠉, not ⠨⠁⠃⠉), and a letter after one from another alphabet gets its sign twice ("HАH" gives ⠨⠓⠘⠘⠁⠨⠓). Likely needs indication tiers unified across capitals, emphasis and modes ([ADR-0009](adr/0009-capsletter-vs-begcapsword.org)). |
+| German detailed (`de-g0-detailed`, `de-g1-detailed`), backward |     ≈16 | After a number, ⠠ is read as an apostrophe (⠼⠓⠠⠋⠁⠉⠓ gives "8'fach", not "8fach"), and a few quotation marks and ¦ come back as other characters. |
 | Punjabi (`pa`), backward              |     ≈10 | The number sign ⠼ is read as the letter ਣ, which has the same cells; liblouis takes the number sign when a digit follows.                                                             |
-| everything else                       |    ≈820 | Roughly 85 files, each with fewer than 80 failures.                                                                                                                                    |
+| everything else                       |    ≈850 | Roughly 90 files, each with fewer than 80 failures.                                                                                                                                    |
 
 **Backward translation** is where louis-rs is weakest. The word-boundary checks
 (`word_start` and friends) only work forward, caps passages have no backward path at
