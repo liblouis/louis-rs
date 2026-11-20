@@ -1005,6 +1005,11 @@ mod tests {
             Parser::new(r#""a\\b""#).string(),
             Ok(TestInstruction::String { s: "a\\b".into() })
         );
+        // like liblouis, an unknown escape is an error, not a backslash and a letter
+        assert_eq!(
+            Parser::new(r#""\q""#).string(),
+            Err(ParseError::InvalidEscapeSequence { found: 'q' })
+        );
     }
 
     #[test]

@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `louis::VERSION`, the version of louis-rs, for bindings that report it,
   such as the C API's `louis_version()`.
 
+### Changed
+- An unknown escape in a quoted multipass operand, such as `"\q"`, is a
+  table error, as in liblouis and as already for other opcodes. It used to
+  be read as a backslash and a letter. Escape errors now name the escape:
+  `invalid escape sequence '\q'`.
+
 ## [0.4.0] - 2026-11-18
 
 ### Added

@@ -162,8 +162,10 @@ pub enum ParseError {
     InvalidUnicodeLiteral { found: Option<String> },
     #[error("invalid number")]
     InvalidNumber(#[from] ParseIntError),
-    #[error("invalid escape sequence {0:?}")]
-    InvalidEscape(Option<char>),
+    #[error("invalid escape sequence '\\{0}'")]
+    InvalidEscape(char),
+    #[error("backslash at end of string")]
+    TrailingBackslash,
     #[error("names can only contain a-z and A-Z, got {name:?}")]
     InvalidName { name: String },
     #[error("constraints '{constraints:?}' not allowed for opcode {opcode:?}")]
@@ -1309,7 +1311,7 @@ fn unescape_unicode(chars: &mut Chars, len: u8) -> Result<char, ParseError> {
     // A hex literal that fits a UTF-16 code unit (`\x`, always 4 digits) can
     // only fail to be a scalar value by being a surrogate half -- that's the
     // one gap in `char::from_u32`'s range for u16-sized input. Anything wider
-    // (only reachable via `\y`/`\z`) is a genuine out-of-range literal.
+    // (only reachable via `\y`) is a genuine out-of-range literal.
     let Ok(unit) = u16::try_from(value) else {
         return Err(ParseError::InvalidUnicodeLiteral { found: Some(s) });
     };
@@ -1371,8 +1373,8 @@ pub fn unescape(s: &str, context: EscapingContext) -> Result<String, ParseError>
             }
             Some('x') => new.push(unescape_unicode(&mut iter, 4)?),
             Some('y') => new.push(unescape_unicode(&mut iter, 5)?),
-            Some(c) => new.push(simple_escape(c).ok_or(ParseError::InvalidEscape(Some(c)))?),
-            _ => return Err(ParseError::InvalidEscape(None)),
+            Some(c) => new.push(simple_escape(c).ok_or(ParseError::InvalidEscape(c))?),
+            _ => return Err(ParseError::TrailingBackslash),
         };
     }
     Ok(new)

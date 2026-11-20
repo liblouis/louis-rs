@@ -38,8 +38,12 @@ pub enum ParseError {
     InvalidQuantifier,
     #[error("invalid operator")]
     InvalidOperator { found: Option<char> },
-    #[error("invalid escape sequence")]
-    InvalidEscapeSequence { found: Option<char> },
+    #[error("invalid escape sequence '\\{found}'")]
+    InvalidEscapeSequence { found: char },
+    #[error("backslash at end of string")]
+    TrailingBackslash,
+    #[error("invalid unicode literal '{found}'")]
+    InvalidUnicodeLiteral { found: String },
     #[error("double negation ('!!') is not allowed")]
     DoubleNegation,
     #[error("negating a replacement ('![...]') is not allowed")]
@@ -111,15 +115,13 @@ impl<'a> Scanner<'a> {
                 } else {
                     super::simple_escape(escaped)
                 };
-                if let Some(decoded) = decoded {
+                if decoded.is_some() {
                     self.0.next();
-                    Ok(decoded)
-                } else {
-                    // Preserve unknown escapes. The next character is still part of the string.
-                    Ok(c)
                 }
+                // like liblouis, an unknown escape is an error, not two characters
+                decoded.ok_or(ParseError::InvalidEscapeSequence { found: escaped })
             }
-            None => Err(ParseError::InvalidEscapeSequence { found: None }),
+            None => Err(ParseError::TrailingBackslash),
         }
     }
 
@@ -128,13 +130,13 @@ impl<'a> Scanner<'a> {
         for _ in 0..len {
             match self.0.next() {
                 Some(c) => s.push(c),
-                None => return Err(ParseError::InvalidEscapeSequence { found: None }),
+                None => return Err(ParseError::InvalidUnicodeLiteral { found: s }),
             }
         }
         u32::from_str_radix(&s, 16)
             .ok()
             .and_then(char::from_u32)
-            .ok_or(ParseError::InvalidEscapeSequence { found: None })
+            .ok_or(ParseError::InvalidUnicodeLiteral { found: s })
     }
 }
 
