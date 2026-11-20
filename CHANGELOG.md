@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+- `louis::VERSION`, the version of louis-rs, for bindings that report it,
+  such as the C API's `louis_version()`.
+
 ## [0.4.0] - 2026-11-18
 
 ### Added

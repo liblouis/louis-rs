@@ -94,6 +94,9 @@ pub mod internals {
     }
 }
 
+/// The version of louis-rs, such as `"0.4.0"`.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Why a [`Translator`] could not be built.
 #[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
