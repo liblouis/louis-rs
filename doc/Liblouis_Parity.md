@@ -66,8 +66,10 @@ that stops before the space, and the six unimplemented opcodes. They're collecte
 
 ## The liblouis API in louis-rs
 
-There is **no C ABI** yet. Python bindings live in
-[louis-py](https://github.com/liblouis/louis-py).
+Python bindings live in [louis-py](https://github.com/liblouis/louis-py), a C API
+in [louis-capi](https://github.com/liblouis/louis-capi): `louis_*` functions of its
+own, not a replacement for `lou_*` ([ADR-0023](adr/0023-c-api.org)). It covers
+what BRLTTY and TalkBack need; its README lists what is missing.
 
 | liblouis                                              | louis-rs                                                                                      |
 |-------------------------------------------------------|-----------------------------------------------------------------------------------------------|

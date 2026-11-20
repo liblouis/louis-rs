@@ -82,6 +82,10 @@ None yet ([[file:0018-parity-or-migration-path.org][ADR-0018]]): an
 application that needs one of the three should say so, and it can be
 added as decided here. Each is small (S) once its user is known.
 
+The first such user is Orca, whose braille monitor calls
+~charToDots~ through liblouis's Python bindings (found in the consumer
+survey of [[file:0023-c-api.org][ADR-0023]]). Its way there is louis-py, not the C API.
+
 ** Pros and Cons of the Options
 
 *** Option 1: all three now, like liblouis

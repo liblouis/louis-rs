@@ -112,6 +112,9 @@ assert_eq!(translator.translate("It's about the blind"), "⠠⠭⠄⠎⠀⠁⠃�
 
 The [API documentation](https://docs.rs/louis-rs) has the rest.
 
+From other languages: Python with [louis-py](https://github.com/liblouis/louis-py), C
+with [louis-capi](https://github.com/liblouis/louis-capi).
+
 ## Project status
 
 Beta. Compatibility with liblouis is driven by its own test suite, which

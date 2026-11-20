@@ -104,11 +104,14 @@ In liblouis, `dotsIO` makes a translation write, or read back, dot patterns rath
 the display table's characters, and `ucBrl` with it makes those dot patterns Unicode
 braille. louis-rs has no such modes: braille is Unicode braille unless a
 `BrailleEncoding` is named, so every translation already does what `dotsIO | ucBrl`
-does. `dotsIO` alone gives liblouis's internal dot values, which mean nothing outside
-its C API.
+does. `dotsIO` alone gives liblouis's dot values, `0x8000` plus a bit per dot, which
+screen readers such as NVDA and TalkBack use to drive a braille display.
 
 **Migration path:** drop the modes. For Unicode braille, use a `Translator` without a
-`BrailleEncoding`; for a display table's characters, use one with it.
+`BrailleEncoding`; for a display table's characters, use one with it. For dot values,
+subtract `0x2800` from each cell of Unicode braille: bit 0 is dot 1, bit 7 dot 8,
+the bits `dotsIO` gives without its `0x8000`. The same holds for the C API,
+[louis-capi](https://github.com/liblouis/louis-capi).
 
 ## Attributes `$w`, `$x`, `$y` and `$z`
 
