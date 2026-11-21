@@ -33,7 +33,7 @@ wrong in visible ways:
 
 - A trailing ~_N~ was dropped, so a rule without brackets or with a ~*~
   action consumed the character it only meant to check: ~th-g2.ctb~'s
-  ~"ใคร"!%ToneAndVowels_~ ate the character after "ใคร" (most of
+  ~"ใคร"!%ToneAndVowels_~ consumed the character after "ใคร" (most of
   ~th.yaml~'s failures).
 - A leading ~_N~ was matched forward as part of the rule, so a ~*~ rule
   consumed its look-behind too (~da-dk-g26.ctb~'s ~_$D[@6-46-6] *~), and
@@ -73,10 +73,10 @@ match is the concatenation of the pieces. ~_N~ breaks that model:
    the rule replaces. A ~_N~ that steps back into or across them makes
    that span ambiguous: the ~[$d5]_6~ of liblouis's own tests steps
    from after the bracket to before it.
-5. *It's hard to read.* ~th-g2.ctb~'s ~!%Ahead_"หมาก"~ checks that the
-   character at the cursor is not in ~%Ahead~, steps back, then reads
-   "หมาก" from the same place. Since ~ห~ is not in ~%Ahead~ the first
-   test is a no-op, which nobody noticed because nobody can read it.
+5. *It obscures what a rule checks.* ~th-g2.ctb~'s ~!%Ahead_"หมาก"~
+   checks that the character at the cursor is not in ~%Ahead~, steps
+   back, then reads "หมาก" from the same place. Since ~ห~ is not in ~%Ahead~ the first
+   test is a no-op, which the rule does not make apparent.
 6. *It hides the rule's position.* Rules are indexed and ranked by the
    characters they start with at the cursor (~passFindCharacters~,
    ~leading_literal_len~, ~Rank~, ADR-0016). With ~_N~ anywhere, what
@@ -86,7 +86,7 @@ match is the concatenation of the pieces. ~_N~ breaks that model:
 *** How the corpus uses it
 
 Across liblouis's tables ~_N~ appears in exactly two useful shapes,
-plus three odd rules:
+plus three rules that use it otherwise:
 
 - *Leading*: ~_N~ followed by tests covering exactly N characters, then
   the rule proper: ~_$l["ound"]~, "ound" after a letter. The tests
@@ -96,7 +96,7 @@ plus three odd rules:
   Those characters are checked and given back; that is a look-ahead.
 - *Middle*: three rules, ~it-it-comp6.utb~'s two
   ~...%mathnumber_$u.%mathop~ and ~th-g2.ctb~'s ~!%Ahead_"หมาก"~.
-  Each was either a no-op or a fragile way of saying something
+  Each was either a no-op or an indirect way of saying something
   simpler, and each has a table fix: liblouis#2196 and #2197.
 - Three inline tables in liblouis's unit tests (~multipass.yaml~,
   ~multipass-forward.yaml~, ~multipass-backward.yaml~) step back into a
@@ -186,7 +186,7 @@ are better fixed in the tables.
 - Good, because it is no work.
 - Bad, because it consumes what trailing ~_N~ rules only check, and a
   ~*~ rule consumes its look-behind.
-- Bad, because look-behind only worked by accident, through delayed
+- Bad, because look-behind only worked as a side effect of delayed
   translations, and lost rules a longer translation jumped over.
 - Bad, because a ~_N~ before the input never fails.
 
@@ -197,8 +197,8 @@ are better fixed in the tables.
   input; a thread that rewinds needs its own position, which turns the
   VM into a backtracker and gives up the linear-time guarantee of
   ADR-0007.
-- Bad, because it keeps the unreadable middle and bracket-crossing
-  forms alive, and with them the question of which span is replaced.
+- Bad, because it keeps the middle and bracket-crossing forms alive,
+  and with them the question of which span is replaced.
 - Bad, because rules would still be found at their look-behind and need
   delayed translations.
 
@@ -222,7 +222,7 @@ reaches past ~A₂~, ~A₂~ being ~A~'s last N characters.
 - Bad, because the VM's only look-ahead is the matched but unconsumed
   tail after the ~Consume~ span; one in the middle of a program is the
   intersection again, and would need nested sub-matches.
-- Bad, because all three rules it would serve are a no-op or a fragile
+- Bad, because all three rules it would serve are a no-op or an indirect
   form with a simpler fix in the table.
 
 ** Links
