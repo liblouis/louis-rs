@@ -2,7 +2,7 @@
 #+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
 #+language: en
 
-* PROPOSED ADR-0026: The order of indications at one position
+* ACCEPTED ADR-0026: The order of indications at one position
 - Deciders :: CE
 - Date :: [2026-11-23 Mon]
 
