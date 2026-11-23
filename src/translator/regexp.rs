@@ -92,16 +92,16 @@ impl Regexp {
         self.compile_with_payload(Translation::default())
     }
 
+    /// liblouis's `!`, which is not a logical complement: it keeps the structure of what it
+    /// negates (sequences, alternatives, repetitions) and inverts each test of a single
+    /// character, which still consumes that character (`notOperator` in liblouis's
+    /// `pattern_check_expression`). So `!(ab)` is `!a!b`, and `!(a|b)` is `!a|!b`.
     pub fn negate(self) -> Regexp {
         match self {
             Regexp::Concat(left, right) => {
-                // FIXME: Unfortunatelly this is wrong: !(e1e2) is not the same as (!e1!e2)
                 Regexp::Concat(Box::new(left.negate()), Box::new(right.negate()))
             }
             Regexp::Either(left, right) => {
-                // FIXME: Unfortunatelly this is wrong as well: !(e1|e2) is not the same as
-                // (!e1|!e2). The following would be true: !(e1|e2) ≡ (!e1&!e2), but alas we do not
-                // have &
                 Regexp::Either(Box::new(left.negate()), Box::new(right.negate()))
             }
             Regexp::Optional(regexp) => Regexp::Optional(Box::new(regexp.negate())),

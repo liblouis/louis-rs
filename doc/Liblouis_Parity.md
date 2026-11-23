@@ -111,9 +111,6 @@ counts are the `Failure` lines `check` prints for each file, rounded.
 all, and backward `capsletter`/`begcapsword` fails in `hu-hu-g1`
 ([#4](https://github.com/liblouis/louis-rs/issues/4)).
 
-**Patterns.** In `match` and `context` rules, negating a sequence or an alternation
-is wrong: `!(e1e2)` is taken as `(!e1!e2)`, and `!(e1|e2)` as `(!e1|!e2)`.
-
 ## Not yet measured
 
 About 40 blocks in liblouis's YAML files don't run, because their table or include

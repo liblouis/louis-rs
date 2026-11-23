@@ -37,7 +37,15 @@ impl Regexp {
             Pattern::Group(patterns) => {
                 Regexp::Group(Box::new(Regexp::from_patterns(patterns, ctx)))
             }
-            Pattern::Negate(pattern) => Regexp::from_pattern(pattern, ctx).negate(),
+            // `!%[_^]` means: there is a character, and it is not in the set. So it fails at
+            // the boundary, and after a space. Negating the `Either` instead would give "not
+            // in the set, or not at the boundary", which matches after a space too.
+            Pattern::Negate(pattern) => match pattern.as_ref() {
+                Pattern::AttributesOrBoundary(hash_set, _) => {
+                    Regexp::from_attributes(hash_set, ctx).negate()
+                }
+                _ => Regexp::from_pattern(pattern, ctx).negate(),
+            },
             Pattern::Optional(pattern) => {
                 Regexp::Optional(Box::new(Regexp::from_pattern(pattern, ctx)))
             }
