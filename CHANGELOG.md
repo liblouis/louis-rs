@@ -17,6 +17,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   table error, as in liblouis and as already for other opcodes. It used to
   be read as a backslash and a letter. Escape errors now name the escape:
   `invalid escape sequence '\q'`.
+- In a multipass, `correct` or `context` test, negating a string or dots of
+  more than one character (`!"ab"`) is a table error. liblouis negates such
+  a test as a whole, louis-rs negated each character; no table in
+  liblouis's corpus has one (ADR-0025).
+
+### Fixed
+- From a number to the next space, `match` rules don't apply, as in
+  liblouis. With `en-ueb-g2`, the second quote in `rotate="180"` is no
+  longer a closing quotation mark, and "46.42a.1" ends in a number with a
+  decimal point (#77, #80).
+- A negated attribute set that includes the boundary, such as
+  `!%[_~^]` in a `match` rule, needs a character not in the set. It used to
+  match after a space too, so `en-ueb-g2` used the "ing" groupsign at the
+  start of every word but the first (#79).
+- In a table with a `capsletter`, a rule that starts on a character that
+  isn't a capital doesn't take a capital, as in liblouis: "GitHub" keeps
+  the capital indicator of its "H" instead of contracting "tH" (#78). The
+  same applies to emphasis: emphasis that starts inside a contraction
+  keeps its indicator.
 
 ## [0.4.0] - 2026-11-18
 
