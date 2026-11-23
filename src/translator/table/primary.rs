@@ -389,13 +389,10 @@ impl PrimaryTableBuilder {
     fn build(self, direction: Direction, ctx: &TableContext) -> PrimaryTable {
         let triggers = self.compbrl_triggers;
         let indicators = [
-            // Computer braille must be first so begcomp appears before emphasis.
             self.computer_braille_indicator
                 .build()
                 .map(Indicator::ComputerBraille),
-            // Emphasis must be before capsletter so begemphword appears before capsletter.
             self.emphasis_indicator.build(ctx).map(Indicator::Emphasis),
-            // the letter sign goes before the capitals, so "B" gives ⠰⠠⠃ and not ⠠⠰⠃
             self.lettersign_indicator
                 .build(ctx)
                 .map(Indicator::LetterSign),
@@ -403,8 +400,6 @@ impl PrimaryTableBuilder {
                 .build(ctx)
                 .map(Indicator::Uppercase),
             self.mode_indicator.build(ctx).map(Indicator::Mode),
-            // Last, as in liblouis: "1A" must give ⠠⠰ for en-ueb-g2's pass2 rule
-            // `_$D[@6-56]$U` to drop the nonumsign in front of a capital.
             self.numeric_indicator.build().map(Indicator::Numeric),
         ]
         .into_iter()

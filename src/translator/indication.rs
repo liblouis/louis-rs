@@ -36,6 +36,7 @@
 //!
 //! A table holds its rewriters as [`Rewriters`], applied in turn.
 
+use std::cmp::Reverse;
 use std::ops::Range;
 
 use crate::emphasis::EmphasisSpan;
@@ -92,8 +93,90 @@ pub enum Indicator {
     Uppercase(uppercase::Indicator),
 }
 
+impl Indicator {
+    /// The indications at their positions, each with its place among those at the same
+    /// position
+    fn precompute(
+        &self,
+        input: &str,
+        spans: &[EmphasisSpan],
+    ) -> Vec<(usize, IndicationOrder, ResolvedTranslation)> {
+        let (pairs, order): (Vec<_>, fn(&ResolvedTranslation) -> IndicationOrder) = match self {
+            // the emphasis knows how its runs nest, and places its indications itself
+            Indicator::Emphasis(i) => return i.precompute(input, spans),
+            Indicator::ComputerBraille(i) => (i.precompute(input, spans), |_| {
+                IndicationOrder::ComputerBraille
+            }),
+            Indicator::LetterSign(i) => (i.precompute(input), |_| IndicationOrder::LetterSign),
+            Indicator::Uppercase(i) => (i.precompute(input), |t| match t.rule() {
+                Some(
+                    Rule::Endcapsword { .. } | Rule::Endcapsphrase { .. } | Rule::Endcaps { .. },
+                ) => IndicationOrder::CapitalsEnd,
+                _ => IndicationOrder::Capitals,
+            }),
+            Indicator::Mode(i) => (i.precompute(input), |t| match t.rule() {
+                Some(
+                    Rule::Endmodeword { .. } | Rule::Endmodephrase { .. } | Rule::Endmode { .. },
+                ) => IndicationOrder::ModeEnd,
+                _ => IndicationOrder::Mode,
+            }),
+            Indicator::Numeric(i) => (i.precompute(input), |_| IndicationOrder::Numeric),
+        };
+        pairs
+            .into_iter()
+            .map(|(pos, t)| (pos, order(&t), t))
+            .collect()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Indicators(Vec<Indicator>);
+
+/// The place of an indication among those at the same position, first to last (ADR-0026).
+///
+/// Indicators nest, as liblouis's `insertEmphasesAt` nests them and UEB 8.6.2 prefers:
+/// what closes there closes innermost first, then what opens there opens outermost first,
+/// capitals and modes closest to the word. The other indicators keep their places around
+/// them. Each group belongs to one indicator, so the order of [`Indicators`] doesn't
+/// matter; the fields break ties within a group, and an equal key keeps the order in
+/// which the indicator gave its indications.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum IndicationOrder {
+    /// `begcomp` and `endcomp`, before everything else
+    ComputerBraille,
+    /// The end of capitals: opened closest to the word, they close first
+    CapitalsEnd,
+    /// The end of a mode, as for capitals, which liblouis treats as the first mode
+    ModeEnd,
+    /// The end of emphasis: the most recently opened first, then in declaration order
+    EmphasisEnd {
+        /// Where the emphasis began, its first character that isn't a space: the
+        /// latest first, as it is the innermost
+        opened: Reverse<usize>,
+        /// The index of the class among the `emphclass` rules: on a tie, the class
+        /// declared first closes first
+        definition_order: usize,
+    },
+    /// The begin of emphasis: the longest first, as it closes last, then the
+    /// last-declared class first
+    EmphasisBegin {
+        /// Where the emphasis ends, after its last character that isn't a space: the
+        /// latest first, as it is the outermost
+        until: Reverse<usize>,
+        /// The index of the class among the `emphclass` rules: on a tie, the class
+        /// declared last opens first
+        definition_order: Reverse<usize>,
+    },
+    /// The letter sign goes before the capitals, so "B" gives ⠰⠠⠃ and not ⠠⠰⠃
+    LetterSign,
+    /// The begin of capitals, or a capital letter
+    Capitals,
+    /// The begin of a mode
+    Mode,
+    /// Last, as in liblouis: "1A" must give ⠠⠰ for en-ueb-g2's pass2 rule `_$D[@6-56]$U`
+    /// to drop the nonumsign in front of a capital
+    Numeric,
+}
 
 /// The result of pre-computing indications for a given input.
 ///
@@ -135,42 +218,24 @@ impl Indicators {
 
     pub fn precompute(&self, input: &str, spans: &[EmphasisSpan]) -> PrecomputedIndications {
         let n = input.chars().count();
+        let mut ordered: Vec<(usize, IndicationOrder, ResolvedTranslation)> = self
+            .0
+            .iter()
+            .flat_map(|indicator| indicator.precompute(input, spans))
+            .collect();
+        // stable, so an equal key keeps the order in which the indicator gave them
+        ordered.sort_by_key(|(pos, order, _)| (*pos, *order));
+
         let mut indications: Vec<Vec<ResolvedTranslation>> = vec![vec![]; n + 1];
         let mut emphasis = vec![false; n + 1];
-
-        for indicator in &self.0 {
-            let is_emphasis = matches!(
-                indicator,
-                Indicator::Emphasis(_) | Indicator::Uppercase(_) | Indicator::Mode(_)
+        for (pos, order, t) in ordered {
+            emphasis[pos] |= !matches!(
+                order,
+                IndicationOrder::ComputerBraille
+                    | IndicationOrder::LetterSign
+                    | IndicationOrder::Numeric
             );
-            let pairs: Vec<(usize, ResolvedTranslation)> = match indicator {
-                Indicator::ComputerBraille(i) => i.precompute(input, spans),
-                Indicator::Emphasis(i) => i.precompute(input, spans),
-                Indicator::Numeric(i) => i.precompute(input),
-                Indicator::Uppercase(i) => i.precompute(input),
-                Indicator::Mode(i) => i.precompute(input),
-                Indicator::LetterSign(i) => i.precompute(input),
-            };
-            for (pos, t) in pairs {
-                emphasis[pos] |= is_emphasis;
-                // capitals and modes open closest to the word, so they close first, before
-                // the emphasis that ends with them ("ROMEO AND JULIET" in italics)
-                if matches!(
-                    t.rule(),
-                    Some(
-                        Rule::Endcapsword { .. }
-                            | Rule::Endcapsphrase { .. }
-                            | Rule::Endcaps { .. }
-                            | Rule::Endmodeword { .. }
-                            | Rule::Endmodephrase { .. }
-                            | Rule::Endmode { .. }
-                    )
-                ) {
-                    indications[pos].insert(0, t);
-                } else {
-                    indications[pos].push(t);
-                }
-            }
+            indications[pos].push(t);
         }
 
         PrecomputedIndications {

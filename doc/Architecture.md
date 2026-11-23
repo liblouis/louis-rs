@@ -145,6 +145,11 @@ One per kind of indication: `uppercase`, `numeric`, `emphasis`, `computer_braill
 `lettersign`, and `mode` for the generic `begmode` family, which marks a run of any
 character class the way capitals are marked.
 
+**`IndicationOrder`.** The order of the indications at one position: what closes there
+closes innermost first, then what opens there opens outermost first, capitals and modes
+closest to the word, so that indicators nest (ADR-0026). Each indicator gives its
+indications their place; `Indicators::precompute` sorts by it.
+
 **Constrainer, `Constraint`.** Decides from the text alone where rules may or may not
 apply, before translation, as one set of flags per position. One per question: inside a
 number, inside a `nocont` word, a syllable start, a hyphenation break, backward after a
