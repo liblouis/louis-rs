@@ -60,8 +60,8 @@ two kinds of precomputation run over the whole input:
   `PrecomputedIndications`, is a list of translations per position (ADR-0005, ADR-0006).
 - **Constrainers** (`position_constraints.rs`) decide which *rules* may apply where: a set of
   `Constraint` flags per position, such as "inside a number, no contractions"
-  (`DontContract`), "inside a `nocont` word" (`Uncontracted`), "a syllable of a `syllable`
-  rule starts here" (`SyllableStart`) or "a hyphenation break falls here"
+  (`DontContract`), "inside a `nocont` word" (`Uncontracted`), "a syllable, an emphasis span
+  or a run of capitals starts here, and no rule from before may take it" (`TypeStart`) or "a hyphenation break falls here"
   (`HyphenationBreak`).
 
 Both read only the input text, the spans and the options. Neither knows which rules will

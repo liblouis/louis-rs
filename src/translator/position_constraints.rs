@@ -45,9 +45,17 @@ pub enum Constraint {
     /// class) that the word's hyphenation dictionary marks as a valid break point.
     /// Consulted to decide whether a `nocross` rule may cross this gap.
     HyphenationBreak,
-    /// A `syllable` rule's syllable starts at this character, in forward translation. A
-    /// rule starting before it can't take it.
-    SyllableStart,
+    /// A rule that starts before this character can't take it, in forward translation.
+    ///
+    /// Set where a syllable of a `syllable` rule, an emphasis span or a run of capitals
+    /// starts, so that "GitHub" doesn't contract "tH" and the "H" keeps its capital
+    /// indicator. A rule starting on a [`Constraint::Capital`] is exempt.
+    TypeStart,
+    /// A capital, in forward translation with a table that has a `capsletter`.
+    ///
+    /// Exempts a rule starting on it from [`Constraint::TypeStart`]: it may run into a
+    /// syllable, an emphasis span or another run of capitals.
+    Capital,
     /// Suppress the word-family rules at this position, in backward translation.
     ///
     /// Set for the run of letter cells following a `letsign`/`nocontractsign`/
@@ -137,10 +145,16 @@ impl PositionConstraints {
             .is_some_and(|f| f.contains(Constraint::PreferDigit))
     }
 
-    pub fn syllable_start_at(&self, pos: usize) -> bool {
+    pub fn type_start_at(&self, pos: usize) -> bool {
         self.0
             .get(pos)
-            .is_some_and(|f| f.contains(Constraint::SyllableStart))
+            .is_some_and(|f| f.contains(Constraint::TypeStart))
+    }
+
+    pub fn capital_at(&self, pos: usize) -> bool {
+        self.0
+            .get(pos)
+            .is_some_and(|f| f.contains(Constraint::Capital))
     }
 
     pub fn hyphenation_break_at(&self, pos: usize) -> bool {
@@ -290,33 +304,62 @@ impl HyphenationConstrainer {
     }
 }
 
-/// Detects the syllables of the `syllable` rules and sets [`Constraint::SyllableStart`]
-/// where each one starts, as liblouis's `markSyllables` does: going through the text, it
-/// takes the longest syllable at each position and goes on after it.
+/// Keeps a rule from running into a syllable, an emphasis span or a run of capitals that
+/// starts after its first character, by setting [`Constraint::TypeStart`] where each of
+/// them starts, and [`Constraint::Capital`] on the capitals, whose rules are exempt.
+///
+/// - The syllables of the `syllable` rules: going through the text, the longest syllable
+///   at each position, then on after it. Two syllables next to each other are two.
+/// - The emphasis spans.
+/// - The runs of capitals, in a table with a `capsletter`, so that "GitHub" doesn't
+///   contract "tH" and the "H" keeps its capital indicator.
+///
+/// This is how liblouis's `validMatch` checks a rule against the types it keeps per
+/// character.
 #[derive(Debug, Clone)]
-pub struct SyllableConstrainer {
-    /// Lowercased.
-    syllables: Vec<Vec<char>>,
+pub struct TypeConstrainer {
+    /// The strings of the `syllable` rules, lowercased, one `char` per character, so that
+    /// they compare with the input at character positions, which the constraints use. A
+    /// linear scan at each position, as only `en-us-g2` and `en-us-interline` have them,
+    /// 38 at most; a trie if that changes.
+    syllable_rules: Vec<Vec<char>>,
+    capitals: bool,
 }
 
-impl SyllableConstrainer {
-    fn compute(&self, input: &str) -> Vec<Constraints> {
-        let chars: Vec<char> = input.chars().map(lowercase).collect();
+impl TypeConstrainer {
+    fn compute(&self, input: &str, spans: &[EmphasisSpan]) -> Vec<Constraints> {
+        let chars: Vec<char> = input.chars().collect();
         let mut constraints: Vec<Constraints> = vec![Constraints::empty(); chars.len()];
+        let lowercased: Vec<char> = chars.iter().copied().map(lowercase).collect();
         let mut pos = 0;
         while pos < chars.len() {
             match self
-                .syllables
+                .syllable_rules
                 .iter()
-                .filter(|s| chars[pos..].starts_with(s))
+                .filter(|s| lowercased[pos..].starts_with(s))
                 .map(Vec::len)
                 .max()
             {
                 Some(len) => {
-                    constraints[pos].insert(Constraint::SyllableStart);
+                    constraints[pos].insert(Constraint::TypeStart);
                     pos += len;
                 }
                 None => pos += 1,
+            }
+        }
+        for span in spans {
+            if let Some(c) = constraints.get_mut(span.range().start) {
+                c.insert(Constraint::TypeStart);
+            }
+        }
+        if self.capitals {
+            for (pos, c) in chars.iter().enumerate() {
+                if c.is_uppercase() {
+                    constraints[pos].insert(Constraint::Capital);
+                    if pos == 0 || !chars[pos - 1].is_uppercase() {
+                        constraints[pos].insert(Constraint::TypeStart);
+                    }
+                }
             }
         }
         constraints
@@ -914,9 +957,9 @@ pub enum Constrainer {
     BackwardNoContract(BackwardNoContractConstrainer),
     /// Detects hyphenation-dictionary breaks and sets [`Constraint::HyphenationBreak`].
     Hyphenation(HyphenationConstrainer),
-    /// Detects where the `syllable` rules' syllables start and sets
-    /// [`Constraint::SyllableStart`].
-    Syllable(SyllableConstrainer),
+    /// Detects where a syllable, an emphasis span or a run of capitals starts and sets
+    /// [`Constraint::TypeStart`], and [`Constraint::Capital`] on the capitals.
+    Type(TypeConstrainer),
     /// Detects `prepunc`/`postpunc` scan eligibility and sets
     /// [`Constraint::PrepuncOk`]/[`Constraint::PostpuncOk`].
     Punctuation(PunctuationConstrainer),
@@ -952,7 +995,7 @@ impl Constrainer {
             Constrainer::BackwardNoContract(c) => c.compute(input),
             Constrainer::BackwardNumeric(c) => c.compute(input),
             Constrainer::Hyphenation(c) => c.compute(input),
-            Constrainer::Syllable(c) => c.compute(input),
+            Constrainer::Type(c) => c.compute(input, spans),
             Constrainer::Punctuation(c) => c.compute(input),
             Constrainer::Join(c) => c.compute(input),
             Constrainer::NoCont(c) => c.compute(input),
@@ -1166,25 +1209,33 @@ fn lowercase(c: char) -> char {
     c.to_lowercase().next().unwrap_or(c)
 }
 
-/// A builder for [`Constrainer::Syllable`].
+/// A builder for [`Constrainer::Type`].
 #[derive(Debug, Default)]
-pub struct SyllableConstrainerBuilder {
-    syllables: Vec<Vec<char>>,
+pub struct TypeConstrainerBuilder {
+    syllable_rules: Vec<Vec<char>>,
+    capitals: bool,
 }
 
-impl SyllableConstrainerBuilder {
+impl TypeConstrainerBuilder {
     pub fn new() -> Self {
         Self::default()
     }
 
     pub fn syllable(&mut self, chars: &str) {
-        self.syllables.push(chars.chars().map(lowercase).collect());
+        self.syllable_rules
+            .push(chars.chars().map(lowercase).collect());
     }
 
-    pub fn build(self) -> Option<SyllableConstrainer> {
-        (!self.syllables.is_empty()).then_some(SyllableConstrainer {
-            syllables: self.syllables,
-        })
+    /// The table has a `capsletter`.
+    pub fn capsletter(&mut self) {
+        self.capitals = true;
+    }
+
+    pub fn build(self) -> TypeConstrainer {
+        TypeConstrainer {
+            syllable_rules: self.syllable_rules,
+            capitals: self.capitals,
+        }
     }
 }
 
@@ -1588,17 +1639,43 @@ mod tests {
 
     #[test]
     fn syllables_are_marked_where_they_start() {
-        let mut builder = SyllableConstrainerBuilder::new();
+        let mut builder = TypeConstrainerBuilder::new();
         builder.syllable("hood");
         builder.syllable("ho");
-        let c = Constrainers::new(vec![Constrainer::Syllable(builder.build().unwrap())])
-            .precompute("tHoodho", &[], &TranslationOptions::default());
+        let c = Constrainers::new(vec![Constrainer::Type(builder.build())]).precompute(
+            "tHoodho",
+            &[],
+            &TranslationOptions::default(),
+        );
         let marked: Vec<bool> =
             c.0.iter()
-                .map(|f| f.contains(Constraint::SyllableStart))
+                .map(|f| f.contains(Constraint::TypeStart))
                 .collect();
         // the longest syllable, case-insensitively, and on after it
         assert_eq!(marked, vec![false, true, false, false, false, true, false]);
+    }
+
+    #[test]
+    fn emphasis_and_capitals_are_marked_where_they_start() {
+        let mut builder = TypeConstrainerBuilder::new();
+        builder.capsletter();
+        let spans = [EmphasisSpan::new("italic", 4..6)];
+        let c = Constrainers::new(vec![Constrainer::Type(builder.build())]).precompute(
+            "aBCdef",
+            &spans,
+            &TranslationOptions::default(),
+        );
+        let starts: Vec<bool> =
+            c.0.iter()
+                .map(|f| f.contains(Constraint::TypeStart))
+                .collect();
+        let capitals: Vec<bool> =
+            c.0.iter()
+                .map(|f| f.contains(Constraint::Capital))
+                .collect();
+        // the run of capitals "BC" starts at 1, the emphasis at 4
+        assert_eq!(starts, vec![false, true, false, false, true, false]);
+        assert_eq!(capitals, vec![false, true, true, false, false, false]);
     }
 
     #[test]
