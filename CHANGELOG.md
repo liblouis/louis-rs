@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   the capital indicator of its "H" instead of contracting "tH" (#78). The
   same applies to emphasis: emphasis that starts inside a contraction
   keeps its indicator.
+- Emphasis over several words that ends or starts inside a word, such as
+  "Escherichia coli" in italics before a period that isn't, is indicated
+  like any other: with `en-ueb-g2`, a word indicator for each of two words
+  and the passage indicator for three or more, and a terminator after the
+  last. It used to get a single word indicator for all the words (#76).
 
 ## [0.4.0] - 2026-11-18
 

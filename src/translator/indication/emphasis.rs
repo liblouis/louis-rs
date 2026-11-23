@@ -219,17 +219,33 @@ impl ClassIndicator {
 
         if starts_clean && ends_clean {
             self.emit_clean_words(&words, result);
-        } else {
+        } else if words.len() == 1 || self.begemphword.is_none() {
             self.emit_partial(chars, run_start, run_end, &words, result);
+        } else {
+            // Several words, the first or the last only partly emphasized: indicated as
+            // words or as a phrase all the same, and the last word, if the emphasis ends
+            // inside it, closed with endemphword ("Escherichia coli." with the period
+            // not emphasized). A last word of one letter has emphletter, which needs none.
+            let closed = self.emit_clean_words(&words, result);
+            let (last_start, last_end) = *words.last().unwrap();
+            let letter = last_end - last_start == 1 && self.emphletter.is_some();
+            if let Some(end_t) = &self.endemphword
+                && !closed
+                && !letter
+                && !ends_clean
+            {
+                result.push((effective_run_end, end_t.clone(), EmitKind::Unordered));
+            }
         }
     }
 
-    /// Emit indicators for emphasis that aligns cleanly with word boundaries.
+    /// Emit indicators for emphasis that aligns cleanly with word boundaries. Whether it
+    /// closed the emphasis with an `endemphphrase` after the last word.
     fn emit_clean_words(
         &self,
         words: &[(usize, usize)],
         result: &mut Vec<(usize, ResolvedTranslation, EmitKind)>,
-    ) {
+    ) -> bool {
         if let Some(begemphphrase) = &self.begemphphrase
             && words.len() >= self.len_phrase
         {
@@ -246,13 +262,15 @@ impl ClassIndicator {
                 // Phrase brackets all words; explicit endemph after the last.
                 if let Some(end_t) = &self.endemphphrase {
                     result.push((words.last().unwrap().1, end_t.clone(), EmitKind::Unordered));
+                    return true;
                 }
             }
-            return;
+            return false;
         }
         for &(ws, we) in words {
             self.emit_single_word(ws, we, result);
         }
+        false
     }
 
     /// Emit a begemphword (or emphletter for single chars) for one word.
@@ -582,6 +600,22 @@ mod tests {
 
         let result = indicator.precompute("hello", &[EmphasisSpan::new("italic", 0..5)]);
         assert_eq!(outputs_at(&result, 0), vec!["⠨"]);
+    }
+
+    #[test]
+    fn words_before_unemphasized_punctuation_each_get_a_word_indicator() {
+        // "ab cd." with "ab cd" emphasized: a word indicator for each word, and the last
+        // closed before the period, not one word indicator for the whole run
+        let mut b = IndicatorBuilder::new();
+        b.begemphword("italic", "⠨", &rule("always a 1"));
+        b.endemphword("italic", "⠠", &rule("always a 1"));
+        let ctx = TableContext::compile(&[rule("space \\s 0")]).unwrap();
+        let indicator = b.build(&ctx).unwrap();
+
+        let result = indicator.precompute("ab cd.", &[EmphasisSpan::new("italic", 0..5)]);
+        assert_eq!(outputs_at(&result, 0), vec!["⠨"]);
+        assert_eq!(outputs_at(&result, 3), vec!["⠨"]);
+        assert_eq!(outputs_at(&result, 5), vec!["⠠"]);
     }
 
     #[test]
