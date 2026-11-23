@@ -2330,9 +2330,11 @@ impl PrimaryTable {
             candidates
                 .retain(|t| !Self::crosses_syllable(t, chars.as_str(), char_pos, &constraints));
 
-            // from a number to the next space, suppress multi-character contractions
+            // from a number to the next space, suppress multi-character contractions, and
+            // `match` rules of any length, as liblouis's `dontContract` does
             if constraints.dont_contract_at(char_pos) {
-                candidates.retain(|t| t.length() <= 1);
+                candidates
+                    .retain(|t| t.length() <= 1 && !matches!(t.rule(), Some(Rule::Match { .. })));
             }
 
             // Backward, once a letsign/nocontractsign/nonumsign's letters have ended, the
