@@ -11,11 +11,10 @@ behave the same as liblouis, and if it doesn't, that's a bug:
 
 ## How close
 
-Measured at louis-rs `a542e24` against liblouis `f4627636` plus the open pull requests
+Measured at louis-rs `f862ab6` against liblouis `d19d8c0b` plus the open pull requests
 [#2176](https://github.com/liblouis/liblouis/pull/2176),
 [#2190](https://github.com/liblouis/liblouis/pull/2190),
 [#2194](https://github.com/liblouis/liblouis/pull/2194),
-[#2195](https://github.com/liblouis/liblouis/pull/2195),
 [#2196](https://github.com/liblouis/liblouis/pull/2196) and
 [#2197](https://github.com/liblouis/liblouis/pull/2197). Without #2196 and #2197,
 `it-it-comp6.utb` and `th-g2.ctb` don't load (see `_N` in
@@ -23,14 +22,14 @@ Measured at louis-rs `a542e24` against liblouis `f4627636` plus the open pull re
 
 |                                |                |
 |--------------------------------|----------------|
-| Assertions run                 | 2 241 030      |
+| Assertions run                 | 2 240 353      |
 | Pass                           | **99.4%**      |
-| Fail                           | 957 (0.04%)    |
+| Fail                           | 826 (0.04%)    |
 | Expected failure               | 0.5%           |
 | Tables that compile            | all            |
 
 Forward and backward combined. "Expected failure" means tests liblouis itself marks as
-failing (`xfail`), and louis-rs fails them too. Going the other way, 42 tests that
+failing (`xfail`), and louis-rs fails them too. Going the other way, 40 tests that
 liblouis marks as failing pass in louis-rs, spread over 16 files.
 
 Reproduce the assertion figures with:
@@ -113,7 +112,7 @@ all, and backward `capsletter`/`begcapsword` fails in `hu-hu-g1`
 
 ## Not yet measured
 
-About 40 blocks in liblouis's YAML files don't run, because their table or include
+About 50 blocks in liblouis's YAML files don't run, because their table or include
 can't be found, their YAML doesn't parse, or, in three of liblouis's own multipass
 tests, a `_N` steps back into a bracket. The `hyphenate`, `hyphenateBraille` and
 `display` test modes aren't run at all. Those tests report neither pass nor fail;
