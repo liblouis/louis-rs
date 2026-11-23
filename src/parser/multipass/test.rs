@@ -653,6 +653,10 @@ impl<'a> Parser<'a> {
         if matches!(test, TestInstruction::Replace { .. }) {
             return Err(ParseError::NegatedReplacement);
         }
+        // see ADR-0025
+        if test.literal_count() > 1 {
+            return Err(ParseError::NegatedLongString);
+        }
         Ok(TestInstruction::Negate {
             test: Box::new(test),
         })
@@ -937,7 +941,7 @@ mod tests {
         assert_eq!(count("@1-2"), 2);
         assert_eq!(count("$a"), 0);
         assert_eq!(count("#1=1[@1]$d\"ab\""), 3);
-        assert_eq!(count("!\"ab\"@1"), 1);
+        assert_eq!(count("!\"a\"@1"), 1);
     }
 
     #[test]
@@ -1027,6 +1031,14 @@ mod tests {
         assert_eq!(
             Parser::new("![$d]").negate(),
             Err(ParseError::NegatedReplacement)
+        );
+        assert_eq!(
+            Parser::new(r#"!"ab""#).negate(),
+            Err(ParseError::NegatedLongString)
+        );
+        assert_eq!(
+            Parser::new("!@1-2").negate(),
+            Err(ParseError::NegatedLongString)
         );
     }
 

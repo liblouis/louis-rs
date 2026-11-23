@@ -48,6 +48,8 @@ pub enum ParseError {
     DoubleNegation,
     #[error("negating a replacement ('![...]') is not allowed")]
     NegatedReplacement,
+    #[error("negating a string or dots of more than one character is not supported")]
+    NegatedLongString,
     #[error(
         "'_' must come before the tests it steps back over, or after them at the end, and step over tests of fixed width only"
     )]

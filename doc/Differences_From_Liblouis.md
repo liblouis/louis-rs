@@ -151,6 +151,19 @@ supported forms is still owed. A table outside the corpus fails with
 `'_' must come before the tests it steps back over, or after them at the end, and step
 over tests of fixed width only`, naming the line.
 
+## No negated strings of more than one character in `context` rules
+
+In a multipass, `correct` or `context` test, liblouis negates a string or dots test as a
+whole and still consumes its characters: `!"ab"` takes any two characters except "ab".
+louis-rs rejects a negated string or dots of more than one character with a parse
+error, and the table does not load ([ADR-0025](adr/0025-negation.org)). A negated
+single character works as in liblouis.
+
+**Migration path:** not needed for the corpus, which has none. A table using one fails
+with `negating a string or dots of more than one character is not supported`, naming
+the line. If a table needs it, it can be supported by spelling it out as alternatives
+(`!"abc"` is `[^a].. | a[^b]. | ab[^c]`), see the ADR.
+
 ## A word's emphasis ends before the space
 
 Back-translating, an emphasis indicator for a word without an end indicator emphasizes
