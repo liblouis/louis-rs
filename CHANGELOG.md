@@ -61,6 +61,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A capitals passage ends after the last word's symbols-sequence,
   punctuation included, as in liblouis and in the examples of UEB 8.5.3:
   "CAUTION: WET PAINT!" ends in ⠏⠁⠔⠞⠖⠠⠄, not ⠏⠁⠔⠞⠠⠄⠖.
+- Emphasis and capitals indicators that open or close at the same place
+  nest, as in liblouis and UEB 8.6.2: of two emphasis classes, the longer
+  opens first, the later-declared on a tie, and closes last; capitals
+  close before the emphasis around them ("ROMEO AND JULIET" in italics
+  ends ⠠⠄⠨⠄). A space between emphasized words no longer ends the
+  emphasis unless the table lists it in `noemphchars`.
 
 ## [0.4.0] - 2026-11-18
 

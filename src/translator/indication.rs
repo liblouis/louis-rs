@@ -39,6 +39,7 @@
 use std::ops::Range;
 
 use crate::emphasis::EmphasisSpan;
+use crate::parser::Rule;
 use crate::translator::ResolvedTranslation;
 
 mod class_indicator;
@@ -152,7 +153,23 @@ impl Indicators {
             };
             for (pos, t) in pairs {
                 emphasis[pos] |= is_emphasis;
-                indications[pos].push(t);
+                // capitals and modes open closest to the word, so they close first, before
+                // the emphasis that ends with them ("ROMEO AND JULIET" in italics)
+                if matches!(
+                    t.rule(),
+                    Some(
+                        Rule::Endcapsword { .. }
+                            | Rule::Endcapsphrase { .. }
+                            | Rule::Endcaps { .. }
+                            | Rule::Endmodeword { .. }
+                            | Rule::Endmodephrase { .. }
+                            | Rule::Endmode { .. }
+                    )
+                ) {
+                    indications[pos].insert(0, t);
+                } else {
+                    indications[pos].push(t);
+                }
             }
         }
 

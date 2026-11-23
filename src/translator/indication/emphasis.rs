@@ -118,6 +118,23 @@ impl ClassIndicator {
                 }
             }
         }
+        // a space neither starts nor ends emphasis: spaces between two emphasized
+        // characters are emphasized too, as in liblouis, unless they are `noemphchars`
+        let mut pos = 0;
+        while pos < n {
+            let gap_start = pos;
+            while pos < n
+                && !active[pos]
+                && self.character_classes.is_whitespace(chars[pos])
+                && !self.noemphchars.contains(&chars[pos])
+            {
+                pos += 1;
+            }
+            if pos > gap_start && gap_start > 0 && active[gap_start - 1] && pos < n && active[pos] {
+                active[gap_start..pos].fill(true);
+            }
+            pos += 1;
+        }
         active
     }
 
@@ -157,7 +174,30 @@ impl ClassIndicator {
                 pos += 1;
             }
             let run_end = pos;
-            self.emit_run(chars, run_start, run_end, result);
+            // the word and phrase indicators of a run nest with those of other classes
+            // like begemph and endemph do, see `Indicator::precompute`
+            let mut run = Vec::new();
+            self.emit_run(chars, run_start, run_end, &mut run);
+            result.extend(run.into_iter().map(|(pos, t, kind)| {
+                let kind = match (kind, t.rule()) {
+                    (
+                        EmitKind::Unordered,
+                        Some(
+                            Rule::Begemphword { .. }
+                            | Rule::Begemphphrase { .. }
+                            | Rule::Emphletter { .. },
+                        ),
+                    ) => EmitKind::Open { run_end },
+                    (
+                        EmitKind::Unordered,
+                        Some(Rule::Endemphword { .. } | Rule::Endemphphrase { .. }),
+                    ) => EmitKind::Close {
+                        emit_start: run_start,
+                    },
+                    (kind, _) => kind,
+                };
+                (pos, t, kind)
+            }));
         }
     }
 

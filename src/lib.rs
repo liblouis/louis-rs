@@ -461,6 +461,60 @@ mod tests {
         assert_eq!(forward.translate("AB AB AB!"), "⠠⠠⠠⠁⠃⠀⠁⠃⠀⠁⠃⠖⠠⠄");
     }
 
+    /// UEB-like italic and underline emphasis and capitals, for the nesting tests
+    const NESTING_TABLE: &str = "space \\s 0\nlowercase a 1\nlowercase b 12\n\
+        base uppercase A a\nbase uppercase B b\n\
+        emphclass italic\nemphclass underline\n\
+        begemphword italic 46-2\nendemphword italic 46-3\nlenemphphrase italic 3\n\
+        begemphphrase italic 46-2356\nendemphphrase italic after 46-3\n\
+        begemphword underline 456-2\nendemphword underline 456-3\n\
+        capsletter 6\nbegcapsword 6-6\nendcapsword 6-3\n\
+        begcapsphrase 6-6-6\nendcapsphrase after 6-3\nlencapsphrase 3\n";
+
+    fn with_emphasis(spans: &[(&str, std::ops::Range<usize>)]) -> TranslationOptions {
+        let emphasis: Emphasis = spans
+            .iter()
+            .map(|(class, range)| EmphasisSpan::new(*class, range.clone()))
+            .collect();
+        TranslationOptions::default().with_emphasis(emphasis)
+    }
+
+    #[test]
+    fn emphasis_classes_that_open_together_nest() {
+        // the same run: the later-declared class opens first, outermost (UEB 8.6.2)
+        let forward = Translator::from_table_source(NESTING_TABLE, Direction::Forward).unwrap();
+        let options = with_emphasis(&[("italic", 0..2), ("underline", 0..2)]);
+        assert_eq!(
+            forward.translate_with_options("ab", &options).output(),
+            "⠸⠂⠨⠂⠁⠃"
+        );
+    }
+
+    #[test]
+    fn capitals_close_before_the_emphasis_around_them() {
+        // "ROMEO AND JULIET" in italics: ⠨⠶⠠⠠⠠ … ⠠⠄⠨⠄ (UEB 8.6.2)
+        let forward = Translator::from_table_source(NESTING_TABLE, Direction::Forward).unwrap();
+        let options = with_emphasis(&[("italic", 0..8)]);
+        assert_eq!(
+            forward
+                .translate_with_options("AB AB AB", &options)
+                .output(),
+            "⠨⠶⠠⠠⠠⠁⠃⠀⠁⠃⠀⠁⠃⠠⠄⠨⠄"
+        );
+    }
+
+    #[test]
+    fn an_unemphasized_space_does_not_end_emphasis() {
+        let forward = Translator::from_table_source(NESTING_TABLE, Direction::Forward).unwrap();
+        let options = with_emphasis(&[("italic", 0..2), ("italic", 3..8)]);
+        assert_eq!(
+            forward
+                .translate_with_options("ab ab ab", &options)
+                .output(),
+            "⠨⠶⠁⠃⠀⠁⠃⠀⠁⠃⠨⠄"
+        );
+    }
+
     #[test]
     fn a_translator_lists_its_emphasis_classes() {
         let table = "emphclass italic\nemphclass bold\nemphclass italic\nletter a 1\n";
