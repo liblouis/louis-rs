@@ -41,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   like any other: with `en-ueb-g2`, a word indicator for each of two words
   and the passage indicator for three or more, and a terminator after the
   last. It used to get a single word indicator for all the words (#76).
+- Unicode braille has only dots 1 to 8, as in liblouis: a cell a table
+  gives virtual dots, such as `ru-litbrl.ctb`'s Cyrillic letters, came
+  out as a private use character instead. A braille encoding without a
+  rule for such a cell shows it as the cell without them, so `en-ueb-g2`'s
+  no-break space is a space in BRF (#81).
 
 ## [0.4.0] - 2026-11-18
 

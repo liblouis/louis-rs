@@ -88,8 +88,8 @@ $ louis trace --braille-encoding da-dk-octobraille.dis da-dk-g28.ctb "ørene"
 └───┴──────┴────┴───────────────┴─────────┘
 ```
 
-Without an encoding there is no such stage, so the trace is unchanged and the
-output stays Unicode braille.
+Without an encoding, translating to braille ends in a Unicode braille stage instead.
+It has no rules, so the trace doesn't show it.
 
 **Migration path:** name the display table, as a `BrailleEncoding`. The liblouis
 YAML tests that relied
@@ -98,14 +98,27 @@ on the fallback are being changed to name theirs (liblouis
 For an application, none yet: louis-rs does not say when a translation table
 brings display rules that it is ignoring.
 
+## A cell with virtual dots and no `display` rule
+
+A table can give a cell virtual dots (9 to F) to tell it apart from another, as
+`en-ueb-g2.ctb` writes the no-break space as a blank cell with dot A. A braille
+encoding with a `display` rule for the cell, virtual dots and all, shows it by that
+rule. Without one, liblouis writes the print character instead, the no-break space
+itself, which is no braille. louis-rs shows the cell without its virtual dots, by the
+encoding's rule for that: a blank cell, a space in BRF.
+
+**Migration path:** where the print character is wanted, add a `display` rule for the
+cell to the encoding, such as `display \x00a0 a` with `include text_nabcc.dis`.
+
 ## The `dotsIO` and `ucBrl` modes
 
 In liblouis, `dotsIO` makes a translation write, or read back, dot patterns rather than
 the display table's characters, and `ucBrl` with it makes those dot patterns Unicode
 braille. louis-rs has no such modes: braille is Unicode braille unless a
 `BrailleEncoding` is named, so every translation already does what `dotsIO | ucBrl`
-does. `dotsIO` alone gives liblouis's dot values, `0x8000` plus a bit per dot, which
-screen readers such as NVDA and TalkBack use to drive a braille display.
+does. That includes dropping the virtual dots (9 to F) a table writes, which Unicode
+braille has no room for. `dotsIO` alone gives liblouis's dot values, `0x8000` plus a bit
+per dot, which screen readers such as NVDA and TalkBack use to drive a braille display.
 
 **Migration path:** drop the modes. For Unicode braille, use a `Translator` without a
 `BrailleEncoding`; for a display table's characters, use one with it. For dot values,

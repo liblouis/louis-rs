@@ -42,9 +42,11 @@ Backward (braille to text) runs the same stages in reverse order, the display ta
    this direction (`nofor`, `noback`), sorts the rest into stages by opcode, and compiles
    each stage, with the context, into a table: a `MultipassTable` for `correct` and each of
    `pass2` to `pass4`, a `PrimaryTable` for everything else. Backward, the stages are
-   reversed. A braille encoding (`BrailleEncoding`, from a liblouis display table), if
-   the caller gives one, is added as the outermost stage, a `DisplayTable`; a display
-   table a translation table includes is ignored.
+   reversed. The outermost stage is a `DisplayTable`: a braille encoding
+   (`BrailleEncoding`, from a liblouis display table) if the caller gives one, or else,
+   forward, the Unicode braille one, which drops the virtual dots (9 to F) Unicode braille
+   can't show, as an encoding does for a cell it has no rule for; a display table a
+   translation table includes is ignored.
 
 ### The main stage: `PrimaryTable::trace`
 
