@@ -451,6 +451,17 @@ mod tests {
     }
 
     #[test]
+    fn a_capitals_passage_ends_after_the_last_symbols_sequence() {
+        // UEB 8.5.3: "CAUTION: WET PAINT!" ends in ⠏⠁⠔⠞⠖⠠⠄, the terminator after the "!"
+        let table = "space \\s 0\nlowercase a 1\nlowercase b 12\n\
+                     base uppercase A a\nbase uppercase B b\npunctuation ! 235\n\
+                     capsletter 6\nbegcapsword 6-6\nendcapsword 6-3\n\
+                     begcapsphrase 6-6-6\nendcapsphrase after 6-3\nlencapsphrase 3\n";
+        let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(forward.translate("AB AB AB!"), "⠠⠠⠠⠁⠃⠀⠁⠃⠀⠁⠃⠖⠠⠄");
+    }
+
+    #[test]
     fn a_translator_lists_its_emphasis_classes() {
         let table = "emphclass italic\nemphclass bold\nemphclass italic\nletter a 1\n";
         let translator = Translator::from_table_source(table, Direction::Forward).unwrap();

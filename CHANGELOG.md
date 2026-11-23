@@ -58,6 +58,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A rule doesn't take a change of case after its second letter, as in
   liblouis: with `en-ueb-g2`, "NorthEast" is no longer contracted as
   "northeast", losing the capital of the "E"; "The" still contracts.
+- A capitals passage ends after the last word's symbols-sequence,
+  punctuation included, as in liblouis and in the examples of UEB 8.5.3:
+  "CAUTION: WET PAINT!" ends in ⠏⠁⠔⠞⠖⠠⠄, not ⠏⠁⠔⠞⠠⠄⠖.
 
 ## [0.4.0] - 2026-11-18
 
