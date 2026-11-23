@@ -422,6 +422,22 @@ mod tests {
     }
 
     #[test]
+    fn empmatchafter_keeps_a_rule_from_an_emphasis_change_after_it() {
+        // en-ueb-g2's "ff" groupsign, not used right before an indicator (#82)
+        let table = "emphclass italic\nbegemphword italic 46-2\nendemphword italic 46-3\n\
+                     lowercase a 1\nlowercase b 12\nlowercase f 124\n\
+                     empmatchafter match %a ff %a 235\n";
+        let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(forward.translate("affb"), "⠁⠖⠃");
+        let italic: Emphasis = [EmphasisSpan::new("italic", 3..4)].into_iter().collect();
+        let options = TranslationOptions::default().with_emphasis(italic);
+        assert_eq!(
+            forward.translate_with_options("affb", &options).output(),
+            "⠁⠋⠋⠨⠂⠃"
+        );
+    }
+
+    #[test]
     fn a_translator_lists_its_emphasis_classes() {
         let table = "emphclass italic\nemphclass bold\nemphclass italic\nletter a 1\n";
         let translator = Translator::from_table_source(table, Direction::Forward).unwrap();

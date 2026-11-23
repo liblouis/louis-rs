@@ -51,6 +51,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   "word" with only "wo" in italics is spelled out, so the emphasis ends
   after "wo", and "THe" is no longer contracted to "the", losing where the
   capitals end (#69).
+- `empmatchbefore` and `empmatchafter` apply: a `match` rule marked with
+  them isn't used right after or right before an emphasis or capitals
+  indicator. With `en-ueb-g2`, "DiffEq's" spells out the "ff" before the
+  capital E (#82).
 
 ## [0.4.0] - 2026-11-18
 

@@ -6,7 +6,7 @@ use crate::{
     Direction,
     parser::{
         AnchoredRule, Braille, BrailleChar, BrailleChars, CharacterClass, CharacterClasses,
-        HasDirection, HasNocross, WithClass, in_definition_order,
+        HasDirection, HasNocross, WithClass, WithMatch, in_definition_order,
     },
     translator::{
         CharacterDefinition, ClassConstraints, CompileError, ResolvedTranslation, Rule,
@@ -2165,6 +2165,27 @@ impl PrimaryTable {
         ) && indications.emphasis_in(char_pos + 1..char_pos + t.length())
     }
 
+    /// Whether `t`, a rule marked `empmatchbefore` or `empmatchafter` starting at
+    /// `char_pos`, has an emphasis, capitals or mode indicator right before or right after
+    /// it, where it mustn't apply: `en-ueb-g2`'s "ff" groupsign isn't used in "DiffEq's",
+    /// as the capital indicator for "E" follows it.
+    fn meets_emphasis_change(
+        t: &ResolvedTranslation,
+        char_pos: usize,
+        indications: &PrecomputedIndications,
+    ) -> bool {
+        let Some(Rule::Match {
+            matches: Some(matches),
+            ..
+        }) = t.rule()
+        else {
+            return false;
+        };
+        let end = char_pos + t.length();
+        (matches.contains(&WithMatch::Before) && indications.emphasis_in(char_pos..char_pos + 1))
+            || (matches.contains(&WithMatch::After) && indications.emphasis_in(end..end + 1))
+    }
+
     fn context_candidates(
         &self,
         input: &str,
@@ -2352,6 +2373,8 @@ impl PrimaryTable {
             candidates.retain(|t| {
                 !Self::crosses_type(t, char_pos, &constraints)
                     && !Self::crosses_emphasis_change(t, char_pos, &indications)
+                    && !(self.direction == Direction::Forward
+                        && Self::meets_emphasis_change(t, char_pos, &indications))
             });
 
             // from a number to the next space, suppress multi-character contractions, and
