@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   out as a private use character instead. A braille encoding without a
   rule for such a cell shows it as the cell without them, so `en-ueb-g2`'s
   no-break space is a space in BRF (#81).
+- A `word`, `always` or `match` rule isn't used where an emphasis or
+  capitals indicator falls inside it, as in liblouis: with `en-ueb-g2`,
+  "word" with only "wo" in italics is spelled out, so the emphasis ends
+  after "wo", and "THe" is no longer contracted to "the", losing where the
+  capitals end (#69).
 
 ## [0.4.0] - 2026-11-18
 

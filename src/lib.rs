@@ -405,6 +405,23 @@ mod tests {
     }
 
     #[test]
+    fn a_contraction_does_not_cross_where_emphasis_ends() {
+        // en-ueb-g2's "word" with only "wo" in italics: spelled out, so that the
+        // emphasis can end after "wo" (#69)
+        let table = "emphclass italic\nbegemphword italic 46-2\nendemphword italic 46-3\n\
+                     lowercase w 2456\nlowercase o 135\nlowercase r 1235\nlowercase d 145\n\
+                     always word 45-2456\n";
+        let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(forward.translate("word"), "⠘⠺");
+        let italic: Emphasis = [EmphasisSpan::new("italic", 0..2)].into_iter().collect();
+        let options = TranslationOptions::default().with_emphasis(italic);
+        assert_eq!(
+            forward.translate_with_options("word", &options).output(),
+            "⠨⠂⠺⠕⠨⠄⠗⠙"
+        );
+    }
+
+    #[test]
     fn a_translator_lists_its_emphasis_classes() {
         let table = "emphclass italic\nemphclass bold\nemphclass italic\nletter a 1\n";
         let translator = Translator::from_table_source(table, Direction::Forward).unwrap();

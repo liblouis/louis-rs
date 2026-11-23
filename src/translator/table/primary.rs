@@ -2144,6 +2144,27 @@ impl PrimaryTable {
             && (char_pos + 1..char_pos + t.length()).any(|pos| constraints.type_start_at(pos))
     }
 
+    /// Whether `t`, an `always`, `word`, `match` or `syllable` rule starting at `char_pos`,
+    /// would take a character an emphasis, capitals or mode indicator goes before. liblouis
+    /// doesn't use these rules across such a change (`checkEmphasisChange`), so that
+    /// "word" with only "wo" in italics, or "THe", is spelled out and gets its indicators.
+    /// The other rules aren't checked, as in liblouis.
+    fn crosses_emphasis_change(
+        t: &ResolvedTranslation,
+        char_pos: usize,
+        indications: &PrecomputedIndications,
+    ) -> bool {
+        matches!(
+            t.rule(),
+            Some(
+                Rule::Always { .. }
+                    | Rule::Word { .. }
+                    | Rule::Match { .. }
+                    | Rule::Syllable { .. }
+            )
+        ) && indications.emphasis_in(char_pos + 1..char_pos + t.length())
+    }
+
     fn context_candidates(
         &self,
         input: &str,
@@ -2326,8 +2347,12 @@ impl PrimaryTable {
                 candidates.retain(|t| !Self::contracts(t));
             }
 
-            // a rule can't run into a syllable, an emphasis span or a run of capitals
-            candidates.retain(|t| !Self::crosses_type(t, char_pos, &constraints));
+            // a rule can't run into a syllable, an emphasis span or a run of capitals, and
+            // some can't take an emphasis or capitals indicator either
+            candidates.retain(|t| {
+                !Self::crosses_type(t, char_pos, &constraints)
+                    && !Self::crosses_emphasis_change(t, char_pos, &indications)
+            });
 
             // from a number to the next space, suppress multi-character contractions, and
             // `match` rules of any length, as liblouis's `dontContract` does

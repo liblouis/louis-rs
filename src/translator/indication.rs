@@ -99,18 +99,31 @@ pub struct Indicators(Vec<Indicator>);
 /// Holds per-position braille translations to emit, indexed by
 /// character position (with one extra slot at index `n` for translations that
 /// must appear after all input characters, e.g. `endemph` at end of string).
-pub struct PrecomputedIndications(Vec<Vec<ResolvedTranslation>>);
+pub struct PrecomputedIndications {
+    indications: Vec<Vec<ResolvedTranslation>>,
+    /// Where an emphasis, capitals or mode indicator falls, see [`Self::emphasis_in`]
+    emphasis: Vec<bool>,
+}
 
 impl PrecomputedIndications {
     pub fn translations_at(&self, pos: usize) -> Vec<ResolvedTranslation> {
-        self.0.get(pos).cloned().unwrap_or_default()
+        self.indications.get(pos).cloned().unwrap_or_default()
     }
 
     /// Whether an indicator falls on any position in `range`
     pub fn any_in(&self, range: Range<usize>) -> bool {
-        self.0
+        self.indications
             .get(range)
             .is_some_and(|positions| positions.iter().any(|indicators| !indicators.is_empty()))
+    }
+
+    /// Whether an emphasis, capitals or mode indicator falls on any position in `range`:
+    /// where emphasis or capitals begin, end or are indicated again. Not a number sign or
+    /// a letter sign.
+    pub fn emphasis_in(&self, range: Range<usize>) -> bool {
+        self.emphasis
+            .get(range)
+            .is_some_and(|positions| positions.contains(&true))
     }
 }
 
@@ -122,8 +135,13 @@ impl Indicators {
     pub fn precompute(&self, input: &str, spans: &[EmphasisSpan]) -> PrecomputedIndications {
         let n = input.chars().count();
         let mut indications: Vec<Vec<ResolvedTranslation>> = vec![vec![]; n + 1];
+        let mut emphasis = vec![false; n + 1];
 
         for indicator in &self.0 {
+            let is_emphasis = matches!(
+                indicator,
+                Indicator::Emphasis(_) | Indicator::Uppercase(_) | Indicator::Mode(_)
+            );
             let pairs: Vec<(usize, ResolvedTranslation)> = match indicator {
                 Indicator::ComputerBraille(i) => i.precompute(input, spans),
                 Indicator::Emphasis(i) => i.precompute(input, spans),
@@ -133,11 +151,15 @@ impl Indicators {
                 Indicator::LetterSign(i) => i.precompute(input),
             };
             for (pos, t) in pairs {
+                emphasis[pos] |= is_emphasis;
                 indications[pos].push(t);
             }
         }
 
-        PrecomputedIndications(indications)
+        PrecomputedIndications {
+            indications,
+            emphasis,
+        }
     }
 }
 
