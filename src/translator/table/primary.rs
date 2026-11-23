@@ -2130,18 +2130,22 @@ impl PrimaryTable {
 
     /// Whether `t`, starting at `char_pos`, would take a character with a type its first
     /// character hasn't: a syllable, an emphasis span or a run of capitals starting after
-    /// it ([`Constraint::TypeStart`]). liblouis doesn't allow that (`validMatch`), unless
-    /// the first character is a capital. `context` rules are tested their own way.
+    /// it ([`Constraint::TypeStart`]), unless the first character is a capital; or a change
+    /// of case after its second character ([`Constraint::CaseChange`]). liblouis doesn't
+    /// allow either (`validMatch`). `context` rules are tested their own way.
     ///
     /// [`Constraint::TypeStart`]: crate::translator::position_constraints::Constraint::TypeStart
+    /// [`Constraint::CaseChange`]: crate::translator::position_constraints::Constraint::CaseChange
     fn crosses_type(
         t: &ResolvedTranslation,
         char_pos: usize,
         constraints: &PositionConstraints,
     ) -> bool {
         !matches!(t.rule(), Some(Rule::Context { .. }))
-            && !constraints.capital_at(char_pos)
-            && (char_pos + 1..char_pos + t.length()).any(|pos| constraints.type_start_at(pos))
+            && (!constraints.capital_at(char_pos)
+                && (char_pos + 1..char_pos + t.length()).any(|pos| constraints.type_start_at(pos))
+                // from the third character on, not even a rule starting on a capital
+                || (char_pos + 2..char_pos + t.length()).any(|pos| constraints.case_change_at(pos)))
     }
 
     /// Whether `t`, an `always`, `word`, `match` or `syllable` rule starting at `char_pos`,

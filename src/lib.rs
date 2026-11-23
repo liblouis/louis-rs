@@ -438,6 +438,19 @@ mod tests {
     }
 
     #[test]
+    fn a_rule_does_not_take_a_change_of_case_after_its_second_letter() {
+        // "NorthEast" isn't contracted as "northeast"; "Man" still contracts
+        let table = "lowercase m 134\nlowercase a 1\nlowercase n 1345\n\
+                     base uppercase M m\nbase uppercase A a\nbase uppercase N n\n\
+                     always man 2345\n";
+        let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(forward.translate("man"), "⠞");
+        assert_eq!(forward.translate("Man"), "⠞");
+        assert_eq!(forward.translate("mAn"), "⠍⠁⠝");
+        assert_eq!(forward.translate("maN"), "⠍⠁⠝");
+    }
+
+    #[test]
     fn a_translator_lists_its_emphasis_classes() {
         let table = "emphclass italic\nemphclass bold\nemphclass italic\nletter a 1\n";
         let translator = Translator::from_table_source(table, Direction::Forward).unwrap();

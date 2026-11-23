@@ -56,6 +56,10 @@ pub enum Constraint {
     /// Exempts a rule starting on it from [`Constraint::TypeStart`]: it may run into a
     /// syllable, an emphasis span or another run of capitals.
     Capital,
+    /// A letter in the other case than the letter before it, in forward translation. A rule
+    /// can't take it after its second character, so that "NorthEast" isn't contracted as
+    /// "northeast" and the "E" keeps its capital indicator; "The" still contracts.
+    CaseChange,
     /// Suppress the word-family rules at this position, in backward translation.
     ///
     /// Set for the run of letter cells following a `letsign`/`nocontractsign`/
@@ -149,6 +153,12 @@ impl PositionConstraints {
         self.0
             .get(pos)
             .is_some_and(|f| f.contains(Constraint::TypeStart))
+    }
+
+    pub fn case_change_at(&self, pos: usize) -> bool {
+        self.0
+            .get(pos)
+            .is_some_and(|f| f.contains(Constraint::CaseChange))
     }
 
     pub fn capital_at(&self, pos: usize) -> bool {
@@ -350,6 +360,15 @@ impl TypeConstrainer {
         for span in spans {
             if let Some(c) = constraints.get_mut(span.range().start) {
                 c.insert(Constraint::TypeStart);
+            }
+        }
+        for (pos, pair) in chars.windows(2).enumerate() {
+            let cased = |c: &char| c.is_uppercase() || c.is_lowercase();
+            if cased(&pair[0])
+                && cased(&pair[1])
+                && pair[0].is_uppercase() != pair[1].is_uppercase()
+            {
+                constraints[pos + 1].insert(Constraint::CaseChange);
             }
         }
         if self.capitals {

@@ -55,6 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   them isn't used right after or right before an emphasis or capitals
   indicator. With `en-ueb-g2`, "DiffEq's" spells out the "ff" before the
   capital E (#82).
+- A rule doesn't take a change of case after its second letter, as in
+  liblouis: with `en-ueb-g2`, "NorthEast" is no longer contracted as
+  "northeast", losing the capital of the "E"; "The" still contracts.
 
 ## [0.4.0] - 2026-11-18
 
