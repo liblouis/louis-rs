@@ -140,6 +140,11 @@ pub struct Indicators(Vec<Indicator>);
 /// them. Each group belongs to one indicator, so the order of [`Indicators`] doesn't
 /// matter; the fields break ties within a group, and an equal key keeps the order in
 /// which the indicator gave its indications.
+///
+/// It is the same kind of key as [`Rank`], which picks the one translation that wins at a
+/// position; this one keeps all the indications and puts them in order, lowest first.
+///
+/// [`Rank`]: crate::translator::translation::Rank
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IndicationOrder {
     /// `begcomp` and `endcomp`, before everything else

@@ -205,6 +205,9 @@ impl Resolve for Translation {
 /// The key used to pick between competing translation candidates at the same position: the
 /// highest wins. The fields are compared in the order they are declared, so that order is the
 /// order of precedence; each one only matters when all the fields above it tie.
+///
+/// The indications at a position have the same kind of key, `IndicationOrder`, which keeps
+/// them all and puts them in order, lowest first, rather than picking one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Rank {
     /// A forward main-stage `context` rule whose test starts with no literal characters wins

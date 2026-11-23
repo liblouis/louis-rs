@@ -148,7 +148,9 @@ character class the way capitals are marked.
 **`IndicationOrder`.** The order of the indications at one position: what closes there
 closes innermost first, then what opens there opens outermost first, capitals and modes
 closest to the word, so that indicators nest (ADR-0026). Each indicator gives its
-indications their place; `Indicators::precompute` sorts by it.
+indications their place; `Indicators::precompute` sorts by it. It is the same kind of key
+as `Rank`, but it orders all the indications at a position, lowest first, where `Rank`
+picks the one candidate that wins.
 
 **Constrainer, `Constraint`.** Decides from the text alone where rules may or may not
 apply, before translation, as one set of flags per position. One per question: inside a
@@ -169,7 +171,7 @@ then the longest match, then the kind of rule (`Precedence`: character definitio
 emphasis indicator < indicator < `always` < everything else), then backward the longest
 output, `nocross`, a `context` rule's test, and finally the earliest definition. The order
 of the fields is the order of precedence; ADR-0016 has the reasoning, and the doc comments
-on `Rank` the details.
+on `Rank` the details. `IndicationOrder` is the same kind of key for indications.
 
 **Effects, environment.** The variables a `context` or multipass rule sets (`#1=0`,
 `#1+`, `#1-`) and tests (`#1=3`, `#1<3`, ...), carried along one stage's loop. A
