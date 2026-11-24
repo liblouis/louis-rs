@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - ReleaseDate
 
+## [0.4.1] - 2026-11-24
+
 ### Added
 - `louis::VERSION`, the version of louis-rs, for bindings that report it,
   such as the C API's `louis_version()`.
@@ -789,7 +791,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 -   Make it clear that the library API is unstable.
 
 <!-- next-url -->
-[Unreleased]: https://github.com/liblouis/louis-rs/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/liblouis/louis-rs/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/liblouis/louis-rs/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/liblouis/louis-rs/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/liblouis/louis-rs/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/liblouis/louis-rs/compare/v0.2.8...v0.3.0
