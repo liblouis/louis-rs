@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `endcapsphrase` or `endcaps` is read only inside a passage, and there it
   wins over a capital indicator with the same cells, as in
   liblouis/liblouis#2125.
+- Back-translation of `nl-NL-g0` e-mail addresses and hashtags (#88): an
+  emphasis indicator with the cells of a character is not read right after a
+  letter, so ⠇⠊⠎⠁⠸⠙⠊⠗⠅ is "lisa_dirk", and a number sign inside a
+  character such as `sign # 5-3456` starts no number, so ⠐⠼⠙⠞⠧ is "#dtv".
 
 ## [0.4.1] - 2026-11-24
 

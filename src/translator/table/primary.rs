@@ -6,7 +6,7 @@ use crate::{
     Direction,
     parser::{
         AnchoredRule, Braille, BrailleChar, BrailleChars, CharacterClass, CharacterClasses,
-        HasDirection, HasNocross, WithClass, WithMatch, in_definition_order,
+        HasDirection, HasNocross, Position, WithClass, WithMatch, in_definition_order,
     },
     translator::{
         CharacterDefinition, ClassConstraints, CompileError, ResolvedTranslation, Rule,
@@ -297,7 +297,24 @@ impl PrimaryTableBuilder {
     ) {
         if Self::backward_indicator_dots_available(opcode, dots, letter_dots) {
             if ctx.character_definitions().defines_dots(dots) {
-                self.insert_backward_indicator_before_letter(dots, rule);
+                // An indicator that comes before the emphasized text isn't read right
+                // after a letter either, where the dots are the character: Dutch ⠸ is
+                // begemphword and also `_`, as in "lisa_dirk".
+                let after = match rule.rule {
+                    Rule::Endemphword { .. }
+                    | Rule::Endemph { .. }
+                    | Rule::Endemphphrase {
+                        position: Position::After,
+                        ..
+                    } => None,
+                    _ => Some(Self::not_after_letter()),
+                };
+                self.insert_backward_indicator_between(
+                    dots,
+                    after,
+                    Some(Self::before_letter()),
+                    rule,
+                );
             } else {
                 self.insert_backward_indicator(dots, rule);
             }
@@ -2003,36 +2020,55 @@ impl PrimaryTable {
                             .braille_to_unicode(dots, chars)
                             .map_err(|e| e.at(rule))?;
                         builder.backward_numeric_constrainer.rule_dots(&dots);
-                        // an `always` rule takes an indicator's dots as its own, where the
-                        // word-family rules would only be kept off the letters after it
-                        if matches!(rule.rule, Rule::Always { .. }) {
-                            builder.backward_nocontract_constrainer.rule_dots(&dots);
-                        }
-                        // and so does a rule inside a word after a letter, as UEB's ⠰⠎ for
-                        // "ness" does
-                        if matches!(
-                            rule.rule,
-                            Rule::Begmidword { .. }
-                                | Rule::Midword { .. }
-                                | Rule::Midendword { .. }
-                                | Rule::Endword { .. }
-                                | Rule::Partword { .. }
-                        ) {
-                            builder
-                                .backward_nocontract_constrainer
-                                .inword_rule_dots(&dots);
-                        }
-                    }
-                    // so does punctuation, as Danish `prepunc ! 56-235` does
-                    Rule::Prepunc { dots, .. } | Rule::Postpunc { dots, .. } => {
-                        builder
-                            .backward_nocontract_constrainer
-                            .rule_dots(&dots.to_string());
                     }
                     Rule::Context { test, .. } => {
                         if let Some(dots) = test.literal_text() {
                             builder.backward_numeric_constrainer.rule_dots(&dots);
                         }
+                    }
+                    // as Dutch `sign # 5-3456`
+                    Rule::Punctuation { dots, .. }
+                    | Rule::Sign { dots, .. }
+                    | Rule::Math { dots, .. } => {
+                        builder
+                            .backward_numeric_constrainer
+                            .rule_dots(&dots.to_string());
+                    }
+                    _ => (),
+                }
+            }
+            // a rule can take a letsign's or nocontractsign's dots as its own, see
+            // `BackwardNoContractConstrainer::claiming_dots`
+            for rule in rules {
+                match &rule.rule {
+                    // an `always` rule, where the word-family rules would only be kept off
+                    // the letters after the indicator
+                    Rule::Always { chars, dots, .. } => {
+                        let dots = ctx
+                            .character_definitions()
+                            .braille_to_unicode(dots, chars)
+                            .map_err(|e| e.at(rule))?;
+                        builder.backward_nocontract_constrainer.rule_dots(&dots);
+                    }
+                    // a rule inside a word after a letter, as UEB's ⠰⠎ for "ness"
+                    Rule::Begmidword { chars, dots, .. }
+                    | Rule::Midword { chars, dots, .. }
+                    | Rule::Midendword { chars, dots, .. }
+                    | Rule::Endword { chars, dots, .. }
+                    | Rule::Partword { chars, dots, .. } => {
+                        let dots = ctx
+                            .character_definitions()
+                            .braille_to_unicode(dots, chars)
+                            .map_err(|e| e.at(rule))?;
+                        builder
+                            .backward_nocontract_constrainer
+                            .inword_rule_dots(&dots);
+                    }
+                    // punctuation, as Danish `prepunc ! 56-235`
+                    Rule::Prepunc { dots, .. } | Rule::Postpunc { dots, .. } => {
+                        builder
+                            .backward_nocontract_constrainer
+                            .rule_dots(&dots.to_string());
                     }
                     _ => (),
                 }
@@ -3772,6 +3808,8 @@ mod tests {
         assert_eq!(table.translate("⠁⠂⠃⠆"), "a,b;");
         assert_eq!(table.translate("⠰"), "¨");
         assert_eq!(table.translate("⠰⠁⠃"), "ab");
+        // not right after a letter, where it is the character, as Dutch ⠸ is `_`
+        assert_eq!(table.translate("⠁⠰⠃"), "a¨b");
     }
 
     #[test]
@@ -3940,6 +3978,27 @@ mod tests {
         .unwrap();
         assert_eq!(table.translate("⠼⠁"), "1");
         assert_eq!(table.translate("⠁"), "a");
+    }
+
+    #[test]
+    fn backward_numsign_inside_a_character_starts_no_number() {
+        // as Dutch `sign # 5-3456`
+        let rules = [
+            parse_rule("lowercase a 1"),
+            parse_rule("litdigit 1 1"),
+            parse_rule("numsign 3456"),
+            parse_rule("sign # 5-3456"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table = PrimaryTable::compile(
+            &rules,
+            Direction::Backward,
+            TranslationStage::Main,
+            &context,
+        )
+        .unwrap();
+        assert_eq!(table.translate("⠐⠼⠁"), "#a");
+        assert_eq!(table.translate("⠼⠁"), "1");
     }
 
     #[test]
