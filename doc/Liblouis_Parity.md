@@ -11,7 +11,7 @@ behave the same as liblouis, and if it doesn't, that's a bug:
 
 ## How close
 
-Measured at louis-rs `056813e` against liblouis `6f3f93f6` plus the open pull requests
+Measured at louis-rs `e0edef5` against liblouis `6f3f93f6` plus the open pull requests
 [#2176](https://github.com/liblouis/liblouis/pull/2176),
 [#2190](https://github.com/liblouis/liblouis/pull/2190),
 [#2194](https://github.com/liblouis/liblouis/pull/2194),
@@ -24,7 +24,7 @@ Measured at louis-rs `056813e` against liblouis `6f3f93f6` plus the open pull re
 |--------------------------------|----------------|
 | Assertions run                 | 2 241 080      |
 | Pass                           | **99.4%**      |
-| Fail                           | 883 (0.04%)    |
+| Fail                           | 877 (0.04%)    |
 | Expected failure               | 0.5%           |
 | Tables that compile            | all            |
 
@@ -106,7 +106,7 @@ counts are the `Failure` lines `check` prints for each file, rounded.
 | Russian (`ru`)                        |     ≈32 | Generic `begmode` alphabet indicators: word tiers repeat per letter ("ABC" gives ⠨⠁⠨⠃⠨⠉, not ⠨⠁⠃⠉), and a letter after one from another alphabet gets its sign twice ("HАH" gives ⠨⠓⠘⠘⠁⠨⠓). Likely needs indication tiers unified across capitals, emphasis and modes ([ADR-0009](adr/0009-capsletter-vs-begcapsword.org)). |
 | German detailed (`de-g0-detailed`, `de-g1-detailed`), backward |     ≈16 | After a number, ⠠ is read as an apostrophe (⠼⠓⠠⠋⠁⠉⠓ gives "8'fach", not "8fach"), and a few quotation marks and ¦ come back as other characters. |
 | Punjabi (`pa`), backward              |     ≈10 | The number sign ⠼ is read as the letter ਣ, which has the same cells; liblouis takes the number sign when a digit follows.                                                             |
-| everything else                       |    ≈780 | Roughly 90 files, each with fewer than 80 failures.                                                                                                                                    |
+| everything else                       |    ≈770 | Roughly 90 files, each with fewer than 80 failures.                                                                                                                                    |
 
 **Backward translation** is where louis-rs is weakest. The word-boundary checks
 (`word_start` and friends) only work forward, and backward
