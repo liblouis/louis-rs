@@ -106,6 +106,11 @@ pub enum Constraint {
     /// This position is in the run of whitespace right before the word at the cursor, so a
     /// `joinword` or `joinnum` just before it would join onto that word.
     SpaceBeforeCursorWord,
+    /// The end of a capitals passage indicator starts here, in backward translation.
+    ///
+    /// An `endcapsphrase` is read only here, and wins over a capital indicator with the
+    /// same cells, such as UEB's `endcapsword` ⠠⠄ or Dutch `begcapsword` ⠘.
+    CapsPassageEnd,
 }
 
 pub type Constraints = EnumSet<Constraint>;
@@ -189,6 +194,12 @@ impl PositionConstraints {
         self.0
             .get(pos)
             .is_some_and(|f| f.contains(Constraint::Uncontracted))
+    }
+
+    pub fn caps_passage_end_at(&self, pos: usize) -> bool {
+        self.0
+            .get(pos)
+            .is_some_and(|f| f.contains(Constraint::CapsPassageEnd))
     }
 
     pub fn in_cursor_word_at(&self, pos: usize) -> bool {
@@ -888,6 +899,54 @@ impl BackwardNoContractConstrainer {
     }
 }
 
+/// Finds the capitals passages in backward input and sets [`Constraint::CapsPassageEnd`]
+/// where each one's end indicator starts: the first `endcapsphrase` after a
+/// `begcapsphrase`, or a `multind` with one. Outside a passage, the end indicator's cells
+/// are something else, as `endcapsphrase after 6` is also `capsletter 6` in no-no-g0.utb.
+#[derive(Debug, Clone, Default)]
+pub struct BackwardCapsPassageConstrainer {
+    begin_dots: Vec<String>,
+    end_dots: Vec<String>,
+}
+
+impl BackwardCapsPassageConstrainer {
+    pub fn begin(&mut self, dots: &str) {
+        self.begin_dots.push(dots.to_string());
+    }
+
+    pub fn end(&mut self, dots: &str) {
+        self.end_dots.push(dots.to_string());
+    }
+
+    pub fn build(self) -> Option<Self> {
+        (!self.begin_dots.is_empty() && !self.end_dots.is_empty()).then_some(self)
+    }
+
+    fn compute(&self, input: &str) -> Vec<Constraints> {
+        let chars: Vec<char> = input.chars().collect();
+        let mut constraints = vec![Constraints::empty(); chars.len()];
+        let mut in_passage = false;
+        let mut pos = 0;
+        while pos < chars.len() {
+            let dots = if in_passage {
+                &self.end_dots
+            } else {
+                &self.begin_dots
+            };
+            if let Some(len) = longest_match_at(&chars, pos, dots) {
+                if in_passage {
+                    constraints[pos].insert(Constraint::CapsPassageEnd);
+                }
+                in_passage = !in_passage;
+                pos += len;
+            } else {
+                pos += 1;
+            }
+        }
+        constraints
+    }
+}
+
 /// A builder for [`Constrainer::BackwardNoContract`].
 #[derive(Debug, Default)]
 pub struct BackwardNoContractConstrainerBuilder {
@@ -974,6 +1033,8 @@ pub enum Constrainer {
     /// Detects backward `letsign`/`nocontractsign`/`nonumsign` dots and sets
     /// [`Constraint::NoContract`].
     BackwardNoContract(BackwardNoContractConstrainer),
+    /// Detects backward capitals passages and sets [`Constraint::CapsPassageEnd`].
+    BackwardCapsPassage(BackwardCapsPassageConstrainer),
     /// Detects hyphenation-dictionary breaks and sets [`Constraint::HyphenationBreak`].
     Hyphenation(HyphenationConstrainer),
     /// Detects where a syllable, an emphasis span or a run of capitals starts and sets
@@ -1013,6 +1074,7 @@ impl Constrainer {
             Constrainer::ComputerBraille(c) => c.compute(input, spans),
             Constrainer::BackwardNoContract(c) => c.compute(input),
             Constrainer::BackwardNumeric(c) => c.compute(input),
+            Constrainer::BackwardCapsPassage(c) => c.compute(input),
             Constrainer::Hyphenation(c) => c.compute(input),
             Constrainer::Type(c) => c.compute(input, spans),
             Constrainer::Punctuation(c) => c.compute(input),
@@ -1920,5 +1982,22 @@ mod tests {
             &options.with_modes(TranslationModes::empty()),
         );
         assert!(!(0..9).any(|pos| c.in_cursor_word_at(pos)));
+    }
+
+    #[test]
+    fn caps_passage_end_only_inside_a_passage() {
+        // no-no-g0.utb: `endcapsphrase after 6` has the cells of `capsletter 6`
+        let mut c = BackwardCapsPassageConstrainer::default();
+        c.begin("⠠⠠⠠");
+        c.end("⠠");
+        let ends: Vec<bool> = c
+            .build()
+            .unwrap()
+            .compute("⠠⠁ ⠠⠠⠠⠁ ⠃⠠ ⠠⠉")
+            .iter()
+            .map(|f| f.contains(Constraint::CapsPassageEnd))
+            .collect();
+        let at: Vec<usize> = (0..ends.len()).filter(|&i| ends[i]).collect();
+        assert_eq!(at, vec![9]);
     }
 }

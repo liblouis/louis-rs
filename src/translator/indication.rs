@@ -31,8 +31,9 @@
 //!   front of a `contraction` rule chosen (forward)
 //! * [`largesign::LargeSigns`]: drops the spaces between two `largesign` rules chosen
 //!   (forward)
-//! * [`uppercase::BackwardCaps`]: capitalizes after a `capsletter` and in the words a
-//!   `begcapsword` starts, as written, with the table's `base uppercase` (backward)
+//! * [`uppercase::BackwardCaps`]: capitalizes after a `capsletter`, in the words a
+//!   `begcapsword` starts and in a capitals passage, as written, with the table's
+//!   `base uppercase` (backward)
 //!
 //! A table holds its rewriters as [`Rewriters`], applied in turn.
 
@@ -257,8 +258,8 @@ pub enum Rewriter {
     ContractionSigns(contraction::ContractionSigns),
     /// Drops the spaces between two `largesign`s (forward).
     LargeSigns(largesign::LargeSigns),
-    /// Capitalizes after a `capsletter` and in the words a `begcapsword` starts, as
-    /// written (backward).
+    /// Capitalizes after a `capsletter`, in the words a `begcapsword` starts and in a
+    /// capitals passage, as written (backward).
     BackwardCaps(uppercase::BackwardCaps),
 }
 

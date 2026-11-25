@@ -25,12 +25,13 @@ use crate::{
         },
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
         position_constraints::{
-            BackwardNoContractConstrainerBuilder, BackwardNumericConstrainerBuilder,
-            CapsNoContConstrainerBuilder, ComputerBrailleConstrainer, Constrainer, Constrainers,
-            Constraint, CursorWordConstrainer, HyphenationConstrainerBuilder,
-            JoinConstrainerBuilder, NoContConstrainerBuilder, NoContractionsConstrainer,
-            NumericConstrainerBuilder, PositionConstraints, PunctuationConstrainerBuilder,
-            RepwordConstrainerBuilder, TypeConstrainerBuilder,
+            BackwardCapsPassageConstrainer, BackwardNoContractConstrainerBuilder,
+            BackwardNumericConstrainerBuilder, CapsNoContConstrainerBuilder,
+            ComputerBrailleConstrainer, Constrainer, Constrainers, Constraint,
+            CursorWordConstrainer, HyphenationConstrainerBuilder, JoinConstrainerBuilder,
+            NoContConstrainerBuilder, NoContractionsConstrainer, NumericConstrainerBuilder,
+            PositionConstraints, PunctuationConstrainerBuilder, RepwordConstrainerBuilder,
+            TypeConstrainerBuilder,
         },
         standing_alone::StandingAloneScanner,
         table::TableContext,
@@ -139,6 +140,7 @@ struct PrimaryTableBuilder {
     backward_caps: BackwardCapsBuilder,
     backward_numeric_constrainer: BackwardNumericConstrainerBuilder,
     backward_nocontract_constrainer: BackwardNoContractConstrainerBuilder,
+    backward_caps_passage: BackwardCapsPassageConstrainer,
     hyphenation_constrainer: HyphenationConstrainerBuilder,
     type_constrainer: TypeConstrainerBuilder,
     punctuation_constrainer: PunctuationConstrainerBuilder,
@@ -202,6 +204,7 @@ impl PrimaryTableBuilder {
             backward_caps: BackwardCapsBuilder::new(),
             backward_numeric_constrainer: BackwardNumericConstrainerBuilder::new(),
             backward_nocontract_constrainer: BackwardNoContractConstrainerBuilder::new(),
+            backward_caps_passage: BackwardCapsPassageConstrainer::default(),
             hyphenation_constrainer: HyphenationConstrainerBuilder::new(),
             type_constrainer: TypeConstrainerBuilder::new(),
             punctuation_constrainer: PunctuationConstrainerBuilder::new(),
@@ -444,6 +447,9 @@ impl PrimaryTableBuilder {
                     self.backward_nocontract_constrainer
                         .build()
                         .map(Constrainer::BackwardNoContract),
+                    self.backward_caps_passage
+                        .build()
+                        .map(Constrainer::BackwardCapsPassage),
                     // liblouis's `nocross`/hyphenation-based syllable-break check is a
                     // forward-translation-only mechanism (lou_backTranslateString.c never
                     // consults it); a nocross rule is always an unrestricted candidate
@@ -884,11 +890,35 @@ impl PrimaryTable {
                     builder
                         .uppercase_indicator
                         .begcapsphrase(&dots.to_string(), rule);
+                    if direction == Direction::Backward
+                        && PrimaryTableBuilder::backward_indicator_dots_available(
+                            "begcapsphrase",
+                            &dots.to_string(),
+                            &letter_dots,
+                        )
+                    {
+                        builder.insert_backward_indicator(&dots.to_string(), rule);
+                        builder.backward_caps_passage.begin(&dots.to_string());
+                        builder
+                            .backward_nocontract_constrainer
+                            .caps_indicator(&dots.to_string());
+                    }
                 }
                 Rule::Endcapsphrase { dots, position } => {
                     builder
                         .uppercase_indicator
                         .endcapsphrase(&dots.to_string(), position, rule);
+                    // read only where the passage ends, see `Constraint::CapsPassageEnd`
+                    if direction == Direction::Backward
+                        && PrimaryTableBuilder::backward_indicator_dots_available(
+                            "endcapsphrase",
+                            &dots.to_string(),
+                            &letter_dots,
+                        )
+                    {
+                        builder.insert_backward_indicator(&dots.to_string(), rule);
+                        builder.backward_caps_passage.end(&dots.to_string());
+                    }
                 }
                 Rule::Lencapsphrase { number } => {
                     builder.uppercase_indicator.lencapsphrase(*number as usize);
@@ -1097,6 +1127,7 @@ impl PrimaryTable {
                                 "numsign" => {
                                     builder.backward_numeric_constrainer.multind_numsign(&dots)
                                 }
+                                "begcapsphrase" => builder.backward_caps_passage.begin(&dots),
                                 // endcapsword etc.: consuming the cells is the
                                 // whole effect, the constrainers already end a
                                 // caps word at the first non-letter cell.
@@ -2381,6 +2412,21 @@ impl PrimaryTable {
             if constraints.dont_contract_at(char_pos) {
                 candidates
                     .retain(|t| t.length() <= 1 && !matches!(t.rule(), Some(Rule::Match { .. })));
+            }
+
+            // Backward, an `endcapsphrase` is read only where a capitals passage ends, and
+            // there it wins over a capital indicator with the same cells
+            if self.direction == Direction::Backward {
+                let passage_end = constraints.caps_passage_end_at(char_pos);
+                candidates.retain(|t| match t.rule() {
+                    Some(Rule::Endcapsphrase { .. }) => passage_end,
+                    Some(
+                        Rule::Capsletter { .. }
+                        | Rule::Begcapsword { .. }
+                        | Rule::Endcapsword { .. },
+                    ) => !passage_end,
+                    _ => true,
+                });
             }
 
             // Backward, once a letsign/nocontractsign/nonumsign's letters have ended, the
