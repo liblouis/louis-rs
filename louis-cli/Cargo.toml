@@ -21,7 +21,7 @@ clap = { version = "4.4.11", features = ["derive"] }
 env_logger = "0.11.3"
 tabled = "0.22.0"
 rayon = "1.12.0"
-saphyr-parser = "0.3.3"
+saphyr-parser = "0.4.0"
 
 # The changelog and the v{{version}} tag belong to the library; the two crates share a version.
 [package.metadata.release]
