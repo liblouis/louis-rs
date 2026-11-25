@@ -92,9 +92,9 @@ Without an encoding, translating to braille ends in a Unicode braille stage inst
 It has no rules, so the trace doesn't show it.
 
 **Migration path:** name the display table, as a `BrailleEncoding`. The liblouis
-YAML tests that relied
-on the fallback are being changed to name theirs (liblouis
-[#2102](https://github.com/liblouis/liblouis/pull/2102) fixed three; more remain).
+YAML tests that relied on the fallback are changed to name theirs, with a
+`display:` key: liblouis [#2102](https://github.com/liblouis/liblouis/pull/2102)
+fixed three, [#2216](https://github.com/liblouis/liblouis/pull/2216) the rest.
 For an application, none yet: louis-rs does not say when a translation table
 brings display rules that it is ignoring.
 
