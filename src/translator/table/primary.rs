@@ -875,12 +875,34 @@ impl PrimaryTable {
                     builder
                         .backward_nocontract_constrainer
                         .caps_indicator(&dots.to_string());
+                    // backward, a capitals passage like `begcapsphrase`
+                    if direction == Direction::Backward
+                        && PrimaryTableBuilder::backward_indicator_dots_available(
+                            "begcaps",
+                            &dots.to_string(),
+                            &letter_dots,
+                        )
+                    {
+                        builder.insert_backward_indicator(&dots.to_string(), rule);
+                        builder.backward_caps_passage.begin(&dots.to_string());
+                    }
                 }
                 Rule::Endcaps { dots } => {
                     builder.uppercase_indicator.endcaps(&dots.to_string(), rule);
                     builder
                         .backward_nocontract_constrainer
                         .caps_indicator(&dots.to_string());
+                    // backward, the end of a capitals passage like `endcapsphrase after`
+                    if direction == Direction::Backward
+                        && PrimaryTableBuilder::backward_indicator_dots_available(
+                            "endcaps",
+                            &dots.to_string(),
+                            &letter_dots,
+                        )
+                    {
+                        builder.insert_backward_indicator(&dots.to_string(), rule);
+                        builder.backward_caps_passage.end(&dots.to_string());
+                    }
                 }
                 Rule::Capsmodechars { chars } => {
                     builder.uppercase_indicator.capsmodechars(chars);
@@ -2414,12 +2436,12 @@ impl PrimaryTable {
                     .retain(|t| t.length() <= 1 && !matches!(t.rule(), Some(Rule::Match { .. })));
             }
 
-            // Backward, an `endcapsphrase` is read only where a capitals passage ends, and
-            // there it wins over a capital indicator with the same cells
+            // Backward, an `endcapsphrase` or `endcaps` is read only where a capitals
+            // passage ends, and there it wins over a capital indicator with the same cells
             if self.direction == Direction::Backward {
                 let passage_end = constraints.caps_passage_end_at(char_pos);
                 candidates.retain(|t| match t.rule() {
-                    Some(Rule::Endcapsphrase { .. }) => passage_end,
+                    Some(Rule::Endcapsphrase { .. } | Rule::Endcaps { .. }) => passage_end,
                     Some(
                         Rule::Capsletter { .. }
                         | Rule::Begcapsword { .. }

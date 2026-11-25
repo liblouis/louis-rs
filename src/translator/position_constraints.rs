@@ -900,9 +900,10 @@ impl BackwardNoContractConstrainer {
 }
 
 /// Finds the capitals passages in backward input and sets [`Constraint::CapsPassageEnd`]
-/// where each one's end indicator starts: the first `endcapsphrase` after a
-/// `begcapsphrase`, or a `multind` with one. Outside a passage, the end indicator's cells
-/// are something else, as `endcapsphrase after 6` is also `capsletter 6` in no-no-g0.utb.
+/// where each one's end indicator starts: the first `endcapsphrase` or `endcaps` after a
+/// `begcapsphrase`, a `begcaps` or a `multind` with a `begcapsphrase`. Outside a passage,
+/// the end indicator's cells are something else, as `endcapsphrase after 6` is also
+/// `capsletter 6` in no-no-g0.utb.
 #[derive(Debug, Clone, Default)]
 pub struct BackwardCapsPassageConstrainer {
     begin_dots: Vec<String>,

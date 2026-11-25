@@ -208,10 +208,11 @@ Backward translation runs the same machinery over braille, with these difference
   rules with the same dots (`Precedence::Indicator`, `Precedence::Emphasis`).
 - **Constrainers read cells**: after a number sign, a cell shared by a digit and a letter
   reads as the digit (`PreferDigit` and the backward digit overrides); after a letter sign,
-  the word rules stay off (`NoContract`, `NoWholeWord`); after a `begcapsphrase`, the
-  first `endcapsphrase` cells end the passage (`CapsPassageEnd`). Only there are they read
-  as `endcapsphrase`, even where a capital indicator has the same cells, such as UEB's
-  `endcapsword` ⠠⠄. Anywhere else they keep their other meaning.
+  the word rules stay off (`NoContract`, `NoWholeWord`); after a `begcapsphrase` or
+  `begcaps`, the first `endcapsphrase` or `endcaps` cells end the passage
+  (`CapsPassageEnd`). Only there are they read as the end of the passage, even where a
+  capital indicator has the same cells, such as UEB's `endcapsword` ⠠⠄. Anywhere else
+  they keep their other meaning.
 - **Word boundaries** are decided from the text already written (`BegWordScanner`) and the
   cells still to come (`EndWordScanner`), since a cell doesn't say whether it is a letter.
 - **`Rank`** prefers the rule that writes more text, as liblouis sorts its backward rules.

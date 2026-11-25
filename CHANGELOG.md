@@ -11,9 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - Capitals passages are back-translated (#86): `begcapsphrase` and
   `endcapsphrase before|after` are read, so with `en-ueb-g2` ⠠⠠⠠⠮ ⠙⠕⠛
-  ⠗⠁⠝⠠⠄ is "THE DOG RAN" rather than "The dog ran". An `endcapsphrase` is
-  read only inside a passage, and there it wins over a capital indicator
-  with the same cells, as in liblouis/liblouis#2125.
+  ⠗⠁⠝⠠⠄ is "THE DOG RAN" rather than "The dog ran". `begcaps` and
+  `endcaps` mark a passage too, as in the Vietnamese tables (#87). An
+  `endcapsphrase` or `endcaps` is read only inside a passage, and there it
+  wins over a capital indicator with the same cells, as in
+  liblouis/liblouis#2125.
 
 ## [0.4.1] - 2026-11-24
 

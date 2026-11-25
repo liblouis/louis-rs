@@ -254,6 +254,8 @@ impl HasPrecedence for Rule {
             Rule::Capsletter { .. }
             | Rule::Begcapsword { .. }
             | Rule::Endcapsword { .. }
+            | Rule::Begcaps { .. }
+            | Rule::Endcaps { .. }
             | Rule::Begcapsphrase { .. }
             | Rule::Endcapsphrase { .. }
             | Rule::Numsign { .. }
