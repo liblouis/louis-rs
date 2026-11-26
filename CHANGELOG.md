@@ -78,6 +78,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   Swedish, `word man 134` now applies after the phonetic `always ◌̹ 6-135`,
   whose characters no rule defines: ⠠⠕⠍ is "◌̹man", not "◌̹m". Forward, with
   `en-us-g2.ctb`, "but" before "✔" is the wordsign ⠃.
+- Back-translating, a `decpoint` is read only before a `digit` or
+  `litdigit` cell, as in liblouis (#62). Elsewhere its cells are what else
+  the table makes of them: with `en-us-g2.ctb`, EBAE's italic sign, also
+  `decpoint . 46`, gave ⠨⠠⠠⠎⠊⠇⠧⠊⠕ as ".SILVIO" instead of "SILVIO".
 
 ## [0.4.1] - 2026-11-24
 

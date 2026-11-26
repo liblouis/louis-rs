@@ -1702,12 +1702,20 @@ impl PrimaryTable {
                             TranslationStage::Main,
                             rule,
                         ),
-                        // FIXME: liblouis also requires a digit after it backward, but an
-                        // End transition here would add weight and beat an equally long
-                        // `always` the table defines earlier, see TODO.org
-                        Direction::Backward => {
-                            builder.insert_character(*character, &dots.to_string(), direction, rule)
-                        }
+                        // backward, before a digit or litdigit cell, as in liblouis
+                        Direction::Backward => builder.get_trie_mut(rule).insert(
+                            &s,
+                            &dots.to_string(),
+                            None,
+                            Some(Transition::End(vec![
+                                CharacterClass::Digit,
+                                CharacterClass::Litdigit,
+                            ])),
+                            direction,
+                            ClassConstraints::default(),
+                            TranslationStage::Main,
+                            rule,
+                        ),
                     }
                 }
                 Rule::Midnum { chars, dots, .. } => {
@@ -4013,6 +4021,35 @@ mod tests {
         .unwrap();
         assert_eq!(table.translate("⠁⠷"), "aá");
         assert_eq!(table.translate("⠖⠷"), "+[");
+    }
+
+    #[test]
+    fn backward_decpoint_only_before_a_digit() {
+        // as in en-us-g2.ctb, where EBAE's italic sign is also the decimal point
+        let rules = [
+            parse_rule("lowercase a 1"),
+            parse_rule("lowercase b 12"),
+            parse_rule("lowercase s 234"),
+            parse_rule("base uppercase A a"),
+            parse_rule("capsletter 6"),
+            parse_rule("litdigit 1 1"),
+            parse_rule("numsign 3456"),
+            parse_rule("punctuation . 256"),
+            parse_rule("decpoint . 46"),
+            parse_rule("emphclass italic"),
+            parse_rule("begemphword italic 46"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table = PrimaryTable::compile(
+            &rules,
+            Direction::Backward,
+            TranslationStage::Main,
+            &context,
+        )
+        .unwrap();
+        assert_eq!(table.translate("⠨⠎⠃"), "sb");
+        assert_eq!(table.translate("⠨⠠⠁"), "A");
+        assert_eq!(table.translate("⠼⠁⠨⠁"), "1.a");
     }
 
     #[test]

@@ -1,7 +1,7 @@
 //! A braille translator that uses [liblouis](https://liblouis.io) braille tables
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, hash_map::Entry},
     path::{Path, PathBuf},
 };
 
@@ -119,9 +119,11 @@ impl CharacterDefinition {
     }
 
     fn insert(&mut self, from: char, to: &str) {
-        // first rule wins, as in liblouis
-        self.dots.entry(from).or_insert(to.to_string());
-        self.characters.entry(to.to_string()).or_insert(from);
+        // first rule wins, as in liblouis, and only it gives its dots a character
+        if let Entry::Vacant(dots) = self.dots.entry(from) {
+            dots.insert(to.to_string());
+            self.characters.entry(to.to_string()).or_insert(from);
+        }
     }
 
     pub fn get(&self, from: &char) -> Option<&String> {
