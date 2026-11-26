@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+- `EmphasisSpan::COMPUTER_BRAILLE`, the class of a span translated in
+  computer braille, which needs no `emphclass` in the table (#94).
+
 ### Fixed
 - Capitals passages are back-translated (#86): `begcapsphrase` and
   `endcapsphrase before|after` are read, so with `en-ueb-g2` ⠠⠠⠠⠮ ⠙⠕⠛

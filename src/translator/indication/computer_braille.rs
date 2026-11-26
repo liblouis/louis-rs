@@ -50,7 +50,10 @@ impl CompbrlWords {
         let words = words
             .into_iter()
             .map(|word| {
-                EmphasisSpan::new("computer_braille", char_at(word.start)..char_at(word.end))
+                EmphasisSpan::new(
+                    EmphasisSpan::COMPUTER_BRAILLE,
+                    char_at(word.start)..char_at(word.end),
+                )
             })
             .filter(|span| !caller_spans.contains(span));
         caller_spans.iter().cloned().chain(words).collect()
@@ -107,7 +110,7 @@ impl Indicator {
     /// Returns sparse `(position, translation)` pairs for the given input and emphasis spans.
     ///
     /// Emits `begcomp` at `span.range.start` and `endcomp` at `span.range.end`
-    /// (clamped to `n`) for each span with `class == "computer_braille"`.
+    /// (clamped to `n`) for each span of class [`EmphasisSpan::COMPUTER_BRAILLE`].
     /// Only emits for spans where `start < end`. Result is sorted by position.
     pub fn precompute(
         &self,
@@ -118,7 +121,7 @@ impl Indicator {
         let mut result: Vec<(usize, ResolvedTranslation)> = Vec::new();
 
         for span in spans {
-            if span.class() != "computer_braille" {
+            if span.class() != EmphasisSpan::COMPUTER_BRAILLE {
                 continue;
             }
             let start = span.range().start;
@@ -154,7 +157,10 @@ mod tests {
         b.endcomp("⠿", &rule("endcomp 123456"));
         let indicator = b.build().unwrap();
 
-        let result = indicator.precompute("hello", &[EmphasisSpan::new("computer_braille", 1..4)]);
+        let result = indicator.precompute(
+            "hello",
+            &[EmphasisSpan::new(EmphasisSpan::COMPUTER_BRAILLE, 1..4)],
+        );
         let positions: Vec<usize> = result.iter().map(|(p, _)| *p).collect();
         assert!(positions.contains(&1));
         assert!(positions.contains(&4));

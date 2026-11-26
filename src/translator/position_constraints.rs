@@ -621,7 +621,7 @@ impl ComputerBrailleConstrainer {
         let n = input.chars().count();
         let mut constraints: Vec<Constraints> = vec![Constraints::empty(); n];
         for span in spans {
-            if span.class() == "computer_braille" {
+            if span.class() == EmphasisSpan::COMPUTER_BRAILLE {
                 let end = span.range().end.min(n);
                 for c in constraints.iter_mut().take(end).skip(span.range().start) {
                     c.insert(Constraint::UseComp6);
@@ -1562,7 +1562,7 @@ mod tests {
 
     #[test]
     fn computer_braille_span_sets_use_comp6() {
-        let spans = vec![EmphasisSpan::new("computer_braille", 1..4)];
+        let spans = vec![EmphasisSpan::new(EmphasisSpan::COMPUTER_BRAILLE, 1..4)];
         let constrainers = Constrainers::new(vec![Constrainer::ComputerBraille(
             ComputerBrailleConstrainer {},
         )]);

@@ -2928,7 +2928,7 @@ mod tests {
         let words = table.compbrl_words.as_ref().unwrap();
         assert_eq!(
             words.spans("a awww", &[]),
-            [EmphasisSpan::new("computer_braille", 2..6)]
+            [EmphasisSpan::new(EmphasisSpan::COMPUTER_BRAILLE, 2..6)]
         );
         // fewer characters are left than the trigger has
         assert_eq!(words.spans("a ww", &[]), []);

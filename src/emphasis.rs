@@ -10,8 +10,15 @@ pub struct EmphasisSpan {
 }
 
 impl EmphasisSpan {
-    /// Emphasis of `class` over the characters in `range`. The class must be declared with
-    /// the `emphclass` opcode in the table, e.g. `"italic"`, `"bold"` or `"underline"`.
+    /// The class of a span in computer braille, see [`new`](Self::new)
+    pub const COMPUTER_BRAILLE: &str = "computer_braille";
+
+    /// Emphasis of `class` over the characters in `range`. The class is one the table
+    /// declares with the `emphclass` opcode, e.g. `"italic"`, `"bold"` or `"underline"`, or
+    /// [`COMPUTER_BRAILLE`](Self::COMPUTER_BRAILLE), `"computer_braille"`, which needs no
+    /// declaration: its characters are translated in computer braille, between the table's
+    /// `begcomp` and `endcomp` indicators and with its `comp6` rules. A span of any other
+    /// class is ignored.
     pub fn new(class: impl Into<String>, range: Range<usize>) -> Self {
         Self {
             class: class.into(),
