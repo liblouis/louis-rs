@@ -11,7 +11,9 @@ candidates is an ill-formed table and declined any tie-break by table
 order; see "History" below. Amended [2026-11-11 Wed]: weight no longer
 ranks rules ahead of liblouis's chain order, and ~context~ rules are
 ranked as liblouis files them; see "Amendment: weight and ~context~
-rules".
+rules". Amended [2026-11-26 Thu]: back-translation over several cells
+ranks by the characters written first; see "Amendment: multi-cell
+back-translation".
 
 ** Context and Problem Statement
 
@@ -93,6 +95,8 @@ compares its fields in declaration order, the highest winning:
 | ~length~                     | characters consumed; for a forward ~context~ rule, the          | louis-rs, liblouis           |
 |                              | leading literal it is filed under (~Test::leading_literal_len~) |                              |
 | ~literals~                   | literal characters in a pass or ~correct~ test                  | liblouis's pass-rule sort    |
+| ~multicell_backward_output~  | backward main stage, two or more cells: characters written,     | liblouis's backward chains   |
+|                              | a ~context~ rule first                                          |                              |
 | ~precedence~                 | character definition < indicator < ~always~ < other rules       | liblouis's chain order       |
 | ~output_length~              | backward main stage only: the longer output                     | liblouis's backward chains   |
 | ~nocross~                    | a ~nocross~ rule beats its plain twin                           | louis-rs                     |
@@ -180,6 +184,35 @@ not), which is fragile in liblouis too; raised upstream as
 [[https://github.com/liblouis/liblouis/issues/2189][liblouis#2189]]. Not
 modelled: liblouis skips the override at a position where the previous
 rule did not advance (~posIncremented~).
+
+** Amendment: multi-cell back-translation
+
+~precedence~ came before the characters a rule writes in every
+direction. Backward over several cells liblouis orders the other way
+round: its chains for those (~addBackwardRuleWithMultipleCells~) sort
+by cells plus characters written, put ~always~ last among rules of
+equal length, and otherwise keep definition order. A character
+definition is not demoted there, and an indicator writes nothing. So
+in ~ar-ar-g1-core.uti~ an earlier ~punctuation ؛ 5-23~ beats a later
+~postpunc ; 5-23~, and "بها؛" came back as "بها;" in louis-rs.
+
+Backward in the main stage, a match of two or more cells now ranks
+first by the characters the rule writes
+(~multicell_backward_output~), and a character definition there
+counts as a translation rule, so only ~always~ stays below the others
+in ~precedence~. Single-cell matches are unchanged: liblouis's
+single-cell chains already put character definitions last, as
+~precedence~ does.
+
+A backward ~context~ rule comes first among these. liblouis files it
+by the length of its compiled test and action, which in practice
+exceeds every other rule on the same cells, so
+~cuneiform-transliterated-compact.utb~'s ~nofor context @46-1 "A"~
+wins over the earlier ~lowercase α 46-1~ it includes. Without this,
+7 of its tests failed.
+
+Where indicators go among these candidates made no difference in the
+suite; they count as writing nothing, as in liblouis.
 
 ** Deferred: a table linter
 

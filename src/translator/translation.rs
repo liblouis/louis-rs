@@ -307,9 +307,19 @@ pub struct Rank {
     /// pass rules by their leading literals alone and takes the first match, never comparing
     /// the input consumed; here [`length`](Rank::length) still comes first.
     literals: usize,
+    /// Backward main stage, matches of two or more cells only: the characters the rule
+    /// writes, more winning, as liblouis orders its multi-cell backward rule chains by cells
+    /// plus characters. An indicator writes none. A `context` rule comes first: liblouis files
+    /// it by the length of its compiled test and action, which in practice exceeds every
+    /// other rule on the same cells. Ties fall to [`precedence`](Rank::precedence), where a
+    /// character definition then counts as a translation rule, so `always` still comes last
+    /// and definition order decides the rest. 0 everywhere else.
+    multicell_backward_output: usize,
     /// The kind of rule: a translation rule beats `always`, which beats an indicator, which
     /// beats a character definition. On a one-character match `always` counts as a
-    /// translation rule, as liblouis only puts it last in its multi-character chains.
+    /// translation rule, as liblouis only puts it last in its multi-character chains. On a
+    /// backward match of several cells a character definition counts as a translation rule,
+    /// see [`multicell_backward_output`](Rank::multicell_backward_output).
     precedence: Precedence,
     /// Backward main stage only: the rule producing more text wins, as liblouis sorts its
     /// backward rule chains by output length. Forward and in the passes liblouis does not look
@@ -443,6 +453,15 @@ impl ResolvedTranslation {
             }
             _ => None,
         };
+        let multicell_backward = direction == Direction::Backward
+            && self.stage == TranslationStage::Main
+            && self.length > 1;
+        let multicell_backward_output = match (multicell_backward, self.rule(), precedence) {
+            (false, _, _) => 0,
+            (true, Some(Rule::Context { .. }), _) => usize::MAX,
+            (true, _, Precedence::Indicator | Precedence::Emphasis) => 0,
+            (true, _, _) => self.output.chars().count(),
+        };
         Rank {
             context_no_leading_literal: leading_literal_len == Some(0),
             zero_length: self.length == 0,
@@ -450,8 +469,10 @@ impl ResolvedTranslation {
                 .filter(|&n| n > 0)
                 .unwrap_or(self.length),
             literals,
+            multicell_backward_output,
             precedence: match precedence {
                 Precedence::Always if self.length < 2 => Precedence::Translation,
+                Precedence::CharacterDefinition if multicell_backward => Precedence::Translation,
                 p => p,
             },
             output_length: match (direction, self.stage) {
@@ -561,6 +582,46 @@ mod tests {
         assert_eq!(best(&["always ab 2", "word ab 4"], "ab"), 1);
         // among equals, the earliest-defined rule wins
         assert_eq!(best(&["always ab 2", "always ab 3"], "ab"), 0);
+    }
+
+    #[test]
+    fn multicell_backward_ranks_by_characters_written() {
+        use crate::parser::RuleParser;
+        let best = |candidates: &[(&str, &str)], cells: &str| {
+            let rules: Vec<_> = candidates
+                .iter()
+                .map(|(s, _)| AnchoredRule::from(RuleParser::new(s).rule().unwrap()))
+                .collect();
+            crate::parser::in_definition_order(&rules)
+                .into_iter()
+                .zip(candidates)
+                .map(|(r, (_, out))| {
+                    ResolvedTranslation::new(cells, out, 1, TranslationStage::Main, r)
+                })
+                .max_by_key(|t| t.rank(Direction::Backward))
+                .unwrap()
+                .origin()
+                .unwrap()
+                .definition_order()
+        };
+        // the rule writing more characters wins, even `always` over `word`
+        assert_eq!(
+            best(&[("word ab 1-2", "ab"), ("always abc 1-2", "abc")], "⠁⠃"),
+            1
+        );
+        // a character definition is not demoted: the earlier rule wins
+        let semicolon = [("punctuation \\x061B 5-23", "؛"), ("postpunc ; 5-23", ";")];
+        assert_eq!(best(&semicolon, "⠐⠆"), 0);
+        // `always` comes last among rules writing as many characters
+        assert_eq!(
+            best(&[("always ab 1-2", "ab"), ("word ab 1-2", "ab")], "⠁⠃"),
+            1
+        );
+        // a `context` rule comes first
+        let context = [("lowercase α 46-1", "α"), ("context @46-1 \"AB\"", "AB")];
+        assert_eq!(best(&context, "⠨⠁"), 1);
+        // on one cell, a character definition is still only the fallback
+        assert_eq!(best(&[("letter a 1", "a"), ("postpunc ; 1", ";")], "⠁"), 1);
     }
 
     #[test]

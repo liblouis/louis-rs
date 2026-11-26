@@ -216,6 +216,9 @@ Backward translation runs the same machinery over braille, with these difference
 - **Word boundaries** are decided from the text already written (`BegWordScanner`) and the
   cells still to come (`EndWordScanner`), since a cell doesn't say whether it is a letter.
 - **`Rank`** prefers the rule that writes more text, as liblouis sorts its backward rules.
+  Over several cells this comes before the kind of rule: a character definition is no
+  longer only the fallback there, it ties with other rules writing as many characters,
+  and the earlier rule wins, `always` excepted.
 - **Capitals** are applied by the `BackwardCaps` rewriter, with the table's
   `base uppercase` rules.
 - **Emphasis** comes out as the typeform, `TranslationResult::emphasis`:

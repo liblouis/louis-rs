@@ -47,6 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `braille-patterns.cti` defines with `noback sign`, so a `before` or
   `after` rule testing them never matched backward: "laissait" came back
   as "laièait".
+- Back-translating several cells, the rule writing more characters wins,
+  then definition order, with `always` last and a `context` rule first, as
+  in liblouis. A character definition no longer loses to any other rule
+  there: with `ar-ar-g1.utb`, "بها؛" came back as "بها;".
 
 ## [0.4.1] - 2026-11-24
 
