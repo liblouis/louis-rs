@@ -99,8 +99,9 @@ reaches into it or joins onto it (`SpaceBeforeCursorWord`).
 
 **After the loop**, the **rewriters** (`indication.rs`, `Rewriters`) rewrite the chosen
 translations where the result depends on which rule was chosen: the `nocontractsign` and
-letter sign in front of a `contraction` applied and the spaces between two `largesign`s
-(forward), and the capitals (backward).
+letter sign in front of a `contraction` applied, the letter sign taken back off in front
+of an `endnum` and the spaces between two `largesign`s (forward), and the capitals
+(backward).
 
 ### The multipass stages
 
@@ -159,10 +160,11 @@ number sign, and so on.
 
 **Rewriter.** Rewrites the chosen translations after the loop, where the result depends on
 the rule chosen rather than on the text. It may insert translations or change them:
-`ContractionSigns` puts a chosen contraction's signs in front of it and `LargeSigns` drops
-the spaces between two large signs (forward), `BackwardCaps` uppercases after a chosen
-`capsletter` or `begcapsword` and in a capitals passage (backward). A table holds them as
-`Rewriters`, applied in turn.
+`ContractionSigns` puts a chosen contraction's signs in front of it, `EndnumLetterSign`
+takes the letter sign off in front of an `endnum` and `LargeSigns` drops the spaces between
+two large signs (forward), `BackwardCaps` uppercases after a chosen `capsletter` or
+`begcapsword` and in a capitals passage (backward). A table holds them as `Rewriters`,
+applied in turn.
 
 **`Rank`, `Precedence`.** How the loop picks between candidates at the same position: a
 key compared field by field. Roughly: a forward `context` rule with no leading literal

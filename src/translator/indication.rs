@@ -29,6 +29,8 @@
 //! rewriters are built in and see each translation's rule. They are:
 //! * [`contraction::ContractionSigns`]: puts the `nocontractsign` and letter sign in
 //!   front of a `contraction` rule chosen (forward)
+//! * [`lettersign::EndnumLetterSign`]: takes the letter sign back off in front of an
+//!   `endnum` rule chosen (forward)
 //! * [`largesign::LargeSigns`]: drops the spaces between two `largesign` rules chosen
 //!   (forward), and puts them back (backward)
 //! * [`uppercase::BackwardCaps`]: capitalizes after a `capsletter`, in the words a
@@ -256,6 +258,8 @@ impl Indicators {
 pub enum Rewriter {
     /// Puts the `nocontractsign` and letter sign in front of a `contraction` (forward).
     ContractionSigns(contraction::ContractionSigns),
+    /// Takes the letter sign back off in front of an `endnum` (forward).
+    EndnumLetterSign(lettersign::EndnumLetterSign),
     /// Drops the spaces between two `largesign`s (forward).
     LargeSigns(largesign::LargeSigns),
     /// Capitalizes after a `capsletter`, in the words a `begcapsword` starts and in a
@@ -270,6 +274,7 @@ impl Rewriter {
     fn apply(&self, translations: Vec<ResolvedTranslation>) -> Vec<ResolvedTranslation> {
         match self {
             Rewriter::ContractionSigns(a) => a.apply(translations),
+            Rewriter::EndnumLetterSign(a) => a.apply(translations),
             Rewriter::LargeSigns(a) => a.apply(translations),
             Rewriter::BackwardCaps(a) => a.apply(translations),
             Rewriter::BackwardLargeSigns(a) => a.apply_backward(translations),

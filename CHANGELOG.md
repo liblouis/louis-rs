@@ -82,6 +82,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `litdigit` cell, as in liblouis (#62). Elsewhere its cells are what else
   the table makes of them: with `en-us-g2.ctb`, EBAE's italic sign, also
   `decpoint . 46`, gave ⠨⠠⠠⠎⠊⠇⠧⠊⠕ as ".SILVIO" instead of "SILVIO".
+- A letter standing alone after a space gets its letter sign, as in
+  liblouis (#66): `en-us-g2.ctb`'s "x y" is ⠰⠭⠀⠰⠽, not ⠰⠭⠀⠽. So does a
+  letter after a digit with letters after it, as in "2bc", except before
+  an `endnum` rule, so "1st" stays ⠼⠁⠌. Back-translating, the letter sign
+  is no longer written into the text.
 
 ## [0.4.1] - 2026-11-24
 

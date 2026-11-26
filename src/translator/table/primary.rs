@@ -20,7 +20,8 @@ use crate::{
             contraction::ContractionSignsBuilder,
             emphasis,
             largesign::LargeSigns,
-            lettersign, mode, numeric,
+            lettersign::{self, EndnumLetterSign},
+            mode, numeric,
             uppercase::{self, BackwardCapsBuilder},
         },
         match_pattern::{MatchPatterns, MatchPatternsBuilder},
@@ -139,6 +140,8 @@ struct PrimaryTableBuilder {
     contraction_signs: ContractionSignsBuilder,
     /// Whether the table has `largesign` rules, whose spaces `LargeSigns` drops and puts back
     largesigns: bool,
+    /// Drops the letter sign before an `endnum`, forward, if the table has one
+    endnum_letter_sign: Option<EndnumLetterSign>,
     emphasis_indicator: emphasis::IndicatorBuilder,
     computer_braille_indicator: computer_braille::IndicatorBuilder,
     numeric_constrainer: NumericConstrainerBuilder,
@@ -203,6 +206,7 @@ impl PrimaryTableBuilder {
             lettersign_indicator: lettersign::IndicatorBuilder::new(),
             contraction_signs: ContractionSignsBuilder::new(),
             largesigns: false,
+            endnum_letter_sign: None,
             emphasis_indicator: emphasis::IndicatorBuilder::new(),
             computer_braille_indicator: computer_braille::IndicatorBuilder::new(),
             numeric_constrainer: NumericConstrainerBuilder::new(),
@@ -418,8 +422,10 @@ impl PrimaryTableBuilder {
                 .build()
                 .map(Indicator::ComputerBraille),
             self.emphasis_indicator.build(ctx).map(Indicator::Emphasis),
+            // forward only, as liblouis's `insertLetterSign`
             self.lettersign_indicator
                 .build(ctx)
+                .filter(|_| direction == Direction::Forward)
                 .map(Indicator::LetterSign),
             self.uppercase_indicator
                 .build(ctx)
@@ -433,6 +439,7 @@ impl PrimaryTableBuilder {
         PrimaryTable {
             rewriters: Rewriters::new(
                 [
+                    self.endnum_letter_sign.map(Rewriter::EndnumLetterSign),
                     (direction == Direction::Forward)
                         .then(|| self.contraction_signs.build())
                         .flatten()
@@ -1732,6 +1739,9 @@ impl PrimaryTable {
                     );
                 }
                 Rule::Endnum { chars, dots, .. } => {
+                    if direction == Direction::Forward {
+                        builder.endnum_letter_sign = Some(EndnumLetterSign);
+                    }
                     let dots = ctx
                         .character_definitions()
                         .braille_to_unicode(dots, chars).map_err(|e| e.at(rule))?;

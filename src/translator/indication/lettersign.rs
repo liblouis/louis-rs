@@ -1,11 +1,12 @@
 //! Lettersign braille indication
 //!
-//! [`Indicator`] analyses the full input text in a single pass before translation begins. It
-//! fires for any isolated letter (not followed by another letter)
-//! whose preceding character is neither a space nor a letter — for example, a letter at string
-//! start before punctuation (`b:`), or a Tamil consonant followed by a vowel sign or virama.
-//! Letters preceded by a space (word boundary) or by another letter (tail of a letter run) do not fire.
-//! The `noletsignafter` and `noletsignbefore` opcodes list characters adjacent to a letter that
+//! [`Indicator`] analyses the full input text in a single pass before translation begins. As
+//! in liblouis (`insertLetterSign`), it fires for a letter that doesn't follow another letter
+//! and either isn't followed by a letter or follows a digit: a letter standing alone, as in
+//! "plan b", a letter before punctuation (`b:`), a letter after a digit (`2b`, `2bc`), or a
+//! Tamil consonant followed by a vowel sign or virama. The main stage emits it only where a
+//! translation starts, as liblouis checks only there, so a letter inside a longer rule gets
+//! none. The `noletsignafter` and `noletsignbefore` opcodes list characters adjacent to a letter that
 //! suppress the indicator. The `noletsign` opcode lists letters that must never themselves be
 //! preceded by a letter sign, regardless of context, and so does a letter with a `word` or
 //! `largesign` rule of its own.
@@ -15,7 +16,7 @@
 
 use std::collections::HashSet;
 
-use crate::parser::{AnchoredRule, CharacterClass};
+use crate::parser::{AnchoredRule, CharacterClass, Rule};
 use crate::translator::{ResolvedTranslation, table::TableContext};
 
 /// A builder for [`Indicator`]
@@ -55,8 +56,8 @@ impl IndicatorBuilder {
         .flatten()
         .collect();
 
-        let space_chars: HashSet<char> = cc
-            .get(&CharacterClass::Space)
+        let digit_chars: HashSet<char> = cc
+            .get(&CharacterClass::Digit)
             .into_iter()
             .flatten()
             .collect();
@@ -64,7 +65,7 @@ impl IndicatorBuilder {
         Some(Indicator {
             start_translation,
             letter_chars,
-            space_chars,
+            digit_chars,
             noletsign_chars: self.noletsign_chars,
             noletsignafter_chars: self.noletsignafter_chars,
             noletsignbefore_chars: self.noletsignbefore_chars,
@@ -101,8 +102,8 @@ pub struct Indicator {
     start_translation: ResolvedTranslation,
     /// Characters that are considered letters (Letter + Uppercase + Lowercase classes).
     letter_chars: HashSet<char>,
-    /// Characters that are considered spaces (Space class).
-    space_chars: HashSet<char>,
+    /// Characters that are considered digits (Digit class).
+    digit_chars: HashSet<char>,
     /// These letters must never themselves be preceded by a letter sign.
     noletsign_chars: HashSet<char>,
     /// When one of these characters follows a single letter the letsign must NOT be inserted.
@@ -119,15 +120,8 @@ impl Indicator {
 
         let mut fire: Vec<usize> = Vec::new();
 
-        // ── Isolation-based letsign ───────────────────────────────────────────
-        // Fires for a letter that is isolated (not followed by another letter)
-        // AND whose preceding character, if any, is neither a space nor a letter.
-        // This covers:
-        //   - letters at string start before punctuation (e.g. `b:`, prev=None)
-        //   - Tamil consonants followed by vowel signs or virama (prev=digit/punct)
-        //   - letters that immediately follow a digit or other non-letter, non-space char
-        // It does NOT fire when preceded by a space (word boundary: "a", "I'm")
-        // or by another letter (tail of a word: `:bc` — 'c' has prev='b').
+        // A letter that doesn't follow a letter, and either is isolated (not followed by a
+        // letter) or follows a digit. The tail of a word (`:bc`, the 'c') doesn't fire.
         for (i, &c) in chars.iter().enumerate() {
             if !self.letter_chars.contains(&c) || self.noletsign_chars.contains(&c) {
                 continue;
@@ -145,9 +139,9 @@ impl Indicator {
             }
 
             let isolated = next.is_none_or(|n| !self.letter_chars.contains(&n));
-            let prev_is_space_or_letter = prev
-                .is_some_and(|p| self.space_chars.contains(&p) || self.letter_chars.contains(&p));
-            if isolated && !prev_is_space_or_letter {
+            let after_letter = prev.is_some_and(|p| self.letter_chars.contains(&p));
+            let after_digit = prev.is_some_and(|p| self.digit_chars.contains(&p));
+            if !after_letter && (isolated || after_digit) {
                 fire.push(i);
             }
         }
@@ -155,6 +149,38 @@ impl Indicator {
         fire.into_iter()
             .map(|pos| (pos, self.start_translation.clone()))
             .collect()
+    }
+}
+
+/// Takes the letter sign back off in front of an `endnum` rule (forward), as liblouis does.
+///
+/// A letter after a digit gets a letter sign, as in "2b", but liblouis drops it again when
+/// the rule that translates the letter is an `endnum`: "1st" is ⠼⠁⠌ in `en-GB-g2.ctb`, not
+/// ⠼⠁⠰⠌. liblouis takes off the last cell written, which is the letter sign or, as in
+/// `da-dk-g26-lit_1993.ctb`, the same cell written by a `context` rule after it. Which rule
+/// translation picks decides it, so this is a rewriter (see [`indication`](super)).
+#[derive(Debug, Clone)]
+pub struct EndnumLetterSign;
+
+impl EndnumLetterSign {
+    pub fn apply(&self, translations: Vec<ResolvedTranslation>) -> Vec<ResolvedTranslation> {
+        let mut result: Vec<ResolvedTranslation> = Vec::with_capacity(translations.len());
+        for t in translations {
+            if matches!(t.rule(), Some(Rule::Endnum { .. })) {
+                // the letter sign among the translations of no input right before it, such
+                // as a `context` rule that writes a cell there
+                let letsign = result
+                    .iter()
+                    .rev()
+                    .take_while(|p| p.input().is_empty())
+                    .position(|p| matches!(p.rule(), Some(Rule::Letsign { .. })));
+                if let Some(back) = letsign {
+                    result.remove(result.len() - 1 - back);
+                }
+            }
+            result.push(t);
+        }
+        result
     }
 }
 
@@ -182,13 +208,14 @@ mod tests {
         let cc = CharacterClasses::new(&[
             (CharacterClass::Letter, letter_chars),
             (CharacterClass::Space, &[' ']),
+            (CharacterClass::Digit, &['2', '3']),
         ]);
         let ctx = TableContext::new(cc, CharacterClasses::default(), Default::default());
         builder.build(&ctx).unwrap()
     }
 
     #[test]
-    fn isolated_letter_fires_when_not_preceded_by_space() {
+    fn a_letter_alone_or_after_a_digit_fires() {
         let indicator = build_indicator(&['a', 'b', 'c'], &[]);
         // isolated letter at string start (prev=None): fires
         assert_eq!(
@@ -200,13 +227,43 @@ mod tests {
             pairs(&indicator.precompute("2b")),
             vec![(1, "⠠".to_string())]
         );
-        // isolated letter preceded by space: does NOT fire
-        assert_eq!(pairs(&indicator.precompute("x b")), vec![]);
-        assert_eq!(pairs(&indicator.precompute(" b ")), vec![]);
+        // isolated letter preceded by space: fires, as in liblouis ("plan b")
+        assert_eq!(
+            pairs(&indicator.precompute("a b")),
+            vec![(0, "⠠".to_string()), (2, "⠠".to_string())]
+        );
+        assert_eq!(
+            pairs(&indicator.precompute(" b ")),
+            vec![(1, "⠠".to_string())]
+        );
         // letter followed by another letter (not isolated): does NOT fire
         assert_eq!(pairs(&indicator.precompute(":bc")), vec![]);
+        // unless it follows a digit
+        assert_eq!(
+            pairs(&indicator.precompute("2bc")),
+            vec![(1, "⠠".to_string())]
+        );
         // multi-letter word: no letsign
         assert_eq!(pairs(&indicator.precompute("abc")), vec![]);
+    }
+
+    #[test]
+    fn letters_alone_after_the_first_word_and_after_digits_get_one() {
+        use crate::{Direction, Translator};
+        let table = "space \\s 0\ndigit 1 1\nlowercase b 12\nlowercase s 234\n\
+                     lowercase t 2345\nlowercase x 1346\nnumsign 3456\nletsign 56\n\
+                     punctuation ' 3\nendnum st 34\nnoletsignafter '\n";
+        let translate = |input| {
+            Translator::from_table_source(table, Direction::Forward)
+                .unwrap()
+                .translate(input)
+        };
+        assert_eq!(translate("x b"), "⠰⠭⠀⠰⠃");
+        assert_eq!(translate("1b"), "⠼⠁⠰⠃");
+        assert_eq!(translate("1bt"), "⠼⠁⠰⠃⠞");
+        // but not in front of an `endnum`, nor before a `noletsignafter` character
+        assert_eq!(translate("1st"), "⠼⠁⠌");
+        assert_eq!(translate("x b't"), "⠰⠭⠀⠃⠄⠰⠞");
     }
 
     #[test]
