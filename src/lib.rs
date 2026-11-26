@@ -743,4 +743,13 @@ mod tests {
         assert_eq!(result.output_positions(), [0, 0, 1, 2]);
         assert_eq!(result.input_positions(), [1, 2, 3]);
     }
+
+    #[test]
+    fn the_undefined_rule_is_only_for_forward_translation() {
+        let table = "undefined 0\nspace \\s 0\nlowercase a 1\n";
+        let backward = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(backward.translate("⢀"), "\\8/");
+        let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(forward.translate("b"), "⠀");
+    }
 }

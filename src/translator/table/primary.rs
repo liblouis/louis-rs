@@ -716,9 +716,11 @@ impl PrimaryTable {
 
         for rule in rules {
             match &rule.rule {
-                Rule::Undefined { dots } => {
+                // only forward: backward, liblouis spells an undefined cell as its dots
+                Rule::Undefined { dots } if direction == Direction::Forward => {
                     builder.undefined = Some(dots.to_string());
                 }
+                Rule::Undefined { .. } => (),
                 Rule::Space {
                     character, dots, ..
                 }

@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   emphasis indicator with the cells of a character is not read right after a
   letter, so ⠇⠊⠎⠁⠸⠙⠊⠗⠅ is "lisa_dirk", and a number sign inside a
   character such as `sign # 5-3456` starts no number, so ⠐⠼⠙⠞⠧ is "#dtv".
+- The `undefined` rule only applies forward, as in liblouis (#59). Back-
+  translating, an undefined cell is spelled as its dots, such as "\8/",
+  even when the table has one, and `noUndefined` drops it (#35).
 
 ## [0.4.1] - 2026-11-24
 
