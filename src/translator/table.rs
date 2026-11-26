@@ -30,6 +30,18 @@ impl TableContext {
         }
     }
 
+    /// This context, compiled from one direction's rules, with the character and cell classes
+    /// of `all`, compiled from all of the table's rules. As in liblouis, a character and its
+    /// cell have their classes whatever the direction of their definition: `noback` and
+    /// `nofor` keep a rule from translating in one direction, not a character from being
+    /// defined. So the braille patterns that `braille-patterns.cti` defines with `noback sign`
+    /// are still in the classes that list them when back-translating.
+    pub fn with_classes_of(mut self, all: &TableContext) -> Self {
+        self.character_classes = all.character_classes.clone();
+        self.dots_classes = all.dots_classes.clone();
+        self
+    }
+
     pub fn character_definitions(&self) -> &CharacterDefinition {
         &self.character_definitions
     }

@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   together, as liblouis means to (liblouis/liblouis#2168): with
   `en-us-g2.ctb`, ⠷⠮ is "of the" rather than "ofthe", and ⠷⠠⠮ "of The".
   Large signs inside a word stay together, so ⠮⠁⠞⠻ is still "theater".
+- A character and its cell have their classes in both directions, also
+  when their definition is `noback` or `nofor`, as in liblouis (#54).
+  French contracted braille's `bvoy` and `bvoyyy` list braille cells that
+  `braille-patterns.cti` defines with `noback sign`, so a `before` or
+  `after` rule testing them never matched backward: "laissait" came back
+  as "laièait".
 
 ## [0.4.1] - 2026-11-24
 

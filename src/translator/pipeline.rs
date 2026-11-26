@@ -88,7 +88,7 @@ impl TranslationPipeline {
                 MultipassTable::compile(&correct_rules, direction, TranslationStage::Pre, &ctx)?;
             steps.push(Transformation::Pre(transform));
         }
-        let context = TableContext::compile(rules.as_slice())?;
+        let context = TableContext::compile(rules.as_slice())?.with_classes_of(&ctx);
         let transform = PrimaryTable::compile(
             rules.as_slice(),
             direction,
