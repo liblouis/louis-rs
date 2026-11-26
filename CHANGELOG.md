@@ -56,6 +56,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   Swedish lists the no-break space, which shares the blank cell with the
   space, so a number went on across every space after it: with `sv-g1.ctb`,
   ⠼⠃⠀⠃⠗⠜⠝⠙⠑ came back as "2 2rände".
+- Back-translating, a `joinword` or `joinnum` applies whenever no space
+  follows, as in liblouis (#56). Before, more of the same word had to
+  follow, so with `en-us-g2.ctb` ⠖⠤⠑ came back as "!come", not "to come".
+  It ranks by its characters, not counting the space it puts back, and a
+  `begnum` applies before a `litdigit` or `sign` cell, so in German ⠬⠼⠉ is
+  "§ 3".
 
 ## [0.4.1] - 2026-11-24
 

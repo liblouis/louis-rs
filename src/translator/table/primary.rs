@@ -1669,7 +1669,15 @@ impl PrimaryTable {
                         CharacterClass::Space,
                         CharacterClass::Punctuation,
                     ])),
-                    Some(Transition::End(vec![CharacterClass::Digit])),
+                    // backward, liblouis asks for a litdigit or sign cell, such as the
+                    // numsign in German ⠬⠼⠙, "§ 4". With braille-patterns.cti every cell
+                    // is a sign, see liblouis/liblouis#2226.
+                    Some(Transition::End(match direction {
+                        Direction::Forward => vec![CharacterClass::Digit],
+                        Direction::Backward => {
+                            vec![CharacterClass::Litdigit, CharacterClass::Sign]
+                        }
+                    })),
                     direction,
                     ClassConstraints::default(),
                     TranslationStage::Main,
@@ -1825,13 +1833,14 @@ impl PrimaryTable {
                         }
                         Direction::Backward => {
                             // The output puts back the space that forward translation
-                            // swallowed, as liblouis's insertSpace does. Not when a space
-                            // follows anyway.
+                            // swallowed, as liblouis's insertSpace does. Only when no
+                            // space follows, the one thing liblouis checks: "to" joins
+                            // "com" in en-us-g2's ⠖⠤⠑, though ⠤ is also a hyphen.
                             builder.get_trie_mut(rule).insert(
                                 &format!("{chars} "),
                                 &dots.to_string(),
                                 Some(Transition::BegWord),
-                                Some(Transition::ContinuesWord),
+                                Some(Transition::NotEnd(vec![CharacterClass::Space])),
                                 direction,
                                 ClassConstraints::default(),
                                 TranslationStage::Main,

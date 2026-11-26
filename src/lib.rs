@@ -801,4 +801,25 @@ mod tests {
         let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
         assert_eq!(translator.translate("⠼⠁⠀⠃"), "1 b");
     }
+
+    #[test]
+    fn a_joinword_joins_whatever_follows_but_a_space() {
+        // en-us-g2 `joinword to 235` before `begword com 36`, whose cell is also the hyphen,
+        // so "⠖⠤⠁" is "to coma", not "!coma"
+        let table = "space \\s 0\nhyphen - 36\npunctuation ! 235\nlowercase a 1\n\
+                     begword com 36\njoinword to 235\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠖⠤⠁"), "to coma");
+        assert_eq!(translator.translate("⠖⠀⠁"), "! a");
+    }
+
+    #[test]
+    fn a_joinnum_ranks_without_the_space_it_puts_back() {
+        // no-no-g2 `joinnum § 346` and `word et 346`: "et" writes more characters than "§",
+        // so "⠬⠂" is "et,", not "§ ,"
+        let table = "space \\s 0\npunctuation , 2\nlowercase e 15\nlowercase t 2345\n\
+                     sign § 346\njoinnum § 346\nword et 346\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠬⠂"), "et,");
+    }
 }

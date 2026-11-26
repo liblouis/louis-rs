@@ -453,6 +453,13 @@ impl ResolvedTranslation {
             }
             _ => None,
         };
+        // the characters a rule writes, not the space a `joinword` or `joinnum` puts back
+        let written = match self.rule() {
+            Some(Rule::Joinword { chars, .. } | Rule::Joinnum { chars, .. }) => {
+                chars.chars().count()
+            }
+            _ => self.output.chars().count(),
+        };
         let multicell_backward = direction == Direction::Backward
             && self.stage == TranslationStage::Main
             && self.length > 1;
@@ -460,7 +467,7 @@ impl ResolvedTranslation {
             (false, _, _) => 0,
             (true, Some(Rule::Context { .. }), _) => usize::MAX,
             (true, _, Precedence::Indicator | Precedence::Emphasis) => 0,
-            (true, _, _) => self.output.chars().count(),
+            (true, _, _) => written,
         };
         Rank {
             context_no_leading_literal: leading_literal_len == Some(0),
@@ -476,7 +483,7 @@ impl ResolvedTranslation {
                 p => p,
             },
             output_length: match (direction, self.stage) {
-                (Direction::Backward, TranslationStage::Main) => self.output.chars().count(),
+                (Direction::Backward, TranslationStage::Main) => written,
                 _ => 0,
             },
             nocross: self.origin.as_ref().is_some_and(|o| o.is_nocross()),
