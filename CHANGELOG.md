@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   than a test that never matches. A class defined with the deprecated
   `class` opcode exists: it was parsed but never registered. `$w` to `$z`
   are still not supported, but now log a warning.
+- An undefined character is escaped as liblouis does (#45): between
+  quotes, as `\x` with at least four hex digits, `\y` with five or `\z`
+  with eight, and in the table's dots only where a character takes one
+  cell. With `en-ueb-g1.ctb`, "a中b" gave ⠁⠸⠡⠭⠲⠑⠆⠙⠃ instead of
+  ⠁⠄⡳⠭⠲⠑⠆⠙⠄⠃.
 
 ## [0.4.1] - 2026-11-24
 
