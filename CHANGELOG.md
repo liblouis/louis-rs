@@ -68,6 +68,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   cell counted as a letter, so ⠠⠶⠼⠁⠶⠄ came back as "[a]", not "[1]". After
   a letter, a one-cell rule that ends in a letter still counts, so ⠁⠶⠼⠁
   stays "aggblea".
+- Back-translating, a number sign right after a character of several cells
+  that starts with the number sign, such as Portuguese `sign # 3456-13`,
+  starts a number although the character's last cell is also a letter
+  (#58). With `pt-pt-g2.ctb`, ⠼⠅⠼⠃⠚⠁⠚⠉⠾ came back as "#bjajcú", not
+  "#20103]".
 
 ## [0.4.1] - 2026-11-24
 

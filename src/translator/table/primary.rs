@@ -2061,12 +2061,23 @@ impl PrimaryTable {
                         }
                     }
                     // as Dutch `sign # 5-3456`
-                    Rule::Punctuation { dots, .. }
-                    | Rule::Sign { dots, .. }
-                    | Rule::Math { dots, .. } => {
+                    Rule::Punctuation {
+                        character, dots, ..
+                    }
+                    | Rule::Sign {
+                        character, dots, ..
+                    }
+                    | Rule::Math {
+                        character, dots, ..
+                    } => {
                         builder
                             .backward_numeric_constrainer
                             .rule_dots(&dots.to_string());
+                        if dots.len() > 1 && !character.is_alphabetic() {
+                            builder
+                                .backward_numeric_constrainer
+                                .sign_dots(&dots.to_string());
+                        }
                     }
                     _ => (),
                 }

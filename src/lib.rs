@@ -835,4 +835,16 @@ mod tests {
         assert_eq!(translator.translate("⠶⠼⠁"), "(1");
         assert_eq!(translator.translate("⠁⠶⠼⠁"), "aggblea");
     }
+
+    #[test]
+    fn a_numsign_after_a_sign_starting_with_the_numsign_starts_a_number() {
+        // Portuguese `sign # 3456-13` and `midendword ão 3456`: in "⠼⠅⠼⠃" the ⠅ ends the
+        // "#", not a word, so the second ⠼ is a numsign, not "ão" after a letter
+        let table = "space \\s 0\nlowercase a 1\nlowercase b 12\nlowercase k 13\n\
+                     lowercase o 135\nsign # 3456-13\nlitdigit 2 12\nnumsign 3456\n\
+                     midendword ao 3456\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠼⠅⠼⠃"), "#2");
+        assert_eq!(translator.translate("⠁⠼"), "aao");
+    }
 }

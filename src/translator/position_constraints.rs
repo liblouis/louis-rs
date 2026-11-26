@@ -740,6 +740,14 @@ fn longest_match_at(chars: &[char], pos: usize, patterns: &[String]) -> Option<u
 /// number can follow a letter, as in Hungarian "A1". Neither does a numsign that is
 /// part of a longer rule starting before it, such as sk-g1's `context [@5-46-3456]
 /// "#"`, which takes the numsign's cell as the end of "#".
+///
+/// It decides from the cells alone, before any rule is chosen, where liblouis decides from
+/// the rules it applied and the text it wrote: a number starts when the numsign rule is
+/// applied, and whether a letter comes before depends on how the cells before were read.
+/// The cells can't tell that exactly, as one cell can be a letter in one rule and part of
+/// a sign in another, so this is a guess, refined case by case. Keeping track of number
+/// mode in the translation loop, from the rules actually applied, would make it exact
+/// (#95).
 #[derive(Debug, Clone)]
 pub struct BackwardNumericConstrainer {
     /// The `numsign` dots plus any `multind` sequences naming it, e.g.
@@ -761,13 +769,16 @@ pub struct BackwardNumericConstrainer {
     after_letter_dots: HashSet<String>,
     /// The dots of the backward rules that contain a numsign after their first cell.
     covering_dots: Vec<String>,
+    /// The dots of characters other than letters that are a numsign and more, such as
+    /// Portuguese `sign # 3456-13`. The longer match wins over the numsign, and the text
+    /// then ends in the character, whatever its last cell is.
+    sign_dots: Vec<String>,
 }
 
 impl BackwardNumericConstrainer {
     /// Whether `cells` come back as text ending in a letter, as far as the cells tell: they
     /// end in a letter cell, or in cells of one-cell rules that apply inside a word after
-    /// one. So in en-us-g2 ⠶ is "gg" after ⠁, but "(" at the start of a word. A guess:
-    /// the text is only known once the rules are chosen, see #95.
+    /// one. So in en-us-g2 ⠶ is "gg" after ⠁, but "(" at the start of a word.
     fn ends_in_letter(&self, cells: &[char]) -> bool {
         cells
             .iter()
@@ -790,9 +801,20 @@ impl BackwardNumericConstrainer {
         let mut constraints: Vec<Constraints> = vec![Constraints::empty(); n];
         let mut pos = 0;
         let mut in_number = false;
+        let mut sign_end = None;
         while pos < n {
+            // not on a digit inside a number, where only the digit is tried
+            if !(in_number && self.digit_cells.contains(&chars[pos]))
+                && let Some(len) = longest_match_at(&chars, pos, &self.sign_dots)
+            {
+                pos += len;
+                in_number = false;
+                sign_end = Some(pos);
+                continue;
+            }
             if let Some(len) = longest_match_at(&chars, pos, &self.numsign_dots)
                 && !(pos > 0
+                    && sign_end != Some(pos)
                     && self.ends_in_letter(&chars[..pos])
                     && self
                         .after_letter_dots
@@ -1196,6 +1218,7 @@ pub struct BackwardNumericConstrainerBuilder {
     inner_letter_cells: HashSet<char>,
     after_letter_dots: HashSet<String>,
     rule_dots: Vec<String>,
+    sign_dots: Vec<String>,
 }
 
 impl BackwardNumericConstrainerBuilder {
@@ -1247,6 +1270,12 @@ impl BackwardNumericConstrainerBuilder {
         self.rule_dots.push(dots.to_string());
     }
 
+    /// Registers the dots of a character other than a letter, of more than one cell, see
+    /// [`BackwardNumericConstrainer::sign_dots`].
+    pub fn sign_dots(&mut self, dots: &str) {
+        self.sign_dots.push(dots.to_string());
+    }
+
     pub fn build(self) -> Option<BackwardNumericConstrainer> {
         let numsign_dots: Vec<String> = self
             .numsign_dots
@@ -1265,6 +1294,11 @@ impl BackwardNumericConstrainerBuilder {
                         .any(|offset| numsign_dots.iter().any(|n| matches_at(&cells, offset, n)))
                 })
                 .collect();
+            let sign_dots = self
+                .sign_dots
+                .into_iter()
+                .filter(|dots| numsign_dots.iter().any(|n| dots.starts_with(n.as_str())))
+                .collect();
             Some(BackwardNumericConstrainer {
                 numsign_dots,
                 nonumsign_dots: self.nonumsign_dots,
@@ -1275,6 +1309,7 @@ impl BackwardNumericConstrainerBuilder {
                 inner_letter_cells: self.inner_letter_cells,
                 after_letter_dots: self.after_letter_dots,
                 covering_dots,
+                sign_dots,
             })
         }
     }
