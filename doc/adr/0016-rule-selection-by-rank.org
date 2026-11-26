@@ -100,7 +100,6 @@ compares its fields in declaration order, the highest winning:
 | ~precedence~                 | character definition < indicator < ~always~ < other rules       | liblouis's chain order       |
 | ~output_length~              | backward main stage only: the longer output                     | liblouis's backward chains   |
 | ~nocross~                    | a ~nocross~ rule beats its plain twin                           | louis-rs                     |
-| ~context_weight~             | between forward ~context~ rules: how much the test checked      | louis-rs                     |
 | ~definition_order~           | the earliest-defined rule                                       | liblouis                     |
 
 - ~Precedence~ is derived from the rule, not stored. A one-character
@@ -163,13 +162,14 @@ Modelling that ordering directly removed the need for weight:
   length (~Test::leading_literal_len~, a port of ~passFindCharacters~), not by
   what it consumes: ~th~'s ~"เ"[…]"าะ"~ loses to the eight-character
   ~always เพราะว่า~.
-- Weight survives only between two forward ~context~ rules
+- Weight survived only between two forward ~context~ rules
   (~context_weight~), just before definition order. liblouis tries a
-  ~context~ rule's test where the test starts; louis-rs gets to the
-  rule only once the cursor reaches its ~[~, and the longer test
-  stands in for having been tried earlier (~hu-hu-g2~ "II. Tamás").
-  It should go once ~context~ rules run at the cursor (branch
-  ~context-consume-at-cursor~).
+  ~context~ rule's test where the test starts; louis-rs got to the
+  rule only once the cursor reached its ~[~, and the longer test
+  stood in for having been tried earlier (~hu-hu-g2~ "II. Tamás").
+  Removed [2026-11-26 Thu]: ~context~ rules now match at the cursor
+  and consume the text before their ~[~, as in liblouis, and without
+  ~context_weight~ the suite gives the same results.
 - Backward, liblouis chooses ~context~ rules its own way
   (~back_selectRule~), and they rank like any other rule.
 

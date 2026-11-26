@@ -329,12 +329,6 @@ pub struct Rank {
     /// A `nocross` rule beats its plain twin: it only applies when no syllable break falls
     /// inside the match, so it is the more specific of the two.
     nocross: bool,
-    /// Between two forward `context` rules only, how much of the input their tests checked,
-    /// the longer test winning. liblouis has no such measure: it takes the first rule in its
-    /// chain that applies, and tries a `context` rule's test where it starts. louis-rs gets
-    /// to such a rule only once the cursor reaches its `[`, and this stands in for having
-    /// tried it earlier. Every other rule has 0, so definition order decides between them.
-    context_weight: usize,
     /// Definition order, the earliest-defined rule winning, as in liblouis. Only reached when
     /// nothing in the rules themselves separates the candidates, and it keeps the outcome
     /// deterministic and compatible with liblouis.
@@ -358,9 +352,9 @@ pub struct ResolvedTranslation {
     /// instance for `match` opcodes where the length of the matched input often depends on regular
     /// expressions.
     weight: usize,
-    /// The `match` opcode contains a pre-pattern which is essentially a look-behind regexp. The
-    /// `offset` is the length of this pre-pattern (calculated at run-time) so that the translation
-    /// can be applied later in the input string, when the pre-pattern has been consumed.
+    /// For a `context` or pass rule, the number of characters before its `[`: where the VM's
+    /// consumed span starts, and then how many leading characters the candidate copies (see
+    /// `context_pattern::split_copied`). Zero for everything else.
     offset: usize,
     /// The stage in which this translation is applied
     stage: TranslationStage,
@@ -488,11 +482,6 @@ impl ResolvedTranslation {
                 _ => 0,
             },
             nocross: self.origin.as_ref().is_some_and(|o| o.is_nocross()),
-            context_weight: if leading_literal_len.is_some() {
-                self.weight
-            } else {
-                0
-            },
             definition_order: Reverse(definition_order),
         }
     }
@@ -549,14 +538,6 @@ impl ResolvedTranslation {
     /// Set the `offset` of a translation.
     pub fn with_offset(self, offset: usize) -> Self {
         Self { offset, ..self }
-    }
-
-    /// Decrement the `offset` of a translation.
-    pub fn decrement_offset(self, decrement: usize) -> Self {
-        Self {
-            offset: self.offset - decrement,
-            ..self
-        }
     }
 }
 

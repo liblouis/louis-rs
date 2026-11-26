@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::translator::context_pattern::{ContextPatterns, ContextPatternsBuilder};
+use crate::translator::context_pattern::{ContextPatterns, ContextPatternsBuilder, split_copied};
 use crate::translator::effect::Environment;
 use crate::translator::table::TableContext;
 use crate::translator::translation::{TranslationSubset, TranslationTarget};
@@ -84,60 +84,28 @@ impl MultipassTable {
         preceding: &str,
         env: &Environment,
         at_start: bool,
-    ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
-        self.patterns
-            .find(
-                input,
-                preceding,
-                env,
-                at_start,
-                &CharacterDefinition::default(),
-            )
-            .into_iter()
-            .partition(|t| t.offset() == 0)
-    }
-
-    fn update_offsets(
-        &self,
-        translations: Vec<ResolvedTranslation>,
-        decrement: usize,
     ) -> Vec<ResolvedTranslation> {
-        translations
-            .into_iter()
-            // drop translations where the offet is smaller than the decrement
-            .filter(|t| t.offset() >= decrement)
-            .map(|t| t.decrement_offset(decrement))
-            .collect()
-    }
-
-    fn partition_delayed_translations(
-        &self,
-        delayed: Vec<ResolvedTranslation>,
-    ) -> (Vec<ResolvedTranslation>, Vec<ResolvedTranslation>) {
-        delayed.into_iter().partition(|t| t.offset() == 0)
+        self.patterns.find(
+            input,
+            preceding,
+            env,
+            at_start,
+            &CharacterDefinition::default(),
+        )
     }
 
     pub fn trace(&self, input: &str) -> Vec<ResolvedTranslation> {
         let mut translations: Vec<ResolvedTranslation> = Vec::new();
-        let mut delayed_translations: Vec<ResolvedTranslation> = Vec::new();
         let mut env = Environment::new();
         let mut chars = input.chars();
         let reversed: String = input.chars().rev().collect();
         let mut seen: HashSet<TranslationSubset> = HashSet::default();
 
         loop {
-            // given an input query the patterns for matching translations. Then split off the
-            // translations that are delayed, i.e. have an offset because they have a pre-pattern
+            // query the patterns for the translations that match at the cursor
             let at_start = chars.as_str().len() == input.len();
             let preceding = &reversed[chars.as_str().len()..];
-            let (mut candidates, delayed) =
-                self.translation_candidates(chars.as_str(), preceding, &env, at_start);
-            delayed_translations.extend(delayed);
-
-            // move delayed_translations with zero offset into candidates
-            let (current, delayed) = self.partition_delayed_translations(delayed_translations);
-            delayed_translations = delayed;
-            candidates.extend(current);
+            let candidates = self.translation_candidates(chars.as_str(), preceding, &env, at_start);
 
             // use the longest translation
             let candidate = candidates
@@ -158,9 +126,7 @@ impl MultipassTable {
                     chars.nth(t.length() - 1);
                 }
                 // there is a matching translation rule
-                let translation = t.clone();
-                translations.push(translation);
-                delayed_translations = self.update_offsets(delayed_translations, t.length());
+                translations.extend(split_copied(t.clone(), &CharacterDefinition::default()));
 
                 // update the environment if needed
                 if !t.effects().is_empty() {
@@ -178,7 +144,6 @@ impl MultipassTable {
                     None,
                 );
                 translations.push(translation);
-                delayed_translations = self.update_offsets(delayed_translations, 1);
             } else {
                 // the chars iterator is exhausted
                 break;

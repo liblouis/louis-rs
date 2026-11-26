@@ -329,6 +329,11 @@ impl ContextPatterns {
     ///
     /// `fallback_definitions` are the table's character definitions, which the action's `*`
     /// uses in a forward `context` rule.
+    ///
+    /// A rule matches at the cursor and consumes the text before its `[` too, which comes
+    /// out by `fallback_definitions`, as in liblouis's `copyCharacters`: a forward `context`
+    /// rule puts each character's definition, a pass rule, given none, copies them. The
+    /// candidate's `offset` is the number of those characters, see [`split_copied`].
     pub fn find(
         &self,
         input: &str,
@@ -356,8 +361,75 @@ impl ContextPatterns {
                     None => Some(found),
                 }
             })
+            .map(|t| {
+                let before: String = input.chars().take(t.offset()).collect();
+                if before.is_empty() {
+                    return t;
+                }
+                let copied: String = before
+                    .chars()
+                    .map(|c| copied_output(c, fallback_definitions))
+                    .collect();
+                let output = copied + &t.output();
+                let input = before + &t.input();
+                // the length is what the rule consumes, which can be more than its input
+                let (offset, length) = (t.offset(), t.offset() + t.length());
+                t.with_input(&input)
+                    .with_output(&output)
+                    .with_length(length)
+                    .with_offset(offset)
+            })
             .collect()
     }
+}
+
+/// What a character copied from before a rule's `[` comes out as: forward, its cells;
+/// backward, where the input is cells, the character of the cell. A pass rule, given no
+/// definitions, copies it as it is.
+fn copied_output(c: char, definitions: &CharacterDefinition) -> String {
+    definitions
+        .get(&c)
+        .cloned()
+        .or_else(|| definitions.character(&c.to_string()).map(String::from))
+        .unwrap_or_else(|| c.to_string())
+}
+
+/// The steps a candidate from [`ContextPatterns::find`] stands for: one per character
+/// copied from before its `[`, then the replacement, so that positions map each character
+/// to its own output.
+pub fn split_copied(
+    t: ResolvedTranslation,
+    definitions: &CharacterDefinition,
+) -> Vec<ResolvedTranslation> {
+    let copied = t.offset();
+    if copied == 0 {
+        return vec![t];
+    }
+    let input = t.input();
+    let length = t.length() - copied;
+    let mut steps: Vec<ResolvedTranslation> = input
+        .chars()
+        .take(copied)
+        .map(|c| {
+            ResolvedTranslation::new(
+                &c.to_string(),
+                &copied_output(c, definitions),
+                1,
+                t.stage(),
+                t.origin(),
+            )
+        })
+        .collect();
+    let copied_len: usize = steps.iter().map(|s| s.output().chars().count()).sum();
+    let output: String = t.output().chars().skip(copied_len).collect();
+    let rest: String = input.chars().skip(copied).collect();
+    steps.push(
+        t.with_input(&rest)
+            .with_output(&output)
+            .with_length(length)
+            .with_offset(0),
+    );
+    steps
 }
 
 #[cfg(test)]
@@ -1227,10 +1299,15 @@ mod tests {
                 &TranslationTarget::Capture,
             )
             .unwrap();
-        let translation =
-            ResolvedTranslation::new("abc", "<ABC>", 9, TranslationStage::Main, origin.clone())
-                .with_offset(3)
-                .with_length(3);
+        // the leading `$p3` is copied and consumed, the trailing one only looked at
+        let translation = ResolvedTranslation::new(
+            "{{{abc",
+            "{{{<ABC>",
+            9,
+            TranslationStage::Main,
+            origin.clone(),
+        )
+        .with_offset(3);
         let patterns = builder.build();
         assert_eq!(
             patterns.find("{{{abc}}}", "", &env, true, &CharacterDefinition::default()),

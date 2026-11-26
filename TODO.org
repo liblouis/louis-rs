@@ -179,8 +179,11 @@
     missed in ~{[(2x+3y)]*2y}=32~ backward after ~#1=1#5=0[@⠸$u] #5=1*~
     consumes ⠸⠽ in one step. Check liblouis's pass semantics first, by
     the ~context~ argument above this may be correct.
-- [ ] ~context~ and pass rules: consume the text before ~[~ at the
+- [X] ~context~ and pass rules: consume the text before ~[~ at the
   cursor, and drop ~delayed_translations~
+  - Done [2026-11-26 Thu]: with ~_N~ a look-behind (ADR-0024), the
+    rebased branch fixed 50 tests and broke none, once text copied
+    backward comes out as the character of each cell.
   - liblouis applies such a rule where the cursor stands:
     ~passDoAction~ copies the text before ~[~ (~copyCharacters~: by
     character definition for ~context~, verbatim for pass rules),

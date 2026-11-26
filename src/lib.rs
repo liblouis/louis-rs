@@ -900,4 +900,16 @@ mod tests {
         assert_eq!(translator.translate("⠼⠁⠁⠄⠙⠑"), "11:45");
         assert_eq!(translator.translate("⠼⠁⠁⠄"), "11.");
     }
+
+    #[test]
+    fn a_context_rule_applies_where_its_test_starts() {
+        // as hu-hu-g2's `context $U["ond"]...`: the rule matches at the "g", where the
+        // contraction for "gond" would otherwise take the text before its `[`
+        let table = "space \\s 0\nlowercase a 1\nlowercase d 145\nlowercase g 1245\n\
+                     lowercase n 1345\nlowercase o 135\nalways gond 1245-145\n\
+                     context $l[\"ond\"]$l @135-1345-145\n";
+        let translator = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(translator.translate("gonda"), "⠛⠕⠝⠙⠁");
+        assert_eq!(translator.translate("gond"), "⠛⠙");
+    }
 }

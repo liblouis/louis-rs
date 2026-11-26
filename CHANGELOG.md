@@ -107,6 +107,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   follows, and a `midnum` needs one after it, as in liblouis (#75). With
   `hu-hu-g1.ctb`, ⠼⠁⠁⠄⠙⠑ is "11:45" by `midnum : 3`, not "11.45" by the
   later `endnum . 3`.
+- A `context` rule applies where its test starts, consuming the text before
+  its `[`, as in liblouis (#75). Before, it applied only once the rest of
+  the input had been translated up to the `[`, so a contraction starting
+  earlier could take that text: with `hu-hu-g2.ctb`, "Gonda János" gave
+  ⠛⠙⠁ rather than ⠛⠕⠝⠙⠁, and "Nem vállal" ⠧⠈⠇⠧ rather than ⠧⠈⠇⠇⠁⠇.
 
 ## [0.4.1] - 2026-11-24
 

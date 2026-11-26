@@ -87,9 +87,9 @@ reaches into it or joins onto it (`SpaceBeforeCursorWord`).
    - **match patterns** (`match_pattern.rs`) for `match` rules, and **context patterns**
      (`context_pattern.rs`) for `context` rules, both compiled to the **regexp VM**
      (`regexp.rs`, ADR-0007). A `match` rule's `pre` and a `context` rule's look-behind
-     (a leading `_N`) are checked backwards from the cursor. A `context` rule with text
-     before its `[` is found early and kept as a **delayed translation** until the cursor
-     reaches the `[`;
+     (a leading `_N`) are checked backwards from the cursor. A `context` rule matches at the
+     cursor and consumes the text before its `[` too, writing it by its character
+     definitions, as liblouis does;
 3. **filters** the candidates by the constraints at this position, and by checks the trie
    can't express (`prepunc`, `joinnum`, `repword`, ...);
 4. picks the best candidate by **`Rank`** (`translation.rs`, ADR-0016), applies it, records
