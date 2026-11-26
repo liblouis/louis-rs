@@ -62,6 +62,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   It ranks by its characters, not counting the space it puts back, and a
   `begnum` applies before a `litdigit` or `sign` cell, so in German ⠬⠼⠉ is
   "§ 3".
+- Back-translating, a number sign whose cell is also a rule that only
+  applies after a letter, such as en-us-g2's `midendword ble`, starts a
+  number after a cell of a multi-letter `always` rule (#57). Before, such a
+  cell counted as a letter, so ⠠⠶⠼⠁⠶⠄ came back as "[a]", not "[1]". After
+  a letter, a one-cell rule that ends in a letter still counts, so ⠁⠶⠼⠁
+  stays "aggblea".
 
 ## [0.4.1] - 2026-11-24
 

@@ -2039,6 +2039,21 @@ impl PrimaryTable {
                             .braille_to_unicode(dots, chars)
                             .map_err(|e| e.at(rule))?;
                         builder.backward_numeric_constrainer.rule_dots(&dots);
+                        let mut cells = dots.chars();
+                        if let (Some(cell), None) = (cells.next(), cells.next())
+                            && chars.chars().last().is_some_and(char::is_alphabetic)
+                            && matches!(
+                                rule.rule,
+                                Rule::Always { .. }
+                                    | Rule::Partword { .. }
+                                    | Rule::Begmidword { .. }
+                                    | Rule::Midword { .. }
+                                    | Rule::Midendword { .. }
+                                    | Rule::Endword { .. }
+                            )
+                        {
+                            builder.backward_numeric_constrainer.inner_letter(cell);
+                        }
                     }
                     Rule::Context { test, .. } => {
                         if let Some(dots) = test.literal_text() {
@@ -2092,9 +2107,11 @@ impl PrimaryTable {
                     _ => (),
                 }
             }
-            builder
-                .backward_numeric_constrainer
-                .letter_cells(letter_cells.clone());
+            builder.backward_numeric_constrainer.letter_cells(
+                ctx.dots_classes()
+                    .get(&CharacterClass::Letter)
+                    .unwrap_or_default(),
+            );
             builder
                 .backward_nocontract_constrainer
                 .letter_cells(letter_cells.clone());

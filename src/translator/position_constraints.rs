@@ -753,6 +753,9 @@ pub struct BackwardNumericConstrainer {
     /// The dots of the `endnum` rules, which end a number unless a digit follows.
     endnum_dots: Vec<String>,
     letter_cells: HashSet<char>,
+    /// The cells of one-cell rules that can apply inside a word and write text ending in a
+    /// letter, such as en-us-g2's `midword gg 2356`
+    inner_letter_cells: HashSet<char>,
     /// The dots of the rules that only apply after a letter, such as Punjabi's
     /// `midendword ਣ 3456`.
     after_letter_dots: HashSet<String>,
@@ -761,6 +764,18 @@ pub struct BackwardNumericConstrainer {
 }
 
 impl BackwardNumericConstrainer {
+    /// Whether `cells` come back as text ending in a letter, as far as the cells tell: they
+    /// end in a letter cell, or in cells of one-cell rules that apply inside a word after
+    /// one. So in en-us-g2 ⠶ is "gg" after ⠁, but "(" at the start of a word. A guess:
+    /// the text is only known once the rules are chosen, see #95.
+    fn ends_in_letter(&self, cells: &[char]) -> bool {
+        cells
+            .iter()
+            .rev()
+            .find(|c| self.letter_cells.contains(c) || !self.inner_letter_cells.contains(c))
+            .is_some_and(|c| self.letter_cells.contains(c))
+    }
+
     /// Whether a rule starting before `pos` takes the numsign there as part of its dots.
     fn covered(&self, chars: &[char], pos: usize) -> bool {
         self.covering_dots.iter().any(|dots| {
@@ -778,7 +793,7 @@ impl BackwardNumericConstrainer {
         while pos < n {
             if let Some(len) = longest_match_at(&chars, pos, &self.numsign_dots)
                 && !(pos > 0
-                    && self.letter_cells.contains(&chars[pos - 1])
+                    && self.ends_in_letter(&chars[..pos])
                     && self
                         .after_letter_dots
                         .contains(&chars[pos..pos + len].iter().collect::<String>()))
@@ -1178,6 +1193,7 @@ pub struct BackwardNumericConstrainerBuilder {
     numeric_mode_cells: HashSet<char>,
     endnum_dots: Vec<String>,
     letter_cells: HashSet<char>,
+    inner_letter_cells: HashSet<char>,
     after_letter_dots: HashSet<String>,
     rule_dots: Vec<String>,
 }
@@ -1215,6 +1231,12 @@ impl BackwardNumericConstrainerBuilder {
         self.letter_cells = cells;
     }
 
+    /// Registers the cell of a one-cell rule that can apply inside a word and writes text
+    /// ending in a letter.
+    pub fn inner_letter(&mut self, cell: char) {
+        self.inner_letter_cells.insert(cell);
+    }
+
     /// Registers the dots of a rule that only applies after a letter.
     pub fn after_letter(&mut self, dots: &str) {
         self.after_letter_dots.insert(dots.to_string());
@@ -1250,6 +1272,7 @@ impl BackwardNumericConstrainerBuilder {
                 numeric_mode_cells: self.numeric_mode_cells,
                 endnum_dots: self.endnum_dots,
                 letter_cells: self.letter_cells,
+                inner_letter_cells: self.inner_letter_cells,
                 after_letter_dots: self.after_letter_dots,
                 covering_dots,
             })
