@@ -847,4 +847,18 @@ mod tests {
         assert_eq!(translator.translate("⠼⠅⠼⠃"), "#2");
         assert_eq!(translator.translate("⠁⠼"), "aao");
     }
+
+    #[test]
+    fn a_character_the_table_does_not_define_counts_as_a_space() {
+        // Swedish `always ◌̹ 6-135` writes characters no rule defines, which liblouis takes
+        // for spaces, so `word man 134` applies after it
+        let table = "space \\s 0\nlowercase a 1\nlowercase b 12\nlowercase m 134\n\
+                     lowercase n 1345\nlowercase o 135\nlowercase t 2345\nlowercase u 136\n\
+                     always ~ 6-135\nword man 134\nword but 12\n";
+        let backward = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(backward.translate("⠠⠕⠍⠀"), "~man ");
+        // forward the same before a rule: "but" before "✔" is the word
+        let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert!(forward.translate("but✔").starts_with("⠃⠄"));
+    }
 }

@@ -104,6 +104,11 @@ impl CharacterClasses {
         self.0.get(class).cloned()
     }
 
+    /// Whether `c` is in some class, which means the table defines it
+    pub fn defines(&self, c: char) -> bool {
+        self.0.values().any(|chars| chars.contains(&c))
+    }
+
     pub fn is_whitespace(&self, c: char) -> bool {
         self.0
             .get(&CharacterClass::Space)

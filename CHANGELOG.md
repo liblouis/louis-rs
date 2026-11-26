@@ -73,6 +73,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   starts a number although the character's last cell is also a letter
   (#58). With `pt-pt-g2.ctb`, ⠼⠅⠼⠃⠚⠁⠚⠉⠾ came back as "#bjajcú", not
   "#20103]".
+- A character the table doesn't define counts as a space where a rule
+  checks the text before or after it, as in liblouis (#60). Back-translating
+  Swedish, `word man 134` now applies after the phonetic `always ◌̹ 6-135`,
+  whose characters no rule defines: ⠠⠕⠍ is "◌̹man", not "◌̹m". Forward, with
+  `en-us-g2.ctb`, "but" before "✔" is the wordsign ⠃.
 
 ## [0.4.1] - 2026-11-24
 

@@ -28,10 +28,19 @@ pub struct ResolvedClasses {
     /// Whether `Space` was one of the requested classes. A missing neighbor (start/end
     /// of input) is treated as a literal space.
     includes_space: bool,
+    /// Whether an undefined character counts as a space. Only when checking
+    /// text: a cell in no class can still be the cell of a rule, so it isn't undefined.
+    undefined_is_space: bool,
 }
 
 impl ResolvedClasses {
-    pub fn resolve(ctx: &CharacterClasses, classes: &[CharacterClass]) -> Self {
+    /// The characters of `classes`; `looking_at_text` says whether they are checked
+    /// against text rather than braille, see [`Self::undefined_is_space`].
+    pub fn resolve(
+        ctx: &CharacterClasses,
+        classes: &[CharacterClass],
+        looking_at_text: bool,
+    ) -> Self {
         let mut chars: Vec<char> = classes
             .iter()
             .filter_map(|class| ctx.get(class))
@@ -39,15 +48,21 @@ impl ResolvedClasses {
             .collect();
         chars.sort_unstable();
         chars.dedup();
+        let includes_space = classes.contains(&CharacterClass::Space);
         ResolvedClasses {
             chars,
-            includes_space: classes.contains(&CharacterClass::Space),
+            includes_space,
+            undefined_is_space: includes_space && looking_at_text,
         }
     }
 
-    fn matches(&self, c: Option<char>) -> bool {
+    /// Whether `c` is in the classes, given `classes`, all those of the text.
+    fn matches(&self, c: Option<char>, classes: &CharacterClasses) -> bool {
         match c {
-            Some(c) => self.chars.binary_search(&c).is_ok(),
+            Some(c) => {
+                self.chars.binary_search(&c).is_ok()
+                    || (self.undefined_is_space && !classes.defines(c))
+            }
             None => self.includes_space,
         }
     }
@@ -232,21 +247,32 @@ impl Trie {
         }
     }
 
-    fn resolve_transition(&self, transition: Transition) -> ResolvedTransition {
+    /// Resolve `transition`; the look-behind reads text, the look-ahead reads text only
+    /// translating forward.
+    fn resolve_transition(
+        &self,
+        transition: Transition,
+        direction: Direction,
+    ) -> ResolvedTransition {
+        let ahead_is_text = direction == Direction::Forward;
         match transition {
             Transition::Start(classes) => ResolvedTransition::Start(ResolvedClasses::resolve(
                 &self.lookbehind_classes,
                 &classes,
+                true,
             )),
             Transition::NotStart(classes) => ResolvedTransition::NotStart(
-                ResolvedClasses::resolve(&self.lookbehind_classes, &classes),
+                ResolvedClasses::resolve(&self.lookbehind_classes, &classes, true),
             ),
-            Transition::End(classes) => {
-                ResolvedTransition::End(ResolvedClasses::resolve(&self.lookahead_classes, &classes))
-            }
+            Transition::End(classes) => ResolvedTransition::End(ResolvedClasses::resolve(
+                &self.lookahead_classes,
+                &classes,
+                ahead_is_text,
+            )),
             Transition::NotEnd(classes) => ResolvedTransition::NotEnd(ResolvedClasses::resolve(
                 &self.lookahead_classes,
                 &classes,
+                ahead_is_text,
             )),
             Transition::BegWord => ResolvedTransition::BegWord,
             Transition::EndWord => ResolvedTransition::EndWord,
@@ -302,8 +328,8 @@ impl Trie {
             "Cannot insert empty `from` string (or `to` string in case of backward translation) - this causes infinite loops when translating"
         );
 
-        let before = before.map(|t| self.resolve_transition(t));
-        let after = after.map(|t| self.resolve_transition(t));
+        let before = before.map(|t| self.resolve_transition(t, direction));
+        let after = after.map(|t| self.resolve_transition(t, direction));
 
         let mut current_node = &mut self.root;
         let mut length = from.chars().count();
@@ -311,8 +337,11 @@ impl Trie {
         // the lookbehind on `preceding` goes before the char transitions
         if !class_constraints.preceding.is_empty() {
             length += 1;
-            let resolved =
-                ResolvedClasses::resolve(&self.lookbehind_classes, &class_constraints.preceding);
+            let resolved = ResolvedClasses::resolve(
+                &self.lookbehind_classes,
+                &class_constraints.preceding,
+                true,
+            );
             current_node = current_node
                 .transitions
                 .entry(ResolvedTransition::Start(resolved))
@@ -339,8 +368,11 @@ impl Trie {
         // the lookahead on the next char goes after them
         if !class_constraints.following.is_empty() {
             length += 1;
-            let resolved =
-                ResolvedClasses::resolve(&self.lookahead_classes, &class_constraints.following);
+            let resolved = ResolvedClasses::resolve(
+                &self.lookahead_classes,
+                &class_constraints.following,
+                direction == Direction::Forward,
+            );
             current_node = current_node
                 .transitions
                 .entry(ResolvedTransition::End(resolved))
@@ -389,13 +421,15 @@ impl Trie {
         // Non-consuming checks: they look at the context of the match without consuming input
         for (transition, child_node) in &node.transitions {
             let context_matches = match transition {
-                ResolvedTransition::Start(resolved) => resolved.matches(preceding.chars().last()),
-                ResolvedTransition::NotStart(resolved) => {
-                    !resolved.matches(preceding.chars().last())
+                ResolvedTransition::Start(resolved) => {
+                    resolved.matches(preceding.chars().last(), &self.lookbehind_classes)
                 }
-                ResolvedTransition::End(resolved) => resolved.matches(c),
+                ResolvedTransition::NotStart(resolved) => {
+                    !resolved.matches(preceding.chars().last(), &self.lookbehind_classes)
+                }
+                ResolvedTransition::End(resolved) => resolved.matches(c, &self.lookbehind_classes),
                 ResolvedTransition::NotEnd(resolved) => {
-                    (partial && c.is_none()) || !resolved.matches(c)
+                    (partial && c.is_none()) || !resolved.matches(c, &self.lookbehind_classes)
                 }
                 ResolvedTransition::BegWord => self.beg_word.is_beg_word(preceding),
                 // in a partial input no word ends: it may go on (`partialTrans`)
