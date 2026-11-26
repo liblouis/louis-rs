@@ -2,6 +2,8 @@
 
 use std::collections::HashSet;
 
+use log::warn;
+
 use crate::parser::{Action, ActionInstruction, Quantifier, Test, TestInstruction};
 
 use crate::parser::multipass::test::Operator;
@@ -20,8 +22,12 @@ use crate::translator::{
 impl Regexp {
     /// The body and the look-ahead, which is matched but never consumed, see [`Test`]. The
     /// look-behind is a program of its own, see [`ContextRegexp`].
-    fn from_test(test: &Test, whole_match: bool, ctx: &CharacterClasses) -> Self {
-        let body = Regexp::from_instructions(test.body(), whole_match, ctx);
+    fn from_test(
+        test: &Test,
+        whole_match: bool,
+        ctx: &CharacterClasses,
+    ) -> Result<Self, CompileErrorKind> {
+        let body = Regexp::from_instructions(test.body(), whole_match, ctx)?;
         let body = if whole_match {
             Regexp::Consume(Box::new(body))
         } else {
@@ -29,37 +35,34 @@ impl Regexp {
         };
         let mut regexp = body;
         if !test.lookahead().is_empty() {
-            let lookahead = Regexp::from_instructions(test.lookahead(), whole_match, ctx);
+            let lookahead = Regexp::from_instructions(test.lookahead(), whole_match, ctx)?;
             regexp = Regexp::Concat(Box::new(regexp), Box::new(lookahead));
         }
-        regexp
+        Ok(regexp)
     }
 
     fn from_instructions(
         instructions: &[TestInstruction],
         whole_match: bool,
         ctx: &CharacterClasses,
-    ) -> Self {
-        match instructions.len() {
-            0 => Regexp::Empty,
-            1 => Regexp::from_instruction(&instructions[0], whole_match, ctx),
-            _ => {
-                let mut ast = Regexp::from_instruction(&instructions[0], whole_match, ctx);
-                for instruction in &instructions[1..] {
-                    let other = Regexp::from_instruction(instruction, whole_match, ctx);
-                    ast = Regexp::Concat(Box::new(ast), Box::new(other));
-                }
-                ast
-            }
+    ) -> Result<Self, CompileErrorKind> {
+        let Some((first, rest)) = instructions.split_first() else {
+            return Ok(Regexp::Empty);
+        };
+        let mut ast = Regexp::from_instruction(first, whole_match, ctx)?;
+        for instruction in rest {
+            let other = Regexp::from_instruction(instruction, whole_match, ctx)?;
+            ast = Regexp::Concat(Box::new(ast), Box::new(other));
         }
+        Ok(ast)
     }
 
     fn from_instruction(
         instruction: &TestInstruction,
         whole_match: bool,
         ctx: &CharacterClasses,
-    ) -> Self {
-        match instruction {
+    ) -> Result<Self, CompileErrorKind> {
+        Ok(match instruction {
             TestInstruction::Variable { var, op, operand } => {
                 Regexp::VariableCompare(*var, (*op).into(), *operand)
             }
@@ -69,14 +72,17 @@ impl Regexp {
                 Regexp::from_multipass_attributes(attrs, quantifier, ctx)
             }
             TestInstruction::Class { name, quantifier } => {
-                Regexp::from_class(name, quantifier, ctx)
+                Regexp::from_class(name, quantifier, ctx)?
             }
             TestInstruction::Negate { test } => {
-                Regexp::from_instruction(test, whole_match, ctx).negate()
+                Regexp::from_instruction(test, whole_match, ctx)?.negate()
             }
             TestInstruction::Replace { tests } => {
-                let regexp =
-                    Regexp::Capture(Box::new(Regexp::from_instructions(tests, whole_match, ctx)));
+                let regexp = Regexp::Capture(Box::new(Regexp::from_instructions(
+                    tests,
+                    whole_match,
+                    ctx,
+                )?));
                 if whole_match {
                     regexp
                 } else {
@@ -85,7 +91,7 @@ impl Regexp {
             }
             TestInstruction::AtBeginning => Regexp::StartAnchor,
             TestInstruction::AtEnd => Regexp::EndAnchor,
-        }
+        })
     }
 
     fn quantified(self, quantifier: &Option<Quantifier>) -> Self {
@@ -99,10 +105,18 @@ impl Regexp {
         }
     }
 
-    fn from_class(name: &str, quantifier: &Option<Quantifier>, ctx: &CharacterClasses) -> Self {
-        let class = CharacterClass::from(name);
-        let characters = ctx.get(&class).unwrap_or_default(); // FIXME: should probably fail if we cannot find the class
-        Regexp::CharacterClass(characters).quantified(quantifier)
+    /// A `%name` test matches the characters of the class `name`, which an `attribute` or, as
+    /// in liblouis, a swap rule defines. A name that is neither is a table error, as in
+    /// liblouis, rather than a test that never matches (#34).
+    fn from_class(
+        name: &str,
+        quantifier: &Option<Quantifier>,
+        ctx: &CharacterClasses,
+    ) -> Result<Self, CompileErrorKind> {
+        let characters = ctx
+            .get(&CharacterClass::from(name))
+            .ok_or_else(|| CompileErrorKind::ClassNotDefined(name.to_string()))?;
+        Ok(Regexp::CharacterClass(characters).quantified(quantifier))
     }
 
     fn from_multipass_attributes(
@@ -123,9 +137,12 @@ impl Regexp {
                         characters.extend(chars);
                     }
                 }
-                Attribute::Boundary => (),   // TODO
-                Attribute::ByOrder(_) => (), // TODO
+                // liblouis/liblouis#948 wants `$w` to `$z` gone, as they depend on the order of
+                // the `attribute` rules: say the rule misses them rather than honour them, until
+                // the tables no longer use them (ADR-0028)
+                Attribute::ByOrder(_) => warn!("$w to $z are not supported, the test omits them"),
                 Attribute::Any => unreachable!("handled above"),
+                Attribute::Boundary => unreachable!("only in match patterns"),
             }
         }
         Regexp::CharacterClass(characters).quantified(quantifier)
@@ -274,12 +291,15 @@ impl ContextPatternsBuilder {
             TranslationStage::Display => unreachable!(),
         };
         let main = Regexp::from_test(&test, action.consumes_whole_match(), character_classes)
+            .map_err(|e| e.at(origin))?
             .compile_with_payload(translation);
-        let lookbehind = (!test.lookbehind().is_empty()).then(|| {
-            Regexp::from_instructions(test.lookbehind(), false, character_classes)
-                .reverse()
-                .compile()
-        });
+        let lookbehind = if test.lookbehind().is_empty() {
+            None
+        } else {
+            let lookbehind = Regexp::from_instructions(test.lookbehind(), false, character_classes)
+                .map_err(|e| e.at(origin))?;
+            Some(lookbehind.reverse().compile())
+        };
         self.regexps.push(ContextRegexp { lookbehind, main });
         Ok(())
     }
@@ -361,7 +381,7 @@ mod tests {
         let tests = test::Parser::new("\"abc\"").tests().unwrap();
         let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
-        let re = Regexp::from_test(&tests, true, &ctx).compile();
+        let re = Regexp::from_test(&tests, true, &ctx).unwrap().compile();
         assert_eq!(
             re.find("abc", &env).unwrap(),
             ResolvedTranslation::new("", "", 3, stage, None).with_length(3)
@@ -381,7 +401,7 @@ mod tests {
             &[],
             None,
         ));
-        let regexp = Regexp::from_test(&tests, true, &ctx);
+        let regexp = Regexp::from_test(&tests, true, &ctx).unwrap();
         let re = regexp.compile_with_payload(translation);
         assert_eq!(
             re.find("1", &env).unwrap(),
@@ -406,7 +426,7 @@ mod tests {
         let tests = test::Parser::new("$a").tests().unwrap();
         let stage = TranslationStage::Main;
         let ctx = CharacterClasses::default();
-        let re = Regexp::from_test(&tests, true, &ctx).compile();
+        let re = Regexp::from_test(&tests, true, &ctx).unwrap().compile();
         assert_eq!(
             re.find("x", &env).unwrap(),
             ResolvedTranslation::new("", "", 1, stage, None).with_length(1)
@@ -426,7 +446,7 @@ mod tests {
             &[],
             None,
         ));
-        let regexp = Regexp::from_test(&tests, true, &ctx);
+        let regexp = Regexp::from_test(&tests, true, &ctx).unwrap();
         let re = regexp.compile_with_payload(translation);
         assert_eq!(
             re.find("A", &env).unwrap(),
@@ -464,7 +484,7 @@ mod tests {
             &[],
             None,
         ));
-        let regexp = Regexp::from_test(&tests, true, &ctx);
+        let regexp = Regexp::from_test(&tests, true, &ctx).unwrap();
         let re = regexp.compile_with_payload(translation);
         assert_eq!(
             re.find("%", &env).unwrap(),
@@ -493,7 +513,7 @@ mod tests {
             &[],
             None,
         ));
-        let regexp = Regexp::from_test(&tests, true, &ctx);
+        let regexp = Regexp::from_test(&tests, true, &ctx).unwrap();
         let re = regexp.compile_with_payload(translation);
         assert_eq!(
             re.find("a", &env).unwrap(),
@@ -522,7 +542,7 @@ mod tests {
             &[],
             None,
         ));
-        let regexp = Regexp::from_test(&tests, true, &ctx);
+        let regexp = Regexp::from_test(&tests, true, &ctx).unwrap();
         let re = regexp.compile_with_payload(translation);
         assert_eq!(
             re.find("abc", &env).unwrap(),
@@ -553,7 +573,7 @@ mod tests {
             &[],
             None,
         ));
-        let regexp = Regexp::from_test(&tests, true, &ctx);
+        let regexp = Regexp::from_test(&tests, true, &ctx).unwrap();
         let re = regexp.compile_with_payload(translation);
         assert_eq!(
             re.find("a", &env).unwrap(),
@@ -590,7 +610,7 @@ mod tests {
             &[],
             None,
         ));
-        let regexp = Regexp::from_test(&tests, true, &ctx);
+        let regexp = Regexp::from_test(&tests, true, &ctx).unwrap();
         let re = regexp.compile_with_payload(translation);
         assert_eq!(
             re.find("a1b", &env).unwrap(),
@@ -625,7 +645,7 @@ mod tests {
             &[],
             None,
         ));
-        let regexp = Regexp::from_test(&tests, true, &ctx);
+        let regexp = Regexp::from_test(&tests, true, &ctx).unwrap();
         let re = regexp.compile_with_payload(translation);
         assert_eq!(
             re.find("a1b", &env).unwrap(),
@@ -672,7 +692,7 @@ mod tests {
             &[],
             None,
         ));
-        let regexp = Regexp::from_test(&tests, true, &ctx);
+        let regexp = Regexp::from_test(&tests, true, &ctx).unwrap();
         let re = regexp.compile_with_payload(translation);
         assert_eq!(re.find("a1b", &env), None);
         assert_eq!(re.find("a22b", &env), None);

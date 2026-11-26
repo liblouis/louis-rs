@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The `undefined` rule only applies forward, as in liblouis (#59). Back-
   translating, an undefined cell is spelled as its dots, such as "\8/",
   even when the table has one, and `noUndefined` drops it (#35).
+- A `%name` test in a `context`, `correct` or pass rule (#34): a name that
+  is neither a class nor a swap is a table error, as in liblouis, rather
+  than a test that never matches. A class defined with the deprecated
+  `class` opcode exists: it was parsed but never registered. `$w` to `$z`
+  are still not supported, but now log a warning.
 
 ## [0.4.1] - 2026-11-24
 

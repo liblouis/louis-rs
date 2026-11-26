@@ -359,6 +359,35 @@ mod tests {
         }
     }
 
+    const ABCX: &str = "letter a 1\nletter b 12\nletter c 14\nletter x 1346\n";
+
+    #[test]
+    fn a_test_naming_no_class_or_swap_is_a_table_error() {
+        let table = format!("{ABCX}noback correct \"a\"[%typo]\"c\" \"b\"\n");
+        let error = Translator::from_table_source(&table, Direction::Forward).unwrap_err();
+        let Error::Compile(error) = error else {
+            panic!("expected a compile error, got {error:?}");
+        };
+        assert_eq!(
+            error.to_string(),
+            "line 5: typo is neither a class nor a swap"
+        );
+    }
+
+    #[test]
+    fn a_test_naming_a_swap_matches_what_it_maps_from() {
+        let table = format!("{ABCX}swapcd sw x 12\nnoback correct \"a\"[%sw]\"c\" \"b\"\n");
+        let translator = Translator::from_table_source(&table, Direction::Forward).unwrap();
+        assert_eq!(translator.translate("axc"), "⠁⠃⠉");
+    }
+
+    #[test]
+    fn the_class_rule_defines_a_class_like_attribute() {
+        let table = format!("{ABCX}class foo x\nnoback correct \"a\"[%foo]\"c\" \"b\"\n");
+        let translator = Translator::from_table_source(&table, Direction::Forward).unwrap();
+        assert_eq!(translator.translate("axc"), "⠁⠃⠉");
+    }
+
     #[test]
     fn a_braille_encoding_writes_the_cells_both_ways() {
         let table = "space \\s 0\nlowercase a 1\nlowercase b 12\n";

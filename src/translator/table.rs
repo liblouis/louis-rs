@@ -177,7 +177,8 @@ impl TableContext {
                     // no definition of the base character for this direction (`noback`, `nofor`), so
                     // nothing to derive; `TranslationPipeline::compile` rejects one with none at all
                 }
-                Rule::Attribute { name, chars } => {
+                // `class` is liblouis's deprecated spelling of `attribute`
+                Rule::Attribute { name, chars } | Rule::Class { name, chars } => {
                     let class = CharacterClass::from(name.as_str());
                     for c in chars.chars() {
                         character_classes.insert(class.clone(), c);
@@ -227,6 +228,8 @@ impl TableContext {
                     for c in chars.chars() {
                         character_classes.insert(class.clone(), c);
                     }
+                    // a swap's name is valid in the passes too, as in liblouis
+                    dots_classes.define(class);
                     let replacements: Vec<String> =
                         replacement.chars().map(|c| c.to_string()).collect();
                     let mapping: Vec<(char, &str)> = chars
@@ -240,6 +243,8 @@ impl TableContext {
                     for c in chars.chars() {
                         character_classes.insert(class.clone(), c);
                     }
+                    // a swap's name is valid in the passes too, as in liblouis
+                    dots_classes.define(class);
                     let replacements: Vec<String> = dots.iter().map(|b| b.to_string()).collect();
                     let mapping: Vec<(char, &str)> = chars
                         .chars()
@@ -257,6 +262,7 @@ impl TableContext {
                     for c in dots.to_string().chars() {
                         dots_classes.insert(class.clone(), c);
                     }
+                    character_classes.define(class);
                     let replacements: Vec<String> =
                         replacement.iter().map(|b| b.to_string()).collect();
                     let mapping: Vec<(char, &str)> = dots
