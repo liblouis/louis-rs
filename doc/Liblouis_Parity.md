@@ -11,7 +11,7 @@ behave the same as liblouis, and if it doesn't, that's a bug:
 
 ## How close
 
-Measured at louis-rs `b7457d3` against liblouis `457d5484` plus the open pull requests
+Measured at louis-rs `53ee962` against liblouis `457d5484` plus the open pull requests
 [#2176](https://github.com/liblouis/liblouis/pull/2176),
 [#2190](https://github.com/liblouis/liblouis/pull/2190),
 [#2194](https://github.com/liblouis/liblouis/pull/2194),
@@ -24,7 +24,7 @@ Measured at louis-rs `b7457d3` against liblouis `457d5484` plus the open pull re
 |--------------------------------|----------------|
 | Assertions run                 | 2 241 642      |
 | Pass                           | **99.4%**      |
-| Fail                           | 633 (0.03%)    |
+| Fail                           | 631 (0.03%)    |
 | Expected failure               | 0.5%           |
 | Tables that compile            | all            |
 
