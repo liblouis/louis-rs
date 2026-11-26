@@ -51,6 +51,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   then definition order, with `always` last and a `context` rule first, as
   in liblouis. A character definition no longer loses to any other rule
   there: with `ar-ar-g1.utb`, "بها؛" came back as "بها;".
+- Back-translating, a number continues across a cell only if the cell comes
+  back as a `numericmodechars` or `midendnumericmodechars` character (#55).
+  Swedish lists the no-break space, which shares the blank cell with the
+  space, so a number went on across every space after it: with `sv-g1.ctb`,
+  ⠼⠃⠀⠃⠗⠜⠝⠙⠑ came back as "2 2rände".
 
 ## [0.4.1] - 2026-11-24
 

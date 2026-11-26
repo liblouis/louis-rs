@@ -791,4 +791,14 @@ mod tests {
         let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
         assert_eq!(forward.translate("b"), "⠀");
     }
+
+    #[test]
+    fn a_blank_cell_ends_a_number_although_the_no_break_space_continues_one() {
+        // Swedish has `midendnumericmodechars \x00a0`, but its blank cell comes back as the
+        // space, defined first, so "⠼⠁⠀⠃" is "1 b", not "1 2"
+        let table = "space \\s 0\nspace \\x00a0 0\nlowercase b 12\nlitdigit 1 1\n\
+                     litdigit 2 12\nnumsign 3456\nmidendnumericmodechars \\x00a0\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠼⠁⠀⠃"), "1 b");
+    }
 }

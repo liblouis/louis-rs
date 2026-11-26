@@ -2145,9 +2145,16 @@ impl PrimaryTable {
                 let mut cells = dots.chars();
                 cells.next().filter(|_| cells.next().is_none())
             };
+            // A cell continues a number only if it comes back as a numeric mode character:
+            // Swedish lists the no-break space, but its blank cell is a space, defined first.
             let char_cells: HashSet<char> = numeric_mode_chars
                 .iter()
                 .filter_map(|c| ctx.character_definitions().get(c))
+                .filter(|dots| {
+                    ctx.character_definitions()
+                        .character(dots)
+                        .is_some_and(|c| numeric_mode_chars.contains(&c))
+                })
                 .filter_map(|dots| single_cell(dots))
                 .collect();
             let decpoint_cells: HashSet<char> = decpoint_dots
