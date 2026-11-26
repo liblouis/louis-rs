@@ -89,6 +89,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   is no longer written into the text.
 - A `lowword` doesn't apply after a `joinword`, as in liblouis (#67):
   `en-us-g2.ctb`'s "to be" is ⠖⠃⠑, not ⠖⠆.
+- A `hyphen` rule translates its character even after a definition of
+  it, as in liblouis (#68): `en-gb-g1.utb` writes U+2010 as ⠤, not as the
+  ⠤⠤ of the `punctuation` rule it includes first. Back-translating, it
+  ranks above the character definitions on its cells too.
 
 ## [0.4.1] - 2026-11-24
 

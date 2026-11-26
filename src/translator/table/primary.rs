@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, hash_map::Entry};
 
 use log::warn;
 
@@ -36,7 +36,7 @@ use crate::{
         },
         standing_alone::StandingAloneScanner,
         table::TableContext,
-        translation::{TranslationSubset, TranslationTarget},
+        translation::{HasPrecedence, TranslationSubset, TranslationTarget},
         trie::{Transition, Trie},
     },
 };
@@ -78,9 +78,20 @@ impl CharacterTranslation {
         Self(HashMap::new())
     }
 
+    /// Keeps the rule of the higher precedence for `from`, and of equals the first, as
+    /// in liblouis: a `hyphen` beats a definition of its character wherever that is.
     fn insert(&mut self, from: char, translation: ResolvedTranslation) {
-        // first rule wins, as in liblouis
-        self.0.entry(from).or_insert(translation);
+        let precedence = |t: &ResolvedTranslation| t.origin().map(|o| o.precedence());
+        match self.0.entry(from) {
+            Entry::Vacant(entry) => {
+                entry.insert(translation);
+            }
+            Entry::Occupied(mut entry) => {
+                if precedence(&translation) > precedence(entry.get()) {
+                    entry.insert(translation);
+                }
+            }
+        }
     }
 
     fn get(&self, from: &char) -> Option<&ResolvedTranslation> {
@@ -3735,6 +3746,23 @@ mod tests {
             PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
                 .unwrap();
         assert_eq!(table.translate("fff"), "⠸");
+    }
+
+    #[test]
+    fn a_hyphen_rule_beats_the_characters_definition() {
+        let translate = |rules: &[&str]| {
+            let rules: Vec<_> = rules.iter().map(|r| parse_rule(r)).collect();
+            let context = TableContext::compile(&rules).unwrap();
+            PrimaryTable::compile(&rules, Direction::Forward, TranslationStage::Main, &context)
+                .unwrap()
+                .translate("-")
+        };
+        // en-gb-g1.utb has `hyphen \x2010 36` after ukchardefs.cti's
+        // `punctuation \x2010 36-36`
+        assert_eq!(translate(&["punctuation - 36-36", "hyphen - 36"]), "⠤");
+        assert_eq!(translate(&["hyphen - 36", "punctuation - 36-36"]), "⠤");
+        // of two `hyphen` rules, the first
+        assert_eq!(translate(&["hyphen - 36", "hyphen - 36-36"]), "⠤");
     }
 
     #[test]

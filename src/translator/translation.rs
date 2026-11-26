@@ -206,7 +206,7 @@ impl Resolve for Translation {
 /// else separates them, the higher one wins, see [`Rank`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Precedence {
-    /// `letter`, `punctuation`, `digit`, ..., plus `litdigit`, `base` and `hyphen`: only
+    /// `letter`, `punctuation`, `digit`, ..., plus `litdigit` and `base`: only
     /// the fallback when no other rule matches, which liblouis expresses by putting them
     /// at the end of its rule chains.
     CharacterDefinition,
@@ -246,11 +246,10 @@ impl HasPrecedence for Rule {
             | Rule::Lowercase { .. }
             | Rule::Grouping { .. }
             // outside liblouis' character definition opcodes, but they define a character too:
-            // `base` a derived one, `hyphen` one that can break a word. `litdigit` must also
-            // not beat a `lowercase` with the same dots backward, it only applies in a number
+            // `base` a derived one. `litdigit` must also not beat a `lowercase` with the same
+            // dots backward, it only applies in a number
             | Rule::Litdigit { .. }
-            | Rule::Base { .. }
-            | Rule::Hyphen { .. } => Precedence::CharacterDefinition,
+            | Rule::Base { .. } => Precedence::CharacterDefinition,
             Rule::Capsletter { .. }
             | Rule::Begcapsword { .. }
             | Rule::Endcapsword { .. }
