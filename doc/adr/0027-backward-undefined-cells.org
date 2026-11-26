@@ -1,0 +1,114 @@
+#+options: todo:t
+#+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
+#+language: en
+
+* ACCEPTED ADR-0027: Spell an undefined cell as its dots in back-translation
+- Deciders :: CE
+- Date :: [2026-11-26 Thu]
+
+Technical Story: [[https://github.com/liblouis/louis-rs/issues/35][#35]], [[https://github.com/liblouis/louis-rs/pull/59][#59]]
+
+** Context and Problem Statement
+
+Back-translation can meet a cell for which the table has no rule and
+no character definition. Something has to go into the text output in
+its place. liblouis writes the cell's dots as an escape, ⢀ as ~\8/~
+and ⠸ as ~\456/~ (~undefinedDots~ in ~lou_backTranslateString.c~),
+and writes nothing with the ~noUndefined~ mode. The table's
+~undefined~ rule is not consulted: liblouis reads ~table->undefined~
+only in ~lou_translateString.c~.
+
+Until #59 louis-rs applied the ~undefined~ rule backward too, which
+wrote braille cells into the text (#35). With that gone, the question
+is what an undefined cell should become in the text.
+
+** Decision Drivers
+
+- The output of back-translation is text; braille cells in it are
+  unexpected for a caller
+- The information that an undefined cell was there, and which one,
+  should not be lost unless the caller asks for that (~noUndefined~)
+- Compatibility with liblouis tables and tests
+
+** Considered Options
+
+- The table's ~undefined~ rule, as forward
+- The escape ~\dots/~, as liblouis
+- The cell itself
+- U+FFFD REPLACEMENT CHARACTER
+
+** Decision Outcome
+
+Chosen option: the escape ~\dots/~, as liblouis, because the
+alternatives that keep the dots differ from it mainly in appearance,
+and changing it costs compatibility with liblouis tables and tests.
+~noUndefined~ drops the cell.
+
+*** Positive Consequences
+
+- Same output as liblouis
+- Tables that match the escape keep working (see below)
+
+*** Negative Consequences
+
+- The escape is a liblouis convention that consumers outside liblouis
+  don't know, and ~\8/~ can also be ordinary text
+
+** Pros and Cons of the Options
+
+*** The table's ~undefined~ rule
+
+- Bad, because its argument is a braille cell: a placeholder in the
+  script of the forward output, which back-translation writes into
+  text (#35, fi.utb's ~undefined 35~ gives ~a⠔b~ for ~⠁⣿⠃~)
+- Bad, because the dots of the undefined cell are lost
+- Bad, because it breaks tables that match the escape: fr-bfu-g2's
+  ~nofor correct "\s\\8/\s" ?~ no longer matched, and "perdirent
+  dans" came back as "perdirent  ⠀ dans" (#59)
+
+*** The escape ~\dots/~
+
+- Good, because it keeps the dots
+- Good, because it is what liblouis does, and what tables and tests
+  rely on
+- Bad, because it can collide with ordinary text
+- Bad, because no consumer outside liblouis knows it; a screen reader
+  reads "backslash 8 slash"
+
+*** The cell itself
+
+- Good, because it keeps the dots and cannot collide with text
+- Bad, because it puts braille into the text, which is what #35
+  reported; a screen reader reads "braille pattern dots 8", no better
+  than the escape
+- Bad, because it deviates from liblouis: the tests that expect the
+  escape fail (~tests/yaml/undefined.yaml~, ~en-ueb-g1_backward.yaml~,
+  ~ms-my-g2.yaml~, ~various-regression-tests.yaml~, about 15 in all),
+  and the tables that match the escape need changing upstream first
+
+*** U+FFFD REPLACEMENT CHARACTER
+
+- Good, because every consumer knows it as "could not decode"
+- Bad, because the dots are lost
+- Bad, because it deviates from liblouis, with the same costs as the
+  cell itself
+
+** Notes
+
+Some tables use the escape as an internal marker rather than as
+output: a backward pass produces a cell that the main stage does not
+define, and a ~correct~ rule matches its escape:
+
+- ~fr-bfu-g2.ctb~: ~nofor correct "\s\\8/\s" ?~ removes the dot 8
+  cell that its passes put between words
+- ~da-dk-g16.ctb~, ~da-dk-g26.ctb~ and their ~_1993~ variants:
+  ~nofor correct "~\\456/" "|"~
+
+These would be clearer with a backward rule for the cell itself, and
+are what a change of the escape would have to fix first.
+
+** Links
+
+- [[https://github.com/liblouis/louis-rs/issues/35][#35]] Undefined cells back-translate to a braille escape, and
+  ~noUndefined~ is not applied
+- [[https://github.com/liblouis/louis-rs/pull/59][#59]] Use the undefined rule only forward

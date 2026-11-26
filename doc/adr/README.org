@@ -35,3 +35,4 @@ When you add a record or change its status, update its row in the table below to
 | [[file:0024-lookback-as-lookaround.org][ADR-0024]] | Model ~_N~ as a look-behind and a look-ahead, and reject it anywhere else                      | ACCEPTED   |
 | [[file:0025-negation.org][ADR-0025]] | Negation in ~match~ and ~context~ patterns, and no negated strings of more than one character in ~context~ | PROPOSED   |
 | [[file:0026-indication-order.org][ADR-0026]] | The order of indications at one position: closing innermost first, opening outermost first | ACCEPTED   |
+| [[file:0027-backward-undefined-cells.org][ADR-0027]] | Spell an undefined cell as its dots in back-translation | ACCEPTED   |
