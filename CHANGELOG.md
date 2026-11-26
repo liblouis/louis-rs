@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   with eight, and in the table's dots only where a character takes one
   cell. With `en-ueb-g1.ctb`, "a中b" gave ⠁⠸⠡⠭⠲⠑⠆⠙⠃ instead of
   ⠁⠄⡳⠭⠲⠑⠆⠙⠄⠃.
+- Back-translation puts the space back between large signs written
+  together, as liblouis means to (liblouis/liblouis#2168): with
+  `en-us-g2.ctb`, ⠷⠮ is "of the" rather than "ofthe", and ⠷⠠⠮ "of The".
+  Large signs inside a word stay together, so ⠮⠁⠞⠻ is still "theater".
 
 ## [0.4.1] - 2026-11-24
 

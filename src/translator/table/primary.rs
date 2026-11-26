@@ -137,7 +137,7 @@ struct PrimaryTableBuilder {
     mode_indicator: mode::IndicatorBuilder,
     lettersign_indicator: lettersign::IndicatorBuilder,
     contraction_signs: ContractionSignsBuilder,
-    /// Whether the table has `largesign` rules, whose spaces `LargeSigns` drops
+    /// Whether the table has `largesign` rules, whose spaces `LargeSigns` drops and puts back
     largesigns: bool,
     emphasis_indicator: emphasis::IndicatorBuilder,
     computer_braille_indicator: computer_braille::IndicatorBuilder,
@@ -443,6 +443,9 @@ impl PrimaryTableBuilder {
                         Rewriter::BackwardCaps(
                             self.backward_caps.build(ctx, self.uppercase_letters),
                         )
+                    }),
+                    (direction == Direction::Backward && self.largesigns).then(|| {
+                        Rewriter::BackwardLargeSigns(LargeSigns::new(ctx.character_classes()))
                     }),
                 ]
                 .into_iter()

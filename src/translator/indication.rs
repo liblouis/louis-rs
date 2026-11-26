@@ -30,7 +30,7 @@
 //! * [`contraction::ContractionSigns`]: puts the `nocontractsign` and letter sign in
 //!   front of a `contraction` rule chosen (forward)
 //! * [`largesign::LargeSigns`]: drops the spaces between two `largesign` rules chosen
-//!   (forward)
+//!   (forward), and puts them back (backward)
 //! * [`uppercase::BackwardCaps`]: capitalizes after a `capsletter`, in the words a
 //!   `begcapsword` starts and in a capitals passage, as written, with the table's
 //!   `base uppercase` (backward)
@@ -261,6 +261,9 @@ pub enum Rewriter {
     /// Capitalizes after a `capsletter`, in the words a `begcapsword` starts and in a
     /// capitals passage, as written (backward).
     BackwardCaps(uppercase::BackwardCaps),
+    /// Puts the spaces back between `largesign`s written together (backward), after the
+    /// capitals are read.
+    BackwardLargeSigns(largesign::LargeSigns),
 }
 
 impl Rewriter {
@@ -269,6 +272,7 @@ impl Rewriter {
             Rewriter::ContractionSigns(a) => a.apply(translations),
             Rewriter::LargeSigns(a) => a.apply(translations),
             Rewriter::BackwardCaps(a) => a.apply(translations),
+            Rewriter::BackwardLargeSigns(a) => a.apply_backward(translations),
         }
     }
 }
