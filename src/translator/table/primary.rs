@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, hash_map::Entry};
+use std::collections::{HashMap, HashSet};
 
 use log::warn;
 
@@ -36,7 +36,7 @@ use crate::{
         },
         standing_alone::StandingAloneScanner,
         table::TableContext,
-        translation::{HasPrecedence, TranslationSubset, TranslationTarget},
+        translation::{TranslationSubset, TranslationTarget},
         trie::{Transition, Trie},
     },
 };
@@ -78,20 +78,9 @@ impl CharacterTranslation {
         Self(HashMap::new())
     }
 
-    /// Keeps the rule of the higher precedence for `from`, and of equals the first, as
-    /// in liblouis: a `hyphen` beats a definition of its character wherever that is.
     fn insert(&mut self, from: char, translation: ResolvedTranslation) {
-        let precedence = |t: &ResolvedTranslation| t.origin().map(|o| o.precedence());
-        match self.0.entry(from) {
-            Entry::Vacant(entry) => {
-                entry.insert(translation);
-            }
-            Entry::Occupied(mut entry) => {
-                if precedence(&translation) > precedence(entry.get()) {
-                    entry.insert(translation);
-                }
-            }
-        }
+        // first rule wins, as in liblouis
+        self.0.entry(from).or_insert(translation);
     }
 
     fn get(&self, from: &char) -> Option<&ResolvedTranslation> {
@@ -749,12 +738,23 @@ impl PrimaryTable {
                 Rule::Undefined { .. } => (),
                 Rule::Space {
                     character, dots, ..
-                }
-                | Rule::Hyphen {
-                    character, dots, ..
                 } => {
                     builder.insert_character(*character, &dots.to_string(), direction, rule);
                 }
+                // not a character definition: a rule like any other, so it beats one,
+                // wherever the table defines its character
+                Rule::Hyphen {
+                    character, dots, ..
+                } => builder.get_trie_mut(rule).insert(
+                    &character.to_string(),
+                    &dots.to_string(),
+                    None,
+                    None,
+                    direction,
+                    ClassConstraints::default(),
+                    TranslationStage::Main,
+                    rule,
+                ),
                 Rule::Punctuation {
                     character, dots, ..
                 } => {
