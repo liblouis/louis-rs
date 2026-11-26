@@ -97,6 +97,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   liblouis (#96). With `en-us-g2.ctb`, EBAE's ⠸⠬⠺⠺⠺⠨⠁⠃⠉⠨⠉⠕⠍⠸⠱ came back as
   "_+www.abc.com_wh" rather than "www.abc.com". The text between them is
   still read with the table's rules, as in liblouis.
+- Back-translating, a whole-word rule applies after punctuation inside a
+  braille word, as in liblouis (#98). A `joinword` needed a word to start,
+  so with `hu-hu-g2.ctb` the article after a comma was lost:
+  ⠇⠑⠛⠱⠑⠃⠃⠂⠂⠅⠊⠗⠈⠸⠝⠻⠄ is "legszebb,a királynő.", not "legszebb,,királynő.". And
+  a letter sign isn't read right after a letter, so with `fr-bfu-g2.ctb`,
+  where ⠰ is also `midword or`, ⠇⠰⠎⠟⠥⠄⠊⠎ is "lorsqu'ils", not "lorsqu'is".
 
 ## [0.4.1] - 2026-11-24
 

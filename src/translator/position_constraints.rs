@@ -890,6 +890,13 @@ pub struct BackwardNoContractConstrainer {
     /// Like `claiming_dots`, but of the rules that only apply after a letter, such as
     /// UEB's ⠰⠎ for "ness", which take the cells only there.
     inword_claiming_dots: Vec<String>,
+    /// The dots of the indicators read only when the text before them doesn't end in a
+    /// letter, `letsign` and `nonumsign`, as French grade 2's ⠰ is the letter sign but
+    /// after a letter `midword or`
+    not_after_letter_dots: HashSet<String>,
+    /// The cells that come back as a letter, to tell whether the text before an indicator
+    /// ends in one
+    cells_read_as_letters: HashSet<char>,
 }
 
 impl BackwardNoContractConstrainer {
@@ -904,6 +911,11 @@ impl BackwardNoContractConstrainer {
             // over the indicator, as in liblouis, which tries the longest rules first.
             let after_letter = pos > 0 && self.letter_cells.contains(&chars[pos - 1]);
             if let Some(len) = longest_match_at(&chars, pos, &self.indicator_dots)
+                && !(pos > 0
+                    && self.cells_read_as_letters.contains(&chars[pos - 1])
+                    && self
+                        .not_after_letter_dots
+                        .contains(&chars[pos..pos + len].iter().collect::<String>()))
                 && longest_match_at(&chars, pos, &self.claiming_dots)
                     .is_none_or(|claim| claim <= len)
                 && !(after_letter
@@ -989,6 +1001,8 @@ impl BackwardCapsPassageConstrainer {
 #[derive(Debug, Default)]
 pub struct BackwardNoContractConstrainerBuilder {
     indicator_dots: Vec<String>,
+    not_after_letter_dots: HashSet<String>,
+    cells_read_as_letters: HashSet<char>,
     caps_dots: Vec<String>,
     letter_cells: HashSet<char>,
     space_cells: HashSet<char>,
@@ -1005,6 +1019,12 @@ impl BackwardNoContractConstrainerBuilder {
         self.indicator_dots.push(dots.to_string());
     }
 
+    /// Like [`Self::indicator`], for one read only when no letter comes before it
+    pub fn indicator_not_after_letter(&mut self, dots: &str) {
+        self.indicator(dots);
+        self.not_after_letter_dots.insert(dots.to_string());
+    }
+
     /// The dots of a capital indicator, which a run of plain letters continues across.
     pub fn caps_indicator(&mut self, dots: &str) {
         self.caps_dots.push(dots.to_string());
@@ -1012,6 +1032,11 @@ impl BackwardNoContractConstrainerBuilder {
 
     pub fn letter_cells(&mut self, cells: HashSet<char>) {
         self.letter_cells = cells;
+    }
+
+    /// The cells that come back as a letter
+    pub fn cells_read_as_letters(&mut self, cells: HashSet<char>) {
+        self.cells_read_as_letters = cells;
     }
 
     /// The cells that end a word, and with it a lapsed indicator's scope.
@@ -1042,6 +1067,8 @@ impl BackwardNoContractConstrainerBuilder {
                 caps_dots: self.caps_dots,
                 letter_cells: self.letter_cells,
                 space_cells: self.space_cells,
+                not_after_letter_dots: self.not_after_letter_dots,
+                cells_read_as_letters: self.cells_read_as_letters,
             })
         }
     }

@@ -873,4 +873,19 @@ mod tests {
         // the cells on their own are still the characters
         assert_eq!(translator.translate("⠸⠀⠬"), "_ +");
     }
+
+    #[test]
+    fn a_whole_word_rule_applies_after_punctuation_in_a_braille_word() {
+        // hu-hu-g2 `joinword a 2` after `punctuation , 2`
+        let table = "space \\s 0\nlowercase a 1\nlowercase b 12\nlowercase k 13\n\
+                     punctuation , 2\njoinword a 2\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠃⠂⠂⠅"), "b,a k");
+        // fr-bfu-g2: after a letter ⠰ is `midword or`, not the letter sign, so the word
+        // rule after the apostrophe still applies
+        let table = "space \\s 0\nlowercase i 24\nlowercase l 123\nlowercase s 234\n\
+                     punctuation ' 3\nletsign 56\nmidword or 56\nword ils 24-234\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠇⠰⠎⠄⠊⠎"), "lors'ils");
+    }
 }

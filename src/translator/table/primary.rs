@@ -847,7 +847,7 @@ impl PrimaryTable {
                             .nonumsign(&dots.to_string());
                         builder
                             .backward_nocontract_constrainer
-                            .indicator(&dots.to_string());
+                            .indicator_not_after_letter(&dots.to_string());
                     }
                 }
                 Rule::Numericnocontchars { chars } => {
@@ -1168,7 +1168,7 @@ impl PrimaryTable {
                         builder.insert_backward_letsign(&dots.to_string(), rule);
                         builder
                             .backward_nocontract_constrainer
-                            .indicator(&dots.to_string());
+                            .indicator_not_after_letter(&dots.to_string());
                     }
                 }
                 Rule::Multind { dots, names, .. } => {
@@ -1866,13 +1866,18 @@ impl PrimaryTable {
                         }
                         Direction::Backward => {
                             // The output puts back the space that forward translation
-                            // swallowed, as liblouis's insertSpace does. Only when no
-                            // space follows, the one thing liblouis checks: "to" joins
-                            // "com" in en-us-g2's ⠖⠤⠑, though ⠤ is also a hyphen.
+                            // swallowed, as liblouis's insertSpace does. As in liblouis,
+                            // after a space or punctuation, as Hungarian `joinword a 2`
+                            // after the comma in ⠃⠂⠂⠅, and only when no space follows:
+                            // "to" joins "com" in en-us-g2's ⠖⠤⠑, though ⠤ is also a
+                            // hyphen.
                             builder.get_trie_mut(rule).insert(
                                 &format!("{chars} "),
                                 &dots.to_string(),
-                                Some(Transition::BegWord),
+                                Some(Transition::Start(vec![
+                                    CharacterClass::Space,
+                                    CharacterClass::Punctuation,
+                                ])),
                                 Some(Transition::NotEnd(vec![CharacterClass::Space])),
                                 direction,
                                 ClassConstraints::default(),
@@ -2159,6 +2164,25 @@ impl PrimaryTable {
             builder
                 .backward_nocontract_constrainer
                 .letter_cells(letter_cells.clone());
+            // the cells that come back as a letter: Norwegian ⠌ is in the letter class by
+            // `noback lowercase ï 34`, but back-translates to "/"
+            builder
+                .backward_nocontract_constrainer
+                .cells_read_as_letters(
+                    letter_cells
+                        .iter()
+                        .filter(|cell| {
+                            ctx.character_definitions()
+                                .character(&cell.to_string())
+                                .is_some_and(|c| {
+                                    ctx.character_classes
+                                        .get(&CharacterClass::Letter)
+                                        .is_some_and(|letters| letters.contains(&c))
+                                })
+                        })
+                        .copied()
+                        .collect(),
+                );
             // a character of several cells can start with an indicator's dots, as Danish
             // "é" does with ⠰⠿, and takes them as its own
             for dots in ctx.character_definitions().dots() {
