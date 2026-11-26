@@ -1,0 +1,110 @@
+#+options: todo:t
+#+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
+#+language: en
+
+* ACCEPTED ADR-0028: Warn about ~$w~ to ~$z~ until the tables no longer use them
+- Deciders :: CE
+- Date :: [2026-11-26 Thu]
+
+Technical Story: [[https://github.com/liblouis/louis-rs/issues/34][#34]]
+
+** Context and Problem Statement
+
+In the test of a ~context~, ~correct~ or pass rule, ~$w~, ~$x~, ~$y~
+and ~$z~ stand for the first, second, third and fourth attribute that
+the table defines with ~attribute~. louis-rs parses them but does not
+support them: they add no characters to the test, so a test of ~$w~
+alone matches nothing and its rule never applies. Until #34 this
+happened silently.
+
+liblouis supports them, but [[https://github.com/liblouis/liblouis/issues/948][liblouis#948]] wants them removed: which
+attribute ~$w~ means depends on the order of the ~attribute~ rules,
+across included files, which makes for brittle tables. A named
+attribute can be tested with ~%name~ instead.
+
+21 shipped tables still use them: the 8 da-dk tables, es-g2, sv-g0,
+sv-g1, sv-g2, sv-6g0d, sv-6g0p, sv-6g1d, sv-6g2d, ovd-6g0 and smi-6g0
+(through ~sv-6common.uti~), and zhcn-cbs, zhcn-g1 and zhcn-g2. Some uses
+are a single attribute, which ~%name~ replaces directly (zhcn, sv, and
+~$w~ in da-dk). Others combine a custom attribute with a built-in one
+(~$sw~, ~!$sx~, ~$dy~ in da-dk; ~$wx~, ~!$xs~ in es-g2), which
+~%name~ cannot express: these need an attribute that lists the
+characters of both.
+
+** Decision Drivers
+
+- A test that cannot match should not go unnoticed (#34)
+- Every table that liblouis compiles, louis-rs compiles too
+- Upstream intends to remove the feature
+
+** Considered Options
+
+- Implement ~$w~ to ~$z~
+- A table error
+- A warning, and the rule without them
+- Ignore them, as before #34
+
+** Decision Outcome
+
+Chosen option: a warning, because an error stops 21 tables from
+loading for the sake of a few rules each, and implementing the feature
+works against its removal upstream.
+
+The warning is temporary. The way out is to rewrite the uses in the
+tables upstream, then make ~$w~ to ~$z~ a parse error in louis-rs.
+
+*** Positive Consequences
+
+- The tables load as before, and a missing rule is reported
+- No support for a feature upstream intends to remove
+
+*** Negative Consequences
+
+- The rules that use ~$w~ to ~$z~ still don't apply, so these tables
+  translate differently from liblouis where those rules matter
+- The warning goes through ~log~, which reaches only an application
+  that installs a logger; bindings generally don't. How the library
+  reports non-fatal table problems is open, see #93
+
+** Pros and Cons of the Options
+
+*** Implement ~$w~ to ~$z~
+
+- Good, because the 21 tables translate as in liblouis
+- Bad, because it depends on the order of the ~attribute~ rules, which
+  louis-rs would have to track only for this
+- Bad, because it supports a feature upstream intends to remove
+
+*** A table error
+
+- Good, because nothing goes unnoticed
+- Bad, because 21 shipped tables no longer load
+
+*** A warning, and the rule without them
+
+- Good, because the tables load and the problem is reported
+- Bad, because the report is easy to miss (#93)
+
+*** Ignore them
+
+- Bad, because a rule silently never applies (#34)
+
+** Upstream
+
+How each use can be rewritten:
+
+- zhcn-g1, zhcn-g2, zhcn-cbs: ~$w~ is the attribute ~w~, so ~%w~
+- ~sv-6common.uti~: ~$w~ is ~Phoneticchars~, so ~%Phoneticchars~
+- da-dk: ~$w~ is ~charsWDoubleDash~, ~$x~ is ~charsBeforePercent~, ~$y~
+  is ~extraDigits~. ~$w~ alone becomes ~%charsWDoubleDash~; ~$sw~,
+  ~!$sx~, ~$dy~ and ~$dy$Spm~ need an attribute with the characters of
+  both
+- es-g2: ~$w~ is ~contraction~, ~$x~ is ~kwx~. ~$wx~ and ~!$xs~ need an
+  attribute with the characters of both
+
+** Links
+
+- [[https://github.com/liblouis/louis-rs/issues/34][#34]] An empty attribute or class test silently disables the rule
+- [[https://github.com/liblouis/louis-rs/issues/93][#93]] Report non-fatal table problems to the library caller
+- [[https://github.com/liblouis/liblouis/issues/948][liblouis#948]] Remove the feature to use $w, $x, $y, $z in multipass
+  expressions

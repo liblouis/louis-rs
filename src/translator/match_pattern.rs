@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use crate::parser::{AnchoredRule, Attribute, CharacterClasses, Pattern, Patterns, Side};
 
 use crate::translator::effect::Environment;
-use crate::translator::regexp::{CompiledRegexp, Regexp};
+use crate::translator::regexp::{CompiledRegexp, FirstCharIndex, Regexp};
 use crate::translator::translation::Translation;
 use crate::translator::{CharacterDefinition, ResolvedTranslation, TranslationStage};
 
@@ -37,7 +37,15 @@ impl Regexp {
             Pattern::Group(patterns) => {
                 Regexp::Group(Box::new(Regexp::from_patterns(patterns, ctx)))
             }
-            Pattern::Negate(pattern) => Regexp::from_pattern(pattern, ctx).negate(),
+            // `!%[_^]` means: there is a character, and it is not in the set. So it fails at
+            // the boundary, and after a space. Negating the `Either` instead would give "not
+            // in the set, or not at the boundary", which matches after a space too.
+            Pattern::Negate(pattern) => match pattern.as_ref() {
+                Pattern::AttributesOrBoundary(hash_set, _) => {
+                    Regexp::from_attributes(hash_set, ctx).negate()
+                }
+                _ => Regexp::from_pattern(pattern, ctx).negate(),
+            },
             Pattern::Optional(pattern) => {
                 Regexp::Optional(Box::new(Regexp::from_pattern(pattern, ctx)))
             }
@@ -160,6 +168,7 @@ impl MatchPatternsBuilder {
 
     pub fn build(self) -> MatchPatterns {
         MatchPatterns {
+            index: FirstCharIndex::new(self.regexps.iter().map(|r| &r.main)),
             regexps: self.regexps,
         }
     }
@@ -168,6 +177,7 @@ impl MatchPatternsBuilder {
 #[derive(Debug)]
 pub struct MatchPatterns {
     regexps: Vec<MatchRegexp>,
+    index: FirstCharIndex,
 }
 
 impl MatchPatterns {
@@ -179,9 +189,11 @@ impl MatchPatterns {
     pub fn find(&self, input: &str, preceding: &str) -> Vec<ResolvedTranslation> {
         let env = Environment::new();
         let definitions = CharacterDefinition::default();
-        self.regexps
+        self.index
+            .candidates(input)
             .iter()
-            .filter_map(|r| {
+            .filter_map(|&i| {
+                let r = &self.regexps[i];
                 let found = r.main.find_anchored(input, &env, false, &definitions)?;
                 match &r.pre {
                     // the weight counts the whole match, `pre` included, as in a

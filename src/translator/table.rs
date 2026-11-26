@@ -30,6 +30,18 @@ impl TableContext {
         }
     }
 
+    /// This context, compiled from one direction's rules, with the character and cell classes
+    /// of `all`, compiled from all of the table's rules. As in liblouis, a character and its
+    /// cell have their classes whatever the direction of their definition: `noback` and
+    /// `nofor` keep a rule from translating in one direction, not a character from being
+    /// defined. So the braille patterns that `braille-patterns.cti` defines with `noback sign`
+    /// are still in the classes that list them when back-translating.
+    pub fn with_classes_of(mut self, all: &TableContext) -> Self {
+        self.character_classes = all.character_classes.clone();
+        self.dots_classes = all.dots_classes.clone();
+        self
+    }
+
     pub fn character_definitions(&self) -> &CharacterDefinition {
         &self.character_definitions
     }
@@ -177,7 +189,8 @@ impl TableContext {
                     // no definition of the base character for this direction (`noback`, `nofor`), so
                     // nothing to derive; `TranslationPipeline::compile` rejects one with none at all
                 }
-                Rule::Attribute { name, chars } => {
+                // `class` is liblouis's deprecated spelling of `attribute`
+                Rule::Attribute { name, chars } | Rule::Class { name, chars } => {
                     let class = CharacterClass::from(name.as_str());
                     for c in chars.chars() {
                         character_classes.insert(class.clone(), c);
@@ -227,6 +240,8 @@ impl TableContext {
                     for c in chars.chars() {
                         character_classes.insert(class.clone(), c);
                     }
+                    // a swap's name is valid in the passes too, as in liblouis
+                    dots_classes.define(class);
                     let replacements: Vec<String> =
                         replacement.chars().map(|c| c.to_string()).collect();
                     let mapping: Vec<(char, &str)> = chars
@@ -240,6 +255,8 @@ impl TableContext {
                     for c in chars.chars() {
                         character_classes.insert(class.clone(), c);
                     }
+                    // a swap's name is valid in the passes too, as in liblouis
+                    dots_classes.define(class);
                     let replacements: Vec<String> = dots.iter().map(|b| b.to_string()).collect();
                     let mapping: Vec<(char, &str)> = chars
                         .chars()
@@ -257,6 +274,7 @@ impl TableContext {
                     for c in dots.to_string().chars() {
                         dots_classes.insert(class.clone(), c);
                     }
+                    character_classes.define(class);
                     let replacements: Vec<String> =
                         replacement.iter().map(|b| b.to_string()).collect();
                     let mapping: Vec<(char, &str)> = dots

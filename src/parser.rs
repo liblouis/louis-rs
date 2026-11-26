@@ -162,8 +162,10 @@ pub enum ParseError {
     InvalidUnicodeLiteral { found: Option<String> },
     #[error("invalid number")]
     InvalidNumber(#[from] ParseIntError),
-    #[error("invalid escape sequence {0:?}")]
-    InvalidEscape(Option<char>),
+    #[error("invalid escape sequence '\\{0}'")]
+    InvalidEscape(char),
+    #[error("backslash at end of string")]
+    TrailingBackslash,
     #[error("names can only contain a-z and A-Z, got {name:?}")]
     InvalidName { name: String },
     #[error("constraints '{constraints:?}' not allowed for opcode {opcode:?}")]
@@ -1170,77 +1172,6 @@ impl HasNocross for Rule {
     }
 }
 
-/// Precedence levels for [`Rules`](Rule): when two rules match the same input and nothing
-/// else separates them, the higher one wins, see [`Rank`](crate::translator::translation::Rank).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Precedence {
-    /// `letter`, `punctuation`, `digit`, ..., plus `litdigit`, `base` and `hyphen`: only
-    /// the fallback when no other rule matches, which liblouis expresses by putting them
-    /// at the end of its rule chains.
-    CharacterDefinition,
-    /// Backward, `decpoint`: read as its character wherever it is, beating the other
-    /// characters on its cells, as "." does Vietnamese's "'", but not an indicator on them,
-    /// as EBAE's italic sign is. Forward it is a [`Precedence::Translation`].
-    Decpoint,
-    /// Backward-only emphasis indicators (`begemphword`, `endemphphrase`, ...). Any other
-    /// rule with the same dots wins over them, as `endcapsword 6-3` does over
-    /// `endemphword italic 6-3` in `fr-bfu-comp6.utb`.
-    Emphasis,
-    /// Backward-only indicator opcodes (`capsletter`, `numsign`, ...). Above the
-    /// character definitions, whose dots they can coincide with in some tables, but below
-    /// `always`: a same-dots `always` rule is a more specific language rule that must
-    /// still win.
-    Indicator,
-    /// `always`: liblouis puts it after the other translation rules of the same length, but
-    /// only in its multi-character chains, so [`Rank`](crate::translator::translation::Rank) treats a
-    /// one-character `always` match as [`Precedence::Translation`].
-    Always,
-    /// Every other rule: the word family, `match`, `context`, the passes, ...
-    Translation,
-}
-
-/// A trait to query the precedence of a [`Rule`].
-pub trait HasPrecedence {
-    /// Returns the precedence level of this Rule.
-    fn precedence(&self) -> Precedence;
-}
-
-impl HasPrecedence for Rule {
-    fn precedence(&self) -> Precedence {
-        match self {
-            Rule::Space { .. }
-            | Rule::Digit { .. }
-            | Rule::Punctuation { .. }
-            | Rule::Math { .. }
-            | Rule::Sign { .. }
-            | Rule::Letter { .. }
-            | Rule::Uppercase { .. }
-            | Rule::Lowercase { .. }
-            | Rule::Grouping { .. }
-            // outside liblouis' character definition opcodes, but they define a character too:
-            // `base` a derived one, `hyphen` one that can break a word. `litdigit` must also
-            // not beat a `lowercase` with the same dots backward, it only applies in a number
-            | Rule::Litdigit { .. }
-            | Rule::Base { .. }
-            | Rule::Hyphen { .. } => Precedence::CharacterDefinition,
-            Rule::Capsletter { .. }
-            | Rule::Begcapsword { .. }
-            | Rule::Endcapsword { .. }
-            | Rule::Numsign { .. }
-            | Rule::Nonumsign { .. } => Precedence::Indicator,
-            Rule::Begemph { .. }
-            | Rule::Endemph { .. }
-            | Rule::Emphletter { .. }
-            | Rule::Begemphword { .. }
-            | Rule::Endemphword { .. }
-            | Rule::Begemphphrase { .. }
-            | Rule::Endemphphrase { .. } => Precedence::Emphasis,
-            Rule::Always { .. } => Precedence::Always,
-            _ => Precedence::Translation,
-        }
-    }
-}
-
 impl Rule {
     /// How many characters of a pass or `correct` test are spelled out literally rather than
     /// given by a class, see [`Test::literal_count`](multipass::Test::literal_count); 0 for
@@ -1313,7 +1244,7 @@ fn unescape_unicode(chars: &mut Chars, len: u8) -> Result<char, ParseError> {
     // A hex literal that fits a UTF-16 code unit (`\x`, always 4 digits) can
     // only fail to be a scalar value by being a surrogate half -- that's the
     // one gap in `char::from_u32`'s range for u16-sized input. Anything wider
-    // (only reachable via `\y`/`\z`) is a genuine out-of-range literal.
+    // (only reachable via `\y`) is a genuine out-of-range literal.
     let Ok(unit) = u16::try_from(value) else {
         return Err(ParseError::InvalidUnicodeLiteral { found: Some(s) });
     };
@@ -1375,8 +1306,8 @@ pub fn unescape(s: &str, context: EscapingContext) -> Result<String, ParseError>
             }
             Some('x') => new.push(unescape_unicode(&mut iter, 4)?),
             Some('y') => new.push(unescape_unicode(&mut iter, 5)?),
-            Some(c) => new.push(simple_escape(c).ok_or(ParseError::InvalidEscape(Some(c)))?),
-            _ => return Err(ParseError::InvalidEscape(None)),
+            Some(c) => new.push(simple_escape(c).ok_or(ParseError::InvalidEscape(c))?),
+            _ => return Err(ParseError::TrailingBackslash),
         };
     }
     Ok(new)
@@ -2714,8 +2645,7 @@ pub struct AnchoredRule {
     path: Option<PathBuf>,
     line: usize,
     /// Position in the rule list a table was compiled from, i.e. definition order across
-    /// `include`s and table lists. Only the last resort for picking between candidates, see
-    /// [`Rank`](crate::translator::translation::Rank).
+    /// `include`s and table lists.
     definition_order: usize,
 }
 
@@ -2759,12 +2689,6 @@ impl HasDirection for AnchoredRule {
     }
 }
 
-impl HasPrecedence for AnchoredRule {
-    fn precedence(&self) -> Precedence {
-        self.rule.precedence()
-    }
-}
-
 impl HasNocross for AnchoredRule {
     fn constraints(&self) -> Constraints {
         self.rule.constraints()
@@ -2782,8 +2706,7 @@ impl From<Rule> for AnchoredRule {
     }
 }
 
-/// `rules` stamped with their position in it, which is their definition order: the last
-/// resort for picking between candidates, see [`Rank`](crate::translator::translation::Rank).
+/// `rules` stamped with their position in it, which is their definition order.
 pub fn in_definition_order(rules: &[AnchoredRule]) -> Vec<AnchoredRule> {
     rules
         .iter()

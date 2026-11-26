@@ -1,0 +1,234 @@
+#+options: todo:t
+#+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
+#+language: en
+
+* ACCEPTED ADR-0024: Model ~_N~ as a look-behind and a look-ahead, and reject it anywhere else
+- Deciders :: CE
+- Date :: [2026-11-13 Fri]
+
+Technical Story: In liblouis's ~context~ and multipass rules, ~_N~
+steps back N characters so that a rule can check its surroundings
+without consuming them: ~context _$l["ound"] @46-145a~ contracts
+"ound" only after a letter, and ~context "ใคร"!%ToneAndVowels_ ...~
+matches "ใคร" only when no vowel or tone mark follows. louis-rs
+ignored ~_N~, so such rules matched too much or too little. This
+record explains why ~_N~ can't be taken over as it is into louis-rs's
+regular-expression matcher, and why it now becomes a look-behind or a
+look-ahead. Implemented in ~4d78544~ and ~b2134ba~.
+
+** Context and Problem Statement
+
+The test operand of a ~context~, ~correct~ or ~pass2~-~pass4~ rule is a
+sequence of tests that liblouis runs one after the other, each from
+where the previous one left off. ~_N~ (~_~ alone is ~_1~) is one of
+them: it moves that position back N characters (~pass_lookback~ in
+~lou_translateString.c~ and ~lou_backTranslateString.c~), and the rule
+fails if it moves before the start of the input. Nothing restricts
+where it stands.
+
+louis-rs compiles these tests to its regexp VM (ADR-0007). Before
+~4d78544~ the parser kept ~_N~ as a ~TestInstruction::Lookback~ and the
+compiler turned it into ~Regexp::Empty~, i.e. ignored it. That was
+wrong in visible ways:
+
+- A trailing ~_N~ was dropped, so a rule without brackets or with a ~*~
+  action consumed the character it only meant to check: ~th-g2.ctb~'s
+  ~"ใคร"!%ToneAndVowels_~ consumed the character after "ใคร" (most of
+  ~th.yaml~'s failures).
+- A leading ~_N~ was matched forward as part of the rule, so a ~*~ rule
+  consumed its look-behind too (~da-dk-g26.ctb~'s ~_$D[@6-46-6] *~), and
+  the rule was found one position early and held as a delayed
+  translation, which a rule that consumed across that position hid
+  (~context _$l["ound"]~ lost to ~always ar~ in "around").
+- ~[$d5]_6~ on "12345" must fail (stepping before the input), louis-rs
+  matched it.
+
+So how should ~_N~ be represented, given that the matcher is a
+regular-expression engine?
+
+*** Why ~_N~ doesn't fit in a regular expression
+
+A regular expression describes a string read once, left to right: each
+piece matches the characters right after the previous piece, and the
+match is the concatenation of the pieces. ~_N~ breaks that model:
+
+1. *It is a cursor move, not a pattern.* It matches nothing; it
+   rewinds the reading head. Automata (Thompson NFA, Pike VM,
+   backtracking alike) only ever advance over the input. There is no
+   operator for "go back".
+2. *In the middle it means intersection.* ~A _N B~ with ~A~ ending in N
+   characters that ~B~ starts on says: those N characters must match
+   both the end of ~A~ and the start of ~B~. That is the intersection
+   of two languages over an overlapping span, which concatenation
+   can't say. It can be emulated by a look-ahead in the middle
+   (~A'(?=X)~), but only once you know where ~A~'s last N characters
+   start, which needs the next point.
+3. *Its meaning depends on widths.* Where ~_N~ lands depends on how
+   many characters the tests before it consumed. Over a class with a
+   quantifier (~%a.~, ~$l1-3~) the landing point depends on the match,
+   and N may land in the middle of a string or a run of dots. The
+   pattern can't be compiled without knowing the widths, and with
+   variable widths the result isn't one pattern at all.
+4. *It interacts with the replacement.* The brackets ~[...]~ mark what
+   the rule replaces. A ~_N~ that steps back into or across them makes
+   that span ambiguous: the ~[$d5]_6~ of liblouis's own tests steps
+   from after the bracket to before it.
+5. *It obscures what a rule checks.* ~th-g2.ctb~'s ~!%Ahead_"หมาก"~
+   checks that the character at the cursor is not in ~%Ahead~, steps
+   back, then reads "หมาก" from the same place. Since ~ห~ is not in ~%Ahead~ the first
+   test is a no-op, which the rule does not make apparent.
+6. *It hides the rule's position.* Rules are indexed and ranked by the
+   characters they start with at the cursor (~passFindCharacters~,
+   ~leading_literal_len~, ~Rank~, ADR-0016). With ~_N~ anywhere, what
+   the rule matches "at the cursor" is whatever survives the arithmetic
+   of all the ~_N~ and widths before it.
+
+*** How the corpus uses it
+
+Across liblouis's tables ~_N~ appears in exactly two useful shapes,
+plus three rules that use it otherwise:
+
+- *Leading*: ~_N~ followed by tests covering exactly N characters, then
+  the rule proper: ~_$l["ound"]~, "ound" after a letter. The tests
+  after ~_N~ look at what precedes the cursor; that is a look-behind.
+- *Trailing*: tests covering N characters at the end, followed by ~_N~:
+  ~"ใคร"!%ToneAndVowels_~, "ใคร" not followed by a vowel or tone mark.
+  Those characters are checked and given back; that is a look-ahead.
+- *Middle*: three rules, ~it-it-comp6.utb~'s two
+  ~...%mathnumber_$u.%mathop~ and ~th-g2.ctb~'s ~!%Ahead_"หมาก"~.
+  Each was either a no-op or an indirect way of saying something
+  simpler, and each has a table fix: liblouis#2196 and #2197.
+- Three inline tables in liblouis's unit tests (~multipass.yaml~,
+  ~multipass-forward.yaml~, ~multipass-backward.yaml~) step back into a
+  bracket or before the input on purpose, to test the C code paths.
+
+** Decision Drivers
+
+- The regexp VM stays a forward-only, linear-time automaton
+  (ADR-0007); no backtracking, no general intersection.
+- Cover every use in real tables, with the same results as liblouis.
+- A rule must not consume what it only checks.
+- A context rule is found and ranked where its body starts, not where
+  its look-behind starts.
+- Prefer an error at table load over silently doing something
+  different from liblouis (ADR-0018); fix the tables upstream when
+  their ~_N~ is what's wrong (the user co-maintains them).
+
+** Considered Options
+
+1. Keep ignoring ~_N~ (compile it to ~Regexp::Empty~).
+2. Emulate liblouis: give the VM a "move back N" instruction and let
+   threads rewind.
+3. Classify ~_N~ in the parser: a leading ~_N~ becomes a look-behind, a
+   trailing one a look-ahead, anything else is a parse error.
+4. Option 3, but compile a middle ~_N~ into a look-ahead in the middle
+   of the body, where the widths are fixed.
+
+** Decision Outcome
+
+Chosen option: 3, because it covers every real use with constructs a
+regular-expression engine already has, and the three rules it rejects
+are better fixed in the tables.
+
+- The parser turns the tests and ~_N~s as written into a ~Test~ with a
+  ~lookbehind~, a ~body~ and a ~lookahead~ (~Test::from_raw~ in
+  ~src/parser/multipass/test.rs~). A ~_N~ before anything that
+  consumes characters takes the next tests covering N characters as
+  the look-behind; a ~_N~ after the last such test takes the tests
+  before it covering N characters as the look-ahead.
+- The tests stepped over must have a fixed width: strings, dots, and
+  classes or attributes without a quantifier or with an exact count. A
+  string or dots that a ~_N~ ends inside is split. Variable tests
+  (~#1=1~) consume nothing and go to the body wherever they stand.
+  Consecutive ~_~s add up (~__~ is ~_2~).
+- Any other ~_N~ (in the middle, into or across a bracket, before the
+  input, over a test of open width) is ~ParseError::MisplacedLookback~,
+  and the table does not load.
+- The compiler consumes only the body. The look-ahead is matched after
+  the consumed span and given back. The look-behind is compiled from
+  the reversed pattern (~Regexp::reverse~) and run over the reversed
+  text before the cursor, exactly as a ~match~ rule's ~pre~ already
+  is, so the rule is found at the cursor where its body starts. Its
+  weight still counts the look-behind's literals.
+- ~Display~ prints the normalized form: look-behind first, then the
+  body, then the look-ahead.
+
+*** Positive Consequences
+
+- ~th-g2.ctb~'s trailing ~_N~ rules no longer swallow the next
+  character, and ~da-dk-g26.ctb~'s ~*~ rules no longer consume their
+  look-behind.
+- Context rules with a look-behind are no longer delayed translations,
+  so a rule that consumes across their start no longer hides them
+  ("around"). Delayed translations remain only for body text before
+  ~[~ (see ~TODO.org~ and branch ~context-consume-at-cursor~).
+- A rule's look-behind, body and look-ahead are explicit in the data
+  structure. ~leading_literal_len~, ~literal_text~ and ~is_literal~ no
+  longer do ~_N~ arithmetic.
+- The VM is unchanged: no backward moves, no intersection.
+
+*** Negative Consequences
+
+- ~it-it-comp6.utb~ and ~th-g2.ctb~ don't load until liblouis#2196 and
+  #2197 land. Accepted deliberately: the change went in before them.
+- Five tests in liblouis's ~multipass*.yaml~ don't run, as their inline
+  tables don't load. A liblouis change testing the same with the two
+  supported shapes (e.g. ~_$a["u"]~ at the start of the input) is still
+  owed.
+- A third-party table with a middle ~_N~ that liblouis accepts fails in
+  louis-rs. Documented in ~doc/Differences_From_Liblouis.md~ with the
+  error message as the migration path.
+
+** Pros and Cons of the Options
+
+*** 1. Keep ignoring ~_N~
+
+- Good, because it is no work.
+- Bad, because it consumes what trailing ~_N~ rules only check, and a
+  ~*~ rule consumes its look-behind.
+- Bad, because look-behind only worked as a side effect of delayed
+  translations, and lost rules a longer translation jumped over.
+- Bad, because a ~_N~ before the input never fails.
+
+*** 2. A "move back" instruction in the VM
+
+- Good, because every ~_N~ liblouis accepts would work.
+- Bad, because a Pike VM advances all threads in lockstep over the
+  input; a thread that rewinds needs its own position, which turns the
+  VM into a backtracker and gives up the linear-time guarantee of
+  ADR-0007.
+- Bad, because it keeps the middle and bracket-crossing forms alive,
+  and with them the question of which span is replaced.
+- Bad, because rules would still be found at their look-behind and need
+  delayed translations.
+
+*** 3. Look-behind and look-ahead, nothing else
+
+- Good, because both are standard regexp constructs, and the
+  look-behind reuses the reversed-program machinery of ~match~ rules'
+  ~pre~.
+- Good, because the shapes are classified once, at parse time, and an
+  unsupported shape is reported with its file and line.
+- Bad, because it rejects three rules in the corpus and five unit
+  tests, which need upstream changes.
+
+*** 4. Option 3 plus a middle look-ahead
+
+~A _N B~ with fixed widths becomes ~A₁(?=A₂B)~ plus whatever of ~B~
+reaches past ~A₂~, ~A₂~ being ~A~'s last N characters.
+
+- Good, because it would load ~it-it-comp6.utb~ and ~th-g2.ctb~ as they
+  are.
+- Bad, because the VM's only look-ahead is the matched but unconsumed
+  tail after the ~Consume~ span; one in the middle of a program is the
+  intersection again, and would need nested sub-matches.
+- Bad, because all three rules it would serve are a no-op or an indirect
+  form with a simpler fix in the table.
+
+** Links
+
+- Builds on [[file:0007-hand-rolled-regexp-vm.org][ADR-0007]] (the VM stays forward-only)
+- Relates to [[file:0016-rule-selection-by-rank.org][ADR-0016]] (rules are ranked by what they match at the cursor)
+- Relates to [[file:0018-parity-or-migration-path.org][ADR-0018]] (migration path for the rejected shapes)
+- ~doc/Differences_From_Liblouis.md~, "~_N~ only before or after the tests it steps over"
+- liblouis#2196 (~it-it-comp6.utb~), liblouis#2197 (~th-g2.ctb~)

@@ -112,6 +112,9 @@ assert_eq!(translator.translate("It's about the blind"), "⠠⠭⠄⠎⠀⠁⠃�
 
 The [API documentation](https://docs.rs/louis-rs) has the rest.
 
+From other languages: Python with [louis-py](https://github.com/liblouis/louis-py), C
+with [louis-capi](https://github.com/liblouis/louis-capi).
+
 ## Project status
 
 Beta. Compatibility with liblouis is driven by its own test suite, which
@@ -124,7 +127,8 @@ current figures and the reproduction steps.
 Reports from real use are the most useful contribution right now: a text that
 comes out wrong, a table that doesn't load, an API that gets in the way. Please
 [file an issue](https://github.com/liblouis/louis-rs/issues); pull requests are
-welcome too.
+welcome too. [CONTRIBUTING.md](CONTRIBUTING.md) says what makes a report or a
+change easy to take.
 
 ## Acknowledgments
 
@@ -143,16 +147,4 @@ a just port of the [Parsing expression grammar](https://en.wikipedia.org/wiki/Pa
 Copyright (C) 2023-2026 Swiss Library for the Blind, Visually Impaired
 and Print Disabled
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation, either version 2.1 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Lesser General Public License for more details.
-
-You should have received a copy of the GNU Lesser General Public License
-along with this program.  If not, see
-<https://www.gnu.org/licenses/>.
+Licensed under LGPL-2.1-or-later. See [LICENSE](LICENSE).

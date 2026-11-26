@@ -61,6 +61,12 @@ impl CharacterClasses {
         self.0.entry(class).or_default().insert(c)
     }
 
+    /// Define `class`, without characters if it has none yet, so that a test naming it is
+    /// valid in every stage
+    pub fn define(&mut self, class: CharacterClass) {
+        self.0.entry(class).or_default();
+    }
+
     pub fn insert_dot(&mut self, class: CharacterClass, dot: &BrailleChar) -> bool {
         self.0.entry(class).or_default().insert(dot.to_unicode())
     }
@@ -80,6 +86,8 @@ impl CharacterClasses {
         c: char,
         character_definitions: &CharacterDefinition,
     ) -> bool {
+        // the class exists even if none of its characters has a single cell
+        self.define(class.clone());
         // if there is an associated single cell braille dot for the character add it to the
         // dots_classes
         if let Some(dots) = character_definitions.get(&c)
@@ -97,7 +105,8 @@ impl CharacterClasses {
     }
 
     pub fn is_whitespace(&self, c: char) -> bool {
-        self.get(&CharacterClass::Space)
+        self.0
+            .get(&CharacterClass::Space)
             .is_some_and(|class| class.contains(&c))
     }
 }

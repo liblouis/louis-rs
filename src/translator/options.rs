@@ -79,7 +79,10 @@ impl TranslationOptions {
         self
     }
 
-    /// Translate with the input emphasized as `emphasis` says.
+    /// Translate with the input emphasized as `emphasis` says. See [`EmphasisSpan::new`]
+    /// for the classes a span can have.
+    ///
+    /// [`EmphasisSpan::new`]: crate::EmphasisSpan::new
     pub fn with_emphasis(mut self, emphasis: Emphasis) -> Self {
         self.emphasis = emphasis;
         self

@@ -90,6 +90,9 @@ pub enum CompileErrorKind {
     /// A rule refers to a swap class that no rule defines
     #[error("swap class {0} not defined")]
     SwapClassNotDefined(String),
+    /// A rule's test names a class that no `attribute` and no swap rule defines
+    #[error("{0} is neither a class nor a swap")]
+    ClassNotDefined(String),
 }
 
 impl CompileErrorKind {
@@ -104,30 +107,41 @@ impl CompileErrorKind {
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct CharacterDefinition(HashMap<char, String>);
+pub struct CharacterDefinition {
+    dots: HashMap<char, String>,
+    /// The character defined first with the dots, which they back-translate to
+    characters: HashMap<String, char>,
+}
 
 impl CharacterDefinition {
     fn new() -> Self {
-        Self(HashMap::new())
+        Self::default()
     }
 
     fn insert(&mut self, from: char, to: &str) {
         // first rule wins, as in liblouis
-        self.0.entry(from).or_insert(to.to_string());
+        self.dots.entry(from).or_insert(to.to_string());
+        self.characters.entry(to.to_string()).or_insert(from);
     }
 
     pub fn get(&self, from: &char) -> Option<&String> {
-        self.0.get(from)
+        self.dots.get(from)
+    }
+
+    /// The character `dots` back-translate to: of the characters defined with them, the
+    /// first.
+    pub fn character(&self, dots: &str) -> Option<char> {
+        self.characters.get(dots).copied()
     }
 
     /// The dots of every definition.
     pub fn dots(&self) -> impl Iterator<Item = &str> {
-        self.0.values().map(String::as_str)
+        self.dots.values().map(String::as_str)
     }
 
     /// Whether some character is defined with exactly these dots.
     pub fn defines_dots(&self, dots: &str) -> bool {
-        self.0.values().any(|d| d == dots)
+        self.characters.contains_key(dots)
     }
 
     fn resolve_implicit_dots(&self, chars: &str) -> Result<String, CompileErrorKind> {

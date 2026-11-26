@@ -94,6 +94,9 @@ pub mod internals {
     }
 }
 
+/// The version of louis-rs, such as `"0.4.0"`.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Why a [`Translator`] could not be built.
 #[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
@@ -356,6 +359,35 @@ mod tests {
         }
     }
 
+    const ABCX: &str = "letter a 1\nletter b 12\nletter c 14\nletter x 1346\n";
+
+    #[test]
+    fn a_test_naming_no_class_or_swap_is_a_table_error() {
+        let table = format!("{ABCX}noback correct \"a\"[%typo]\"c\" \"b\"\n");
+        let error = Translator::from_table_source(&table, Direction::Forward).unwrap_err();
+        let Error::Compile(error) = error else {
+            panic!("expected a compile error, got {error:?}");
+        };
+        assert_eq!(
+            error.to_string(),
+            "line 5: typo is neither a class nor a swap"
+        );
+    }
+
+    #[test]
+    fn a_test_naming_a_swap_matches_what_it_maps_from() {
+        let table = format!("{ABCX}swapcd sw x 12\nnoback correct \"a\"[%sw]\"c\" \"b\"\n");
+        let translator = Translator::from_table_source(&table, Direction::Forward).unwrap();
+        assert_eq!(translator.translate("axc"), "⠁⠃⠉");
+    }
+
+    #[test]
+    fn the_class_rule_defines_a_class_like_attribute() {
+        let table = format!("{ABCX}class foo x\nnoback correct \"a\"[%foo]\"c\" \"b\"\n");
+        let translator = Translator::from_table_source(&table, Direction::Forward).unwrap();
+        assert_eq!(translator.translate("axc"), "⠁⠃⠉");
+    }
+
     #[test]
     fn a_braille_encoding_writes_the_cells_both_ways() {
         let table = "space \\s 0\nlowercase a 1\nlowercase b 12\n";
@@ -375,6 +407,141 @@ mod tests {
         // and without one, Unicode braille
         let plain = Translator::from_table_source(table, Direction::Forward).unwrap();
         assert_eq!(plain.translate("ab"), "⠁⠃");
+    }
+
+    #[test]
+    fn unicode_braille_has_no_virtual_dots() {
+        // ru-litbrl.ctb: Cyrillic а is ⠁ with a virtual dot 9, which its display table shows
+        let table = "space \\s 0\nlowercase a 19\nlowercase b 12\n";
+        let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(forward.translate("ab ba"), "⠁⠃⠀⠃⠁");
+        let result = forward.translate_with_options("ab", &TranslationOptions::default());
+        assert_eq!(result.output(), "⠁⠃");
+        assert_eq!(result.output_positions(), [0, 1]);
+        // a braille encoding still gets the virtual dot
+        let encoding = BrailleEncoding::from_table_source("display x 19\ndisplay y 1\n").unwrap();
+        assert_eq!(
+            forward.with_braille_encoding(&encoding).translate("aa"),
+            "xx"
+        );
+        // and without a rule for it, shows the cell without it
+        let encoding = BrailleEncoding::from_table_source("display y 1\n").unwrap();
+        let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(
+            forward.with_braille_encoding(&encoding).translate("aa"),
+            "yy"
+        );
+    }
+
+    #[test]
+    fn a_contraction_does_not_cross_where_emphasis_ends() {
+        // en-ueb-g2's "word" with only "wo" in italics: spelled out, so that the
+        // emphasis can end after "wo" (#69)
+        let table = "emphclass italic\nbegemphword italic 46-2\nendemphword italic 46-3\n\
+                     lowercase w 2456\nlowercase o 135\nlowercase r 1235\nlowercase d 145\n\
+                     always word 45-2456\n";
+        let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(forward.translate("word"), "⠘⠺");
+        let italic: Emphasis = [EmphasisSpan::new("italic", 0..2)].into_iter().collect();
+        let options = TranslationOptions::default().with_emphasis(italic);
+        assert_eq!(
+            forward.translate_with_options("word", &options).output(),
+            "⠨⠂⠺⠕⠨⠄⠗⠙"
+        );
+    }
+
+    #[test]
+    fn empmatchafter_keeps_a_rule_from_an_emphasis_change_after_it() {
+        // en-ueb-g2's "ff" groupsign, not used right before an indicator (#82)
+        let table = "emphclass italic\nbegemphword italic 46-2\nendemphword italic 46-3\n\
+                     lowercase a 1\nlowercase b 12\nlowercase f 124\n\
+                     empmatchafter match %a ff %a 235\n";
+        let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(forward.translate("affb"), "⠁⠖⠃");
+        let italic: Emphasis = [EmphasisSpan::new("italic", 3..4)].into_iter().collect();
+        let options = TranslationOptions::default().with_emphasis(italic);
+        assert_eq!(
+            forward.translate_with_options("affb", &options).output(),
+            "⠁⠋⠋⠨⠂⠃"
+        );
+    }
+
+    #[test]
+    fn a_rule_does_not_take_a_change_of_case_after_its_second_letter() {
+        // "NorthEast" isn't contracted as "northeast"; "Man" still contracts
+        let table = "lowercase m 134\nlowercase a 1\nlowercase n 1345\n\
+                     base uppercase M m\nbase uppercase A a\nbase uppercase N n\n\
+                     always man 2345\n";
+        let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(forward.translate("man"), "⠞");
+        assert_eq!(forward.translate("Man"), "⠞");
+        assert_eq!(forward.translate("mAn"), "⠍⠁⠝");
+        assert_eq!(forward.translate("maN"), "⠍⠁⠝");
+    }
+
+    #[test]
+    fn a_capitals_passage_ends_after_the_last_symbols_sequence() {
+        // UEB 8.5.3: "CAUTION: WET PAINT!" ends in ⠏⠁⠔⠞⠖⠠⠄, the terminator after the "!"
+        let table = "space \\s 0\nlowercase a 1\nlowercase b 12\n\
+                     base uppercase A a\nbase uppercase B b\npunctuation ! 235\n\
+                     capsletter 6\nbegcapsword 6-6\nendcapsword 6-3\n\
+                     begcapsphrase 6-6-6\nendcapsphrase after 6-3\nlencapsphrase 3\n";
+        let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(forward.translate("AB AB AB!"), "⠠⠠⠠⠁⠃⠀⠁⠃⠀⠁⠃⠖⠠⠄");
+    }
+
+    /// UEB-like italic and underline emphasis and capitals, for the nesting tests
+    const NESTING_TABLE: &str = "space \\s 0\nlowercase a 1\nlowercase b 12\n\
+        base uppercase A a\nbase uppercase B b\n\
+        emphclass italic\nemphclass underline\n\
+        begemphword italic 46-2\nendemphword italic 46-3\nlenemphphrase italic 3\n\
+        begemphphrase italic 46-2356\nendemphphrase italic after 46-3\n\
+        begemphword underline 456-2\nendemphword underline 456-3\n\
+        capsletter 6\nbegcapsword 6-6\nendcapsword 6-3\n\
+        begcapsphrase 6-6-6\nendcapsphrase after 6-3\nlencapsphrase 3\n";
+
+    fn with_emphasis(spans: &[(&str, std::ops::Range<usize>)]) -> TranslationOptions {
+        let emphasis: Emphasis = spans
+            .iter()
+            .map(|(class, range)| EmphasisSpan::new(*class, range.clone()))
+            .collect();
+        TranslationOptions::default().with_emphasis(emphasis)
+    }
+
+    #[test]
+    fn emphasis_classes_that_open_together_nest() {
+        // the same run: the later-declared class opens first, outermost (UEB 8.6.2)
+        let forward = Translator::from_table_source(NESTING_TABLE, Direction::Forward).unwrap();
+        let options = with_emphasis(&[("italic", 0..2), ("underline", 0..2)]);
+        assert_eq!(
+            forward.translate_with_options("ab", &options).output(),
+            "⠸⠂⠨⠂⠁⠃"
+        );
+    }
+
+    #[test]
+    fn capitals_close_before_the_emphasis_around_them() {
+        // "ROMEO AND JULIET" in italics: ⠨⠶⠠⠠⠠ … ⠠⠄⠨⠄ (UEB 8.6.2)
+        let forward = Translator::from_table_source(NESTING_TABLE, Direction::Forward).unwrap();
+        let options = with_emphasis(&[("italic", 0..8)]);
+        assert_eq!(
+            forward
+                .translate_with_options("AB AB AB", &options)
+                .output(),
+            "⠨⠶⠠⠠⠠⠁⠃⠀⠁⠃⠀⠁⠃⠠⠄⠨⠄"
+        );
+    }
+
+    #[test]
+    fn an_unemphasized_space_does_not_end_emphasis() {
+        let forward = Translator::from_table_source(NESTING_TABLE, Direction::Forward).unwrap();
+        let options = with_emphasis(&[("italic", 0..2), ("italic", 3..8)]);
+        assert_eq!(
+            forward
+                .translate_with_options("ab ab ab", &options)
+                .output(),
+            "⠨⠶⠁⠃⠀⠁⠃⠀⠁⠃⠨⠄"
+        );
     }
 
     #[test]
@@ -529,6 +696,16 @@ mod tests {
     }
 
     #[test]
+    fn a_class_cell_defined_only_forward_counts_backward() {
+        // French `nofor before bvoyyy always ss 2346`, whose class lists braille cells that
+        // braille-patterns.cti defines with `noback sign`. Without the rule, ⠮ is the letter è.
+        let table = "lowercase a 1\nlowercase è 2346\nnoback sign ⠩ 146\nattribute bvoy a⠩\n\
+                     always ait 146\nnofor before bvoy always ss 2346\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠁⠮⠩"), "assait");
+    }
+
+    #[test]
     fn digits_after_a_number_sign_are_not_read_as_a_contraction() {
         let table = "space \\s 0\nletter a 1\nletter b 12\nlitdigit 1 1\nlitdigit 2 12\nnumsign 3456\nword about 1-12\n";
         let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
@@ -604,5 +781,70 @@ mod tests {
         assert_eq!(result.output(), "⠋⠕⠕");
         assert_eq!(result.output_positions(), [0, 0, 1, 2]);
         assert_eq!(result.input_positions(), [1, 2, 3]);
+    }
+
+    #[test]
+    fn the_undefined_rule_is_only_for_forward_translation() {
+        let table = "undefined 0\nspace \\s 0\nlowercase a 1\n";
+        let backward = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(backward.translate("⢀"), "\\8/");
+        let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
+        assert_eq!(forward.translate("b"), "⠀");
+    }
+
+    #[test]
+    fn a_blank_cell_ends_a_number_although_the_no_break_space_continues_one() {
+        // Swedish has `midendnumericmodechars \x00a0`, but its blank cell comes back as the
+        // space, defined first, so "⠼⠁⠀⠃" is "1 b", not "1 2"
+        let table = "space \\s 0\nspace \\x00a0 0\nlowercase b 12\nlitdigit 1 1\n\
+                     litdigit 2 12\nnumsign 3456\nmidendnumericmodechars \\x00a0\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠼⠁⠀⠃"), "1 b");
+    }
+
+    #[test]
+    fn a_joinword_joins_whatever_follows_but_a_space() {
+        // en-us-g2 `joinword to 235` before `begword com 36`, whose cell is also the hyphen,
+        // so "⠖⠤⠁" is "to coma", not "!coma"
+        let table = "space \\s 0\nhyphen - 36\npunctuation ! 235\nlowercase a 1\n\
+                     begword com 36\njoinword to 235\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠖⠤⠁"), "to coma");
+        assert_eq!(translator.translate("⠖⠀⠁"), "! a");
+    }
+
+    #[test]
+    fn a_joinnum_ranks_without_the_space_it_puts_back() {
+        // no-no-g2 `joinnum § 346` and `word et 346`: "et" writes more characters than "§",
+        // so "⠬⠂" is "et,", not "§ ,"
+        let table = "space \\s 0\npunctuation , 2\nlowercase e 15\nlowercase t 2345\n\
+                     sign § 346\njoinnum § 346\nword et 346\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠬⠂"), "et,");
+    }
+
+    #[test]
+    fn a_cell_of_a_longer_letter_rule_is_no_letter_before_a_numsign() {
+        // en-us-g2: ⠼ is also `midendword ble`, and ⠶ is part of `always bedragg`. At the
+        // start of a word ⠶ is "(", so "⠶⠼⠁" is "(1"; after a letter `midword gg` makes it
+        // "gg", and ⠼ is "ble"
+        let table = "space \\s 0\nlowercase a 1\nlowercase b 12\nlowercase g 1245\n\
+                     punctuation ( 2356\nlitdigit 1 1\nnumsign 3456\nmidendword ble 3456\n\
+                     midword gg 2356\nalways bagg 12-1-2356\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠶⠼⠁"), "(1");
+        assert_eq!(translator.translate("⠁⠶⠼⠁"), "aggblea");
+    }
+
+    #[test]
+    fn a_numsign_after_a_sign_starting_with_the_numsign_starts_a_number() {
+        // Portuguese `sign # 3456-13` and `midendword ão 3456`: in "⠼⠅⠼⠃" the ⠅ ends the
+        // "#", not a word, so the second ⠼ is a numsign, not "ão" after a letter
+        let table = "space \\s 0\nlowercase a 1\nlowercase b 12\nlowercase k 13\n\
+                     lowercase o 135\nsign # 3456-13\nlitdigit 2 12\nnumsign 3456\n\
+                     midendword ao 3456\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠼⠅⠼⠃"), "#2");
+        assert_eq!(translator.translate("⠁⠼"), "aao");
     }
 }

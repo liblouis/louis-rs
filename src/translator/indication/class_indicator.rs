@@ -368,6 +368,11 @@ impl ClassIndicator {
             if let Some(begphrase) = &self.begmodephrase {
                 let start_pos = group[0].0;
                 let &(last_open, last_close, last_count) = group.last().unwrap();
+                // the passage ends after the last word's symbols-sequence, punctuation
+                // included: "CAUTION: WET PAINT!" gives ⠏⠁⠔⠞⠖⠠⠄ (UEB 8.5.3)
+                let passage_end = (last_close..chars.len())
+                    .find(|&i| self.is_space(chars[i]))
+                    .unwrap_or(chars.len());
                 result.push((start_pos, begphrase.clone()));
                 match &self.endmodephrase {
                     Some(_) if self.endmodephrase_before => {
@@ -375,12 +380,12 @@ impl ClassIndicator {
                         self.emit_whole_word(chars, last_open, last_close, last_count, result);
                     }
                     Some(endt) => {
-                        result.push((last_close, endt.clone()));
+                        result.push((passage_end, endt.clone()));
                     }
                     None => {
                         // No dedicated endmodephrase: fall back to the shared mode closer.
                         if let Some(endt) = &self.endmode {
-                            result.push((last_close, endt.clone()));
+                            result.push((passage_end, endt.clone()));
                         }
                     }
                 }

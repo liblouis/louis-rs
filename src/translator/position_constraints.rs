@@ -1,7 +1,8 @@
 //! Per-position translation constraints
 //!
-//! A [`Constrainers`] collection analyses the input text before translation begins and
-//! produces a [`PositionConstraints`] value. The translation loop consults this
+//! A [`Constrainers`] collection analyses the input text, the emphasis spans and the
+//! translation options before translation begins and produces a [`PositionConstraints`]
+//! value. The translation loop consults this
 //! to decide which rules are eligible at each character position.
 //!
 //! The constrainer types are:
@@ -11,8 +12,12 @@
 use enumset::{EnumSet, EnumSetType};
 use std::collections::HashSet;
 
+use std::ops::Range;
+
 use crate::emphasis::EmphasisSpan;
 use crate::hyphenation::HyphenationTable;
+use crate::parser::CharacterClasses;
+use crate::translator::{TranslationMode, TranslationOptions};
 
 /// A rule-selection constraint that can be set at a character position.
 #[derive(EnumSetType, Debug)]
@@ -40,9 +45,21 @@ pub enum Constraint {
     /// class) that the word's hyphenation dictionary marks as a valid break point.
     /// Consulted to decide whether a `nocross` rule may cross this gap.
     HyphenationBreak,
-    /// A `syllable` rule's syllable starts at this character, in forward translation. A
-    /// rule starting before it can't take it.
-    SyllableStart,
+    /// A rule that starts before this character can't take it, in forward translation.
+    ///
+    /// Set where a syllable of a `syllable` rule, an emphasis span or a run of capitals
+    /// starts, so that "GitHub" doesn't contract "tH" and the "H" keeps its capital
+    /// indicator. A rule starting on a [`Constraint::Capital`] is exempt.
+    TypeStart,
+    /// A capital, in forward translation with a table that has a `capsletter`.
+    ///
+    /// Exempts a rule starting on it from [`Constraint::TypeStart`]: it may run into a
+    /// syllable, an emphasis span or another run of capitals.
+    Capital,
+    /// A letter in the other case than the letter before it, in forward translation. A rule
+    /// can't take it after its second character, so that "NorthEast" isn't contracted as
+    /// "northeast" and the "E" keeps its capital indicator; "The" still contracts.
+    CaseChange,
     /// Suppress the word-family rules at this position, in backward translation.
     ///
     /// Set for the run of letter cells following a `letsign`/`nocontractsign`/
@@ -82,6 +99,18 @@ pub enum Constraint {
     /// the first one that a `repword`/`rependword` separator repeats, in forward
     /// translation.
     Repetition,
+    /// This position is in the word at the cursor, which `compbrlAtCursor` or
+    /// `compbrlLeftCursor` shows in computer braille, in forward translation: no rule
+    /// reaches into it, and no indicator goes in it.
+    CursorWord,
+    /// This position is in the run of whitespace right before the word at the cursor, so a
+    /// `joinword` or `joinnum` just before it would join onto that word.
+    SpaceBeforeCursorWord,
+    /// The end of a capitals passage indicator starts here, in backward translation.
+    ///
+    /// An `endcapsphrase` is read only here, and wins over a capital indicator with the
+    /// same cells, such as UEB's `endcapsword` ⠠⠄ or Dutch `begcapsword` ⠘.
+    CapsPassageEnd,
 }
 
 pub type Constraints = EnumSet<Constraint>;
@@ -90,20 +119,6 @@ pub type Constraints = EnumSet<Constraint>;
 pub struct PositionConstraints(Vec<Constraints>);
 
 impl PositionConstraints {
-    /// Translate the characters in `range` as computer braille.
-    pub fn use_comp6_in(&mut self, range: std::ops::Range<usize>) {
-        for constraints in self.0.iter_mut().take(range.end).skip(range.start) {
-            constraints.insert(Constraint::UseComp6);
-        }
-    }
-
-    /// Switch contractions off everywhere, for `noContractions`
-    pub fn uncontract_all(&mut self) {
-        for constraints in &mut self.0 {
-            constraints.insert(Constraint::Uncontracted);
-        }
-    }
-
     #[cfg(test)]
     pub fn empty() -> Self {
         Self(Vec::new())
@@ -139,10 +154,22 @@ impl PositionConstraints {
             .is_some_and(|f| f.contains(Constraint::PreferDigit))
     }
 
-    pub fn syllable_start_at(&self, pos: usize) -> bool {
+    pub fn type_start_at(&self, pos: usize) -> bool {
         self.0
             .get(pos)
-            .is_some_and(|f| f.contains(Constraint::SyllableStart))
+            .is_some_and(|f| f.contains(Constraint::TypeStart))
+    }
+
+    pub fn case_change_at(&self, pos: usize) -> bool {
+        self.0
+            .get(pos)
+            .is_some_and(|f| f.contains(Constraint::CaseChange))
+    }
+
+    pub fn capital_at(&self, pos: usize) -> bool {
+        self.0
+            .get(pos)
+            .is_some_and(|f| f.contains(Constraint::Capital))
     }
 
     pub fn hyphenation_break_at(&self, pos: usize) -> bool {
@@ -167,6 +194,31 @@ impl PositionConstraints {
         self.0
             .get(pos)
             .is_some_and(|f| f.contains(Constraint::Uncontracted))
+    }
+
+    pub fn caps_passage_end_at(&self, pos: usize) -> bool {
+        self.0
+            .get(pos)
+            .is_some_and(|f| f.contains(Constraint::CapsPassageEnd))
+    }
+
+    pub fn in_cursor_word_at(&self, pos: usize) -> bool {
+        self.0
+            .get(pos)
+            .is_some_and(|f| f.contains(Constraint::CursorWord))
+    }
+
+    /// Whether a translation of `length` characters at `pos` reaches into the word at the
+    /// cursor from outside it
+    pub fn reaches_into_cursor_word(&self, pos: usize, length: usize) -> bool {
+        !self.in_cursor_word_at(pos) && (pos..pos + length).any(|p| self.in_cursor_word_at(p))
+    }
+
+    /// Whether only whitespace, or nothing, lies between `pos` and the word at the cursor
+    pub fn joins_cursor_word_at(&self, pos: usize) -> bool {
+        self.0.get(pos).is_some_and(|f| {
+            f.contains(Constraint::CursorWord) || f.contains(Constraint::SpaceBeforeCursorWord)
+        })
     }
 
     pub fn space_before_digit_at(&self, pos: usize) -> bool {
@@ -273,33 +325,71 @@ impl HyphenationConstrainer {
     }
 }
 
-/// Detects the syllables of the `syllable` rules and sets [`Constraint::SyllableStart`]
-/// where each one starts, as liblouis's `markSyllables` does: going through the text, it
-/// takes the longest syllable at each position and goes on after it.
+/// Keeps a rule from running into a syllable, an emphasis span or a run of capitals that
+/// starts after its first character, by setting [`Constraint::TypeStart`] where each of
+/// them starts, and [`Constraint::Capital`] on the capitals, whose rules are exempt.
+///
+/// - The syllables of the `syllable` rules: going through the text, the longest syllable
+///   at each position, then on after it. Two syllables next to each other are two.
+/// - The emphasis spans.
+/// - The runs of capitals, in a table with a `capsletter`, so that "GitHub" doesn't
+///   contract "tH" and the "H" keeps its capital indicator.
+///
+/// This is how liblouis's `validMatch` checks a rule against the types it keeps per
+/// character.
 #[derive(Debug, Clone)]
-pub struct SyllableConstrainer {
-    /// Lowercased.
-    syllables: Vec<Vec<char>>,
+pub struct TypeConstrainer {
+    /// The strings of the `syllable` rules, lowercased, one `char` per character, so that
+    /// they compare with the input at character positions, which the constraints use. A
+    /// linear scan at each position, as only `en-us-g2` and `en-us-interline` have them,
+    /// 38 at most; a trie if that changes.
+    syllable_rules: Vec<Vec<char>>,
+    capitals: bool,
 }
 
-impl SyllableConstrainer {
-    fn compute(&self, input: &str) -> Vec<Constraints> {
-        let chars: Vec<char> = input.chars().map(lowercase).collect();
+impl TypeConstrainer {
+    fn compute(&self, input: &str, spans: &[EmphasisSpan]) -> Vec<Constraints> {
+        let chars: Vec<char> = input.chars().collect();
         let mut constraints: Vec<Constraints> = vec![Constraints::empty(); chars.len()];
+        let lowercased: Vec<char> = chars.iter().copied().map(lowercase).collect();
         let mut pos = 0;
         while pos < chars.len() {
             match self
-                .syllables
+                .syllable_rules
                 .iter()
-                .filter(|s| chars[pos..].starts_with(s))
+                .filter(|s| lowercased[pos..].starts_with(s))
                 .map(Vec::len)
                 .max()
             {
                 Some(len) => {
-                    constraints[pos].insert(Constraint::SyllableStart);
+                    constraints[pos].insert(Constraint::TypeStart);
                     pos += len;
                 }
                 None => pos += 1,
+            }
+        }
+        for span in spans {
+            if let Some(c) = constraints.get_mut(span.range().start) {
+                c.insert(Constraint::TypeStart);
+            }
+        }
+        for (pos, pair) in chars.windows(2).enumerate() {
+            let cased = |c: &char| c.is_uppercase() || c.is_lowercase();
+            if cased(&pair[0])
+                && cased(&pair[1])
+                && pair[0].is_uppercase() != pair[1].is_uppercase()
+            {
+                constraints[pos + 1].insert(Constraint::CaseChange);
+            }
+        }
+        if self.capitals {
+            for (pos, c) in chars.iter().enumerate() {
+                if c.is_uppercase() {
+                    constraints[pos].insert(Constraint::Capital);
+                    if pos == 0 || !chars[pos - 1].is_uppercase() {
+                        constraints[pos].insert(Constraint::TypeStart);
+                    }
+                }
             }
         }
         constraints
@@ -531,7 +621,7 @@ impl ComputerBrailleConstrainer {
         let n = input.chars().count();
         let mut constraints: Vec<Constraints> = vec![Constraints::empty(); n];
         for span in spans {
-            if span.class() == "computer_braille" {
+            if span.class() == EmphasisSpan::COMPUTER_BRAILLE {
                 let end = span.range().end.min(n);
                 for c in constraints.iter_mut().take(end).skip(span.range().start) {
                     c.insert(Constraint::UseComp6);
@@ -539,6 +629,86 @@ impl ComputerBrailleConstrainer {
             }
         }
         constraints
+    }
+}
+
+/// Switches contractions off everywhere with the `noContractions` mode.
+#[derive(Debug, Clone)]
+pub struct NoContractionsConstrainer;
+
+impl NoContractionsConstrainer {
+    fn compute(&self, input: &str, options: &TranslationOptions) -> Vec<Constraints> {
+        let constraints = if options.modes().contains(TranslationMode::NoContractions) {
+            Constraints::only(Constraint::Uncontracted)
+        } else {
+            Constraints::empty()
+        };
+        vec![constraints; input.chars().count()]
+    }
+}
+
+/// Finds the word at the cursor to show uncontracted, in computer braille, with
+/// `compbrlAtCursor` or `compbrlLeftCursor`, as liblouis does: the word the cursor is in, up
+/// to the next space, or only up to the cursor with `compbrlLeftCursor`; the space itself if
+/// the cursor is on one.
+///
+/// Unlike liblouis, `repeated` rules next to the word are left alone: liblouis's limits
+/// there are off by one, so a `repeated \s 0` expands spaces inconsistently (its own
+/// `present_progressive.yaml` marks this `xfail`), and a `repword` can't reach into the word.
+#[derive(Debug, Clone)]
+pub struct CursorWordConstrainer {
+    pub character_classes: CharacterClasses,
+}
+
+impl CursorWordConstrainer {
+    fn compute(&self, input: &str, options: &TranslationOptions) -> Vec<Constraints> {
+        let chars: Vec<char> = input.chars().collect();
+        let mut constraints = vec![Constraints::empty(); chars.len()];
+        let Some(word) = self.word(&chars, options) else {
+            return constraints;
+        };
+        for c in &mut constraints[word.clone()] {
+            *c |= Constraint::UseComp6 | Constraint::CursorWord;
+        }
+        let is_space = |c: &char| self.character_classes.is_whitespace(*c);
+        let spaces = chars[..word.start]
+            .iter()
+            .rev()
+            .take_while(|c| is_space(c))
+            .count();
+        for c in &mut constraints[word.start - spaces..word.start] {
+            c.insert(Constraint::SpaceBeforeCursorWord);
+        }
+        constraints
+    }
+
+    fn word(&self, chars: &[char], options: &TranslationOptions) -> Option<Range<usize>> {
+        let modes = options.modes();
+        let left = modes.contains(TranslationMode::CompbrlLeftCursor);
+        if !(left || modes.contains(TranslationMode::CompbrlAtCursor)) {
+            return None;
+        }
+        let cursor = options.cursor_position()?;
+        if cursor > chars.len() {
+            return None;
+        }
+        let is_space = |c: &char| self.character_classes.is_whitespace(*c);
+        if chars.get(cursor).is_some_and(is_space) {
+            return Some(cursor..cursor + 1);
+        }
+        let start = chars[..cursor]
+            .iter()
+            .rposition(is_space)
+            .map_or(0, |p| p + 1);
+        let end = if left {
+            cursor
+        } else {
+            chars[cursor..]
+                .iter()
+                .position(is_space)
+                .map_or(chars.len(), |p| cursor + p)
+        };
+        Some(start..end)
     }
 }
 
@@ -570,6 +740,14 @@ fn longest_match_at(chars: &[char], pos: usize, patterns: &[String]) -> Option<u
 /// number can follow a letter, as in Hungarian "A1". Neither does a numsign that is
 /// part of a longer rule starting before it, such as sk-g1's `context [@5-46-3456]
 /// "#"`, which takes the numsign's cell as the end of "#".
+///
+/// It decides from the cells alone, before any rule is chosen, where liblouis decides from
+/// the rules it applied and the text it wrote: a number starts when the numsign rule is
+/// applied, and whether a letter comes before depends on how the cells before were read.
+/// The cells can't tell that exactly, as one cell can be a letter in one rule and part of
+/// a sign in another, so this is a guess, refined case by case. Keeping track of number
+/// mode in the translation loop, from the rules actually applied, would make it exact
+/// (#95).
 #[derive(Debug, Clone)]
 pub struct BackwardNumericConstrainer {
     /// The `numsign` dots plus any `multind` sequences naming it, e.g.
@@ -583,14 +761,32 @@ pub struct BackwardNumericConstrainer {
     /// The dots of the `endnum` rules, which end a number unless a digit follows.
     endnum_dots: Vec<String>,
     letter_cells: HashSet<char>,
+    /// The cells of one-cell rules that can apply inside a word and write text ending in a
+    /// letter, such as en-us-g2's `midword gg 2356`
+    inner_letter_cells: HashSet<char>,
     /// The dots of the rules that only apply after a letter, such as Punjabi's
     /// `midendword ਣ 3456`.
     after_letter_dots: HashSet<String>,
     /// The dots of the backward rules that contain a numsign after their first cell.
     covering_dots: Vec<String>,
+    /// The dots of characters other than letters that are a numsign and more, such as
+    /// Portuguese `sign # 3456-13`. The longer match wins over the numsign, and the text
+    /// then ends in the character, whatever its last cell is.
+    sign_dots: Vec<String>,
 }
 
 impl BackwardNumericConstrainer {
+    /// Whether `cells` come back as text ending in a letter, as far as the cells tell: they
+    /// end in a letter cell, or in cells of one-cell rules that apply inside a word after
+    /// one. So in en-us-g2 ⠶ is "gg" after ⠁, but "(" at the start of a word.
+    fn ends_in_letter(&self, cells: &[char]) -> bool {
+        cells
+            .iter()
+            .rev()
+            .find(|c| self.letter_cells.contains(c) || !self.inner_letter_cells.contains(c))
+            .is_some_and(|c| self.letter_cells.contains(c))
+    }
+
     /// Whether a rule starting before `pos` takes the numsign there as part of its dots.
     fn covered(&self, chars: &[char], pos: usize) -> bool {
         self.covering_dots.iter().any(|dots| {
@@ -605,10 +801,21 @@ impl BackwardNumericConstrainer {
         let mut constraints: Vec<Constraints> = vec![Constraints::empty(); n];
         let mut pos = 0;
         let mut in_number = false;
+        let mut sign_end = None;
         while pos < n {
+            // not on a digit inside a number, where only the digit is tried
+            if !(in_number && self.digit_cells.contains(&chars[pos]))
+                && let Some(len) = longest_match_at(&chars, pos, &self.sign_dots)
+            {
+                pos += len;
+                in_number = false;
+                sign_end = Some(pos);
+                continue;
+            }
             if let Some(len) = longest_match_at(&chars, pos, &self.numsign_dots)
                 && !(pos > 0
-                    && self.letter_cells.contains(&chars[pos - 1])
+                    && sign_end != Some(pos)
+                    && self.ends_in_letter(&chars[..pos])
                     && self
                         .after_letter_dots
                         .contains(&chars[pos..pos + len].iter().collect::<String>()))
@@ -729,6 +936,55 @@ impl BackwardNoContractConstrainer {
     }
 }
 
+/// Finds the capitals passages in backward input and sets [`Constraint::CapsPassageEnd`]
+/// where each one's end indicator starts: the first `endcapsphrase` or `endcaps` after a
+/// `begcapsphrase`, a `begcaps` or a `multind` with a `begcapsphrase`. Outside a passage,
+/// the end indicator's cells are something else, as `endcapsphrase after 6` is also
+/// `capsletter 6` in no-no-g0.utb.
+#[derive(Debug, Clone, Default)]
+pub struct BackwardCapsPassageConstrainer {
+    begin_dots: Vec<String>,
+    end_dots: Vec<String>,
+}
+
+impl BackwardCapsPassageConstrainer {
+    pub fn begin(&mut self, dots: &str) {
+        self.begin_dots.push(dots.to_string());
+    }
+
+    pub fn end(&mut self, dots: &str) {
+        self.end_dots.push(dots.to_string());
+    }
+
+    pub fn build(self) -> Option<Self> {
+        (!self.begin_dots.is_empty() && !self.end_dots.is_empty()).then_some(self)
+    }
+
+    fn compute(&self, input: &str) -> Vec<Constraints> {
+        let chars: Vec<char> = input.chars().collect();
+        let mut constraints = vec![Constraints::empty(); chars.len()];
+        let mut in_passage = false;
+        let mut pos = 0;
+        while pos < chars.len() {
+            let dots = if in_passage {
+                &self.end_dots
+            } else {
+                &self.begin_dots
+            };
+            if let Some(len) = longest_match_at(&chars, pos, dots) {
+                if in_passage {
+                    constraints[pos].insert(Constraint::CapsPassageEnd);
+                }
+                in_passage = !in_passage;
+                pos += len;
+            } else {
+                pos += 1;
+            }
+        }
+        constraints
+    }
+}
+
 /// A builder for [`Constrainer::BackwardNoContract`].
 #[derive(Debug, Default)]
 pub struct BackwardNoContractConstrainerBuilder {
@@ -815,11 +1071,13 @@ pub enum Constrainer {
     /// Detects backward `letsign`/`nocontractsign`/`nonumsign` dots and sets
     /// [`Constraint::NoContract`].
     BackwardNoContract(BackwardNoContractConstrainer),
+    /// Detects backward capitals passages and sets [`Constraint::CapsPassageEnd`].
+    BackwardCapsPassage(BackwardCapsPassageConstrainer),
     /// Detects hyphenation-dictionary breaks and sets [`Constraint::HyphenationBreak`].
     Hyphenation(HyphenationConstrainer),
-    /// Detects where the `syllable` rules' syllables start and sets
-    /// [`Constraint::SyllableStart`].
-    Syllable(SyllableConstrainer),
+    /// Detects where a syllable, an emphasis span or a run of capitals starts and sets
+    /// [`Constraint::TypeStart`], and [`Constraint::Capital`] on the capitals.
+    Type(TypeConstrainer),
     /// Detects `prepunc`/`postpunc` scan eligibility and sets
     /// [`Constraint::PrepuncOk`]/[`Constraint::PostpuncOk`].
     Punctuation(PunctuationConstrainer),
@@ -834,22 +1092,36 @@ pub enum Constrainer {
     /// Detects words that a `repword`/`rependword` separator repeats and sets
     /// [`Constraint::RepeatedWord`]/[`Constraint::RepeatedWordEnd`].
     Repword(RepwordConstrainer),
+    /// Sets [`Constraint::Uncontracted`] everywhere with the `noContractions` mode.
+    NoContractions(NoContractionsConstrainer),
+    /// Finds the word at the cursor with `compbrlAtCursor` or `compbrlLeftCursor` and sets
+    /// [`Constraint::UseComp6`] and [`Constraint::CursorWord`] in it, and
+    /// [`Constraint::SpaceBeforeCursorWord`] before it.
+    CursorWord(CursorWordConstrainer),
 }
 
 impl Constrainer {
-    fn compute(&self, input: &str, spans: &[EmphasisSpan]) -> Vec<Constraints> {
+    fn compute(
+        &self,
+        input: &str,
+        spans: &[EmphasisSpan],
+        options: &TranslationOptions,
+    ) -> Vec<Constraints> {
         match self {
             Constrainer::Numeric(c) => c.compute(input),
             Constrainer::ComputerBraille(c) => c.compute(input, spans),
             Constrainer::BackwardNoContract(c) => c.compute(input),
             Constrainer::BackwardNumeric(c) => c.compute(input),
+            Constrainer::BackwardCapsPassage(c) => c.compute(input),
             Constrainer::Hyphenation(c) => c.compute(input),
-            Constrainer::Syllable(c) => c.compute(input),
+            Constrainer::Type(c) => c.compute(input, spans),
             Constrainer::Punctuation(c) => c.compute(input),
             Constrainer::Join(c) => c.compute(input),
             Constrainer::NoCont(c) => c.compute(input),
             Constrainer::CapsNoCont(c) => c.compute(input),
             Constrainer::Repword(c) => c.compute(input),
+            Constrainer::NoContractions(c) => c.compute(input, options),
+            Constrainer::CursorWord(c) => c.compute(input, options),
         }
     }
 }
@@ -863,13 +1135,18 @@ impl Constrainers {
         Constrainers(constrainers)
     }
 
-    pub fn precompute(&self, input: &str, spans: &[EmphasisSpan]) -> PositionConstraints {
+    pub fn precompute(
+        &self,
+        input: &str,
+        spans: &[EmphasisSpan],
+        options: &TranslationOptions,
+    ) -> PositionConstraints {
         let n = input.chars().count();
         let mut constraints: Vec<Constraints> = vec![Constraints::empty(); n];
         for constrainer in &self.0 {
             for (accum, computed) in constraints
                 .iter_mut()
-                .zip(constrainer.compute(input, spans))
+                .zip(constrainer.compute(input, spans, options))
             {
                 *accum |= computed;
             }
@@ -938,8 +1215,10 @@ pub struct BackwardNumericConstrainerBuilder {
     numeric_mode_cells: HashSet<char>,
     endnum_dots: Vec<String>,
     letter_cells: HashSet<char>,
+    inner_letter_cells: HashSet<char>,
     after_letter_dots: HashSet<String>,
     rule_dots: Vec<String>,
+    sign_dots: Vec<String>,
 }
 
 impl BackwardNumericConstrainerBuilder {
@@ -975,6 +1254,12 @@ impl BackwardNumericConstrainerBuilder {
         self.letter_cells = cells;
     }
 
+    /// Registers the cell of a one-cell rule that can apply inside a word and writes text
+    /// ending in a letter.
+    pub fn inner_letter(&mut self, cell: char) {
+        self.inner_letter_cells.insert(cell);
+    }
+
     /// Registers the dots of a rule that only applies after a letter.
     pub fn after_letter(&mut self, dots: &str) {
         self.after_letter_dots.insert(dots.to_string());
@@ -983,6 +1268,12 @@ impl BackwardNumericConstrainerBuilder {
     /// Registers the dots of a backward rule, see [`BackwardNumericConstrainer::covered`].
     pub fn rule_dots(&mut self, dots: &str) {
         self.rule_dots.push(dots.to_string());
+    }
+
+    /// Registers the dots of a character other than a letter, of more than one cell, see
+    /// [`BackwardNumericConstrainer::sign_dots`].
+    pub fn sign_dots(&mut self, dots: &str) {
+        self.sign_dots.push(dots.to_string());
     }
 
     pub fn build(self) -> Option<BackwardNumericConstrainer> {
@@ -1003,6 +1294,11 @@ impl BackwardNumericConstrainerBuilder {
                         .any(|offset| numsign_dots.iter().any(|n| matches_at(&cells, offset, n)))
                 })
                 .collect();
+            let sign_dots = self
+                .sign_dots
+                .into_iter()
+                .filter(|dots| numsign_dots.iter().any(|n| dots.starts_with(n.as_str())))
+                .collect();
             Some(BackwardNumericConstrainer {
                 numsign_dots,
                 nonumsign_dots: self.nonumsign_dots,
@@ -1010,8 +1306,10 @@ impl BackwardNumericConstrainerBuilder {
                 numeric_mode_cells: self.numeric_mode_cells,
                 endnum_dots: self.endnum_dots,
                 letter_cells: self.letter_cells,
+                inner_letter_cells: self.inner_letter_cells,
                 after_letter_dots: self.after_letter_dots,
                 covering_dots,
+                sign_dots,
             })
         }
     }
@@ -1051,25 +1349,33 @@ fn lowercase(c: char) -> char {
     c.to_lowercase().next().unwrap_or(c)
 }
 
-/// A builder for [`Constrainer::Syllable`].
+/// A builder for [`Constrainer::Type`].
 #[derive(Debug, Default)]
-pub struct SyllableConstrainerBuilder {
-    syllables: Vec<Vec<char>>,
+pub struct TypeConstrainerBuilder {
+    syllable_rules: Vec<Vec<char>>,
+    capitals: bool,
 }
 
-impl SyllableConstrainerBuilder {
+impl TypeConstrainerBuilder {
     pub fn new() -> Self {
         Self::default()
     }
 
     pub fn syllable(&mut self, chars: &str) {
-        self.syllables.push(chars.chars().map(lowercase).collect());
+        self.syllable_rules
+            .push(chars.chars().map(lowercase).collect());
     }
 
-    pub fn build(self) -> Option<SyllableConstrainer> {
-        (!self.syllables.is_empty()).then_some(SyllableConstrainer {
-            syllables: self.syllables,
-        })
+    /// The table has a `capsletter`.
+    pub fn capsletter(&mut self) {
+        self.capitals = true;
+    }
+
+    pub fn build(self) -> TypeConstrainer {
+        TypeConstrainer {
+            syllable_rules: self.syllable_rules,
+            capitals: self.capitals,
+        }
     }
 }
 
@@ -1253,6 +1559,7 @@ impl RepwordConstrainerBuilder {
 mod tests {
     use super::*;
     use crate::emphasis::EmphasisSpan;
+    use crate::translator::TranslationModes;
 
     fn dont_contract(c: &PositionConstraints) -> Vec<bool> {
         c.0.iter()
@@ -1283,7 +1590,11 @@ mod tests {
     #[test]
     fn numeric_run() {
         // from the first digit to the next space, the letters after the number included
-        let c = numeric_constrainers(numeric_mode_builder()).precompute("ab12a a", &[]);
+        let c = numeric_constrainers(numeric_mode_builder()).precompute(
+            "ab12a a",
+            &[],
+            &TranslationOptions::default(),
+        );
         assert_eq!(
             dont_contract(&c),
             vec![false, false, true, true, true, false, false]
@@ -1309,11 +1620,11 @@ mod tests {
 
     #[test]
     fn computer_braille_span_sets_use_comp6() {
-        let spans = vec![EmphasisSpan::new("computer_braille", 1..4)];
+        let spans = vec![EmphasisSpan::new(EmphasisSpan::COMPUTER_BRAILLE, 1..4)];
         let constrainers = Constrainers::new(vec![Constrainer::ComputerBraille(
             ComputerBrailleConstrainer {},
         )]);
-        let c = constrainers.precompute("hello", &spans);
+        let c = constrainers.precompute("hello", &spans, &TranslationOptions::default());
         assert_eq!(use_comp6(&c), vec![false, true, true, true, false]);
         assert_eq!(dont_contract(&c), vec![false, false, false, false, false]);
     }
@@ -1347,7 +1658,11 @@ mod tests {
         let mut builder = BackwardNoContractConstrainerBuilder::new();
         builder.indicator("L");
         builder.letter_cells(HashSet::from(['a', 'b', 'c']));
-        let c = backward_nocontract_constrainers(builder).precompute("Lab cLc", &[]);
+        let c = backward_nocontract_constrainers(builder).precompute(
+            "Lab cLc",
+            &[],
+            &TranslationOptions::default(),
+        );
         assert_eq!(
             no_contract(&c),
             vec![false, true, true, false, false, false, true]
@@ -1368,7 +1683,11 @@ mod tests {
         builder.indicator("L");
         builder.letter_cells(HashSet::from(['a', 'b']));
         builder.space_cells(HashSet::from([' ']));
-        let c = backward_nocontract_constrainers(builder).precompute("La.b b", &[]);
+        let c = backward_nocontract_constrainers(builder).precompute(
+            "La.b b",
+            &[],
+            &TranslationOptions::default(),
+        );
         assert_eq!(
             no_contract(&c),
             vec![false, true, false, false, false, false]
@@ -1387,7 +1706,11 @@ mod tests {
         builder.rule_dots("Lb");
         builder.letter_cells(HashSet::from(['a', 'b']));
         builder.space_cells(HashSet::from([' ']));
-        let c = backward_nocontract_constrainers(builder).precompute("Lb-b La-b", &[]);
+        let c = backward_nocontract_constrainers(builder).precompute(
+            "Lb-b La-b",
+            &[],
+            &TranslationOptions::default(),
+        );
         assert_eq!(
             no_contract(&c),
             vec![false, false, false, false, false, false, true, false, false]
@@ -1406,7 +1729,11 @@ mod tests {
         builder.inword_rule_dots("Lb");
         builder.letter_cells(HashSet::from(['a', 'b']));
         builder.space_cells(HashSet::from([' ']));
-        let c = backward_nocontract_constrainers(builder).precompute("aLb-a Lb", &[]);
+        let c = backward_nocontract_constrainers(builder).precompute(
+            "aLb-a Lb",
+            &[],
+            &TranslationOptions::default(),
+        );
         assert_eq!(
             no_contract(&c),
             vec![false, false, false, false, false, false, false, true]
@@ -1423,7 +1750,11 @@ mod tests {
         builder.caps_indicator("C");
         builder.caps_indicator("CC");
         builder.letter_cells(HashSet::from(['a', 'b']));
-        let c = backward_nocontract_constrainers(builder).precompute("LCCCa b", &[]);
+        let c = backward_nocontract_constrainers(builder).precompute(
+            "LCCCa b",
+            &[],
+            &TranslationOptions::default(),
+        );
         assert_eq!(
             no_contract(&c),
             vec![false, false, false, false, true, false, false]
@@ -1438,23 +1769,53 @@ mod tests {
         builder.indicator("N");
         builder.indicator("NN");
         builder.letter_cells(HashSet::from(['a', 'N']));
-        let c = backward_nocontract_constrainers(builder).precompute("NNa", &[]);
+        let c = backward_nocontract_constrainers(builder).precompute(
+            "NNa",
+            &[],
+            &TranslationOptions::default(),
+        );
         assert_eq!(no_contract(&c), vec![false, false, true]);
     }
 
     #[test]
     fn syllables_are_marked_where_they_start() {
-        let mut builder = SyllableConstrainerBuilder::new();
+        let mut builder = TypeConstrainerBuilder::new();
         builder.syllable("hood");
         builder.syllable("ho");
-        let c = Constrainers::new(vec![Constrainer::Syllable(builder.build().unwrap())])
-            .precompute("tHoodho", &[]);
+        let c = Constrainers::new(vec![Constrainer::Type(builder.build())]).precompute(
+            "tHoodho",
+            &[],
+            &TranslationOptions::default(),
+        );
         let marked: Vec<bool> =
             c.0.iter()
-                .map(|f| f.contains(Constraint::SyllableStart))
+                .map(|f| f.contains(Constraint::TypeStart))
                 .collect();
         // the longest syllable, case-insensitively, and on after it
         assert_eq!(marked, vec![false, true, false, false, false, true, false]);
+    }
+
+    #[test]
+    fn emphasis_and_capitals_are_marked_where_they_start() {
+        let mut builder = TypeConstrainerBuilder::new();
+        builder.capsletter();
+        let spans = [EmphasisSpan::new("italic", 4..6)];
+        let c = Constrainers::new(vec![Constrainer::Type(builder.build())]).precompute(
+            "aBCdef",
+            &spans,
+            &TranslationOptions::default(),
+        );
+        let starts: Vec<bool> =
+            c.0.iter()
+                .map(|f| f.contains(Constraint::TypeStart))
+                .collect();
+        let capitals: Vec<bool> =
+            c.0.iter()
+                .map(|f| f.contains(Constraint::Capital))
+                .collect();
+        // the run of capitals "BC" starts at 1, the emphasis at 4
+        assert_eq!(starts, vec![false, true, false, false, true, false]);
+        assert_eq!(capitals, vec![false, true, true, false, false, false]);
     }
 
     #[test]
@@ -1462,8 +1823,11 @@ mod tests {
         let mut builder = NoContConstrainerBuilder::new();
         builder.nocont("c@");
         builder.space_characters(HashSet::from([' ']));
-        let c = Constrainers::new(vec![Constrainer::NoCont(builder.build().unwrap())])
-            .precompute("ab C@D e", &[]);
+        let c = Constrainers::new(vec![Constrainer::NoCont(builder.build().unwrap())]).precompute(
+            "ab C@D e",
+            &[],
+            &TranslationOptions::default(),
+        );
         let marked: Vec<bool> =
             c.0.iter()
                 .map(|f| f.contains(Constraint::Uncontracted))
@@ -1481,7 +1845,7 @@ mod tests {
         builder.uppercase_characters(HashSet::from(['A', 'B']));
         builder.space_characters(HashSet::from([' ']));
         let c = Constrainers::new(vec![Constrainer::CapsNoCont(builder.build().unwrap())])
-            .precompute("aABa Aa", &[]);
+            .precompute("aABa Aa", &[], &TranslationOptions::default());
         let marked: Vec<bool> =
             c.0.iter()
                 .map(|f| f.contains(Constraint::Uncontracted))
@@ -1496,8 +1860,11 @@ mod tests {
         let mut builder = RepwordConstrainerBuilder::new();
         builder.separator('-');
         builder.letter_characters("abcxABC".chars().collect());
-        let c = Constrainers::new(vec![Constrainer::Repword(builder.build().unwrap())])
-            .precompute(input, &[]);
+        let c = Constrainers::new(vec![Constrainer::Repword(builder.build().unwrap())]).precompute(
+            input,
+            &[],
+            &TranslationOptions::default(),
+        );
         let at = input.chars().position(|c| c == '-').unwrap();
         (
             c.run_before(at, Constraint::RepeatedWord),
@@ -1510,8 +1877,11 @@ mod tests {
         let mut builder = RepwordConstrainerBuilder::new();
         builder.separator('-');
         builder.letter_characters("abcx".chars().collect());
-        let c = Constrainers::new(vec![Constrainer::Repword(builder.build().unwrap())])
-            .precompute("abc-abc-abc-abx", &[]);
+        let c = Constrainers::new(vec![Constrainer::Repword(builder.build().unwrap())]).precompute(
+            "abc-abc-abc-abx",
+            &[],
+            &TranslationOptions::default(),
+        );
         // the second `-abc`, but not `-abx`
         let marked: Vec<usize> = (0..15).filter(|&p| c.repetition_at(p)).collect();
         assert_eq!(marked, (7..11).collect::<Vec<_>>());
@@ -1531,8 +1901,11 @@ mod tests {
         builder.mark_present();
         builder.letter_characters(HashSet::from(['a']));
         builder.space_characters(HashSet::from([' ']));
-        let c = Constrainers::new(vec![Constrainer::Join(builder.build().unwrap())])
-            .precompute("a  a . a", &[]);
+        let c = Constrainers::new(vec![Constrainer::Join(builder.build().unwrap())]).precompute(
+            "a  a . a",
+            &[],
+            &TranslationOptions::default(),
+        );
         let marked: Vec<usize> = (0..8).filter(|&p| c.space_before_letter_at(p)).collect();
         // not the space before the `.`
         assert_eq!(marked, vec![1, 2, 6]);
@@ -1544,8 +1917,11 @@ mod tests {
         builder.mark_present();
         builder.digit_characters(HashSet::from(['1']));
         builder.space_characters(HashSet::from([' ']));
-        let c = Constrainers::new(vec![Constrainer::Join(builder.build().unwrap())])
-            .precompute("$  1 a $ 1", &[]);
+        let c = Constrainers::new(vec![Constrainer::Join(builder.build().unwrap())]).precompute(
+            "$  1 a $ 1",
+            &[],
+            &TranslationOptions::default(),
+        );
         let marked: Vec<bool> =
             c.0.iter()
                 .map(|f| f.contains(Constraint::SpaceBeforeDigit))
@@ -1563,7 +1939,11 @@ mod tests {
         let mut builder = BackwardNumericConstrainerBuilder::new();
         builder.numsign("N");
         builder.digit_cells(HashSet::from(['1', '2']));
-        let c = backward_numeric_constrainers(builder).precompute("N12a1", &[]);
+        let c = backward_numeric_constrainers(builder).precompute(
+            "N12a1",
+            &[],
+            &TranslationOptions::default(),
+        );
         assert_eq!(prefer_digit(&c), vec![false, true, true, false, false]);
     }
 
@@ -1573,7 +1953,11 @@ mod tests {
         builder.numsign("N");
         builder.nonumsign("X");
         builder.digit_cells(HashSet::from(['1', '2']));
-        let c = backward_numeric_constrainers(builder).precompute("N1X2", &[]);
+        let c = backward_numeric_constrainers(builder).precompute(
+            "N1X2",
+            &[],
+            &TranslationOptions::default(),
+        );
         assert_eq!(prefer_digit(&c), vec![false, true, false, false]);
     }
 
@@ -1589,10 +1973,10 @@ mod tests {
         builder.letter_cells(HashSet::from(['x', 'N']));
         builder.after_letter("N");
         let constrainers = backward_numeric_constrainers(builder);
-        let c = constrainers.precompute("xN12", &[]);
+        let c = constrainers.precompute("xN12", &[], &TranslationOptions::default());
         assert_eq!(prefer_digit(&c), vec![false, false, false, false]);
         // at the start of a word the numsign still starts a number
-        let c = constrainers.precompute(" N12", &[]);
+        let c = constrainers.precompute(" N12", &[], &TranslationOptions::default());
         assert_eq!(prefer_digit(&c), vec![false, false, true, true]);
     }
 
@@ -1604,7 +1988,11 @@ mod tests {
         builder.digit_cells(HashSet::from(['1', '2']));
         builder.letter_cells(HashSet::from(['x']));
         builder.rule_dots("xN");
-        let c = backward_numeric_constrainers(builder).precompute("xN12", &[]);
+        let c = backward_numeric_constrainers(builder).precompute(
+            "xN12",
+            &[],
+            &TranslationOptions::default(),
+        );
         assert_eq!(prefer_digit(&c), vec![false, false, false, false]);
     }
 
@@ -1616,7 +2004,59 @@ mod tests {
         builder.numsign("N");
         builder.digit_cells(HashSet::from(['1', '2']));
         builder.letter_cells(HashSet::from(['x']));
-        let c = backward_numeric_constrainers(builder).precompute("xN12", &[]);
+        let c = backward_numeric_constrainers(builder).precompute(
+            "xN12",
+            &[],
+            &TranslationOptions::default(),
+        );
         assert_eq!(prefer_digit(&c), vec![false, false, true, true]);
+    }
+
+    #[test]
+    fn cursor_word() {
+        let mut classes = CharacterClasses::default();
+        classes.insert(crate::parser::CharacterClass::Space, ' ');
+        let constrainers =
+            Constrainers::new(vec![Constrainer::CursorWord(CursorWordConstrainer {
+                character_classes: classes,
+            })]);
+        let options = TranslationOptions::default()
+            .with_modes([TranslationMode::CompbrlAtCursor].into_iter().collect())
+            .with_cursor_position(5);
+        let c = constrainers.precompute("ab  cde f", &[], &options);
+        let flags = |pos| c.0[pos];
+        assert!(flags(4).is_superset(Constraint::CursorWord | Constraint::UseComp6));
+        assert!(flags(6).contains(Constraint::CursorWord));
+        assert!(!flags(7).contains(Constraint::CursorWord));
+        assert!(flags(2).contains(Constraint::SpaceBeforeCursorWord));
+        assert!(flags(3).contains(Constraint::SpaceBeforeCursorWord));
+        assert!(c.reaches_into_cursor_word(1, 4));
+        assert!(!c.reaches_into_cursor_word(1, 3));
+        assert!(c.joins_cursor_word_at(2));
+        assert!(!c.joins_cursor_word_at(1));
+        // without the mode, there is no word at the cursor
+        let c = constrainers.precompute(
+            "ab  cde f",
+            &[],
+            &options.with_modes(TranslationModes::empty()),
+        );
+        assert!(!(0..9).any(|pos| c.in_cursor_word_at(pos)));
+    }
+
+    #[test]
+    fn caps_passage_end_only_inside_a_passage() {
+        // no-no-g0.utb: `endcapsphrase after 6` has the cells of `capsletter 6`
+        let mut c = BackwardCapsPassageConstrainer::default();
+        c.begin("⠠⠠⠠");
+        c.end("⠠");
+        let ends: Vec<bool> = c
+            .build()
+            .unwrap()
+            .compute("⠠⠁ ⠠⠠⠠⠁ ⠃⠠ ⠠⠉")
+            .iter()
+            .map(|f| f.contains(Constraint::CapsPassageEnd))
+            .collect();
+        let at: Vec<usize> = (0..ends.len()).filter(|&i| ends[i]).collect();
+        assert_eq!(at, vec![9]);
     }
 }

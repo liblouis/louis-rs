@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use crate::{
     Direction,
-    parser::{AnchoredRule, HasDirection, Rule},
+    parser::{AnchoredRule, BrailleChar, HasDirection, Rule},
     translator::{ResolvedTranslation, TranslationStage},
 };
 
@@ -31,6 +31,18 @@ pub struct DisplayTable {
 }
 
 impl DisplayTable {
+    /// How braille is shown without a braille encoding: as Unicode braille.
+    ///
+    /// Unicode braille has dots 1 to 8 only, so a cell with virtual dots (9 to F) is shown
+    /// without them, as liblouis does when it gives Unicode braille (`ucBrl`). A table
+    /// writes a virtual dot to tell cells apart for later rules or for its own display
+    /// table, such as `ru-litbrl.ctb`'s ⠁ with dot 9 for Cyrillic а.
+    pub fn unicode_braille() -> DisplayTable {
+        DisplayTable {
+            mappings: HashMap::new(),
+        }
+    }
+
     pub fn compile(rules: &[AnchoredRule], direction: Direction) -> DisplayTable {
         let mut mappings = HashMap::new();
         let rules: Vec<_> = rules.iter().filter(|r| r.is_direction(direction)).collect();
@@ -67,9 +79,29 @@ impl DisplayTable {
         input.chars().map(|c| self.displayed(c)).collect()
     }
 
-    /// The character `c` is shown as, or `c` itself when the table has no mapping for it.
+    /// The character `c` is shown as, by the table's `display` rule for it or else as
+    /// [`Self::unmapped`] says
     fn displayed(&self, c: char) -> char {
-        self.mappings.get(&c).map_or(c, |mapping| mapping.to)
+        self.mappings
+            .get(&c)
+            .map_or_else(|| self.unmapped(c), |mapping| mapping.to)
+    }
+
+    /// The character `c` is shown as when the table has no `display` rule for it: a cell
+    /// with virtual dots as the cell without them, by the table's rule for that or as
+    /// Unicode braille. A braille encoding without a rule for `en-ueb-g2.ctb`'s no-break
+    /// space, a blank cell with dot A, shows it as a blank cell, not as a private use
+    /// character.
+    fn unmapped(&self, c: char) -> char {
+        match BrailleChar::from_unicode(c) {
+            Some(cell) => {
+                let plain = cell.without_virtual_dots().to_unicode();
+                self.mappings
+                    .get(&plain)
+                    .map_or(plain, |mapping| mapping.to)
+            }
+            None => c,
+        }
     }
 
     /// One [`ResolvedTranslation`] per character, so a display table can take part in the
@@ -77,14 +109,14 @@ impl DisplayTable {
     ///
     /// Every mapping is one character to one character, which is what lets
     /// [`PositionMap::from_trace`] compose this stage as the identity it is. A character the
-    /// table has no rule for translates to itself and carries no origin.
+    /// table has no rule for translates as [`Self::unmapped`] says and carries no origin.
     pub fn trace(&self, input: &str) -> Vec<ResolvedTranslation> {
         input
             .chars()
             .map(|c| {
                 let (to, origin) = match self.mappings.get(&c) {
                     Some(mapping) => (mapping.to, Some(mapping.origin.clone())),
-                    None => (c, None),
+                    None => (self.unmapped(c), None),
                 };
                 ResolvedTranslation::new(
                     &c.to_string(),
@@ -112,12 +144,26 @@ mod tests {
     }
 
     #[test]
+    fn unicode_braille_drops_virtual_dots() {
+        let unicode = DisplayTable::unicode_braille();
+        // dots 1 and 9, dots 1234 and 9, dot 9 alone
+        assert_eq!(unicode.translate("\u{f0101}\u{f010f}\u{f0100}"), "⠁⠏⠀");
+        // cells without virtual dots, and what isn't braille, stay as they are
+        assert_eq!(unicode.translate("⠁⣿ x"), "⠁⣿ x");
+    }
+
+    #[test]
     fn display_table() {
         let display_rules = [parse_rule("display a 1"), parse_rule("display \\s 0")];
         let display_table = DisplayTable::compile(&display_rules, Direction::Forward);
         assert_eq!(display_table.translate("⠁"), "a");
         assert_eq!(display_table.translate("⠀"), " ");
         assert_eq!(display_table.translate(""), "");
+        // a cell with virtual dots it has no rule for, as the cell without them: dots 1
+        // and 9, and en-ueb-g2's no-break space, a blank cell with dot A
+        assert_eq!(display_table.translate("\u{f0101}\u{f0200}"), "a ");
+        // a cell without any rule, as Unicode braille
+        assert_eq!(display_table.translate("\u{f0102}"), "⠂");
         assert_eq!(display_table.translate("x"), "x"); // unknown chars are translated to themselves
     }
 

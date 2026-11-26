@@ -1,0 +1,101 @@
+#+options: todo:t
+#+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
+#+language: en
+
+* ACCEPTED ADR-0026: The order of indications at one position
+- Deciders :: CE
+- Date :: [2026-11-23 Mon]
+
+Technical Story: four tests in liblouis's ~en-ueb.yaml~, examples from
+UEB 8.6.2 and 9.8.1, where two emphasis classes, or emphasis and
+capitals, open or close at the same place. Fixed in ~07d37dc~; this
+record is about how the order is decided.
+
+** Context and Problem Statement
+
+Several indicators can put indications at the same position: emphasis
+of several classes, capitals, modes, the letter sign, the number sign,
+computer braille. Their order there matters. UEB 8.6.2: "it is best
+that indicators and paired characters such as parentheses, square
+brackets and quotes be nested. That is, close punctuation and
+indicators in reverse order of opening." "ROMEO AND JULIET" in italics
+is ⠨⠶⠠⠠⠠ … ⠠⠄⠨⠄: the capitals open inside the italics and close
+first.
+
+liblouis orders them in ~insertEmphasesAt~: the ends of capitals and
+modes, then the ends of emphasis, the shortest first and on a tie in
+declaration order, then the begins of emphasis, the longest first and
+on a tie the last-declared class first, then the capitals. The letter
+sign and the number sign are inserted elsewhere in its translation
+loop, in a fixed place relative to these.
+
+Before ~07d37dc~ louis-rs decided this in three places, none of which
+stated the rule:
+
+1. The order of the ~Indicators~ vector built by ~PrimaryTableBuilder~
+   (computer braille, emphasis, letter sign, capitals, mode, numeric),
+   with comments on why each goes where it does.
+2. A sort inside ~emphasis::Indicator::precompute~, which applied the
+   nesting only to ~begemph~ and ~endemph~; the word and phrase
+   indicators were ~EmitKind::Unordered~ and kept class order.
+3. In ~07d37dc~, an ~insert(0, …)~ that moved the capitals and mode end
+   indicators ahead of the rest of their position.
+
+** Decision Drivers
+
+- The same order as liblouis, which is also UEB's preferred nesting.
+- One place that states the order, rather than a vector order, a sort
+  and a special case that together amount to it.
+- No change in output for anything that isn't about nesting.
+
+** Considered Options
+
+1. Keep the three mechanisms.
+2. An explicit order: each indicator gives each indication a place,
+   ~IndicationOrder~, and ~Indicators::precompute~ sorts the
+   indications of a position by it.
+
+** Decision Outcome
+
+Chosen option: 2. ~IndicationOrder~ (~src/translator/indication.rs~)
+is an enum whose variants are the groups, in order, with fields that
+break ties within a group:
+
+| Group             | Ties                                                  |
+|-------------------+-------------------------------------------------------|
+| ~ComputerBraille~ |                                                       |
+| ~CapitalsEnd~     | end of capitals                                       |
+| ~ModeEnd~         | end of a mode                                         |
+| ~EmphasisEnd~     | the most recently opened first, then declaration order |
+| ~EmphasisBegin~   | the longest first, then the last-declared class first |
+| ~LetterSign~      |                                                       |
+| ~Capitals~        | begin of capitals, or a capital letter                |
+| ~Mode~            | begin of a mode                                       |
+| ~Numeric~         |                                                       |
+
+The emphasis indicator measures a run from its first to its last
+character that isn't a space, as a space neither starts nor ends
+emphasis in liblouis. Each group belongs to one indicator, so the order
+of the ~Indicators~ vector no longer matters; the sort is stable, so
+indications with an equal key keep the order in which their indicator
+gave them. ~EmitKind~ is gone: the emphasis indicator tells a begin from
+an end by the rule.
+
+The groups other than the emphasis, capitals and mode ends keep the
+places the vector order gave them, with the reasons, which were comments
+on the vector, now in the variants' doc comments. Capitals end before a
+mode, as liblouis treats capitals as its first mode.
+On liblouis's YAML suite the output is the same as with the three
+mechanisms.
+
+*** Positive Consequences
+
+- The order is stated once, with its reasons, next to the code that
+  applies it.
+- Emphasis ends now always come before emphasis begins at the same
+  position, as in liblouis; before, that depended on the order the
+  classes emitted them.
+
+*** Negative Consequences
+
+- A new indicator needs its own groups in ~IndicationOrder~.

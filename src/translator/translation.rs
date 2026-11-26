@@ -2,7 +2,7 @@ use std::cmp::Reverse;
 
 use crate::{
     Direction,
-    parser::{AnchoredRule, HasNocross, HasPrecedence, Precedence, Rule},
+    parser::{AnchoredRule, HasNocross, Rule},
     translator::{CharacterDefinition, effect::Effect, regexp::CharacterRange, swap::Swapper},
 };
 
@@ -202,9 +202,93 @@ impl Resolve for Translation {
     }
 }
 
+/// Precedence levels for [`Rules`](Rule): when two rules match the same input and nothing
+/// else separates them, the higher one wins, see [`Rank`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Precedence {
+    /// `letter`, `punctuation`, `digit`, ..., plus `litdigit`, `base` and `hyphen`: only
+    /// the fallback when no other rule matches, which liblouis expresses by putting them
+    /// at the end of its rule chains.
+    CharacterDefinition,
+    /// Backward, `decpoint`: read as its character wherever it is, beating the other
+    /// characters on its cells, as "." does Vietnamese's "'", but not an indicator on them,
+    /// as EBAE's italic sign is. Forward it is a [`Precedence::Translation`].
+    Decpoint,
+    /// Backward-only emphasis indicators (`begemphword`, `endemphphrase`, ...). Any other
+    /// rule with the same dots wins over them, as `endcapsword 6-3` does over
+    /// `endemphword italic 6-3` in `fr-bfu-comp6.utb`.
+    Emphasis,
+    /// Backward-only indicator opcodes (`capsletter`, `numsign`, ...). Above the
+    /// character definitions, whose dots they can coincide with in some tables, but below
+    /// `always`: a same-dots `always` rule is a more specific language rule that must
+    /// still win.
+    Indicator,
+    /// `always`: liblouis puts it after the other translation rules of the same length, but
+    /// only in its multi-character chains, so [`Rank`] treats a
+    /// one-character `always` match as [`Precedence::Translation`].
+    Always,
+    /// Every other rule: the word family, `match`, `context`, the passes, ...
+    Translation,
+}
+
+/// A trait to query the precedence of a [`Rule`].
+pub trait HasPrecedence {
+    /// Returns the precedence level of this Rule.
+    fn precedence(&self) -> Precedence;
+}
+
+impl HasPrecedence for Rule {
+    fn precedence(&self) -> Precedence {
+        match self {
+            Rule::Space { .. }
+            | Rule::Digit { .. }
+            | Rule::Punctuation { .. }
+            | Rule::Math { .. }
+            | Rule::Sign { .. }
+            | Rule::Letter { .. }
+            | Rule::Uppercase { .. }
+            | Rule::Lowercase { .. }
+            | Rule::Grouping { .. }
+            // outside liblouis' character definition opcodes, but they define a character too:
+            // `base` a derived one, `hyphen` one that can break a word. `litdigit` must also
+            // not beat a `lowercase` with the same dots backward, it only applies in a number
+            | Rule::Litdigit { .. }
+            | Rule::Base { .. }
+            | Rule::Hyphen { .. } => Precedence::CharacterDefinition,
+            Rule::Capsletter { .. }
+            | Rule::Begcapsword { .. }
+            | Rule::Endcapsword { .. }
+            | Rule::Begcaps { .. }
+            | Rule::Endcaps { .. }
+            | Rule::Begcapsphrase { .. }
+            | Rule::Endcapsphrase { .. }
+            | Rule::Numsign { .. }
+            | Rule::Nonumsign { .. } => Precedence::Indicator,
+            Rule::Begemph { .. }
+            | Rule::Endemph { .. }
+            | Rule::Emphletter { .. }
+            | Rule::Begemphword { .. }
+            | Rule::Endemphword { .. }
+            | Rule::Begemphphrase { .. }
+            | Rule::Endemphphrase { .. } => Precedence::Emphasis,
+            Rule::Always { .. } => Precedence::Always,
+            _ => Precedence::Translation,
+        }
+    }
+}
+
+impl HasPrecedence for AnchoredRule {
+    fn precedence(&self) -> Precedence {
+        self.rule.precedence()
+    }
+}
+
 /// The key used to pick between competing translation candidates at the same position: the
 /// highest wins. The fields are compared in the order they are declared, so that order is the
 /// order of precedence; each one only matters when all the fields above it tie.
+///
+/// The indications at a position have the same kind of key, `IndicationOrder`, which keeps
+/// them all and puts them in order, lowest first, rather than picking one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Rank {
     /// A forward main-stage `context` rule whose test starts with no literal characters wins
@@ -227,9 +311,19 @@ pub struct Rank {
     /// pass rules by their leading literals alone and takes the first match, never comparing
     /// the input consumed; here [`length`](Rank::length) still comes first.
     literals: usize,
+    /// Backward main stage, matches of two or more cells only: the characters the rule
+    /// writes, more winning, as liblouis orders its multi-cell backward rule chains by cells
+    /// plus characters. An indicator writes none. A `context` rule comes first: liblouis files
+    /// it by the length of its compiled test and action, which in practice exceeds every
+    /// other rule on the same cells. Ties fall to [`precedence`](Rank::precedence), where a
+    /// character definition then counts as a translation rule, so `always` still comes last
+    /// and definition order decides the rest. 0 everywhere else.
+    multicell_backward_output: usize,
     /// The kind of rule: a translation rule beats `always`, which beats an indicator, which
     /// beats a character definition. On a one-character match `always` counts as a
-    /// translation rule, as liblouis only puts it last in its multi-character chains.
+    /// translation rule, as liblouis only puts it last in its multi-character chains. On a
+    /// backward match of several cells a character definition counts as a translation rule,
+    /// see [`multicell_backward_output`](Rank::multicell_backward_output).
     precedence: Precedence,
     /// Backward main stage only: the rule producing more text wins, as liblouis sorts its
     /// backward rule chains by output length. Forward and in the passes liblouis does not look
@@ -363,6 +457,22 @@ impl ResolvedTranslation {
             }
             _ => None,
         };
+        // the characters a rule writes, not the space a `joinword` or `joinnum` puts back
+        let written = match self.rule() {
+            Some(Rule::Joinword { chars, .. } | Rule::Joinnum { chars, .. }) => {
+                chars.chars().count()
+            }
+            _ => self.output.chars().count(),
+        };
+        let multicell_backward = direction == Direction::Backward
+            && self.stage == TranslationStage::Main
+            && self.length > 1;
+        let multicell_backward_output = match (multicell_backward, self.rule(), precedence) {
+            (false, _, _) => 0,
+            (true, Some(Rule::Context { .. }), _) => usize::MAX,
+            (true, _, Precedence::Indicator | Precedence::Emphasis) => 0,
+            (true, _, _) => written,
+        };
         Rank {
             context_no_leading_literal: leading_literal_len == Some(0),
             zero_length: self.length == 0,
@@ -370,13 +480,17 @@ impl ResolvedTranslation {
                 .filter(|&n| n > 0)
                 .unwrap_or(self.length),
             literals,
+            multicell_backward_output,
             precedence: match (direction, self.rule(), precedence) {
                 (_, _, Precedence::Always) if self.length < 2 => Precedence::Translation,
                 (Direction::Backward, Some(Rule::Decpoint { .. }), _) => Precedence::Decpoint,
+                (_, _, Precedence::CharacterDefinition) if multicell_backward => {
+                    Precedence::Translation
+                }
                 (_, _, p) => p,
             },
             output_length: match (direction, self.stage) {
-                (Direction::Backward, TranslationStage::Main) => self.output.chars().count(),
+                (Direction::Backward, TranslationStage::Main) => written,
                 _ => 0,
             },
             nocross: self.origin.as_ref().is_some_and(|o| o.is_nocross()),
@@ -482,6 +596,46 @@ mod tests {
         assert_eq!(best(&["always ab 2", "word ab 4"], "ab"), 1);
         // among equals, the earliest-defined rule wins
         assert_eq!(best(&["always ab 2", "always ab 3"], "ab"), 0);
+    }
+
+    #[test]
+    fn multicell_backward_ranks_by_characters_written() {
+        use crate::parser::RuleParser;
+        let best = |candidates: &[(&str, &str)], cells: &str| {
+            let rules: Vec<_> = candidates
+                .iter()
+                .map(|(s, _)| AnchoredRule::from(RuleParser::new(s).rule().unwrap()))
+                .collect();
+            crate::parser::in_definition_order(&rules)
+                .into_iter()
+                .zip(candidates)
+                .map(|(r, (_, out))| {
+                    ResolvedTranslation::new(cells, out, 1, TranslationStage::Main, r)
+                })
+                .max_by_key(|t| t.rank(Direction::Backward))
+                .unwrap()
+                .origin()
+                .unwrap()
+                .definition_order()
+        };
+        // the rule writing more characters wins, even `always` over `word`
+        assert_eq!(
+            best(&[("word ab 1-2", "ab"), ("always abc 1-2", "abc")], "⠁⠃"),
+            1
+        );
+        // a character definition is not demoted: the earlier rule wins
+        let semicolon = [("punctuation \\x061B 5-23", "؛"), ("postpunc ; 5-23", ";")];
+        assert_eq!(best(&semicolon, "⠐⠆"), 0);
+        // `always` comes last among rules writing as many characters
+        assert_eq!(
+            best(&[("always ab 1-2", "ab"), ("word ab 1-2", "ab")], "⠁⠃"),
+            1
+        );
+        // a `context` rule comes first
+        let context = [("lowercase α 46-1", "α"), ("context @46-1 \"AB\"", "AB")];
+        assert_eq!(best(&context, "⠨⠁"), 1);
+        // on one cell, a character definition is still only the fallback
+        assert_eq!(best(&[("letter a 1", "a"), ("postpunc ; 1", ";")], "⠁"), 1);
     }
 
     #[test]

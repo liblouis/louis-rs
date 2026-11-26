@@ -115,18 +115,26 @@ impl From<EnumSet<BrailleDot>> for BrailleChar {
     }
 }
 
+/// Dots 9 to F, which no braille cell has: a table uses them to tell cells apart, for later
+/// rules or for a display table to show differently
+const VIRTUAL_DOTS_SET: EnumSet<BrailleDot> = enum_set!(
+    BrailleDot::Dot9
+        | BrailleDot::DotA
+        | BrailleDot::DotB
+        | BrailleDot::DotC
+        | BrailleDot::DotD
+        | BrailleDot::DotE
+        | BrailleDot::DotF
+);
+
 impl BrailleChar {
     fn has_virtual_dots(&self) -> bool {
-        let virtual_dots = enum_set!(
-            BrailleDot::Dot9 |
-            BrailleDot::DotA |
-            BrailleDot::DotB |
-            BrailleDot::DotC |
-                BrailleDot::DotD |
-                BrailleDot::DotE |
-                BrailleDot::DotF |
-        );
-        !virtual_dots.intersection(self.0).is_empty()
+        !VIRTUAL_DOTS_SET.intersection(self.0).is_empty()
+    }
+
+    /// The cell with only its dots 1 to 8, which is all Unicode braille can show
+    pub fn without_virtual_dots(&self) -> Self {
+        BrailleChar(self.0.difference(VIRTUAL_DOTS_SET))
     }
 
     pub fn to_unicode(&self) -> char {
@@ -322,6 +330,16 @@ mod tests {
         assert_eq!(BrailleChar::from_unicode('\u{f0001}'), None);
         // outside both the braille patterns block and the private use area
         assert_eq!(BrailleChar::from_unicode('x'), None);
+    }
+
+    #[test]
+    fn test_without_virtual_dots() {
+        let cell = |dots| BrailleChar::try_from(dots).unwrap();
+        assert_eq!(cell("19").without_virtual_dots(), cell("1"));
+        assert_eq!(cell("1234569af").without_virtual_dots(), cell("123456"));
+        assert_eq!(cell("78").without_virtual_dots(), cell("78"));
+        // a cell of virtual dots only is the blank cell
+        assert_eq!(cell("9").without_virtual_dots().to_unicode(), '⠀');
     }
 
     #[test]

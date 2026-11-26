@@ -31,3 +31,9 @@ When you add a record or change its status, update its row in the table below to
 | [[file:0020-repword.org][ADR-0020]] | Implement ~repword~ and ~rependword~ with a constrainer, the trie and ~trace~                         | ACCEPTED   |
 | [[file:0021-base-rule-vs-character-definition.org][ADR-0021]] | A ~base~ rule that conflicts with a character definition                                            | DRAFT      |
 | [[file:0022-hyphenate-chartodots-dotstochar.org][ADR-0022]] | Wait with ~lou_hyphenate~, ~lou_charToDots~ and ~lou_dotsToChar~, and where they go when they come | ACCEPTED   |
+| [[file:0023-c-api.org][ADR-0023]] | A C API of its own, and a ~lou_*~ compatibility layer only on request                          | ACCEPTED   |
+| [[file:0024-lookback-as-lookaround.org][ADR-0024]] | Model ~_N~ as a look-behind and a look-ahead, and reject it anywhere else                      | ACCEPTED   |
+| [[file:0025-negation.org][ADR-0025]] | Negation in ~match~ and ~context~ patterns, and no negated strings of more than one character in ~context~ | PROPOSED   |
+| [[file:0026-indication-order.org][ADR-0026]] | The order of indications at one position: closing innermost first, opening outermost first | ACCEPTED   |
+| [[file:0027-backward-undefined-cells.org][ADR-0027]] | Spell an undefined cell as its dots in back-translation | ACCEPTED   |
+| [[file:0028-by-order-attributes.org][ADR-0028]] | Warn about ~$w~ to ~$z~ until the tables no longer use them | ACCEPTED   |

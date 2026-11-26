@@ -9,6 +9,136 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased] - ReleaseDate
 
 ### Added
+- `EmphasisSpan::COMPUTER_BRAILLE`, the class of a span translated in
+  computer braille, which needs no `emphclass` in the table (#94).
+
+### Fixed
+- Capitals passages are back-translated (#86): `begcapsphrase` and
+  `endcapsphrase before|after` are read, so with `en-ueb-g2` ⠠⠠⠠⠮ ⠙⠕⠛
+  ⠗⠁⠝⠠⠄ is "THE DOG RAN" rather than "The dog ran". `begcaps` and
+  `endcaps` mark a passage too, as in the Vietnamese tables (#87). An
+  `endcapsphrase` or `endcaps` is read only inside a passage, and there it
+  wins over a capital indicator with the same cells, as in
+  liblouis/liblouis#2125.
+- Back-translation of `nl-NL-g0` e-mail addresses and hashtags (#88): an
+  emphasis indicator with the cells of a character is not read right after a
+  letter, so ⠇⠊⠎⠁⠸⠙⠊⠗⠅ is "lisa_dirk", and a number sign inside a
+  character such as `sign # 5-3456` starts no number, so ⠐⠼⠙⠞⠧ is "#dtv".
+- The `undefined` rule only applies forward, as in liblouis (#59). Back-
+  translating, an undefined cell is spelled as its dots, such as "\8/",
+  even when the table has one, and `noUndefined` drops it (#35).
+- A `%name` test in a `context`, `correct` or pass rule (#34): a name that
+  is neither a class nor a swap is a table error, as in liblouis, rather
+  than a test that never matches. A class defined with the deprecated
+  `class` opcode exists: it was parsed but never registered. `$w` to `$z`
+  are still not supported, but now log a warning.
+- An undefined character is escaped as liblouis does (#45): between
+  quotes, as `\x` with at least four hex digits, `\y` with five or `\z`
+  with eight, and in the table's dots only where a character takes one
+  cell. With `en-ueb-g1.ctb`, "a中b" gave ⠁⠸⠡⠭⠲⠑⠆⠙⠃ instead of
+  ⠁⠄⡳⠭⠲⠑⠆⠙⠄⠃.
+- Back-translation puts the space back between large signs written
+  together, as liblouis means to (liblouis/liblouis#2168): with
+  `en-us-g2.ctb`, ⠷⠮ is "of the" rather than "ofthe", and ⠷⠠⠮ "of The".
+  Large signs inside a word stay together, so ⠮⠁⠞⠻ is still "theater".
+- A character and its cell have their classes in both directions, also
+  when their definition is `noback` or `nofor`, as in liblouis (#54).
+  French contracted braille's `bvoy` and `bvoyyy` list braille cells that
+  `braille-patterns.cti` defines with `noback sign`, so a `before` or
+  `after` rule testing them never matched backward: "laissait" came back
+  as "laièait".
+- Back-translating several cells, the rule writing more characters wins,
+  then definition order, with `always` last and a `context` rule first, as
+  in liblouis. A character definition no longer loses to any other rule
+  there: with `ar-ar-g1.utb`, "بها؛" came back as "بها;".
+- Back-translating, a number continues across a cell only if the cell comes
+  back as a `numericmodechars` or `midendnumericmodechars` character (#55).
+  Swedish lists the no-break space, which shares the blank cell with the
+  space, so a number went on across every space after it: with `sv-g1.ctb`,
+  ⠼⠃⠀⠃⠗⠜⠝⠙⠑ came back as "2 2rände".
+- Back-translating, a `joinword` or `joinnum` applies whenever no space
+  follows, as in liblouis (#56). Before, more of the same word had to
+  follow, so with `en-us-g2.ctb` ⠖⠤⠑ came back as "!come", not "to come".
+  It ranks by its characters, not counting the space it puts back, and a
+  `begnum` applies before a `litdigit` or `sign` cell, so in German ⠬⠼⠉ is
+  "§ 3".
+- Back-translating, a number sign whose cell is also a rule that only
+  applies after a letter, such as en-us-g2's `midendword ble`, starts a
+  number after a cell of a multi-letter `always` rule (#57). Before, such a
+  cell counted as a letter, so ⠠⠶⠼⠁⠶⠄ came back as "[a]", not "[1]". After
+  a letter, a one-cell rule that ends in a letter still counts, so ⠁⠶⠼⠁
+  stays "aggblea".
+- Back-translating, a number sign right after a character of several cells
+  that starts with the number sign, such as Portuguese `sign # 3456-13`,
+  starts a number although the character's last cell is also a letter
+  (#58). With `pt-pt-g2.ctb`, ⠼⠅⠼⠃⠚⠁⠚⠉⠾ came back as "#bjajcú", not
+  "#20103]".
+
+## [0.4.1] - 2026-11-24
+
+### Added
+- `louis::VERSION`, the version of louis-rs, for bindings that report it,
+  such as the C API's `louis_version()`.
+
+### Changed
+- An unknown escape in a quoted multipass operand, such as `"\q"`, is a
+  table error, as in liblouis and as already for other opcodes. It used to
+  be read as a backslash and a letter. Escape errors now name the escape:
+  `invalid escape sequence '\q'`.
+- In a multipass, `correct` or `context` test, negating a string or dots of
+  more than one character (`!"ab"`) is a table error. liblouis negates such
+  a test as a whole, louis-rs negated each character; no table in
+  liblouis's corpus has one (ADR-0025).
+
+### Fixed
+- From a number to the next space, `match` rules don't apply, as in
+  liblouis. With `en-ueb-g2`, the second quote in `rotate="180"` is no
+  longer a closing quotation mark, and "46.42a.1" ends in a number with a
+  decimal point (#77, #80).
+- A negated attribute set that includes the boundary, such as
+  `!%[_~^]` in a `match` rule, needs a character not in the set. It used to
+  match after a space too, so `en-ueb-g2` used the "ing" groupsign at the
+  start of every word but the first (#79).
+- In a table with a `capsletter`, a rule that starts on a character that
+  isn't a capital doesn't take a capital, as in liblouis: "GitHub" keeps
+  the capital indicator of its "H" instead of contracting "tH" (#78). The
+  same applies to emphasis: emphasis that starts inside a contraction
+  keeps its indicator.
+- Emphasis over several words that ends or starts inside a word, such as
+  "Escherichia coli" in italics before a period that isn't, is indicated
+  like any other: with `en-ueb-g2`, a word indicator for each of two words
+  and the passage indicator for three or more, and a terminator after the
+  last. It used to get a single word indicator for all the words (#76).
+- Unicode braille has only dots 1 to 8, as in liblouis: a cell a table
+  gives virtual dots, such as `ru-litbrl.ctb`'s Cyrillic letters, came
+  out as a private use character instead. A braille encoding without a
+  rule for such a cell shows it as the cell without them, so `en-ueb-g2`'s
+  no-break space is a space in BRF (#81).
+- A `word`, `always` or `match` rule isn't used where an emphasis or
+  capitals indicator falls inside it, as in liblouis: with `en-ueb-g2`,
+  "word" with only "wo" in italics is spelled out, so the emphasis ends
+  after "wo", and "THe" is no longer contracted to "the", losing where the
+  capitals end (#69).
+- `empmatchbefore` and `empmatchafter` apply: a `match` rule marked with
+  them isn't used right after or right before an emphasis or capitals
+  indicator. With `en-ueb-g2`, "DiffEq's" spells out the "ff" before the
+  capital E (#82).
+- A rule doesn't take a change of case after its second letter, as in
+  liblouis: with `en-ueb-g2`, "NorthEast" is no longer contracted as
+  "northeast", losing the capital of the "E"; "The" still contracts.
+- A capitals passage ends after the last word's symbols-sequence,
+  punctuation included, as in liblouis and in the examples of UEB 8.5.3:
+  "CAUTION: WET PAINT!" ends in ⠏⠁⠔⠞⠖⠠⠄, not ⠏⠁⠔⠞⠠⠄⠖.
+- Emphasis and capitals indicators that open or close at the same place
+  nest, as in liblouis and UEB 8.6.2: of two emphasis classes, the longer
+  opens first, the later-declared on a tie, and closes last; capitals
+  close before the emphasis around them ("ROMEO AND JULIET" in italics
+  ends ⠠⠄⠨⠄). A space between emphasized words no longer ends the
+  emphasis unless the table lists it in `noemphchars`.
+
+## [0.4.0] - 2026-11-18
+
+### Added
 - `louis::metadata` finds tables by their `#+key: value` metadata, like
   liblouis's `lou_findTables`: `Index::new()` indexes the tables on
   `LOUIS_TABLE_PATH`, `Index::with_search_path` those in the given
@@ -107,6 +237,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   in both directions and reports its errors, like liblouis's
   `lou_checktable`. It prints "No errors found." unless given `--quiet`.
   The rule dump and the rule-parsing REPL are gone.
+- Translation is faster, several times so for tables with many `match`,
+  `context`, `correct` or `pass2`-`pass4` rules: at each position only the
+  rules that can start with the character there are tried, not all of
+  them.
 
 ### Fixed
 - Backward, an emphasis indicator on the cells of a `decpoint` is read
@@ -115,6 +249,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   ".SILVIO" instead of "SILVIO". An indicator that opens emphasis on a
   character's cells is read as one wherever its word goes on, as in
   front of a capital sign, not only in front of a letter.
+- Two large signs that only spaces separate are written without the
+  space between them, as in liblouis: `en-us-g2.ctb`'s "of the" is ⠷⠮,
+  not ⠷⠀⠮.
+- With a table that has `compbrl` rules, translating no longer takes time
+  growing with the square of the input's length: the scan for their
+  triggers copied the rest of the input at every character, and
+  compared every word it found with all the words before it.
+- Back-translation no longer looks for `compbrl` triggers, which are
+  print text and never match braille cells; liblouis uses them forward
+  only too. The scan took most of the time of back-translating a long
+  input.
 - A character defined after a `base` rule for it is translated with its
   own dots, and the `base` rule only adds its class, as in liblouis: a
   capital of `nl-NL-g0.utb` keeps its virtual dot, and `vi-cb8.utb`'s
@@ -718,7 +863,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 -   Make it clear that the library API is unstable.
 
 <!-- next-url -->
-[Unreleased]: https://github.com/liblouis/louis-rs/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/liblouis/louis-rs/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/liblouis/louis-rs/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/liblouis/louis-rs/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/liblouis/louis-rs/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/liblouis/louis-rs/compare/v0.2.8...v0.3.0
 [0.2.8]: https://github.com/liblouis/louis-rs/compare/v0.2.7...v0.2.8

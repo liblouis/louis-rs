@@ -1,0 +1,173 @@
+#+options: todo:t
+#+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
+#+language: en
+
+* PROPOSED ADR-0025: Negation in ~match~ and ~context~ patterns, and no negated strings of more than one character in ~context~
+- Deciders :: CE
+- Date :: [2026-11-23 Mon]
+
+Technical Story: [[https://github.com/liblouis/louis-rs/issues/79][#79]].
+In ~en-ueb-g2.ctb~, ~match !%[_~^] ing - ⠬~ used the "ing" groupsign
+at the start of every word but the first. Fixing it raised the question
+of what liblouis's ~!~ means. It means different things in ~match~
+rules and in ~context~ rules, and neither is a logical complement.
+
+** Context and Problem Statement
+
+*** What negation would be expected to mean
+
+Read as logic, ~!~ is a complement: ~!e~ matches where ~e~ doesn't. On
+compound expressions that follows De Morgan's laws:
+
+- ~!(e1|e2)~ is ~!e1 & !e2~: neither alternative matches.
+- ~!(e1 e2)~ is "the span is not an ~e1~ followed by an ~e2~", the
+  complement of a concatenation, which can't be put together from the
+  complements of ~e1~ and ~e2~: ~!e1 !e2~ rejects spans that ~!(e1 e2)~
+  accepts, such as an ~e1~ followed by something that isn't an ~e2~.
+
+Both need an intersection (~&~) or a complement of a whole regular
+expression. Regular languages are closed under both, but the
+constructions are expensive: a complement needs a deterministic
+automaton, which can be exponentially larger than the NFA, and an
+intersection needs a product automaton. A Pike VM (ADR-0007) runs an
+NFA directly, advancing all threads in lockstep one character at a
+time, at most one thread per instruction. It has no way to require
+two threads to cover the same span, nor to succeed where a thread
+fails. That is why Pike-style engines such as RE2 and Rust's ~regex~
+offer neither intersection nor negative look-around; only backtracking
+engines do, and they give up the linear-time guarantee.
+
+liblouis doesn't implement the complement either. In both of its
+pattern languages ~!~ inverts single tests, not expressions, and it
+does so in different ways for ~match~ rules and for ~context~ rules.
+
+*** What liblouis does
+
+liblouis has two pattern languages with a ~!~ operator:
+
+- *~match~ rules* (~pattern.c~, ~pattern_check_expression~). The
+  manual says "The following expression is negated" (~liblouis.texi~,
+  ~match~ opcode). The implementation sets a ~notOperator~ flag, keeps
+  the structure of the negated expression (sequences, alternatives,
+  repetitions), and inverts each single-character test, which still
+  consumes its character. So ~!(ab)~ is "not a, then not b", and
+  ~!(a|b)~ is "not a, or not b". ~%[...]~ is one character test whose
+  attributes may include the boundary ~^~: ~!%[_^]~ fails at the
+  boundary and otherwise takes a character that has none of the
+  attributes.
+- *~context~, ~correct~ and ~pass2~-~pass4~ rules* (~passDoTest~ in
+  ~lou_translateString.c~). The manual says "~!~ reverses the logical
+  meaning of the suboperand which follows". ~!~ applies to exactly one
+  test and inverts its result. For an attribute or class test with a
+  quantifier the inversion is per character, as in ~match~ rules. For
+  a string or dots test it applies to the test as a whole, and the
+  position still moves on by the length of the string: ~!"ab"~ takes
+  any two characters except "ab". It is not a look-ahead: the
+  characters are consumed, and with fewer than two characters left the
+  test fails, although they aren't "ab" either.
+
+The two meanings differ on the same input: as a ~match~ pattern ~!ab~
+rejects "ax" (its "a" is an "a"), while as a ~context~ test ~!"ab"~
+accepts it ("ax" is not "ab"). Neither is the De Morgan complement.
+
+*** What louis-rs did
+
+louis-rs compiles both languages to its regexp VM (ADR-0007), which
+has no intersection and no negative look-ahead. ~Regexp::negate~
+distributes ~!~ over sequences and alternatives and inverts each
+character test, which is the ~match~ meaning. Its comments called this
+wrong (~!(e1|e2)~ should be ~!e1 & !e2~), and ~doc/Liblouis_Parity.md~
+listed it as a gap for both rule kinds.
+
+Two things did not match liblouis:
+
+1. The parser splits ~%[_~^]~ into an alternation of a character class
+   and the boundary. Negating that alternation gave "not in the set, or
+   not at the boundary", which matches after a space. That is #79.
+2. In a ~context~ rule, ~!"ab"~ compiled to "not a, then not b", the
+   ~match~ meaning, so it rejected "ax" and "xb", which liblouis
+   accepts.
+
+** Decision Drivers
+
+- The VM stays a forward-only, linear-time automaton (ADR-0007).
+- Same results as liblouis for every table in its corpus.
+- A form louis-rs doesn't support is a parse error, not a silent
+  difference (ADR-0018).
+- Don't implement a construct no table uses (YAGNI), least of all one
+  whose meaning is surprising: it consumes characters, fails near the
+  end of the input, and differs from what ~!~ means in ~match~ rules.
+
+** Considered Options
+
+For ~match~ rules:
+
+1. Add an intersection to the VM and make ~!~ a logical complement.
+2. Keep ~negate~'s distribution, which is liblouis's meaning, and treat
+   a negated ~%[...^]~ as the single character test it is in liblouis.
+
+For a negated string or dots test of more than one character in
+~context~ rules:
+
+3. Keep negating it per character (the ~match~ meaning).
+4. Spell liblouis's meaning out as alternatives: ~!"abc"~ is
+   ~[^a].. | a[^b]. | ab[^c]~.
+5. Reject it with a parse error.
+
+** Decision Outcome
+
+Chosen options: 2 and 5.
+
+- ~match~ rules: ~Regexp::negate~ stays as it is, now documented as
+  liblouis's ~!~. ~Pattern::Negate(AttributesOrBoundary)~ compiles to
+  the negated character class alone: there is a character, and it is
+  not in the set. Implemented in ~7358c63~.
+- ~context~ rules: a negated string or dots test of more than one
+  character is ~ParseError::NegatedLongString~, and the table does not
+  load. No table in liblouis's corpus has one; the negated strings in
+  ~ru-litbrl.ctb~ and ~th-g1.uti~ are a single character, where all
+  three meanings agree.
+
+*** Positive Consequences
+
+- #79 is fixed, along with four tests in liblouis's YAML suite.
+- What ~!~ means in each rule kind is written down, and the comments no
+  longer call a deliberate behavior a bug.
+- louis-rs doesn't commit to the consuming whole-string negation, nor
+  silently give a different answer for it.
+
+*** Negative Consequences
+
+- A table outside the corpus with a negated string of more than one
+  character in a ~context~ rule does not load. Documented in
+  ~doc/Differences_From_Liblouis.md~, with option 4 as the way to
+  support it if a table needs it.
+
+** Pros and Cons of the Options
+
+*** 1. Intersection in the VM
+
+- Bad, because it is not what liblouis does: ~!(ab)~ would take "ax".
+- Bad, because a Pike VM can't intersect without a product automaton or
+  paired threads, which breaks one thread per instruction.
+
+*** 2. Keep the distribution, one test for ~%[...^]~
+
+- Good, because it is liblouis's meaning, and needs no new instruction.
+
+*** 3. Per character in ~context~ rules
+
+- Good, because it is no work.
+- Bad, because it silently differs from liblouis: ~!"ab"~ rejects "ax".
+
+*** 4. Alternatives
+
+- Good, because it is exactly liblouis's meaning, in about twenty lines.
+- Bad, because no table needs it, and it commits louis-rs to a meaning
+  that is surprising and differs from ~match~ rules.
+
+*** 5. Parse error
+
+- Good, because it is a few lines and the difference is visible.
+- Bad, because a table using it, if one appears, fails to load until
+  option 4 is implemented.

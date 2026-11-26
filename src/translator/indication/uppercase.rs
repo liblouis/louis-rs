@@ -170,10 +170,19 @@ impl BackwardCaps {
         }
     }
 
-    /// Uppercases the output of `translations` after a capital sign and inside
-    /// capitalized words.
+    fn begins_passage(rule: Option<&Rule>) -> bool {
+        match rule {
+            Some(Rule::Begcapsphrase { .. } | Rule::Begcaps { .. }) => true,
+            Some(Rule::Multind { names, .. }) => names.iter().any(|n| n == "begcapsphrase"),
+            _ => false,
+        }
+    }
+
+    /// Uppercases the output of `translations` after a capital sign, inside
+    /// capitalized words and inside capitals passages.
     pub fn apply(&self, translations: Vec<ResolvedTranslation>) -> Vec<ResolvedTranslation> {
         let mut next_upper = false;
+        let mut passage = false;
         let mut state = CapsWord::Off;
         let mut last: Option<char> = None;
         let mut result = Vec::with_capacity(translations.len());
@@ -206,7 +215,27 @@ impl BackwardCaps {
                 }
                 _ => state,
             };
-            let translation = if state == CapsWord::Off && !next_upper {
+            if Self::begins_passage(translation.rule()) {
+                passage = true;
+            }
+            match translation.rule() {
+                // `before` comes before the passage's last word, which is still capitalized
+                Some(Rule::Endcapsphrase {
+                    position: Position::Before,
+                    ..
+                }) => {
+                    passage = false;
+                    state = CapsWord::Started;
+                }
+                Some(Rule::Endcapsphrase { .. } | Rule::Endcaps { .. }) => {
+                    passage = false;
+                    state = CapsWord::Off;
+                }
+                _ => (),
+            }
+            // not the escape of an undefined cell, which has no rule
+            let passage = passage && translation.rule().is_some();
+            let translation = if state == CapsWord::Off && !next_upper && !passage {
                 translation
             } else {
                 let mut output = String::new();
@@ -216,7 +245,7 @@ impl BackwardCaps {
                     {
                         state = CapsWord::Off;
                     }
-                    if next_upper || state != CapsWord::Off {
+                    if next_upper || passage || state != CapsWord::Off {
                         output.push(self.uppercase(c));
                     } else {
                         output.push(c);
@@ -415,8 +444,9 @@ mod tests {
         ResolvedTranslation::new(cells, "", 1, TranslationStage::Main, rule(r))
     }
 
+    /// Text from a rule, unlike the escape of an undefined cell
     fn text(cells: &str, output: &str) -> ResolvedTranslation {
-        ResolvedTranslation::new(cells, output, 1, TranslationStage::Main, None)
+        ResolvedTranslation::new(cells, output, 1, TranslationStage::Main, rule("always x 1"))
     }
 
     #[test]
@@ -444,5 +474,62 @@ mod tests {
         );
         // the table's capital, not Unicode's
         assert_eq!(written(&caps, vec![capsletter(), text("⠊", "i")]), "İ");
+    }
+
+    #[test]
+    fn capitals_passage_uppercases_until_its_end() {
+        let caps = BackwardCapsBuilder::new().build(
+            &space_ctx(),
+            HashMap::from([('a', 'A'), ('b', 'B'), ('c', 'C')]),
+        );
+        let space = || text(" ", " ");
+        // `after` ends the passage after its last word
+        assert_eq!(
+            written(
+                &caps,
+                vec![
+                    sign("⠠⠠⠠", "begcapsphrase 6-6-6"),
+                    text("⠁", "a"),
+                    space(),
+                    text("⠃", "b"),
+                    sign("⠠⠄", "endcapsphrase after 6-3"),
+                    space(),
+                    text("⠉", "c"),
+                ]
+            ),
+            "A B c"
+        );
+        // `before` comes before the last word, which is still capitalized
+        assert_eq!(
+            written(
+                &caps,
+                vec![
+                    sign("⠘⠘", "begcapsphrase 45-45"),
+                    text("⠁", "a"),
+                    space(),
+                    sign("⠘", "endcapsphrase before 45"),
+                    text("⠃", "b"),
+                    space(),
+                    text("⠉", "c"),
+                ]
+            ),
+            "A B c"
+        );
+        // `begcaps` and `endcaps` mark a passage too, as in the Vietnamese tables
+        assert_eq!(
+            written(
+                &caps,
+                vec![
+                    sign("⠨⠨", "begcaps 46-46"),
+                    text("⠁", "a"),
+                    space(),
+                    text("⠃", "b"),
+                    sign("⠱", "endcaps 156"),
+                    space(),
+                    text("⠉", "c"),
+                ]
+            ),
+            "A B c"
+        );
     }
 }

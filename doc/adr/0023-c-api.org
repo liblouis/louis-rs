@@ -1,0 +1,270 @@
+#+options: todo:t
+#+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
+#+language: en
+
+* ACCEPTED ADR-0023: A C API of its own, and a ~lou_*~ compatibility layer only on request
+- Deciders :: CE
+- Date :: [2026-11-20 Fri]
+
+Implemented in [[https://github.com/liblouis/louis-capi][liblouis/louis-capi]] on [2026-11-20 Fri].
+
+Technical Story: the ~TODO.org~ item "Expose the library via a C ABI";
+the transition plan of 2026-11-19, which ranks a C API ahead of wasm,
+because native screen readers and braille drivers can only leave
+liblouis through one.
+
+** Context and Problem Statement
+
+louis-rs has a Rust API and Python bindings (louis-py), but no C API.
+Programs written in C or C++, or in a language that reaches liblouis
+through its C ABI (ctypes, JNA, JNI), cannot use louis-rs at all, so
+they cannot leave liblouis.
+
+The liblouis API cannot be reproduced faithfully on top of louis-rs,
+and should not be:
+
+- Tables are named by a string on every call and compiled into a
+  hidden global cache. ~lou_compileString~ changes a cached table in
+  place, ~lou_setDataPath~ and ~lou_registerTableResolver~ change how
+  every later call finds tables, ~lou_free~ throws the cache away.
+  louis-rs has an immutable ~Translator~ that the caller owns.
+- The caller sizes the output buffer and learns from ~*inlen~ and
+  ~*outlen~ how far translation got. It cannot learn how much room it
+  would have needed, so callers retry with bigger buffers (TalkBack
+  doubles the buffer up to four times).
+- ~widechar~ is 16 or 32 bits depending on how liblouis was built.
+- Some modes and arguments are deliberate differences
+  ([[file:../Differences_From_Liblouis.md][Differences_From_Liblouis.md]]): ~spacing~, ~dotsIO~ without
+  ~ucBrl~, display rules taken from the translation table.
+
+What C API should louis-rs offer, and what migration path does it give
+liblouis users ([[file:0018-parity-or-migration-path.org][ADR-0018]])?
+
+** What the consumers use
+
+Counted in their sources (~lou_*~ for C, the ~louis~ module for Python):
+
+| Consumer              | Revision            | Language        | Calls                                                                                                                               | Modes                                         |
+|-----------------------+---------------------+-----------------+-------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------|
+| BRLTTY                | 589174c, 2026-11-19 | C               | ~lou_translate~ (cursor, both position maps, no typeform), ~lou_version~, ~lou_getDataPath~, ~lou_charSize~                         | ~dotsIO \vert ucBrl~, ~compbrlAtCursor~       |
+| TalkBack              | 229212f, 2026-03-23 | C++ (JNI)       | ~lou_translate~ (cursor, both position maps), ~lou_backTranslateString~, ~lou_getTable~, ~lou_setDataPath~                          | ~dotsIO~; backward: from Java                 |
+| NVDA                  | c295c81, 2026-11-20 | Python (ctypes) | ~translate~ (typeform, cursor, both maps), ~backTranslate~, ~getTableInfo(language)~, log callback, ~lou_registerTableResolver~, ~lou_free~, ~version~ | ~dotsIO~, ~compbrlAtCursor~, ~partialTrans~, ~noUndefinedDots~ |
+| Orca                  | 5e2eb87, 2026-11-20 | Python (ctypes) | ~translate~ (cursor), ~charToDots~ (braille monitor)                                                                                | ~compbrlAtCursor~                             |
+| liblouis-java         | 33feccc, 2026-04-28 | Java (JNA)      | translate, backTranslate, ~charToDots~, ~dotsToChar~, ~hyphenate~, ~getEmphClasses~, table resolver, ~findTable~, ~getTableInfo~, log callback | (from its callers: DAISY Pipeline, Dotify)    |
+| liblouisutdml         | 9910484, 2026-04-22 | C               | about 20 functions, including ~lou_hyphenate~, ~lou_charToDots~, ~lou_dotsToChar~, ~lou_compileString~                              | to be replaced, see [[file:0017-braille-formatter.org][ADR-0017]]              |
+
+What follows from it:
+
+- The two native C consumers, BRLTTY and TalkBack, need four
+  things: build a translator from a table list (and a search path),
+  translate forward with cursor and both position maps, translate
+  backward, report the version. louis-rs has all of it; every mode they
+  use is a ~TranslationMode~.
+- Every screen reader wants dot patterns (~dotsIO~), not display
+  characters. Unicode braille already is that: dots = code point -
+  U+2800.
+- NVDA and Orca go through liblouis's Python bindings, not C. Their
+  migration path is louis-py, not this API. A ~lou_*~ compatibility
+  layer would let them keep the old bindings, but NVDA also calls
+  ~lou_registerTableResolver~ and ~lou_free~ directly.
+- Orca's ~charToDots~ is the first real user [[file:0022-hyphenate-chartodots-dotstochar.org][ADR-0022]] was waiting for,
+  on the Python side.
+- liblouis-java uses the widest surface. Its callers would need a
+  Java binding of their own, over this C API or not.
+
+** Decision Drivers
+
+- Retiring liblouis ([[file:0018-parity-or-migration-path.org][ADR-0018]]): every native consumer needs some
+  path off it.
+- The C API is the place where louis-rs is closest to the memory
+  safety bugs it exists to leave behind. It should not take
+  caller-sized buffers or hand out pointers into shared state.
+- An API that is offered has to be kept stable, so it should be
+  shaped by a real use ([[file:0022-hyphenate-chartodots-dotstochar.org][ADR-0022]]).
+- One maintainer. Two C APIs are twice the surface to keep stable.
+- The library stays free of ~unsafe~ and of C build concerns, as it
+  stays free of CLI dependencies ([[file:0019-library-cli-workspace-split.org][ADR-0019]]).
+
+** Considered Options
+
+1. *A native C API*: ~louis_*~ functions that follow the Rust API, an
+   opaque translator handle, owned results, header generated by
+   cbindgen.
+2. *A ~lou_*~ compatibility library only*: the subset of the liblouis
+   API that consumers call, built as a ~liblouis.so~ replacement.
+3. *Both, layered*: option 1, and option 2 as a separate crate built
+   only on option 1's API.
+4. *Diplomat* instead of cbindgen, generating C, C++, JS and Dart
+   bindings from one definition.
+
+** Decision Outcome
+
+Chosen option: 1. Option 3's compatibility layer is built only when a
+consumer asks for it, and then only on top of option 1.
+
+*** Shape
+
+A crate ~louis-capi~ (~cdylib~ and ~staticlib~) in a repository of its
+own, [[https://github.com/liblouis/louis-capi][liblouis/louis-capi]], depending on the library from crates.io like
+any other user. The header is generated by cbindgen and committed. The
+louis-rs repository gets no ~unsafe~, no ~extern "C"~ and no C
+tooling.
+
+A repository of its own, not a workspace member like the CLI, because
+the two change at different rates: the C API should hardly ever change,
+the library changes with every release. The crate has its own version,
+so the soname moves only when the C ABI breaks. The price is a release
+of the C API for library fixes to reach C users, since a ~cdylib~ links
+louis-rs statically: dependabot proposes the bump, and a weekly CI run
+against louis-rs ~main~ catches breakage before a release does.
+
+A sketch, not a final signature list:
+
+#+begin_src c
+typedef struct LouisTranslator LouisTranslator;
+typedef struct LouisResult LouisResult;
+
+LouisStatus louis_translator_new(const char *const *tables, size_t n_tables,
+                                 const char *const *search_path, size_t n_paths,
+                                 LouisDirection direction,
+                                 LouisTranslator **out);
+void louis_translator_free(LouisTranslator *);
+
+LouisStatus louis_translate(const LouisTranslator *, const char *input, size_t len,
+                            uint32_t modes, const size_t *cursor, /* may be NULL */
+                            LouisResult **out);
+const char   *louis_result_output(const LouisResult *, size_t *len);
+const size_t *louis_result_input_positions(const LouisResult *, size_t *len);
+const size_t *louis_result_output_positions(const LouisResult *, size_t *len);
+bool          louis_result_cursor(const LouisResult *, size_t *cursor);
+void          louis_result_free(LouisResult *);
+
+const char *louis_last_error(void);   /* thread-local, valid until the next call */
+const char *louis_version(void);
+#+end_src
+
+- *Ownership*: the caller owns every handle it gets and frees it with
+  the matching ~_free~. No global cache, no ~lou_free~.
+- *No caller-sized buffers*: the result owns its output, so there is
+  nothing to retry.
+- *Threads*: ~Translator~ is ~Send + Sync~, so one ~const
+  LouisTranslator*~ can be used from any number of threads at once.
+  liblouis cannot offer that.
+- *Text*: UTF-8 in and out, as in Rust, and nothing else: every
+  platform converts natively (~WideCharToMultiByte~ on Windows,
+  ~String.getBytes(UTF_8)~ in Java; not JNI's ~GetStringUTFChars~, whose
+  "modified UTF-8" is not UTF-8). Braille comes out as Unicode
+  braille, so ~dotsIO~ is ~c - 0x2800~; with a braille encoding, the
+  display characters.
+- *Errors*: a ~LouisStatus~ code; the message from ~louis_last_error~.
+  Table errors come from ~louis_translator_new~, which takes the place
+  of ~lou_checkTable~ and ~lou_getTable~.
+- *Panics*: caught at every exported function and turned into a
+  status; none crosses into C.
+- *Emphasis*: as ~EmphasisSpan~, an array of ~{const char *class;
+  size_t start, end;}~ with class names from ~emphclass~, not
+  liblouis's per-character typeform array. A caller that has a
+  typeform array turns each run into a span; going the other way is as
+  easy. Spans name the class instead of a bit position that depends on
+  the table's ~emphclass~ order, and they say nothing about characters
+  outside them.
+- *Scope of the first version*: what BRLTTY and TalkBack need, as
+  listed above; neither passes a typeform. Emphasis, metadata queries,
+  a log callback and the ADR-0022 functions come when a C consumer
+  needs them.
+- *Versioning*: ~louis-capi~'s own semver, independent of the
+  library's; an ABI break is a new 0.x minor and a new soname.
+  ~louis_version~ reports the library's version (~louis::VERSION~).
+- *Names*: everything after the project, ~louis-rs~: the library
+  ~liblouis-rs.so~ (~-llouis-rs~), the header ~louis-rs/louis.h~, the
+  pkg-config module ~louis-rs~, the function prefix ~louis_~. Plain
+  ~louis~ is ruled out: ~lib~ + ~louis~ is ~liblouis.so~, and ~-llouis~
+  would link C liblouis. A ~cdylib~ built straight from the library
+  crate, whose name is ~louis~, would produce exactly that file.
+  ~liblouis2~ is ruled out too, as liblouis had 2.x releases. With
+  these names, louis-rs installs next to liblouis. cargo-c builds it:
+  header through cbindgen, ~.pc~ file, soname.
+
+*** Migration path
+
+For a C consumer, a port, not a relink. For BRLTTY and TalkBack it is
+one call site each, and the result gets simpler: no buffer sizing, no
+~widechar~. For NVDA and Orca, louis-py. If a consumer cannot port,
+the compatibility layer of option 3 is the fallback, built on request.
+
+Java needs nothing in louis-rs beyond this API. liblouis-java (DAISY
+Pipeline, Dotify) already reaches liblouis through JNA, so it points
+its JNA interface at ~louis_*~ and ~liblouis-rs.so~; on Java 22 and
+later, FFM with bindings that ~jextract~ generates from ~louis.h~ is
+the faster alternative, but not on Android. TalkBack keeps its JNI
+wrapper and calls ~louis_*~ from it. Either way, text crosses as UTF-8
+bytes from ~getBytes(UTF_8)~: JNA converts a ~String~ with
+~jna.encoding~, the platform encoding by default, and JNI's
+~GetStringUTFChars~ gives modified UTF-8. A JNI layer written in Rust
+(the ~jni~ crate), a Java binding without the C API, is not planned:
+it would be glue only Java uses, and no Java consumer needs it.
+
+*** Positive Consequences
+
+- One C API to keep stable, shaped like the Rust API and by its two
+  real C users.
+- No buffer sizing, thread-safe sharing, no global state: the memory
+  safety argument for louis-rs holds at the boundary too.
+- Bindings for other languages (Java, Lua, a C++ wrapper) can be
+  written on top of it.
+
+*** Negative Consequences
+
+- No drop-in replacement. Every C consumer has to change code, and has
+  to be convinced to.
+- UTF-8 positions are in characters, while a Java or Windows caller
+  works in UTF-16 code units, so it has to map them.
+- ~unsafe~ code to review, in one crate.
+
+** Pros and Cons of the Options
+
+*** Option 1: native C API
+
+- Good, because it maps directly onto the Rust API, with nothing to
+  emulate.
+- Good, because the API is safe by construction: owned results, no
+  shared mutable state.
+- Bad, because consumers have to port.
+
+*** Option 2: ~lou_*~ compatibility only
+
+The table-list string becomes the key of a global
+~Mutex<HashMap<String, Arc<Translator>>>~. ~lou_compileString~ is
+copy-on-write: the key gains the added rules and the table is built
+again. ~lou_free~ empties the map. Unsupported modes and arguments
+return an error and log a message.
+
+- Good, because consumers relink instead of port, and liblouis's own
+  Python bindings work unchanged.
+- Bad, because the liblouis API, buffer sizing and global state
+  included, becomes louis-rs's permanent public API.
+- Bad, because a relinked consumer gets different output wherever
+  louis-rs deliberately differs, with nothing in its code to show why.
+- Bad, because it attracts requests to emulate ever more of liblouis.
+
+*** Option 3: both, layered
+
+- Good, because the clean API stays the real one and the
+  compatibility layer can be dropped once consumers have ported.
+- Bad, because it is two C APIs to maintain, the second for behavior
+  we consider wrong. Worth it only if a consumer cannot port.
+
+*** Option 4: Diplomat
+
+- Good, because one definition gives several languages.
+- Bad, because the only language needed is C; Python already has
+  louis-py.
+- Bad, because a bigger tool and a less common one than cbindgen.
+
+** Links
+
+- [[file:0018-parity-or-migration-path.org][ADR-0018]] -- what a migration path has to be
+- [[file:0019-library-cli-workspace-split.org][ADR-0019]] -- the workspace split; ~louis-capi~ is deliberately not a member
+- [[file:0022-hyphenate-chartodots-dotstochar.org][ADR-0022]] -- ~charToDots~, ~dotsToChar~, ~hyphenate~; Orca uses ~charToDots~
+- [[file:../Liblouis_Parity.md][Liblouis_Parity.md]] -- the liblouis API and its louis-rs counterparts
+- [[https://github.com/mozilla/cbindgen][cbindgen]], [[https://github.com/rust-diplomat/diplomat][Diplomat]]

@@ -88,15 +88,27 @@ $ louis trace --braille-encoding da-dk-octobraille.dis da-dk-g28.ctb "ørene"
 └───┴──────┴────┴───────────────┴─────────┘
 ```
 
-Without an encoding there is no such stage, so the trace is unchanged and the
-output stays Unicode braille.
+Without an encoding, translating to braille ends in a Unicode braille stage instead.
+It has no rules, so the trace doesn't show it.
 
 **Migration path:** name the display table, as a `BrailleEncoding`. The liblouis
-YAML tests that relied
-on the fallback are being changed to name theirs (liblouis
-[#2102](https://github.com/liblouis/liblouis/pull/2102) fixed three; more remain).
+YAML tests that relied on the fallback are changed to name theirs, with a
+`display:` key: liblouis [#2102](https://github.com/liblouis/liblouis/pull/2102)
+fixed three, [#2216](https://github.com/liblouis/liblouis/pull/2216) the rest.
 For an application, none yet: louis-rs does not say when a translation table
 brings display rules that it is ignoring.
+
+## A cell with virtual dots and no `display` rule
+
+A table can give a cell virtual dots (9 to F) to tell it apart from another, as
+`en-ueb-g2.ctb` writes the no-break space as a blank cell with dot A. A braille
+encoding with a `display` rule for the cell, virtual dots and all, shows it by that
+rule. Without one, liblouis writes the print character instead, the no-break space
+itself, which is no braille. louis-rs shows the cell without its virtual dots, by the
+encoding's rule for that: a blank cell, a space in BRF.
+
+**Migration path:** where the print character is wanted, add a `display` rule for the
+cell to the encoding, such as `display \x00a0 a` with `include text_nabcc.dis`.
 
 ## The `dotsIO` and `ucBrl` modes
 
@@ -104,11 +116,15 @@ In liblouis, `dotsIO` makes a translation write, or read back, dot patterns rath
 the display table's characters, and `ucBrl` with it makes those dot patterns Unicode
 braille. louis-rs has no such modes: braille is Unicode braille unless a
 `BrailleEncoding` is named, so every translation already does what `dotsIO | ucBrl`
-does. `dotsIO` alone gives liblouis's internal dot values, which mean nothing outside
-its C API.
+does. That includes dropping the virtual dots (9 to F) a table writes, which Unicode
+braille has no room for. `dotsIO` alone gives liblouis's dot values, `0x8000` plus a bit
+per dot, which screen readers such as NVDA and TalkBack use to drive a braille display.
 
 **Migration path:** drop the modes. For Unicode braille, use a `Translator` without a
-`BrailleEncoding`; for a display table's characters, use one with it.
+`BrailleEncoding`; for a display table's characters, use one with it. For dot values,
+subtract `0x2800` from each cell of Unicode braille: bit 0 is dot 1, bit 7 dot 8,
+the bits `dotsIO` gives without its `0x8000`. The same holds for the C API,
+[louis-capi](https://github.com/liblouis/louis-capi).
 
 ## Attributes `$w`, `$x`, `$y` and `$z`
 
@@ -147,6 +163,19 @@ into a bracket and don't load; a liblouis change to test the same with the two
 supported forms is still owed. A table outside the corpus fails with
 `'_' must come before the tests it steps back over, or after them at the end, and step
 over tests of fixed width only`, naming the line.
+
+## No negated strings of more than one character in `context` rules
+
+In a multipass, `correct` or `context` test, liblouis negates a string or dots test as a
+whole and still consumes its characters: `!"ab"` takes any two characters except "ab".
+louis-rs rejects a negated string or dots of more than one character with a parse
+error, and the table does not load ([ADR-0025](adr/0025-negation.org)). A negated
+single character works as in liblouis.
+
+**Migration path:** not needed for the corpus, which has none. A table using one fails
+with `negating a string or dots of more than one character is not supported`, naming
+the line. If a table needs it, it can be supported by spelling it out as alternatives
+(`!"abc"` is `[^a].. | a[^b]. | ab[^c]`), see the ADR.
 
 ## A word's emphasis ends before the space
 

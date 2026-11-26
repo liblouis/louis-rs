@@ -17,7 +17,8 @@ table files ──parse──▶ rules ──TableContext──▶ TranslationPi
                                                  │
    text ──▶ [correct] ──▶ main stage ──▶ [pass2] ──▶ [pass3] ──▶ [pass4] ──▶ [display] ──▶ braille
                              │
-                             ├─ before the loop:  indicators ─▶ indications per position
+                             ├─ before the loop:  spans: the caller's emphasis + compbrl words
+                             │                    indicators ─▶ indications per position
                              │                    constrainers ─▶ constraints per position
                              ├─ the loop, at each position:
                              │      candidates (trie, match, context, ...)
@@ -41,30 +42,35 @@ Backward (braille to text) runs the same stages in reverse order, the display ta
    this direction (`nofor`, `noback`), sorts the rest into stages by opcode, and compiles
    each stage, with the context, into a table: a `MultipassTable` for `correct` and each of
    `pass2` to `pass4`, a `PrimaryTable` for everything else. Backward, the stages are
-   reversed. A braille encoding (`BrailleEncoding`, from a liblouis display table), if
-   the caller gives one, is added as the outermost stage, a `DisplayTable`; a display
-   table a translation table includes is ignored.
+   reversed. The outermost stage is a `DisplayTable`: a braille encoding
+   (`BrailleEncoding`, from a liblouis display table) if the caller gives one, or else,
+   forward, the Unicode braille one, which drops the virtual dots (9 to F) Unicode braille
+   can't show, as an encoding does for a cell it has no rule for; a display table a
+   translation table includes is ignored.
 
 ### The main stage: `PrimaryTable::trace`
 
 `translator/table/primary.rs` holds nearly all of liblouis's opcodes. Translating with it
 has three phases.
 
-**Before the loop**, two kinds of precomputation run over the whole input:
+**Before the loop**, the emphasis spans the caller gave are joined, forward, by a
+`computer_braille` span for each word with a `compbrl` string in it (`CompbrlWords`). Then
+two kinds of precomputation run over the whole input:
 
 - **Indicators** (`indication/`) decide which indication *cells* go where: capital signs,
   number signs, emphasis, computer braille, mode and letter signs. The result,
   `PrecomputedIndications`, is a list of translations per position (ADR-0005, ADR-0006).
 - **Constrainers** (`position_constraints.rs`) decide which *rules* may apply where: a set of
   `Constraint` flags per position, such as "inside a number, no contractions"
-  (`DontContract`), "inside a `nocont` word" (`Uncontracted`), "a syllable of a `syllable`
-  rule starts here" (`SyllableStart`) or "a hyphenation break falls here"
+  (`DontContract`), "inside a `nocont` word" (`Uncontracted`), "a syllable, an emphasis span
+  or a run of capitals starts here, and no rule from before may take it" (`TypeStart`) or "a hyphenation break falls here"
   (`HyphenationBreak`).
 
-Both read only the input text, and the options. Neither knows which rules will be chosen.
-Forward, with `compbrlAtCursor` or `compbrlLeftCursor`, the word at the cursor
-(`CursorWordScanner`) is computer braille (`UseComp6`) without indicators, and no rule
-reaches into it.
+Both read only the input text, the spans and the options. Neither knows which rules will
+be chosen. The modes are constrainers too: `noContractions` sets `Uncontracted`
+everywhere, and forward, with `compbrlAtCursor` or `compbrlLeftCursor`, the word at the
+cursor is computer braille (`UseComp6`) without indicators (`CursorWord`), and no rule
+reaches into it or joins onto it (`SpaceBeforeCursorWord`).
 
 **The loop** walks the input. At each position it:
 
@@ -93,7 +99,8 @@ reaches into it.
 
 **After the loop**, the **rewriters** (`indication.rs`, `Rewriters`) rewrite the chosen
 translations where the result depends on which rule was chosen: the `nocontractsign` and
-letter sign in front of a `contraction` applied (forward), and the capitals (backward).
+letter sign in front of a `contraction` applied and the spaces between two `largesign`s
+(forward), and the capitals (backward).
 
 ### The multipass stages
 
@@ -138,6 +145,13 @@ One per kind of indication: `uppercase`, `numeric`, `emphasis`, `computer_braill
 `lettersign`, and `mode` for the generic `begmode` family, which marks a run of any
 character class the way capitals are marked.
 
+**`IndicationOrder`.** The order of the indications at one position: what closes there
+closes innermost first, then what opens there opens outermost first, capitals and modes
+closest to the word, so that indicators nest (ADR-0026). Each indicator gives its
+indications their place; `Indicators::precompute` sorts by it. It is the same kind of key
+as `Rank`, but it orders all the indications at a position, lowest first, where `Rank`
+picks the one candidate that wins.
+
 **Constrainer, `Constraint`.** Decides from the text alone where rules may or may not
 apply, before translation, as one set of flags per position. One per question: inside a
 number, inside a `nocont` word, a syllable start, a hyphenation break, backward after a
@@ -145,9 +159,10 @@ number sign, and so on.
 
 **Rewriter.** Rewrites the chosen translations after the loop, where the result depends on
 the rule chosen rather than on the text. It may insert translations or change them:
-`ContractionSigns` puts a chosen contraction's signs in front of it (forward),
-`BackwardCaps` uppercases after a chosen `capsletter` or `begcapsword` (backward). A table
-holds them as `Rewriters`, applied in turn.
+`ContractionSigns` puts a chosen contraction's signs in front of it and `LargeSigns` drops
+the spaces between two large signs (forward), `BackwardCaps` uppercases after a chosen
+`capsletter` or `begcapsword` and in a capitals passage (backward). A table holds them as
+`Rewriters`, applied in turn.
 
 **`Rank`, `Precedence`.** How the loop picks between candidates at the same position: a
 key compared field by field. Roughly: a forward `context` rule with no leading literal
@@ -156,7 +171,7 @@ then the longest match, then the kind of rule (`Precedence`: character definitio
 emphasis indicator < indicator < `always` < everything else), then backward the longest
 output, `nocross`, a `context` rule's test, and finally the earliest definition. The order
 of the fields is the order of precedence; ADR-0016 has the reasoning, and the doc comments
-on `Rank` the details.
+on `Rank` the details. `IndicationOrder` is the same kind of key for indications.
 
 **Effects, environment.** The variables a `context` or multipass rule sets (`#1=0`,
 `#1+`, `#1-`) and tests (`#1=3`, `#1<3`, ...), carried along one stage's loop. A
@@ -164,9 +179,7 @@ variable that was never set is 0.
 
 **Scanners.** Small helpers that look further than the neighbouring character. The trie
 consults `BegWordScanner` and `EndWordScanner` (backward word boundaries) and
-`StandingAloneScanner` (`seqdelimiter` sequences) for its transitions; the main stage uses
-`CompbrlScanner` (words with a `compbrl` string become computer braille) and
-`CursorWordScanner` (the word at the cursor) before the loop.
+`StandingAloneScanner` (`seqdelimiter` sequences) for its transitions.
 
 ## Where does new logic go?
 
@@ -195,10 +208,17 @@ Backward translation runs the same machinery over braille, with these difference
   rules with the same dots (`Precedence::Indicator`, `Precedence::Emphasis`).
 - **Constrainers read cells**: after a number sign, a cell shared by a digit and a letter
   reads as the digit (`PreferDigit` and the backward digit overrides); after a letter sign,
-  the word rules stay off (`NoContract`, `NoWholeWord`).
+  the word rules stay off (`NoContract`, `NoWholeWord`); after a `begcapsphrase` or
+  `begcaps`, the first `endcapsphrase` or `endcaps` cells end the passage
+  (`CapsPassageEnd`). Only there are they read as the end of the passage, even where a
+  capital indicator has the same cells, such as UEB's `endcapsword` ⠠⠄. Anywhere else
+  they keep their other meaning.
 - **Word boundaries** are decided from the text already written (`BegWordScanner`) and the
   cells still to come (`EndWordScanner`), since a cell doesn't say whether it is a letter.
 - **`Rank`** prefers the rule that writes more text, as liblouis sorts its backward rules.
+  Over several cells this comes before the kind of rule: a character definition is no
+  longer only the fallback there, it ties with other rules writing as many characters,
+  and the earlier rule wins, `always` excepted.
 - **Capitals** are applied by the `BackwardCaps` rewriter, with the table's
   `base uppercase` rules.
 - **Emphasis** comes out as the typeform, `TranslationResult::emphasis`:

@@ -88,7 +88,7 @@ impl TranslationPipeline {
                 MultipassTable::compile(&correct_rules, direction, TranslationStage::Pre, &ctx)?;
             steps.push(Transformation::Pre(transform));
         }
-        let context = TableContext::compile(rules.as_slice())?;
+        let context = TableContext::compile(rules.as_slice())?.with_classes_of(&ctx);
         let transform = PrimaryTable::compile(
             rules.as_slice(),
             direction,
@@ -135,7 +135,11 @@ impl TranslationPipeline {
             }
         }
         let steps = match direction {
-            Direction::Forward => steps,
+            Direction::Forward => {
+                // Unicode braille, until a braille encoding replaces it (`with_display`)
+                steps.push(Transformation::Display(DisplayTable::unicode_braille()));
+                steps
+            }
             Direction::Backward => steps.into_iter().rev().collect(),
         };
         Ok(Self {
@@ -269,7 +273,7 @@ mod tests {
         assert_eq!(pipeline.translate("foobaz"), "⠇⠸");
         assert_eq!(pipeline.translate("foobar"), "⠇⠸");
         assert_eq!(pipeline.translate("  "), "⠀⠀");
-        assert_eq!(pipeline.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
+        assert_eq!(pipeline.translate("🐂"), "⠄⡳⠽⠂⠋⠲⠴⠆⠄");
     }
 
     #[test]
@@ -306,7 +310,7 @@ mod tests {
         assert_eq!(pipeline.translate("foo"), "⠁");
         assert_eq!(pipeline.translate("foobar"), "⠁⠸");
         assert_eq!(pipeline.translate("  "), "⠀⠀");
-        assert_eq!(pipeline.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
+        assert_eq!(pipeline.translate("🐂"), "⠄⡳⠽⠂⠋⠲⠴⠆⠄");
     }
 
     #[test]
@@ -393,7 +397,7 @@ mod tests {
         assert_eq!(pipeline.translate("foo"), "⠁");
         assert_eq!(pipeline.translate("foobar"), "⠁⠸");
         assert_eq!(pipeline.translate("  "), "⠀⠀");
-        assert_eq!(pipeline.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
+        assert_eq!(pipeline.translate("🐂"), "⠄⡳⠽⠂⠋⠲⠴⠆⠄");
     }
 
     #[test]
@@ -410,7 +414,7 @@ mod tests {
         assert_eq!(pipeline.translate("foo"), "⠁");
         assert_eq!(pipeline.translate("foobar"), "⠁⠸");
         assert_eq!(pipeline.translate("  "), "⠀⠀");
-        assert_eq!(pipeline.translate("🐂"), "⠳⠭⠂⠋⠲⠴⠆");
+        assert_eq!(pipeline.translate("🐂"), "⠄⡳⠽⠂⠋⠲⠴⠆⠄");
     }
 
     #[test]
