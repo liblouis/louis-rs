@@ -87,6 +87,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   letter after a digit with letters after it, as in "2bc", except before
   an `endnum` rule, so "1st" stays ⠼⠁⠌. Back-translating, the letter sign
   is no longer written into the text.
+- A `lowword` doesn't apply after a `joinword`, as in liblouis (#67):
+  `en-us-g2.ctb`'s "to be" is ⠖⠃⠑, not ⠖⠆.
 
 ## [0.4.1] - 2026-11-24
 
