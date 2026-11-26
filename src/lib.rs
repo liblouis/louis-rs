@@ -888,4 +888,16 @@ mod tests {
         let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
         assert_eq!(translator.translate("⠇⠰⠎⠄⠊⠎"), "lors'ils");
     }
+
+    #[test]
+    fn endnum_gives_way_to_midnum_where_the_number_goes_on() {
+        // hu-hu-g1_braille_input.cti's `midnum : 3` and `endnum . 3`
+        let table = "space \\s 0\nlowercase a 1\nlowercase d 145\nlowercase e 15\n\
+                     digit 1 18\ndigit 4 1458\ndigit 5 158\n\
+                     litdigit 1 1\nlitdigit 4 145\nlitdigit 5 15\nnumsign 3456\n\
+                     midnum : 3\nendnum . 3\nmidendnumericmodechars :.\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠼⠁⠁⠄⠙⠑"), "11:45");
+        assert_eq!(translator.translate("⠼⠁⠁⠄"), "11.");
+    }
 }

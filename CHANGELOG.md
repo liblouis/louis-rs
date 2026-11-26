@@ -103,6 +103,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   ⠇⠑⠛⠱⠑⠃⠃⠂⠂⠅⠊⠗⠈⠸⠝⠻⠄ is "legszebb,a királynő.", not "legszebb,,királynő.". And
   a letter sign isn't read right after a letter, so with `fr-bfu-g2.ctb`,
   where ⠰ is also `midword or`, ⠇⠰⠎⠟⠥⠄⠊⠎ is "lorsqu'ils", not "lorsqu'is".
+- Back-translating, an `endnum` doesn't apply where a `litdigit` cell
+  follows, and a `midnum` needs one after it, as in liblouis (#75). With
+  `hu-hu-g1.ctb`, ⠼⠁⠁⠄⠙⠑ is "11:45" by `midnum : 3`, not "11.45" by the
+  later `endnum . 3`.
 
 ## [0.4.1] - 2026-11-24
 

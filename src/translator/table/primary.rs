@@ -1746,7 +1746,12 @@ impl PrimaryTable {
                         chars,
                         &dots.to_string(),
                         Some(Transition::Start(vec![CharacterClass::Digit])),
-                        Some(Transition::End(vec![CharacterClass::Digit])),
+                        // backward, a litdigit cell follows, as in liblouis: a number in
+                        // literary braille goes on in those, not in the digit cells
+                        Some(Transition::End(vec![match direction {
+                            Direction::Forward => CharacterClass::Digit,
+                            Direction::Backward => CharacterClass::Litdigit,
+                        }])),
                         direction,
                         ClassConstraints::default(),
                         TranslationStage::Main,
@@ -1767,7 +1772,10 @@ impl PrimaryTable {
                         chars,
                         &dots,
                         Some(Transition::Start(vec![CharacterClass::Digit])),
-                        None,
+                        // backward, not where the number goes on, as in liblouis: Hungarian
+                        // `endnum . 3` gives way to `midnum : 3` in ⠼⠁⠁⠄⠙⠑, "11:45"
+                        (direction == Direction::Backward)
+                            .then(|| Transition::NotEnd(vec![CharacterClass::Litdigit])),
                         direction,
                         ClassConstraints::default(),
                         TranslationStage::Main,
