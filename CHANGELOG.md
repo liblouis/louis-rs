@@ -93,6 +93,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   it, as in liblouis (#68): `en-gb-g1.utb` writes U+2010 as ⠤, not as the
   ⠤⠤ of the `punctuation` rule it includes first. Back-translating, it
   ranks above the character definitions on its cells too.
+- Back-translating, `begcomp` and `endcomp` are read as indicators, as in
+  liblouis (#96). With `en-us-g2.ctb`, EBAE's ⠸⠬⠺⠺⠺⠨⠁⠃⠉⠨⠉⠕⠍⠸⠱ came back as
+  "_+www.abc.com_wh" rather than "www.abc.com". The text between them is
+  still read with the table's rules, as in liblouis.
 
 ## [0.4.1] - 2026-11-24
 

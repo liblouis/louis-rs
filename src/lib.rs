@@ -861,4 +861,16 @@ mod tests {
         let forward = Translator::from_table_source(table, Direction::Forward).unwrap();
         assert!(forward.translate("but✔").starts_with("⠃⠄"));
     }
+
+    #[test]
+    fn computer_braille_indicators_are_read_back_as_indicators() {
+        // en-us-g1.ctb's EBAE indicators, whose cells are also "_+" and "_wh"
+        let table = "space \\s 0\nlowercase a 1\nlowercase h 125\nlowercase w 2456\n\
+                     sign _ 456\nmath + 346\nalways wh 156\n\
+                     begcomp 456-346\nendcomp 456-156\n";
+        let translator = Translator::from_table_source(table, Direction::Backward).unwrap();
+        assert_eq!(translator.translate("⠸⠬⠺⠁⠸⠱"), "wa");
+        // the cells on their own are still the characters
+        assert_eq!(translator.translate("⠸⠀⠬"), "_ +");
+    }
 }

@@ -258,7 +258,9 @@ impl HasPrecedence for Rule {
             | Rule::Begcapsphrase { .. }
             | Rule::Endcapsphrase { .. }
             | Rule::Numsign { .. }
-            | Rule::Nonumsign { .. } => Precedence::Indicator,
+            | Rule::Nonumsign { .. }
+            | Rule::Begcomp { .. }
+            | Rule::Endcomp { .. } => Precedence::Indicator,
             Rule::Begemph { .. }
             | Rule::Endemph { .. }
             | Rule::Emphletter { .. }

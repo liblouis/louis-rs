@@ -1375,16 +1375,20 @@ impl PrimaryTable {
                         rule,
                     );
                 }
-                Rule::Begcomp { dots, .. } => {
-                    builder
+                // backward, the indicators are consumed, as liblouis does; the text between
+                // them is still read with the table's rules
+                Rule::Begcomp { dots, .. } => match direction {
+                    Direction::Forward => builder
                         .computer_braille_indicator
-                        .begcomp(&dots.to_string(), rule);
-                }
-                Rule::Endcomp { dots, .. } => {
-                    builder
+                        .begcomp(&dots.to_string(), rule),
+                    Direction::Backward => builder.insert_backward_indicator(&dots.to_string(), rule),
+                },
+                Rule::Endcomp { dots, .. } => match direction {
+                    Direction::Forward => builder
                         .computer_braille_indicator
-                        .endcomp(&dots.to_string(), rule);
-                }
+                        .endcomp(&dots.to_string(), rule),
+                    Direction::Backward => builder.insert_backward_indicator(&dots.to_string(), rule),
+                },
                 Rule::Capsnocont {} => builder.capsnocont_constrainer.mark_present(),
                 Rule::Nocont { chars } => {
                     // Forward only, like liblouis: no dots to back-translate from.
