@@ -190,9 +190,11 @@ Three implementations come with ~louis-rs~:
 
 - ~SearchDirs(Vec<PathBuf>)~ :: a search path with today's behaviour: the
   key is ~TableKey::File~ with the canonical path of the file found. It
-  is a type of ~louis-rs~'s own because the orphan rule does not allow
-  implementing ~TableSource~ for ~search_path::SearchPath~, a type of
-  another crate. What ~louis-rs~ and ~louis-cli~ use of that crate --
+  is a type of ~louis-rs~'s own. ~TableSource~ could be implemented for
+  ~search_path::SearchPath~ instead, but an implementation of a public
+  trait is public, so the 0.x ~search_path~ crate would become part of
+  ~louis-rs~'s public API and a breaking release of it a breaking release
+  of ~louis-rs~. What ~louis-rs~ and ~louis-cli~ use of that crate --
   ~find_file~, ~iter~, ~prepend~ and reading ~LOUIS_TABLE_PATH~ -- is a
   loop over the directories, ~Vec~ methods and ~std::env::split_paths~,
   so ~SearchDirs~ replaces the dependency, as [[https://github.com/liblouis/louis-rs/pull/28][PR #28]] proposed. ~new~
