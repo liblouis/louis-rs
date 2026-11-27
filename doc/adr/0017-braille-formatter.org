@@ -119,7 +119,7 @@ Pure stages, each turning one immutable structure into the next:
 4. Translate: one ~translate_with_options~ call per inline run of
    segments using the same table, split back as above.
 5. Flow: margins, ~text-indent~ and greedy line breaking at braille
-   spaces, giving lines.
+   spaces and mapped hyphenation points, giving lines.
 6. Paginate: ~@page~ size, page breaks, braille page numbers.
 7. Volumes.
 8. Serialize: PEF, later BRF.
@@ -132,14 +132,24 @@ enough to show cross-node contractions working.
 - No special characters in tables, unlike liblouisutdml's
   ~LOU_ENDSEGMENT~.
 - louis-rs needs no new API for the split-back.
+- louis-rs needs no hyphenation API either. Hyphenation is a
+  print-text concern: the formatter hyphenates the input with its own
+  hyphenator (for example the ~hyphenation~ crate with TeX patterns),
+  as the DAISY Pipeline does for CSS ~hyphens: auto~. Break points
+  are carried into the braille through ~output_positions~ like the
+  segment boundaries. A break at input position ~i~ is not allowed
+  when ~output_positions[i-1] == output_positions[i]~, because a single
+  rule's output spans it. This leaves louis-rs free to drop
+  hyphenation, apart from its internal use for ~nocross~.
 - Stylesheets written for the DAISY Pipeline are a starting point.
 
 *** Negative Consequences
 
-- Hyphenation for line breaking needs a louis-rs API change:
-  ~src/hyphenation.rs~ is only used internally for ~nocross~.
-  Hyphenation points would have to be exposed on the input side and
-  carried into the braille through ~output_positions~.
+- The formatter needs its own hyphenator and per-language patterns.
+- In some braille codes (for example German contracted braille) the
+  two halves of a hyphenated word do not translate the same way as
+  the whole word. After choosing a break, the formatter then has to
+  translate each half separately.
 - It inherits louis-rs's partial emphasis support.
 - No target document exists, so acceptance tests have to be small
   per-feature fixtures (~input.xml~, ~style.css~, expected braille
