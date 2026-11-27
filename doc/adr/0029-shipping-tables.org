@@ -182,11 +182,11 @@ size liblouis has.
 ~text~ is a ~String~, not a ~Cow<'_, str>~ borrowed from the source. A
 borrow would put a lifetime on ~Table~ and on the trait, and save one
 copy of at most 1.5 MB per table loaded, next to about 19 ms for
-compiling a table. Of the sources, only a map of texts held in memory
-would copy where it does not have to: ~louis-tables~ decompresses into a
+compiling a table. Of the sources, only a function over texts held in
+memory would copy where it does not have to: ~louis-tables~ decompresses into a
 new ~String~ anyway, and the C API copies anyway (below).
 
-Three implementations come with ~louis-rs~:
+Two implementations come with ~louis-rs~:
 
 - a search path :: today's behaviour: the key is ~TableKey::File~ with
   the canonical path of the file found. It is a private newtype around
@@ -198,9 +198,8 @@ Three implementations come with ~louis-rs~:
   ~LOUIS_TABLE_PATH~) or ~with_search_path~; ~louis-cli~ gets the newtype
   from ~louis::internals~. The same goes for ~BrailleEncoding~, which
   loads display tables through the same parser.
-- ~HashMap<String, String>~ :: a map from names to text, for tables held
-  in memory: the key is ~TableKey::Name~.
-- ~Fn(&str) -> Option<String>~ :: any such function, for a data crate:
+- ~Fn(&str) -> Option<String>~ :: any such function, for a data crate
+  or for tables held in memory, such as a closure over a map:
   the key is ~TableKey::Name~, and ~None~ is ~NotFound~.
 
 A constructor ~Translator::with_source(&source, &tables, direction)~ sits
