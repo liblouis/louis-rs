@@ -112,6 +112,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   the input had been translated up to the `[`, so a contraction starting
   earlier could take that text: with `hu-hu-g2.ctb`, "Gonda János" gave
   ⠛⠙⠁ rather than ⠛⠕⠝⠙⠁, and "Nem vállal" ⠧⠈⠇⠧ rather than ⠧⠈⠇⠇⠁⠇.
+- A repeated test with a range in a `context`, `correct` or pass rule, such
+  as `$l1-30`, matches any count in the range (#75). It matched only the
+  minimum or the minimum plus a multiple of the rest, so with
+  `hu-hu-g2.ctb`, "Gondos Réka" and "Francisco de Goya" were contracted
+  where the table's `context` rules spell them out.
 
 ## [0.4.1] - 2026-11-24
 

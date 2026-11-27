@@ -242,13 +242,18 @@ impl Regexp {
                 for _ in 0..*min {
                     regexp.emit(instructions, character_classes);
                 }
-                let pos = instructions.len();
-                instructions.push(Instruction::Split(pos + 1, 0));
+                // each further copy is optional, and skipping one ends the repetition
+                let mut splits = Vec::new();
                 for _ in *min..*max {
+                    let pos = instructions.len();
+                    splits.push(pos);
+                    instructions.push(Instruction::Split(pos + 1, 0));
                     regexp.emit(instructions, character_classes);
                 }
-                instructions.push(Instruction::Jump(pos));
-                instructions[pos] = Instruction::Split(pos + 1, instructions.len());
+                let end = instructions.len();
+                for pos in splits {
+                    instructions[pos] = Instruction::Split(pos + 1, end);
+                }
             }
             Regexp::Capture(regexp) => {
                 instructions.push(Instruction::CaptureStart);
@@ -1066,6 +1071,26 @@ mod tests {
         assert!(re.is_match("aaab", &env));
         assert!(!re.is_match("c", &env));
         assert!(!re.is_match("bbb", &env));
+    }
+
+    #[test]
+    fn repeat_at_least_at_most_then_more() {
+        let env = Environment::new();
+        // one to three 'a's, then a 'b': every count in the range, as `$l1-30` needs
+        let re = Regexp::Concat(
+            Box::new(Regexp::RepeatAtLeastAtMost(
+                1,
+                3,
+                Box::new(Regexp::String("a".to_string())),
+            )),
+            Box::new(Regexp::String("b".to_string())),
+        )
+        .compile();
+        assert!(!re.is_match("b", &env));
+        assert!(re.is_match("ab", &env));
+        assert!(re.is_match("aab", &env));
+        assert!(re.is_match("aaab", &env));
+        assert!(!re.is_match("aaaab", &env));
     }
 
     #[test]
