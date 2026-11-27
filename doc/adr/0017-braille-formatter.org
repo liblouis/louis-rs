@@ -127,6 +127,39 @@ Pure stages, each turning one immutable structure into the next:
 A first version would be stages 1-5 producing unpaginated lines --
 enough to show cross-node contractions working.
 
+*** Effort
+
+Little of liblouisutdml's code (about 16.7k lines of C) ports.
+Its configuration and semantic-action code (~readconfig.c~,
+~semantics.c~, about 4.5k lines) is replaced by CSS, and its UTD
+converters (~utd2*.c~, about 1.7k lines) have no counterpart. Its
+formatting core (~transcriber.c~, about 6k lines) mixes both output
+modes and works on global state and an XML tree it edits in place.
+What carries over is knowledge: the edge cases it handles (print page
+indicators, braille and print page numbers, Roman numerals and the
+letter sign before them, words longer than a line) and its test
+inputs, whose expected output would need a stylesheet rewritten for
+each test.
+
+Rough sizes, all guesses:
+
+- Stages 1-5: small, about 1.5-2.5k lines of Rust. ~roxmltree~ and
+  ~simplecss~ do the parsing; the work is the cascade, the box tree
+  and the split-back.
+- Stage 6: medium. ~@page~ margin boxes, ~counter()~, ~string-set~,
+  break and keep rules are each small, but there are many.
+- Stage 7: the hardest part. Balancing volumes, volume-start and
+  volume-end content, and a table of contents whose page numbers move
+  with the volumes are why the DAISY Pipeline hands this to Dotify.
+- Stage 8: small.
+
+A formatter for prose -- paginated PEF from DTBook or HTML -- would
+be about 5-8k lines. Parity with liblouisutdml (math, TOC, endnotes,
+its output formats) is much more and not a goal. The estimate depends
+mostly on which braille CSS subset is needed; choosing a target
+document, such as a typical DTBook novel, would turn it into a list
+of features.
+
 *** Positive Consequences
 
 - No special characters in tables, unlike liblouisutdml's
