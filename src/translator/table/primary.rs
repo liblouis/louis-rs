@@ -402,16 +402,19 @@ impl PrimaryTableBuilder {
         let dots_str = dots.to_string();
         if dots.len() == 1 {
             let cell = dots.iter().next().unwrap().to_unicode();
-            self.backward_digit_overrides.insert(
-                cell,
-                ResolvedTranslation::new(
-                    &dots_str,
-                    &character.to_string(),
-                    1,
-                    TranslationStage::Main,
-                    rule.clone(),
-                ),
-            );
+            // the first definition of a cell wins, as in liblouis: a table defines its own
+            // digits (Arabic ١) before it includes the shared ones (`litdigits6Dots.uti`)
+            self.backward_digit_overrides
+                .entry(cell)
+                .or_insert_with(|| {
+                    ResolvedTranslation::new(
+                        &dots_str,
+                        &character.to_string(),
+                        1,
+                        TranslationStage::Main,
+                        rule.clone(),
+                    )
+                });
         }
     }
 
@@ -4072,6 +4075,26 @@ mod tests {
         .unwrap();
         assert_eq!(table.translate("⠁"), "a");
         assert_eq!(table.translate("⠼⠁"), "1");
+    }
+
+    #[test]
+    fn backward_first_litdigit_for_a_cell_wins() {
+        // as in ar-ar-g1-core.uti, which defines the Arabic digits before it includes
+        // litdigits6Dots.uti
+        let rules = [
+            parse_rule("litdigit \\x0661 1"),
+            parse_rule("litdigit 1 1"),
+            parse_rule("numsign 3456"),
+        ];
+        let context = TableContext::compile(&rules).unwrap();
+        let table = PrimaryTable::compile(
+            &rules,
+            Direction::Backward,
+            TranslationStage::Main,
+            &context,
+        )
+        .unwrap();
+        assert_eq!(table.translate("⠼⠁"), "١");
     }
 
     #[test]

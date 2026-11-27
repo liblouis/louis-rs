@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   computer braille, which needs no `emphclass` in the table (#94).
 
 ### Fixed
+- Back-translating a number, a cell that two `litdigit` rules define is read
+  as the first one, as in liblouis. Tables that define their own digits
+  before including `litdigits6Dots.uti` got the Western digit: with
+  `ar-ar-g1.utb`, ⠼⠁ was "1" rather than "١". This affects the Arabic,
+  Urdu and Kannada tables.
 - Capitals passages are back-translated (#86): `begcapsphrase` and
   `endcapsphrase before|after` are read, so with `en-ueb-g2` ⠠⠠⠠⠮ ⠙⠕⠛
   ⠗⠁⠝⠠⠄ is "THE DOG RAN" rather than "The dog ran". `begcaps` and
