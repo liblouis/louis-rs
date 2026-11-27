@@ -1,0 +1,416 @@
+#+options: todo:t
+#+TODO: DRAFT PROPOSED | ACCEPTED REJECTED DEPRECATED SUPERSEDED
+#+language: en
+
+* PROPOSED ADR-0029: Ship the liblouis tables as a separate data crate, read through an in-memory table source
+- Deciders :: CE
+- Date :: [2026-11-27 Fri]
+
+Technical Story: [[https://github.com/liblouis/louis-rs/issues/61][issue #61]], [[https://github.com/liblouis/louis-rs/pull/10][PR #10]]
+
+** Context and Problem Statement
+
+louis-rs ships no tables. A caller points ~LOUIS_TABLE_PATH~ or
+~Translator::with_search_path~ at a liblouis checkout or install
+([[file:0015-table-lookup.org][ADR-0015]]). That works on a desktop with liblouis installed, and not
+for an application that has to carry its tables with it: iOS and
+Android apps, a single static binary, a Python wheel.
+
+Paperback, the first such application, works around it today. It packs
+the tables into its binary, inlines every ~include~ itself and hands the
+result to ~Translator::from_table_source~, which refuses an ~include~.
+That costs it three things: errors point into the concatenated text
+instead of the file and line of the rule, it parses ~include~ lines
+with a parser of its own, and it cannot load the eight tables whose
+~nocross~ rules include a ~.dic~ (Danish grade 2, German grades 1 and 2,
+~en-g3.ctb~).
+
+Two questions follow: how louis-rs reads a table that is not a file on
+disk, and whether and how the liblouis tables themselves are
+distributed through crates.io. [[https://github.com/liblouis/louis-rs/issues/61][Issue #61]] asks the related question of
+where the tables live in the long run.
+
+Two plans weigh on both questions:
+
+- liblouis is to be retired in favour of louis-rs. The C code ends; the
+  tables, the ~.dic~ files and the YAML tests in ~tests/braille-specs~
+  continue, either in a repository of their own or in louis-rs. Until
+  then the tables are maintained in liblouis.
+- liblouis means to have tables found by their metadata (~#+key: value~,
+  ~lou_findTable~) rather than by file name. louis-rs has the query side
+  as ~louis::metadata~, which today only indexes files on a search path.
+
+The numbers, for liblouis at ed4d873d (after 3.39.0):
+
+- 478 files in ~table_files~ of ~tables/Makefile.am~, the set liblouis
+  installs; 15 MB as text, 3.5 MB as a gzipped tarball, 2.3 MB with xz.
+  Paperback's per-file gzip gives 2.8 MB.
+- 20 of them are ~.dic~ files. 4 are included by tables for ~nocross~;
+  the 16 ~hyph_*.dic~ are included by no table and serve ~lou_hyphenate~
+  only, which louis-rs does not have ([[file:0022-hyphenate-chartodots-dotstochar.org][ADR-0022]]).
+- All tables are LGPL-2.1, like louis-rs. The Creative Commons notices
+  in ~IPA.utb~ and ~IPA-unicode-range.uti~ credit the source of the
+  data, not the tables' licence.
+- 257 commits touched ~tables/~ in the last twelve months; liblouis
+  releases every few months.
+- Loading ~en-ueb-g2.ctb~ takes 19 ms, of which parsing is 15-25 %
+  (measured for [[https://github.com/liblouis/louis-rs/pull/10][PR #10]]).
+
+** Decision Drivers
+
+- An application must be able to carry the tables it needs with no
+  directory on disk.
+- Tables change more often than the library and for other reasons. A
+  table fix must not need a louis-rs release, and a louis-rs release
+  must not drag in table changes. This holds whether the tables are
+  maintained in liblouis or, after it is retired, next to louis-rs.
+- Whatever louis-rs reads tables through must also serve the metadata
+  index, so that selecting tables by query works for bundled tables as
+  well as for files.
+- Nothing loaded at run time skips the parser, so a corrupt or hostile
+  input can do no more than a bad table file can today.
+- The library API stays small: what is stored how is the host's
+  business.
+- crates.io takes at most 10 MB per ~.crate~ file.
+
+** How other Rust crates do it
+
+- [[https://crates.io/crates/hyphenation][hyphenation]]: the patterns are in the crate; a build script compiles
+  them to bincode, and ~embed_all~ or ~embed_<lang>~ features embed the
+  result, read with ~Load::from_embedded~. The docs recommend loading
+  single dictionaries at run time instead of embedding all 2.8 MB.
+- [[https://crates.io/crates/hypher][hypher]] (Typst): the patterns are compiled at development time to
+  automata, checked in and embedded; one Cargo feature per language,
+  all 48 on by default, about 1.1 MiB together. Pays off because
+  building the automaton is the expensive part, and the format is read
+  in place without decoding.
+- [[https://crates.io/crates/spellbook][spellbook]] (Helix): ships no dictionaries; the host finds or carries
+  the Hunspell ~.aff~/~.dic~ pair and passes the text in.
+- [[https://crates.io/crates/icu][ICU4X]]: data is separate from code. ~compiled_data~ (default) bakes
+  data into the binary; without it, every constructor takes an explicit
+  data provider, for example a blob loaded at run time
+  (~icu_provider_blob~). Generated data can live in separate crates.
+- [[https://crates.io/crates/chrono-tz][chrono-tz]]: the IANA database is in the crate and generated into Rust
+  by a build script; ~filter-by-regex~ with ~CHRONO_TZ_TIMEZONE_FILTER~
+  trims the set at build time.
+- webpki-roots: the Mozilla root certificates as a crate of their own,
+  released independently of rustls, which takes them as a value.
+
+Two patterns repeat. The engine takes data from the caller through a
+small interface (spellbook, ICU4X providers, rustls). Where data is
+bundled, a precompiled form is used only when compiling the data is the
+expensive part (hyphenation, hypher); data that changes on its own
+schedule sits in a crate of its own (webpki-roots, ICU4X data crates).
+
+** Considered Options
+
+For reading tables:
+
+- Table source :: an in-memory table source behind a trait, the shape
+  proposed in [[https://github.com/liblouis/louis-rs/pull/10][PR #10]]
+- Serialized rules :: [[https://github.com/liblouis/louis-rs/pull/10][PR #10]] as submitted: serde on ~Rule~, gzipped
+  bincode
+- Serialized pipeline :: a serialized ~TranslationPipeline~
+- Host inlining :: leave it to the host, as now with Paperback
+
+For distributing the tables:
+
+- Data crate :: a separate crate of tables, released on its own
+- Tables in the library :: the tables inside the ~louis-rs~ crate behind
+  a feature
+- No distribution :: each application packs its own
+
+** Decision Outcome
+
+Proposed: Table source and Data crate. This is open for feedback; nothing
+is implemented yet.
+
+*** Reading: a table source
+
+The three spots where the parser touches the filesystem -- ~find_file~
+on the search path, ~canonicalize~ for cycle detection, and
+~read_to_string~ for tables and ~.dic~ files -- go behind a trait of one
+method:
+
+#+begin_src rust
+  pub trait TableSource {
+      /// The table or dictionary called `name`. Two names for one table
+      /// give the same key. A table that does not exist is an error of
+      /// kind `NotFound`.
+      fn get(&self, name: &str) -> io::Result<Table>;
+  }
+
+  pub struct Table {
+      pub key: TableKey,
+      pub text: String,
+  }
+
+  #[non_exhaustive]
+  #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+  pub enum TableKey {
+      /// A file found on a search path, by its canonical path.
+      File(PathBuf),
+      /// A table from an in-memory source or a data crate, by its name.
+      Name(String),
+  }
+#+end_src
+
+The parser calls ~get~ with the name a caller gives or an ~include~ line
+holds, and parses the text. The key is what it needs besides the text:
+the chain of keys catches a table that includes itself, even under
+another name (~a.ctb~ and ~./a.ctb~), and errors name the key and line of
+the rule. The key is never opened or read.
+
+The key is a type of its own rather than a ~PathBuf~ or a ~String~. A
+~PathBuf~ suggests a file to open, which a table held in memory does not
+have; a ~String~ says nothing about what it holds. With ~TableKey~ an
+error says which kind of table it is in, a file by its path or a table
+by its name, and ~#[non_exhaustive]~ leaves room for another kind of
+source without breaking a ~match~ on it.
+
+~text~ is the whole text rather than a reader (~io::BufRead~). A reader
+would let the parser take a table line by line, but the largest table,
+~zh-tw.ctb~, is 1.5 MB, and the rules parsed from it and the tries
+compiled from those are kept in memory anyway and are several times
+larger. A reader would save that text only while it is parsed, make the
+in-memory sources wrap their text in a ~Cursor~, and bring read and UTF-8
+errors into the middle of a table. As changing the type of ~text~ later
+breaks every implementation, this has to be settled before the trait
+is released, for tables of the
+size liblouis has.
+
+~text~ is a ~String~, not a ~Cow<'_, str>~ borrowed from the source. A
+borrow would put a lifetime on ~Table~ and on the trait, and save one
+copy of at most 1.5 MB per table loaded, next to about 19 ms for
+compiling a table. Of the sources, only a map of texts held in memory
+would copy where it does not have to: ~louis-tables~ decompresses into a
+new ~String~ anyway, and the C API copies anyway (below).
+
+Three implementations come with ~louis-rs~:
+
+- ~SearchDirs(Vec<PathBuf>)~ :: a search path with today's behaviour: the
+  key is ~TableKey::File~ with the canonical path of the file found. It
+  is a type of ~louis-rs~'s own because the orphan rule does not allow
+  implementing ~TableSource~ for ~search_path::SearchPath~, a type of
+  another crate. What ~louis-rs~ and ~louis-cli~ use of that crate --
+  ~find_file~, ~iter~, ~prepend~ and reading ~LOUIS_TABLE_PATH~ -- is a
+  loop over the directories, ~Vec~ methods and ~std::env::split_paths~,
+  so ~SearchDirs~ replaces the dependency, as [[https://github.com/liblouis/louis-rs/pull/28][PR #28]] proposed. ~new~
+  and ~with_search_path~ stay and build a ~SearchDirs~;
+  ~with_source(&SearchDirs(dirs), ...)~ does the same by hand. The same
+  goes for ~BrailleEncoding~, which loads display tables through the same
+  parser.
+- ~HashMap<String, String>~ :: a map from names to text, for tables held
+  in memory: the key is ~TableKey::Name~.
+- ~Fn(&str) -> Option<String>~ :: any such function, for a data crate:
+  the key is ~TableKey::Name~, and ~None~ is ~NotFound~.
+
+A constructor ~Translator::with_source(&source, &tables, direction)~ sits
+next to ~with_search_path~. ~include~ is handled by the one parser that
+knows it, and ~.dic~ includes work like any other.
+
+A trait rather than a function parameter, because a trait can gain a
+method with a default implementation without breaking its
+implementations, ~names~ for the metadata index say, where a function
+parameter cannot change at all. The implementation for functions keeps
+the plain function as easy to pass as a parameter would be.
+
+The trait is public API under semver, so it stays this small.
+
+A table given as text, such as an inline table in a YAML test, is the
+one table not fetched through ~get~; the tables it includes are. Its text
+needs no key: having no name, nothing can include it, so it cannot be
+part of a cycle, and the chain of keys starts empty below it. Its rules
+carry no key either, so its errors name no table, as today. The path an
+~AnchoredRule~ keeps, ~Option<PathBuf>~ today, becomes ~Option<TableKey>~,
+~None~ for such a table. ~from_table_source~, which today refuses
+~include~, takes a source for what the text includes:
+~Translator::from_table_source(text, &source, direction)~. This changes
+its signature, which the next 0.x minor allows. The YAML test runner
+does the same with ~SearchDirs~ from ~LOUIS_TABLE_PATH~, and an
+application can put a small table of its own on top of the ones in
+~louis-tables~.
+
+In the C API of louis-capi ([[file:0023-c-api.org][ADR-0023]]) none of these types appear. A
+source there is a callback that returns a table's text or ~NULL~, with
+a release callback and a context pointer:
+
+#+begin_src c
+  typedef const char *(*LouisGetTable)(void *ctx, const char *name);
+  typedef void (*LouisRelease)(void *ctx, const char *text);
+
+  LouisTranslator *louis_translator_new_with_source(
+      const char *const *tables, size_t n_tables, LouisDirection direction,
+      LouisGetTable get, LouisRelease release, void *ctx);
+#+end_src
+
+louis-capi wraps the callbacks in a type that implements ~TableSource~:
+it copies the text into a ~String~, checks that it is UTF-8, then calls
+~release~ if it is not ~NULL~; ~NULL~ from ~get~ is ~NotFound~, and the key is
+always ~TableKey::Name~. A search path stays the ~search_path~ parameter
+of ~louis_translator_new~.
+
+*** Distribution: a ~louis-tables~ crate
+
+- Contents :: the files in ~table_files~ of ~tables/Makefile.am~, less the
+  16 ~hyph_*.dic~ (about 2 MB as text), which no table includes and only
+  ~lou_hyphenate~ reads. The four ~nocross~ ~.dic~ files stay. The
+  ~hyph_*.dic~ move with the tables all the same; [[file:0022-hyphenate-chartodots-dotstochar.org][ADR-0022]] may need them.
+- Version :: continues liblouis's numbering, so the first release after
+  3.39.0 is ~louis-tables 3.40.0~. People already know table sets by
+  those numbers, and after liblouis is retired the numbering carries on
+  with no C release behind it. A change to the crate's small API takes
+  a major version, as anywhere.
+- API :: one function, ~get(name: &str) -> Option<String>~, the text of
+  a table or ~.dic~ file. It has the shape of the
+  ~Fn(&str) -> Option<String>~ implementation of ~TableSource~ above, so
+  the host passes it as it is:
+  ~Translator::with_source(&louis_tables::get, ...)~.
+- Dependencies :: none on ~louis-rs~, in either direction. If ~louis-tables~
+  implemented ~TableSource~ itself it would depend on ~louis-rs~, and since
+  a new 0.x minor of ~louis-rs~ is outside ~^0.x~, every library minor
+  would need a table release. If ~louis-rs~ depended on ~louis-tables~
+  behind a feature, every table release would need a library release.
+- Compatibility :: as the crates do not depend on each other, a
+  ~louis-tables~ release whose tables need a newer ~louis-rs~ -- a new
+  opcode, say -- states the lowest ~louis-rs~ version it works with, in
+  its changelog and as a constant.
+- Location :: a member of this workspace, ~louis-tables/~, with a version
+  of its own rather than the workspace's. There is one engine, and a
+  new opcode is a change to the engine and the tables together; in one
+  repository that is one commit, and CI runs ~louis check-table~ on every
+  bundled table against the library of the same commit. That tables and
+  library change at different paces is handled by the two crates and
+  their separate releases, which needs no separate repository. A
+  repository of its own for the tables pays off when more than one
+  engine reads them, which is not the plan.
+- Storage :: each file is compressed on its own in the build script, and
+  decompressed when it is read. Plain ~include_str!~ would put 15 MB into
+  every binary that uses the crate, which is the size that matters to
+  the mobile applications this is for; per-file compression keeps it
+  near 3 MB and reads only the tables a translator needs. The source
+  stays plain text in git so a sync shows as a readable diff.
+- Sync, while liblouis lives :: a script copies ~table_files~ from a
+  liblouis tag into the crate, followed by a release of ~louis-tables~
+  alone. The crate is not a second place to edit tables; a fix goes to
+  liblouis.
+- After liblouis is retired :: the tables, the ~.dic~ files and the YAML
+  tests move into ~louis-tables/~, which becomes the one place they are
+  maintained. The sync script goes away.
+
+[[https://github.com/liblouis/louis-rs/issues/61][Issue #61]]: the tables stay in liblouis until it is retired and then
+move into this repository. They are published as ~louis-tables~ before
+and after, so applications are not affected by the move.
+
+*** Towards selecting tables by metadata
+
+Not decided here, but the trait is meant not to stand in the way. The
+metadata index needs two things: the names of all tables, and their
+text. The text comes through ~TableSource::get~. The names need not
+come from the trait: the caller passes them, a directory listing for a
+search path, as ~louis::metadata~ does now, and for the bundled set a
+function ~louis_tables::names()~, added to the crate when the index
+needs it; adding it breaks nothing. A query then yields names, and the source
+loads them; names stay what ~include~ lines use. If building the index
+from a bundled set turns out slow, the build script of ~louis-tables~
+can precompute it.
+
+*** Positive Consequences
+
+- An application loads tables with no directory on disk, ~.dic~
+  includes and error locations included, with no parsing of its own.
+- Tables and library release independently; neither waits for the
+  other.
+- Every table still goes through the parser. An in-memory source can
+  resolve an ~include~ only to a name in its own map, never to a path
+  on disk, so it trusts less than the search path does.
+- Applications that do not want the bundled set pay nothing: they use
+  ~with_search_path~ or a source of their own.
+
+*** Negative Consequences
+
+- A new public trait in ~louis-rs~, and a new crate to release whenever
+  the tables change.
+- A runtime dependency on a decompressor in ~louis-tables~ (for
+  example ~miniz_oxide~, pure Rust).
+- The whole set goes into every binary that uses the crate. A way to
+  pick tables at build time, by feature or by filter as chrono-tz does,
+  is left until someone needs it.
+- Until liblouis is retired the tables exist twice, in liblouis and in
+  the crate's sync copy.
+- Table authors, most of whom do not write Rust, work in a Rust
+  repository, and its history carries the tables: 15 MB of text once,
+  diffs after that.
+
+** Pros and Cons of the Options
+
+*** Table source
+
+- Good, because it removes the filesystem as a requirement without a
+  format of its own: what goes in is liblouis table text.
+- Good, because the host decides storage (plain, compressed, per file,
+  downloaded), as Paperback already does.
+- Bad, because it is new public API to keep stable.
+
+*** Serialized rules
+
+- Good, because it skips parsing.
+- Bad, because parsing is 15-25 % of loading, about 4 ms for UEB grade
+  2.
+- Bad, because it puts serde on every type of the rule AST, which is
+  still changing, and a bundle has to be rebuilt whenever it does.
+- Bad, because a bundle skips the parser's checks, and the deserializer
+  needs size limits so a corrupt bundle cannot claim huge lengths.
+
+*** Serialized pipeline
+
+- Good, because it skips all of loading, not just parsing.
+- Bad, because it needs serde on the tries, the regexp VM and every
+  indicator, while those are the parts that change most.
+- Bad, because it is the deserialization trust problem of Serialized
+  rules, over far more types.
+- Bad, because loading happens once per document; 19 ms there does not
+  justify it. hyphenation and hypher precompile because compiling
+  patterns is their expensive part; here it is not.
+
+*** Host inlining
+
+- Good, because it needs nothing from louis-rs.
+- Bad, because every host reimplements ~include~ handling, loses error
+  locations and cannot load ~nocross~ tables.
+
+*** Data crate
+
+- Good, because the tables release on their own schedule, before and
+  after liblouis is retired.
+- Good, because the library crate stays code only.
+- Bad, because the user adds two dependencies and the one line of glue
+  between them.
+
+*** Tables in the library
+
+- Good, because it is one dependency for the user.
+- Bad, because every table change becomes a library release, and the
+  library's semver says nothing about table contents.
+- Bad, because the ~.crate~ grows by about 3.5 MB for users who never
+  turn the feature on.
+
+*** No distribution
+
+- Good, because there is nothing to maintain.
+- Bad, because every application repeats Paperback's packing, and
+  picks its own liblouis snapshot.
+
+** Open Questions
+
+- Compression :: whether per-file compression is the default, or plain
+  text with compression behind a feature.
+
+** Links
+
+- [[https://github.com/liblouis/louis-rs/issues/61][Issue #61]] -- the future of table updates
+- [[https://github.com/liblouis/louis-rs/pull/10][PR #10]] -- gzip+bincode rule bundles, the load-time measurements, and
+  the ~TableSource~ proposal
+- [[file:0015-table-lookup.org][ADR-0015]] -- table lookup on the search path
+- [[file:0022-hyphenate-chartodots-dotstochar.org][ADR-0022]] -- why the ~hyph_*.dic~ files are not needed
+- [[https://doc.rust-lang.org/cargo/reference/publishing.html][Cargo book]] -- the 10 MB upload limit
