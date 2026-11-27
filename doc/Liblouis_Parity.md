@@ -11,12 +11,13 @@ behave the same as liblouis, and if it doesn't, that's a bug:
 
 ## How close
 
-Measured at louis-rs `b7a6cc0` against liblouis `457d5484` plus the open pull requests
+Measured at louis-rs `130990b` against liblouis `457d5484` plus the open pull requests
 [#2176](https://github.com/liblouis/liblouis/pull/2176),
 [#2190](https://github.com/liblouis/liblouis/pull/2190),
 [#2194](https://github.com/liblouis/liblouis/pull/2194),
-[#2196](https://github.com/liblouis/liblouis/pull/2196) and
-[#2197](https://github.com/liblouis/liblouis/pull/2197). Without #2196 and #2197,
+[#2196](https://github.com/liblouis/liblouis/pull/2196),
+[#2197](https://github.com/liblouis/liblouis/pull/2197) and
+[#2232](https://github.com/liblouis/liblouis/pull/2232). Without #2196 and #2197,
 `it-it-comp6.utb` and `th-g2.ctb` don't load (see `_N` in
 [Differences_From_Liblouis.md](Differences_From_Liblouis.md)).
 
@@ -24,7 +25,7 @@ Measured at louis-rs `b7a6cc0` against liblouis `457d5484` plus the open pull re
 |--------------------------------|----------------|
 | Assertions run                 | 2 241 642      |
 | Pass                           | **99.4%**      |
-| Fail                           | 582 (0.03%)    |
+| Fail                           | 523 (0.02%)    |
 | Expected failure               | 0.5%           |
 | Tables that compile            | all            |
 
@@ -77,7 +78,7 @@ what BRLTTY and TalkBack need; its README lists what is missing.
 |-------------------------------------------------------|-----------------------------------------------------------------------------------------------|
 | `lou_translate`, `lou_translateString`                | `Translator::translate_with_options`, or `translate` for just the output                      |
 | `lou_backTranslate`, `lou_backTranslateString`        | The same, with a `Direction::Backward` translator                                              |
-| `inputPos`, `outputPos`, `cursorPos`                  | `TranslationResult::input_positions`, `output_positions`, `cursor_position`; three known mismatches across the whole suite |
+| `inputPos`, `outputPos`, `cursorPos`                  | `TranslationResult::input_positions`, `output_positions`, `cursor_position`; eight known mismatches across the whole suite |
 | `typeform`, forward and backward                      | `Emphasis`, as spans of named classes: `TranslationOptions::with_emphasis` going in, `TranslationResult::emphasis` coming out |
 | `lou_getEmphClasses`, `lou_getTypeformForEmphClass`   | `Translator::emphasis_classes`; spans name their class, so no typeform bits are needed           |
 | `lou_compileString`                                   | `Translator::from_table_source` compiles a whole table from a string; no adding rules to a table already loaded |
@@ -106,7 +107,7 @@ counts are the `Failure` lines `check` prints for each file, rounded.
 | Russian (`ru`)                        |     ≈24 | Generic `begmode` alphabet indicators: word tiers repeat per letter ("ВДНХ" gives ⠘⠘⠘⠺⠘⠘⠘⠙…, not ⠘⠘⠺⠙⠝⠓), and a letter after one from another alphabet gets its sign twice ("HАH" gives ⠨⠓⠘⠘⠁⠨⠓). Likely needs indication tiers unified across capitals, emphasis and modes ([ADR-0009](adr/0009-capsletter-vs-begcapsword.org)). |
 | German detailed (`de-g0-detailed`, `de-g1-detailed`), backward |      ≈8 | After a number, ⠠ is read as an apostrophe (⠼⠓⠠⠋⠁⠉⠓ gives "8'fach", not "8fach"). |
 | Punjabi (`pa`), backward              |     ≈10 | The number sign ⠼ is read as the letter ਣ, which has the same cells; liblouis takes the number sign when a digit follows.                                                             |
-| everything else                       |    ≈500 | Roughly 60 files, each with fewer than 70 failures.                                                                                                                                    |
+| everything else                       |    ≈440 | Roughly 50 files, each with fewer than 70 failures.                                                                                                                                    |
 
 **Backward translation** is where louis-rs is weakest. The word-boundary checks
 (`word_start` and friends) only work forward, and backward
