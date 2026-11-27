@@ -11,7 +11,7 @@ behave the same as liblouis, and if it doesn't, that's a bug:
 
 ## How close
 
-Measured at louis-rs `53ee962` against liblouis `457d5484` plus the open pull requests
+Measured at louis-rs `b7a6cc0` against liblouis `457d5484` plus the open pull requests
 [#2176](https://github.com/liblouis/liblouis/pull/2176),
 [#2190](https://github.com/liblouis/liblouis/pull/2190),
 [#2194](https://github.com/liblouis/liblouis/pull/2194),
@@ -24,13 +24,13 @@ Measured at louis-rs `53ee962` against liblouis `457d5484` plus the open pull re
 |--------------------------------|----------------|
 | Assertions run                 | 2 241 642      |
 | Pass                           | **99.4%**      |
-| Fail                           | 631 (0.03%)    |
+| Fail                           | 582 (0.03%)    |
 | Expected failure               | 0.5%           |
 | Tables that compile            | all            |
 
 Forward and backward combined. "Expected failure" means tests liblouis itself marks as
-failing (`xfail`), and louis-rs fails them too. Going the other way, 27 tests that
-liblouis marks as failing pass in louis-rs, spread over 15 files.
+failing (`xfail`), and louis-rs fails them too. Going the other way, 31 tests that
+liblouis marks as failing pass in louis-rs, spread over 16 files.
 
 Reproduce the assertion figures with the following. liblouis generates
 `nl-NL-g0.utb` and `nl-chardefs.uti` from their `.in` files with m4 when it builds, so
@@ -102,11 +102,11 @@ counts are the `Failure` lines `check` prints for each file, rounded.
 
 | Tables                                | Failing | What goes wrong                                                                                                                                                                       |
 |---------------------------------------|--------:|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Dutch (`nl-g0`)                       |     ≈46 | A multi-word italic passage should open with ⠸⠸ once, louis-rs marks every word ⠸…⠠; a word's emphasis gets a closing ⠠ where it simply ends ("Amsterdam" gives ⠸⠨…⠍⠠ before a space); after a hyphen, emphasis and capitals aren't marked again ("Zuid-Afrika"). Indicators come out in the wrong order (⠨⠰, not ⠰⠨), and a stray ⠠ appears after a capital or emphasis indicator that follows a digit ("1E" gives ⠼⠁⠨⠠⠑). |
-| Russian (`ru`)                        |     ≈32 | Generic `begmode` alphabet indicators: word tiers repeat per letter ("ABC" gives ⠨⠁⠨⠃⠨⠉, not ⠨⠁⠃⠉), and a letter after one from another alphabet gets its sign twice ("HАH" gives ⠨⠓⠘⠘⠁⠨⠓). Likely needs indication tiers unified across capitals, emphasis and modes ([ADR-0009](adr/0009-capsletter-vs-begcapsword.org)). |
+| Dutch (`nl-g0`)                       |     ≈38 | A multi-word italic passage should open with ⠸⠸ once, louis-rs marks every word ⠸…⠠; a word's emphasis gets a closing ⠠ where it simply ends ("Amsterdam" gives ⠸⠨…⠍⠠ before a space); after a hyphen, emphasis and capitals aren't marked again ("Zuid-Afrika"). Indicators come out in the wrong order (⠨⠰, not ⠰⠨). |
+| Russian (`ru`)                        |     ≈24 | Generic `begmode` alphabet indicators: word tiers repeat per letter ("ВДНХ" gives ⠘⠘⠘⠺⠘⠘⠘⠙…, not ⠘⠘⠺⠙⠝⠓), and a letter after one from another alphabet gets its sign twice ("HАH" gives ⠨⠓⠘⠘⠁⠨⠓). Likely needs indication tiers unified across capitals, emphasis and modes ([ADR-0009](adr/0009-capsletter-vs-begcapsword.org)). |
 | German detailed (`de-g0-detailed`, `de-g1-detailed`), backward |      ≈8 | After a number, ⠠ is read as an apostrophe (⠼⠓⠠⠋⠁⠉⠓ gives "8'fach", not "8fach"). |
 | Punjabi (`pa`), backward              |     ≈10 | The number sign ⠼ is read as the letter ਣ, which has the same cells; liblouis takes the number sign when a digit follows.                                                             |
-| everything else                       |    ≈535 | Roughly 70 files, each with fewer than 70 failures.                                                                                                                                    |
+| everything else                       |    ≈500 | Roughly 60 files, each with fewer than 70 failures.                                                                                                                                    |
 
 **Backward translation** is where louis-rs is weakest. The word-boundary checks
 (`word_start` and friends) only work forward, and backward
