@@ -14,7 +14,7 @@ In the test of a ~context~, ~correct~ or pass rule, ~$w~, ~$x~, ~$y~
 and ~$z~ stand for the first, second, third and fourth attribute that
 the table defines with ~attribute~. louis-rs parses them but does not
 support them: they add no characters to the test, so a test of ~$w~
-alone matches nothing and its rule never applies. Until #34 this
+alone matches nothing and its rule never applies. Until [[https://github.com/liblouis/louis-rs/issues/34][#34]] this
 happened silently.
 
 liblouis supports them, but [[https://github.com/liblouis/liblouis/issues/948][liblouis#948]] wants them removed: which
@@ -33,7 +33,7 @@ characters of both.
 
 ** Decision Drivers
 
-- A test that cannot match should not go unnoticed (#34)
+- A test that cannot match should not go unnoticed ([[https://github.com/liblouis/louis-rs/issues/34][#34]])
 - Every table that liblouis compiles, louis-rs compiles too
 - Upstream intends to remove the feature
 
@@ -42,7 +42,7 @@ characters of both.
 - Implement ~$w~ to ~$z~
 - A table error
 - A warning, and the rule without them
-- Ignore them, as before #34
+- Ignore them, as before [[https://github.com/liblouis/louis-rs/issues/34][#34]]
 
 ** Decision Outcome
 
@@ -64,7 +64,7 @@ tables upstream, then make ~$w~ to ~$z~ a parse error in louis-rs.
   translate differently from liblouis where those rules matter
 - The warning goes through ~log~, which reaches only an application
   that installs a logger; bindings generally don't. How the library
-  reports non-fatal table problems is open, see #93
+  reports non-fatal table problems is open, see [[https://github.com/liblouis/louis-rs/issues/93][#93]]
 
 ** Pros and Cons of the Options
 
@@ -83,11 +83,11 @@ tables upstream, then make ~$w~ to ~$z~ a parse error in louis-rs.
 *** A warning, and the rule without them
 
 - Good, because the tables load and the problem is reported
-- Bad, because the report is easy to miss (#93)
+- Bad, because the report is easy to miss ([[https://github.com/liblouis/louis-rs/issues/93][#93]])
 
 *** Ignore them
 
-- Bad, because a rule silently never applies (#34)
+- Bad, because a rule silently never applies ([[https://github.com/liblouis/louis-rs/issues/34][#34]])
 
 ** Upstream
 

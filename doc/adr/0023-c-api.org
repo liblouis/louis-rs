@@ -170,7 +170,7 @@ const char *louis_version(void);
   outside them.
 - *Scope of the first version*: what BRLTTY and TalkBack need, as
   listed above; neither passes a typeform. Emphasis, metadata queries,
-  a log callback and the ADR-0022 functions come when a C consumer
+  a log callback and the [[file:0022-hyphenate-chartodots-dotstochar.org][ADR-0022]] functions come when a C consumer
   needs them.
 - *Versioning*: ~louis-capi~'s own semver, independent of the
   library's; an ABI break is a new 0.x minor and a new soname.

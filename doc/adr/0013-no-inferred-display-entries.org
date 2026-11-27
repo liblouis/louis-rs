@@ -33,6 +33,6 @@ obvious way is what this ADR declines to do.
 
 Update [2026-11-25 Wed]: Bert confirmed that tables and display tables
 should stay separate, so the liblouis YAML tests are changed instead
-to name their display table with a ~display:~ key: liblouis #2102
-(three files) and liblouis #2216 (twelve files). With #2216, no test
+to name their display table with a ~display:~ key: [[https://github.com/liblouis/liblouis/pull/2102][liblouis #2102]]
+(three files) and [[https://github.com/liblouis/liblouis/pull/2216][liblouis #2216]] (twelve files). With [[https://github.com/liblouis/liblouis/pull/2216][#2216]], no test
 in liblouis's suite depends on the fallback any more.

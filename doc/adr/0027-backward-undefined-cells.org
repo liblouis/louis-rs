@@ -18,8 +18,8 @@ and writes nothing with the ~noUndefined~ mode. The table's
 ~undefined~ rule is not consulted: liblouis reads ~table->undefined~
 only in ~lou_translateString.c~.
 
-Until #59 louis-rs applied the ~undefined~ rule backward too, which
-wrote braille cells into the text (#35). With that gone, the question
+Until [[https://github.com/liblouis/louis-rs/pull/59][#59]] louis-rs applied the ~undefined~ rule backward too, which
+wrote braille cells into the text ([[https://github.com/liblouis/louis-rs/issues/35][#35]]). With that gone, the question
 is what an undefined cell should become in the text.
 
 ** Decision Drivers
@@ -60,11 +60,11 @@ and changing it costs compatibility with liblouis tables and tests.
 
 - Bad, because its argument is a braille cell: a placeholder in the
   script of the forward output, which back-translation writes into
-  text (#35, fi.utb's ~undefined 35~ gives ~a⠔b~ for ~⠁⣿⠃~)
+  text ([[https://github.com/liblouis/louis-rs/issues/35][#35]], fi.utb's ~undefined 35~ gives ~a⠔b~ for ~⠁⣿⠃~)
 - Bad, because the dots of the undefined cell are lost
 - Bad, because it breaks tables that match the escape: fr-bfu-g2's
   ~nofor correct "\s\\8/\s" ?~ no longer matched, and "perdirent
-  dans" came back as "perdirent  ⠀ dans" (#59)
+  dans" came back as "perdirent  ⠀ dans" ([[https://github.com/liblouis/louis-rs/pull/59][#59]])
 
 *** The escape ~\dots/~
 
@@ -78,7 +78,7 @@ and changing it costs compatibility with liblouis tables and tests.
 *** The cell itself
 
 - Good, because it keeps the dots and cannot collide with text
-- Bad, because it puts braille into the text, which is what #35
+- Bad, because it puts braille into the text, which is what [[https://github.com/liblouis/louis-rs/issues/35][#35]]
   reported; a screen reader reads "braille pattern dots 8", no better
   than the escape
 - Bad, because it deviates from liblouis: the tests that expect the

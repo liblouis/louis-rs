@@ -26,7 +26,7 @@ them: it moves that position back N characters (~pass_lookback~ in
 fails if it moves before the start of the input. Nothing restricts
 where it stands.
 
-louis-rs compiles these tests to its regexp VM (ADR-0007). Before
+louis-rs compiles these tests to its regexp VM ([[file:0007-hand-rolled-regexp-vm.org][ADR-0007]]). Before
 ~4d78544~ the parser kept ~_N~ as a ~TestInstruction::Lookback~ and the
 compiler turned it into ~Regexp::Empty~, i.e. ignored it. That was
 wrong in visible ways:
@@ -79,7 +79,7 @@ match is the concatenation of the pieces. ~_N~ breaks that model:
    test is a no-op, which the rule does not make apparent.
 6. *It hides the rule's position.* Rules are indexed and ranked by the
    characters they start with at the cursor (~passFindCharacters~,
-   ~leading_literal_len~, ~Rank~, ADR-0016). With ~_N~ anywhere, what
+   ~leading_literal_len~, ~Rank~, [[file:0016-rule-selection-by-rank.org][ADR-0016]]). With ~_N~ anywhere, what
    the rule matches "at the cursor" is whatever survives the arithmetic
    of all the ~_N~ and widths before it.
 
@@ -97,7 +97,7 @@ plus three rules that use it otherwise:
 - *Middle*: three rules, ~it-it-comp6.utb~'s two
   ~...%mathnumber_$u.%mathop~ and ~th-g2.ctb~'s ~!%Ahead_"หมาก"~.
   Each was either a no-op or an indirect way of saying something
-  simpler, and each has a table fix: liblouis#2196 and #2197.
+  simpler, and each has a table fix: [[https://github.com/liblouis/liblouis/pull/2196][liblouis#2196]] and [[https://github.com/liblouis/liblouis/pull/2197][#2197]].
 - Three inline tables in liblouis's unit tests (~multipass.yaml~,
   ~multipass-forward.yaml~, ~multipass-backward.yaml~) step back into a
   bracket or before the input on purpose, to test the C code paths.
@@ -105,13 +105,13 @@ plus three rules that use it otherwise:
 ** Decision Drivers
 
 - The regexp VM stays a forward-only, linear-time automaton
-  (ADR-0007); no backtracking, no general intersection.
+  ([[file:0007-hand-rolled-regexp-vm.org][ADR-0007]]); no backtracking, no general intersection.
 - Cover every use in real tables, with the same results as liblouis.
 - A rule must not consume what it only checks.
 - A context rule is found and ranked where its body starts, not where
   its look-behind starts.
 - Prefer an error at table load over silently doing something
-  different from liblouis (ADR-0018); fix the tables upstream when
+  different from liblouis ([[file:0018-parity-or-migration-path.org][ADR-0018]]); fix the tables upstream when
   their ~_N~ is what's wrong (the user co-maintains them).
 
 ** Considered Options
@@ -169,8 +169,8 @@ are better fixed in the tables.
 
 *** Negative Consequences
 
-- ~it-it-comp6.utb~ and ~th-g2.ctb~ don't load until liblouis#2196 and
-  #2197 land. Accepted deliberately: the change went in before them.
+- ~it-it-comp6.utb~ and ~th-g2.ctb~ don't load until [[https://github.com/liblouis/liblouis/pull/2196][liblouis#2196]] and
+  [[https://github.com/liblouis/liblouis/pull/2197][#2197]] land. Accepted deliberately: the change went in before them.
 - Five tests in liblouis's ~multipass*.yaml~ don't run, as their inline
   tables don't load. A liblouis change testing the same with the two
   supported shapes (e.g. ~_$a["u"]~ at the start of the input) is still
@@ -196,7 +196,7 @@ are better fixed in the tables.
 - Bad, because a Pike VM advances all threads in lockstep over the
   input; a thread that rewinds needs its own position, which turns the
   VM into a backtracker and gives up the linear-time guarantee of
-  ADR-0007.
+  [[file:0007-hand-rolled-regexp-vm.org][ADR-0007]].
 - Bad, because it keeps the middle and bracket-crossing forms alive,
   and with them the question of which span is replaced.
 - Bad, because rules would still be found at their look-behind and need
@@ -231,4 +231,4 @@ reaches past ~A₂~, ~A₂~ being ~A~'s last N characters.
 - Relates to [[file:0016-rule-selection-by-rank.org][ADR-0016]] (rules are ranked by what they match at the cursor)
 - Relates to [[file:0018-parity-or-migration-path.org][ADR-0018]] (migration path for the rejected shapes)
 - ~doc/Differences_From_Liblouis.md~, "~_N~ only before or after the tests it steps over"
-- liblouis#2196 (~it-it-comp6.utb~), liblouis#2197 (~th-g2.ctb~)
+- [[https://github.com/liblouis/liblouis/pull/2196][liblouis#2196]] (~it-it-comp6.utb~), [[https://github.com/liblouis/liblouis/pull/2197][liblouis#2197]] (~th-g2.ctb~)

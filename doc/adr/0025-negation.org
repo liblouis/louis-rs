@@ -29,7 +29,7 @@ Both need an intersection (~&~) or a complement of a whole regular
 expression. Regular languages are closed under both, but the
 constructions are expensive: a complement needs a deterministic
 automaton, which can be exponentially larger than the NFA, and an
-intersection needs a product automaton. A Pike VM (ADR-0007) runs an
+intersection needs a product automaton. A Pike VM ([[file:0007-hand-rolled-regexp-vm.org][ADR-0007]]) runs an
 NFA directly, advancing all threads in lockstep one character at a
 time, at most one thread per instruction. It has no way to require
 two threads to cover the same span, nor to succeed where a thread
@@ -72,7 +72,7 @@ accepts it ("ax" is not "ab"). Neither is the De Morgan complement.
 
 *** What louis-rs did
 
-louis-rs compiles both languages to its regexp VM (ADR-0007), which
+louis-rs compiles both languages to its regexp VM ([[file:0007-hand-rolled-regexp-vm.org][ADR-0007]]), which
 has no intersection and no negative look-ahead. ~Regexp::negate~
 distributes ~!~ over sequences and alternatives and inverts each
 character test, which is the ~match~ meaning. Its comments called this
@@ -83,17 +83,17 @@ Two things did not match liblouis:
 
 1. The parser splits ~%[_~^]~ into an alternation of a character class
    and the boundary. Negating that alternation gave "not in the set, or
-   not at the boundary", which matches after a space. That is #79.
+   not at the boundary", which matches after a space. That is [[https://github.com/liblouis/louis-rs/issues/79][#79]].
 2. In a ~context~ rule, ~!"ab"~ compiled to "not a, then not b", the
    ~match~ meaning, so it rejected "ax" and "xb", which liblouis
    accepts.
 
 ** Decision Drivers
 
-- The VM stays a forward-only, linear-time automaton (ADR-0007).
+- The VM stays a forward-only, linear-time automaton ([[file:0007-hand-rolled-regexp-vm.org][ADR-0007]]).
 - Same results as liblouis for every table in its corpus.
 - A form louis-rs doesn't support is a parse error, not a silent
-  difference (ADR-0018).
+  difference ([[file:0018-parity-or-migration-path.org][ADR-0018]]).
 - Don't implement a construct no table uses (YAGNI), least of all one
   whose meaning is surprising: it consumes characters, fails near the
   end of the input, and differs from what ~!~ means in ~match~ rules.
@@ -130,7 +130,7 @@ Chosen options: 2 and 5.
 
 *** Positive Consequences
 
-- #79 is fixed, along with four tests in liblouis's YAML suite.
+- [[https://github.com/liblouis/louis-rs/issues/79][#79]] is fixed, along with four tests in liblouis's YAML suite.
 - What ~!~ means in each rule kind is written down, and the comments no
   longer call a deliberate behavior a bug.
 - louis-rs doesn't commit to the consuming whole-string negation, nor
