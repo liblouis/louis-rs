@@ -188,20 +188,16 @@ new ~String~ anyway, and the C API copies anyway (below).
 
 Three implementations come with ~louis-rs~:
 
-- ~SearchDirs(Vec<PathBuf>)~ :: a search path with today's behaviour: the
-  key is ~TableKey::File~ with the canonical path of the file found. It
-  is a type of ~louis-rs~'s own. ~TableSource~ could be implemented for
-  ~search_path::SearchPath~ instead, but an implementation of a public
-  trait is public, so the 0.x ~search_path~ crate would become part of
+- a search path :: today's behaviour: the key is ~TableKey::File~ with
+  the canonical path of the file found. It is a private newtype around
+  ~search_path::SearchPath~, not ~SearchPath~ itself: an implementation
+  of a public trait is public, so implementing ~TableSource~ for
+  ~SearchPath~ would make the 0.x ~search_path~ crate part of
   ~louis-rs~'s public API and a breaking release of it a breaking release
-  of ~louis-rs~. What ~louis-rs~ and ~louis-cli~ use of that crate --
-  ~find_file~, ~iter~, ~prepend~ and reading ~LOUIS_TABLE_PATH~ -- is a
-  loop over the directories, ~Vec~ methods and ~std::env::split_paths~,
-  so ~SearchDirs~ replaces the dependency, as [[https://github.com/liblouis/louis-rs/pull/28][PR #28]] proposed. ~new~
-  and ~with_search_path~ stay and build a ~SearchDirs~;
-  ~with_source(&SearchDirs(dirs), ...)~ does the same by hand. The same
-  goes for ~BrailleEncoding~, which loads display tables through the same
-  parser.
+  of ~louis-rs~. A caller gives a search path as today, to ~new~ (from
+  ~LOUIS_TABLE_PATH~) or ~with_search_path~; ~louis-cli~ gets the newtype
+  from ~louis::internals~. The same goes for ~BrailleEncoding~, which
+  loads display tables through the same parser.
 - ~HashMap<String, String>~ :: a map from names to text, for tables held
   in memory: the key is ~TableKey::Name~.
 - ~Fn(&str) -> Option<String>~ :: any such function, for a data crate:
@@ -229,7 +225,7 @@ carry no key either, so its errors name no table, as today. The path an
 ~include~, takes a source for what the text includes:
 ~Translator::from_table_source(text, &source, direction)~. This changes
 its signature, which the next 0.x minor allows. The YAML test runner
-does the same with ~SearchDirs~ from ~LOUIS_TABLE_PATH~, and an
+does the same with the search path from ~LOUIS_TABLE_PATH~, and an
 application can put a small table of its own on top of the ones in
 ~louis-tables~.
 
